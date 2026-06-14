@@ -1,21 +1,31 @@
 import AppKit
 import Foundation
+import LayoutDCheck
 import LayoutDCore
 import LayoutDDesignAI
 import LayoutDEngine
 import LayoutDExport
 import LayoutDImport
+import UniformTypeIdentifiers
 
 let launchProject = ProjectLoader().loadFromCommandLine()
 
-if let exportPDFURL = launchProject.exportPDFURL {
+if launchProject.exportPDFURL != nil || launchProject.exportProjectURL != nil {
     do {
-        let document = LayoutEngine().layout(project: launchProject.project)
-        try PDFExporter().export(document: document, project: launchProject.project, to: exportPDFURL)
-        print("Exported PDF: \(exportPDFURL.path)")
+        if let exportProjectURL = launchProject.exportProjectURL {
+            let data = try ProjectFile.encode(launchProject.project)
+            try data.write(to: exportProjectURL, options: .atomic)
+            print("Exported project: \(exportProjectURL.path)")
+        }
+
+        if let exportPDFURL = launchProject.exportPDFURL {
+            let document = LayoutEngine().layout(project: launchProject.project)
+            try PDFExporter().export(document: document, project: launchProject.project, to: exportPDFURL)
+            print("Exported PDF: \(exportPDFURL.path)")
+        }
         exit(EXIT_SUCCESS)
     } catch {
-        fputs("PDF export failed: \(error.localizedDescription)\n", stderr)
+        fputs("Export failed: \(error.localizedDescription)\n", stderr)
         exit(EXIT_FAILURE)
     }
 }
@@ -29,10 +39,13 @@ app.run()
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
+    private weak var workspaceController: WorkspaceViewController?
     private let launchProject: LoadedProject
 
     init(launchProject: LoadedProject) {
         self.launchProject = launchProject
+        super.init()
+        buildMainMenu()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -51,17 +64,110 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentViewController = controller
         window.makeKeyAndOrderFront(nil)
         self.window = window
+        self.workspaceController = controller
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
     }
+
+    @objc private func exportPDF(_ sender: Any?) {
+        workspaceController?.exportPDF()
+    }
+
+    @objc private func openProject(_ sender: Any?) {
+        workspaceController?.openProject()
+    }
+
+    @objc private func saveProject(_ sender: Any?) {
+        workspaceController?.saveProject()
+    }
+
+    @objc private func zoomIn(_ sender: Any?) {
+        workspaceController?.zoomIn()
+    }
+
+    @objc private func zoomOut(_ sender: Any?) {
+        workspaceController?.zoomOut()
+    }
+
+    @objc private func actualSize(_ sender: Any?) {
+        workspaceController?.actualSize()
+    }
+
+    @objc private func fitWidth(_ sender: Any?) {
+        workspaceController?.fitWidth()
+    }
+
+    private func buildMainMenu() {
+        let mainMenu = NSMenu()
+
+        let appMenuItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(
+            NSMenuItem(
+                title: "Quit layoutD",
+                action: #selector(NSApplication.terminate(_:)),
+                keyEquivalent: "q"
+            )
+        )
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        let fileMenuItem = NSMenuItem()
+        let fileMenu = NSMenu(title: "File")
+        fileMenu.addItem(
+            NSMenuItem(
+                title: "Open Project or Markdown...",
+                action: #selector(openProject(_:)),
+                keyEquivalent: "o"
+            )
+        )
+        fileMenu.items.last?.target = self
+        fileMenu.addItem(
+            NSMenuItem(
+                title: "Save Project...",
+                action: #selector(saveProject(_:)),
+                keyEquivalent: "s"
+            )
+        )
+        fileMenu.items.last?.target = self
+        fileMenu.addItem(NSMenuItem.separator())
+        fileMenu.addItem(
+            NSMenuItem(
+                title: "Export PDF...",
+                action: #selector(exportPDF(_:)),
+                keyEquivalent: "e"
+            )
+        )
+        fileMenu.items.last?.target = self
+        fileMenuItem.submenu = fileMenu
+        mainMenu.addItem(fileMenuItem)
+
+        let viewMenuItem = NSMenuItem()
+        let viewMenu = NSMenu(title: "View")
+        let viewItems: [(String, Selector, String)] = [
+            ("Zoom In", #selector(zoomIn(_:)), "+"),
+            ("Zoom Out", #selector(zoomOut(_:)), "-"),
+            ("Actual Size", #selector(actualSize(_:)), "0"),
+            ("Fit Width", #selector(fitWidth(_:)), "9")
+        ]
+        for item in viewItems {
+            viewMenu.addItem(NSMenuItem(title: item.0, action: item.1, keyEquivalent: item.2))
+            viewMenu.items.last?.target = self
+        }
+        viewMenuItem.submenu = viewMenu
+        mainMenu.addItem(viewMenuItem)
+
+        NSApplication.shared.mainMenu = mainMenu
+    }
 }
 
 final class WorkspaceViewController: NSViewController {
-    private let project: BookProject
-    private let sourceDescription: String
+    private var project: BookProject
+    private var sourceDescription: String
     private let engine = LayoutEngine()
+    private let inspectorEngine = ProjectInspector()
     private let advisor = RuleBasedLayoutAdvisor()
     private var laidOutDocument: LaidOutDocument?
 
@@ -138,10 +244,12 @@ final class WorkspaceViewController: NSViewController {
         laidOutDocument = document
         canvas.project = project
         canvas.document = document
+        view.window?.title = "layoutD - \(project.metadata.title)"
 
         let plans = advisor.proposePlans(for: project, target: .page(1))
+        let issues = inspectorEngine.inspect(project: project) + document.issues
         sidebar.string = sidebarText(project: project, document: document)
-        inspector.string = inspectorText(project: project, document: document, plans: plans)
+        inspector.string = inspectorText(project: project, issues: issues, plans: plans)
     }
 
     private func sidebarText(project: BookProject, document: LaidOutDocument) -> String {
@@ -149,6 +257,7 @@ final class WorkspaceViewController: NSViewController {
             project.metadata.title,
             sourceDescription,
             project.pageSetup.pageSize.label,
+            "Zoom \(Int(canvas.zoomScale * 100))%",
             "",
             "章节"
         ]
@@ -162,12 +271,12 @@ final class WorkspaceViewController: NSViewController {
         return lines.joined(separator: "\n")
     }
 
-    private func inspectorText(project: BookProject, document: LaidOutDocument, plans: [LayoutPlan]) -> String {
+    private func inspectorText(project: BookProject, issues: [LayoutIssue], plans: [LayoutPlan]) -> String {
         var lines: [String] = [
             "项目检查",
-            "Issues: \(document.issues.count)"
+            "Issues: \(issues.count)"
         ]
-        lines += document.issues.map { "[\($0.severity.rawValue)] \($0.message)" }
+        lines += issues.map { "[\($0.severity.rawValue)] \($0.message)" }
         lines += [
             "",
             "AI LayoutPlan 候选"
@@ -182,5 +291,134 @@ final class WorkspaceViewController: NSViewController {
         ]
         lines += project.assets.map { "- \($0.fileName) · \($0.role.rawValue) · \($0.dpi.map { "\($0) DPI" } ?? "DPI unknown")" }
         return lines.joined(separator: "\n")
+    }
+
+    func openProject() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Open Project or Markdown Manuscript"
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        openPanel.allowedContentTypes = [
+            UTType(filenameExtension: "layoutd"),
+            UTType.json,
+            UTType(filenameExtension: "md"),
+            UTType(filenameExtension: "markdown"),
+            UTType(filenameExtension: "txt")
+        ].compactMap { $0 }
+
+        guard let window = view.window else {
+            return
+        }
+
+        openPanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = openPanel.url, let self else {
+                return
+            }
+
+            do {
+                let loader = ProjectLoader()
+                self.project = try loader.loadProject(inputURL: url)
+                self.sourceDescription = loader.sourceDescription(for: url)
+                self.refreshDocument()
+            } catch {
+                self.showExportResult(message: "Open failed", detail: error.localizedDescription)
+            }
+        }
+    }
+
+    func saveProject() {
+        let savePanel = NSSavePanel()
+        savePanel.title = "Save layoutD Project"
+        savePanel.nameFieldStringValue = safeFileName(project.metadata.title) + ".layoutd"
+        savePanel.allowedContentTypes = [UTType(filenameExtension: "layoutd")].compactMap { $0 }
+        savePanel.canCreateDirectories = true
+
+        guard let window = view.window else {
+            return
+        }
+
+        savePanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = savePanel.url, let self else {
+                return
+            }
+
+            do {
+                let data = try ProjectFile.encode(self.project)
+                try data.write(to: url, options: .atomic)
+                self.showExportResult(message: "Project saved", detail: url.path)
+            } catch {
+                self.showExportResult(message: "Save failed", detail: error.localizedDescription)
+            }
+        }
+    }
+
+    func zoomIn() {
+        canvas.zoomIn()
+        updateZoomLabel()
+    }
+
+    func zoomOut() {
+        canvas.zoomOut()
+        updateZoomLabel()
+    }
+
+    func actualSize() {
+        canvas.resetZoom()
+        updateZoomLabel()
+    }
+
+    func fitWidth() {
+        canvas.fitWidth(availableWidth: canvas.enclosingScrollView?.contentView.bounds.width ?? canvas.bounds.width)
+        updateZoomLabel()
+    }
+
+    private func updateZoomLabel() {
+        guard let document = laidOutDocument else {
+            return
+        }
+        sidebar.string = sidebarText(project: project, document: document)
+    }
+
+    func exportPDF() {
+        let document = laidOutDocument ?? engine.layout(project: project)
+        let savePanel = NSSavePanel()
+        savePanel.title = "Export PDF"
+        savePanel.nameFieldStringValue = safeFileName(project.metadata.title) + ".pdf"
+        savePanel.allowedContentTypes = [.pdf]
+        savePanel.canCreateDirectories = true
+
+        savePanel.beginSheetModal(for: view.window!) { [weak self] response in
+            guard response == .OK, let url = savePanel.url, let self else {
+                return
+            }
+
+            do {
+                try PDFExporter().export(document: document, project: self.project, to: url)
+                self.showExportResult(message: "PDF exported", detail: url.path)
+            } catch {
+                self.showExportResult(message: "PDF export failed", detail: error.localizedDescription)
+            }
+        }
+    }
+
+    private func showExportResult(message: String, detail: String) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.informativeText = detail
+        alert.addButton(withTitle: "OK")
+        if let window = view.window {
+            alert.beginSheetModal(for: window)
+        } else {
+            alert.runModal()
+        }
+    }
+
+    private func safeFileName(_ title: String) -> String {
+        let illegalCharacters = CharacterSet(charactersIn: "/\\?%*|\"<>:")
+        return title
+            .components(separatedBy: illegalCharacters)
+            .joined(separator: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

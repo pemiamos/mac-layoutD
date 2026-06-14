@@ -34,6 +34,7 @@ private struct LayoutContext {
     private var cursorX: Double
     private var cursorY: Double
     private var currentColumn: Int = 0
+    private var placedAssetIds = Set<UUID>()
 
     init(project: BookProject) {
         self.project = project
@@ -84,7 +85,7 @@ private struct LayoutContext {
     }
 
     mutating func placeUnusedAssets(_ assets: [Asset]) {
-        for asset in assets where asset.usage == .unused {
+        for asset in assets where asset.usage == .unused && !placedAssetIds.contains(asset.id) {
             addAsset(asset)
         }
     }
@@ -98,6 +99,19 @@ private struct LayoutContext {
 
     private mutating func addText(_ text: String, style: ParagraphStyle, kind: PageFrameKind) {
         let height = estimatedTextHeight(text: text, style: style, width: columnWidth)
+        let availableHeight = project.pageSetup.pageSize.height
+            - project.pageSetup.margins.top
+            - project.pageSetup.margins.bottom
+        if height > availableHeight {
+            issues.append(
+                LayoutIssue(
+                    severity: .warning,
+                    message: "文本段落高度超过单栏可用高度，可能需要拆分或重排",
+                    pageNumber: currentPage.number
+                )
+            )
+        }
+
         advanceIfNeeded(height + style.spaceBefore + style.spaceAfter)
 
         cursorY += style.spaceBefore
@@ -108,8 +122,9 @@ private struct LayoutContext {
     }
 
     private mutating func addAsset(_ asset: Asset) {
-        let desiredHeight = min(columnWidth * 0.72, 180)
-        advanceIfNeeded(desiredHeight + 22)
+        placedAssetIds.insert(asset.id)
+        let desiredHeight = imageHeight(for: asset)
+        advanceIfNeeded(desiredHeight + 42)
 
         let imageRect = Rect(x: cursorX, y: cursorY, width: columnWidth, height: desiredHeight)
         currentPage.frames.append(PageFrame(kind: .image, rect: imageRect, content: .asset(asset.id)))
@@ -142,6 +157,40 @@ private struct LayoutContext {
         }
 
         snapToBaseline()
+    }
+
+    private func imageHeight(for asset: Asset) -> Double {
+        let aspectRatio = imageAspectRatio(for: asset)
+        let naturalHeight = columnWidth / aspectRatio
+        let roleMultiplier: Double
+        let maximumHeight: Double
+
+        switch asset.role {
+        case .hero:
+            roleMultiplier = 1.35
+            maximumHeight = 260
+        case .diagram, .chart, .comparison:
+            roleMultiplier = 1.10
+            maximumHeight = 220
+        case .step:
+            roleMultiplier = 0.95
+            maximumHeight = 190
+        case .photo:
+            roleMultiplier = 1.0
+            maximumHeight = 200
+        case .decorative:
+            roleMultiplier = 0.65
+            maximumHeight = 120
+        }
+
+        return max(86, min(naturalHeight * roleMultiplier, maximumHeight))
+    }
+
+    private func imageAspectRatio(for asset: Asset) -> Double {
+        guard asset.pixelWidth > 0, asset.pixelHeight > 0 else {
+            return 1.5
+        }
+        return max(Double(asset.pixelWidth) / Double(asset.pixelHeight), 0.2)
     }
 
     private mutating func advanceIfNeeded(_ requiredHeight: Double) {

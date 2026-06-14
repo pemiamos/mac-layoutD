@@ -13,7 +13,7 @@ final class CanvasView: NSView {
         }
     }
 
-    private let scale: CGFloat = 1.15
+    private(set) var zoomScale: CGFloat = 1.15
     private let pageGap: CGFloat = 36
     private let canvasInset: CGFloat = 42
 
@@ -29,6 +29,33 @@ final class CanvasView: NSView {
         nil
     }
 
+    func zoomIn() {
+        setZoomScale(zoomScale * 1.2)
+    }
+
+    func zoomOut() {
+        setZoomScale(zoomScale / 1.2)
+    }
+
+    func resetZoom() {
+        setZoomScale(1.0)
+    }
+
+    func fitWidth(availableWidth: CGFloat) {
+        guard let project else {
+            return
+        }
+        let pageWidth = CGFloat(project.pageSetup.pageSize.width)
+        let targetScale = max((availableWidth - canvasInset * 2) / pageWidth, 0.25)
+        setZoomScale(targetScale)
+    }
+
+    private func setZoomScale(_ scale: CGFloat) {
+        zoomScale = min(max(scale, 0.35), 3.0)
+        updateFrame()
+        needsDisplay = true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         guard let project, let document else { return }
@@ -42,9 +69,9 @@ final class CanvasView: NSView {
         let pageSize = project.pageSetup.pageSize
         let pageRect = CGRect(
             x: canvasInset,
-            y: canvasInset + CGFloat(page.number - 1) * (CGFloat(pageSize.height) * scale + pageGap),
-            width: CGFloat(pageSize.width) * scale,
-            height: CGFloat(pageSize.height) * scale
+            y: canvasInset + CGFloat(page.number - 1) * (CGFloat(pageSize.height) * zoomScale + pageGap),
+            width: CGFloat(pageSize.width) * zoomScale,
+            height: CGFloat(pageSize.height) * zoomScale
         )
 
         NSColor.white.setFill()
@@ -64,10 +91,10 @@ final class CanvasView: NSView {
     private func drawGuides(project: BookProject, pageRect: CGRect) {
         let setup = project.pageSetup
         let marginRect = CGRect(
-            x: pageRect.minX + CGFloat(setup.margins.left) * scale,
-            y: pageRect.minY + CGFloat(setup.margins.top) * scale,
-            width: CGFloat(setup.pageSize.width - setup.margins.left - setup.margins.right) * scale,
-            height: CGFloat(setup.pageSize.height - setup.margins.top - setup.margins.bottom) * scale
+            x: pageRect.minX + CGFloat(setup.margins.left) * zoomScale,
+            y: pageRect.minY + CGFloat(setup.margins.top) * zoomScale,
+            width: CGFloat(setup.pageSize.width - setup.margins.left - setup.margins.right) * zoomScale,
+            height: CGFloat(setup.pageSize.height - setup.margins.top - setup.margins.bottom) * zoomScale
         )
         NSColor(calibratedRed: 0.20, green: 0.48, blue: 0.47, alpha: 0.25).setStroke()
         NSBezierPath(rect: marginRect).stroke()
@@ -75,10 +102,10 @@ final class CanvasView: NSView {
 
     private func draw(frame: PageFrame, project: BookProject, pageRect: CGRect) {
         let rect = CGRect(
-            x: pageRect.minX + CGFloat(frame.rect.x) * scale,
-            y: pageRect.minY + CGFloat(frame.rect.y) * scale,
-            width: CGFloat(frame.rect.width) * scale,
-            height: CGFloat(frame.rect.height) * scale
+            x: pageRect.minX + CGFloat(frame.rect.x) * zoomScale,
+            y: pageRect.minY + CGFloat(frame.rect.y) * zoomScale,
+            width: CGFloat(frame.rect.width) * zoomScale,
+            height: CGFloat(frame.rect.height) * zoomScale
         )
 
         switch frame.content {
@@ -100,10 +127,10 @@ final class CanvasView: NSView {
         }
 
         let style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
-        let font = NSFont(name: style.fontName, size: CGFloat(style.fontSize) * scale) ?? .systemFont(ofSize: CGFloat(style.fontSize) * scale)
+        let font = NSFont(name: style.fontName, size: CGFloat(style.fontSize) * zoomScale) ?? .systemFont(ofSize: CGFloat(style.fontSize) * zoomScale)
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = max(CGFloat(style.lineHeight - style.fontSize), 0) * scale
-        paragraph.firstLineHeadIndent = CGFloat(style.firstLineIndent) * scale
+        paragraph.lineSpacing = max(CGFloat(style.lineHeight - style.fontSize), 0) * zoomScale
+        paragraph.firstLineHeadIndent = CGFloat(style.firstLineIndent) * zoomScale
 
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -185,12 +212,12 @@ final class CanvasView: NSView {
         guard let project, let document else { return }
         let pageSize = project.pageSetup.pageSize
         let height = canvasInset * 2
-            + CGFloat(document.pages.count) * CGFloat(pageSize.height) * scale
+            + CGFloat(document.pages.count) * CGFloat(pageSize.height) * zoomScale
             + CGFloat(max(document.pages.count - 1, 0)) * pageGap
         frame = CGRect(
             x: 0,
             y: 0,
-            width: CGFloat(pageSize.width) * scale + canvasInset * 2,
+            width: CGFloat(pageSize.width) * zoomScale + canvasInset * 2,
             height: height
         )
     }

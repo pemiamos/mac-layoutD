@@ -30,6 +30,8 @@ private struct MarkdownParser {
     let fallbackTitle: String
 
     private var title: String?
+    private var subtitle: String?
+    private var author: String
     private var sections: [BookSection] = []
     private var currentSectionTitle = "正文"
     private var currentParagraphs: [Paragraph] = []
@@ -41,13 +43,20 @@ private struct MarkdownParser {
         self.assetCatalog = assetCatalog
         self.defaultAuthor = defaultAuthor
         self.fallbackTitle = fallbackTitle
+        self.author = defaultAuthor
         self.assetsByReference = Dictionary(
             uniqueKeysWithValues: assetCatalog.assets.map { ($0.fileName.normalizedAssetReference, $0) }
         )
     }
 
     mutating func parse() -> BookProject {
-        for rawLine in markdown.components(separatedBy: .newlines) {
+        var lines = markdown.components(separatedBy: .newlines)
+        let frontMatter = extractFrontMatter(from: &lines)
+        title = frontMatter.title
+        subtitle = frontMatter.subtitle
+        author = frontMatter.author ?? defaultAuthor
+
+        for rawLine in lines {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.isEmpty {
                 flushParagraphBuffer()
@@ -119,7 +128,7 @@ private struct MarkdownParser {
             : sections
 
         return BookProject(
-            metadata: ProjectMetadata(title: projectTitle, author: defaultAuthor),
+            metadata: ProjectMetadata(title: projectTitle, subtitle: subtitle, author: author),
             sections: projectSections,
             assets: Array(assetsByReference.values).sorted {
                 $0.fileName.localizedStandardCompare($1.fileName) == .orderedAscending
@@ -153,13 +162,19 @@ private struct MarkdownParser {
 
     private mutating func addFigure(_ image: MarkdownImage) {
         let asset: Asset
-        if let catalogAsset = assetCatalog.asset(matching: image.path, caption: image.caption) {
+        if let catalogAsset = assetCatalog.asset(
+            matching: image.path,
+            caption: image.caption,
+            role: image.role,
+            credit: image.credit
+        ) {
             asset = catalogAsset
         } else {
             asset = Asset(
                 fileName: image.path,
-                role: .photo,
+                role: image.role ?? .photo,
                 caption: image.caption,
+                credit: image.credit,
                 pixelWidth: 0,
                 pixelHeight: 0
             )
@@ -186,23 +201,118 @@ private struct MarkdownParser {
         let caption = String(line[captionStart..<captionEnd.lowerBound]).trimmed
         let pathStart = captionEnd.upperBound
         let pathEnd = line.index(before: line.endIndex)
-        let path = String(line[pathStart..<pathEnd]).trimmed
+        let target = String(line[pathStart..<pathEnd]).trimmed
+        let parsedTarget = parseImageTarget(target)
+        let path = parsedTarget.path
 
         guard !path.isEmpty else {
             return nil
         }
 
-        return MarkdownImage(caption: caption.isEmpty ? nil : caption, path: path)
+        return MarkdownImage(
+            caption: caption.isEmpty ? nil : caption,
+            path: path,
+            role: parsedTarget.role,
+            credit: parsedTarget.credit
+        )
+    }
+
+    private func extractFrontMatter(from lines: inout [String]) -> FrontMatter {
+        guard lines.first?.trimmingCharacters(in: .whitespacesAndNewlines) == "---" else {
+            return FrontMatter()
+        }
+
+        var values: [String: String] = [:]
+        var endIndex: Int?
+
+        for index in 1..<lines.count {
+            let line = lines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            if line == "---" {
+                endIndex = index
+                break
+            }
+
+            guard let separator = line.firstIndex(of: ":") else {
+                continue
+            }
+
+            let key = String(line[..<separator]).trimmed.lowercased()
+            let value = String(line[line.index(after: separator)...]).trimmed.trimmedQuotes
+            values[key] = value
+        }
+
+        if let endIndex {
+            lines.removeSubrange(0...endIndex)
+        }
+
+        return FrontMatter(
+            title: values["title"],
+            subtitle: values["subtitle"],
+            author: values["author"]
+        )
+    }
+
+    private func parseImageTarget(_ target: String) -> ParsedImageTarget {
+        guard let quoteStart = target.firstIndex(of: "\""),
+              let quoteEnd = target.lastIndex(of: "\""),
+              quoteStart != quoteEnd else {
+            return ParsedImageTarget(path: target.trimmed, role: nil, credit: nil)
+        }
+
+        let path = String(target[..<quoteStart]).trimmed
+        let metadata = String(target[target.index(after: quoteStart)..<quoteEnd])
+        let values = parseMetadata(metadata)
+        let role = values["role"].flatMap { AssetRole(rawValue: $0) }
+        let credit = values["credit"]
+        return ParsedImageTarget(path: path, role: role, credit: credit)
+    }
+
+    private func parseMetadata(_ metadata: String) -> [String: String] {
+        metadata
+            .components(separatedBy: CharacterSet(charactersIn: ";,"))
+            .reduce(into: [String: String]()) { result, item in
+                guard let separator = item.firstIndex(of: "=") else {
+                    return
+                }
+                let key = String(item[..<separator]).trimmed.lowercased()
+                let value = String(item[item.index(after: separator)...]).trimmed.trimmedQuotes
+                if !key.isEmpty, !value.isEmpty {
+                    result[key] = value
+                }
+            }
     }
 }
 
 private struct MarkdownImage {
     var caption: String?
     var path: String
+    var role: AssetRole?
+    var credit: String?
+}
+
+private struct FrontMatter {
+    var title: String?
+    var subtitle: String?
+    var author: String?
+}
+
+private struct ParsedImageTarget {
+    var path: String
+    var role: AssetRole?
+    var credit: String?
 }
 
 private extension String {
     var trimmed: String {
         trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedQuotes: String {
+        var value = trimmed
+        if value.hasPrefix("\""), value.hasSuffix("\""), value.count >= 2 {
+            value.removeFirst()
+            value.removeLast()
+        }
+        return value
     }
 }

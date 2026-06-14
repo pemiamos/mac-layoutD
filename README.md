@@ -17,6 +17,7 @@ This repository currently contains a Swift Package scaffold:
 - `LayoutDEngine`: deterministic pagination and frame generation.
 - `LayoutDDesignAI`: rule-based AI-advisor boundary that can later call model providers.
 - `LayoutDImport`: Markdown manuscript importer and image asset scanner.
+- `LayoutDCheck`: project and asset issue inspection.
 - `LayoutDExport`: PDF export boundary.
 - `LayoutDApp`: macOS AppKit desktop shell.
 
@@ -34,6 +35,12 @@ To preview the sample imported from Markdown:
 swift run layoutD -- Samples/demo.md
 ```
 
+Inside the app:
+
+- `File -> Open Project or Markdown...` opens `.layoutd`, `.json`, `.md`, `.markdown`, or `.txt`.
+- `File -> Save Project...` saves the current structured project as `.layoutd`.
+- `File -> Export PDF...` exports the current layout.
+
 To preview a manuscript with an image folder:
 
 ```bash
@@ -44,6 +51,18 @@ To export an imported manuscript to PDF without opening the app window:
 
 ```bash
 swift run layoutD -- --export-pdf /tmp/layoutD-demo.pdf Samples/demo.md
+```
+
+To export a structured layoutD project file:
+
+```bash
+swift run layoutD -- --export-project /tmp/layoutD-demo.layoutd Samples/demo.md
+```
+
+To export PDF from a saved layoutD project:
+
+```bash
+swift run layoutD -- --export-pdf /tmp/layoutD-from-project.pdf /tmp/layoutD-demo.layoutd
 ```
 
 The exported PDF can be previewed from Finder, Preview, or rendered with:
@@ -64,3 +83,5 @@ The first UI is intentionally minimal. It exists to validate the architecture an
 - Return a `BookProject` that can be passed directly into `LayoutDEngine`.
 
 This keeps manuscript import separate from final page layout. Importers create structured content; the layout engine decides pagination and placement.
+
+`Samples/demo.md` and `Samples/images/cell-diagram.png` provide a small end-to-end sample with a real image.

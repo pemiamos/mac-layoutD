@@ -29,6 +29,9 @@ LayoutDDesignAI
 LayoutDImport
   Markdown manuscript import and image asset scanning
 
+LayoutDCheck
+  project structure, image metadata, and asset issue inspection
+
 LayoutDExport
   PDF export boundary; renders LaidOutDocument into PDF output
 ```
@@ -88,6 +91,9 @@ AI 和模板系统的共同输出格式。它描述“建议如何排”，不�
 - 三栏工作区：左侧项目/页面，中央画布，右侧检查器/AI 候选。
 - App 可从命令行加载 Markdown 书稿：`swift run layoutD -- Samples/demo.md`。
 - App 可无窗口导出审校 PDF：`swift run layoutD -- --export-pdf /tmp/layoutD-demo.pdf Samples/demo.md`。
+- App 可无窗口导出结构化项目：`swift run layoutD -- --export-project /tmp/layoutD-demo.layoutd Samples/demo.md`。
+- App 可打开和保存 `.layoutd` 项目文件。
+- App 可通过 `File -> Export PDF...` 使用保存面板导出当前项目。
 - 结构化文档模型。
 - 默认中文科普样章。
 - 基于 Core Text 文本测量的分页引擎。
@@ -95,6 +101,8 @@ AI 和模板系统的共同输出格式。它描述“建议如何排”，不�
 - Markdown 导入器，支持标题、正文、引用、列表和图片引用。
 - 图片素材扫描器，读取尺寸、DPI 并推断图片角色。
 - 画布和 PDF 导出会优先渲染已扫描到 `sourcePath` 的真实图片，缺失时回退到占位框。
+- 项目检查器会报告缺失章节、缺失正文、缺失图注、低 DPI、重复文件名和源文件缺失。
+- 示例数据包含真实 PNG 图片：`Samples/images/cell-diagram.png`。
 - PDF 导出边界。
 - 基础测试用例。
 
@@ -104,7 +112,7 @@ AI 和模板系统的共同输出格式。它描述“建议如何排”，不�
 
 ```text
 swift build: pass
-swift test: pass, 6 tests
+swift test: pass, 9 tests
 ```
 
 曾经的阻塞是机器只使用 Command Line Tools 时，`Foundation` / `PackageDescription` 导入出现 SDK 模块冲突。解决方式是安装完整 Xcode，并执行：
@@ -121,5 +129,5 @@ sudo xcodebuild -license accept
 3. 把 App 接入 Markdown 文件打开流程，允许用户从真实书稿创建项目。
 4. 增加第一个真实样章数据集。
 5. 扩展画布交互：页面选择、frame 选择、缩放、网格显示开关。
-6. 把 PDF 导出接入 App 菜单。
+6. 增加 App 内打开 Markdown 项目的菜单。
 7. 把 AI `LayoutAdvisor` 从规则实现扩展成 provider 接口。

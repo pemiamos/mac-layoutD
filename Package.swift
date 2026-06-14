@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "LayoutDEngine", targets: ["LayoutDEngine"]),
         .library(name: "LayoutDDesignAI", targets: ["LayoutDDesignAI"]),
         .library(name: "LayoutDImport", targets: ["LayoutDImport"]),
+        .library(name: "LayoutDCheck", targets: ["LayoutDCheck"]),
         .library(name: "LayoutDExport", targets: ["LayoutDExport"])
     ],
     targets: [
@@ -30,6 +31,10 @@ let package = Package(
             dependencies: ["LayoutDCore"]
         ),
         .target(
+            name: "LayoutDCheck",
+            dependencies: ["LayoutDCore"]
+        ),
+        .target(
             name: "LayoutDExport",
             dependencies: ["LayoutDCore", "LayoutDEngine"]
         ),
@@ -40,6 +45,7 @@ let package = Package(
                 "LayoutDEngine",
                 "LayoutDDesignAI",
                 "LayoutDImport",
+                "LayoutDCheck",
                 "LayoutDExport"
             ]
         ),
@@ -54,6 +60,10 @@ let package = Package(
         .testTarget(
             name: "LayoutDExportTests",
             dependencies: ["LayoutDCore", "LayoutDEngine", "LayoutDExport"]
+        ),
+        .testTarget(
+            name: "LayoutDCheckTests",
+            dependencies: ["LayoutDCore", "LayoutDCheck"]
         )
     ]
 )

@@ -6,6 +6,7 @@ struct LoadedProject {
     var project: BookProject
     var sourceDescription: String
     var exportPDFURL: URL?
+    var exportProjectURL: URL?
 }
 
 struct ProjectLoader {
@@ -15,24 +16,22 @@ struct ProjectLoader {
             return LoadedProject(
                 project: .sample,
                 sourceDescription: "内置样章",
-                exportPDFURL: options.exportPDFPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
+                exportPDFURL: options.exportPDFPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportProjectURL: options.exportProjectPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
             )
         }
 
         let manuscriptURL = URL(fileURLWithPath: manuscriptPath).standardizedFileURL
         do {
-            let markdown = try String(contentsOf: manuscriptURL, encoding: .utf8)
-            let assets = try loadAssets(assetPath: options.assetDirectoryPath, manuscriptURL: manuscriptURL)
-            let project = MarkdownBookImporter(defaultAuthor: NSUserName()).importDocument(
-                markdown: markdown,
-                assetCatalog: AssetCatalog(assets: assets),
-                fallbackTitle: manuscriptURL.deletingPathExtension().lastPathComponent
+            let project = try loadProject(
+                inputURL: manuscriptURL,
+                assetDirectoryURL: options.assetDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
             )
-
             return LoadedProject(
                 project: project,
-                sourceDescription: "导入：\(manuscriptURL.lastPathComponent)",
-                exportPDFURL: options.exportPDFPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
+                sourceDescription: sourceDescription(for: manuscriptURL),
+                exportPDFURL: options.exportPDFPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportProjectURL: options.exportProjectPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
             )
         } catch {
             var project = BookProject.sample
@@ -63,16 +62,45 @@ struct ProjectLoader {
             return LoadedProject(
                 project: project,
                 sourceDescription: "导入失败",
-                exportPDFURL: options.exportPDFPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
+                exportPDFURL: options.exportPDFPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportProjectURL: options.exportProjectPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
             )
         }
     }
 
-    private func loadAssets(assetPath: String?, manuscriptURL: URL) throws -> [Asset] {
+    func loadProject(inputURL: URL, assetDirectoryURL: URL? = nil) throws -> BookProject {
+        switch inputURL.pathExtension.lowercased() {
+        case "layoutd", "json":
+            let data = try Data(contentsOf: inputURL)
+            return try ProjectFile.decode(data)
+        default:
+            return try loadMarkdownProject(manuscriptURL: inputURL, assetDirectoryURL: assetDirectoryURL)
+        }
+    }
+
+    func sourceDescription(for inputURL: URL) -> String {
+        switch inputURL.pathExtension.lowercased() {
+        case "layoutd", "json":
+            return "项目：\(inputURL.lastPathComponent)"
+        default:
+            return "导入：\(inputURL.lastPathComponent)"
+        }
+    }
+
+    private func loadMarkdownProject(manuscriptURL: URL, assetDirectoryURL: URL?) throws -> BookProject {
+        let markdown = try String(contentsOf: manuscriptURL, encoding: .utf8)
+        let assets = try loadAssets(assetDirectoryURL: assetDirectoryURL, manuscriptURL: manuscriptURL)
+        return MarkdownBookImporter(defaultAuthor: NSUserName()).importDocument(
+            markdown: markdown,
+            assetCatalog: AssetCatalog(assets: assets),
+            fallbackTitle: manuscriptURL.deletingPathExtension().lastPathComponent
+        )
+    }
+
+    private func loadAssets(assetDirectoryURL: URL?, manuscriptURL: URL) throws -> [Asset] {
         let scanner = AssetScanner()
-        if let explicitAssetPath = assetPath {
-            let assetURL = URL(fileURLWithPath: explicitAssetPath).standardizedFileURL
-            return try scanner.scan(directory: assetURL)
+        if let assetDirectoryURL {
+            return try scanner.scan(directory: assetDirectoryURL)
         }
 
         let localImagesURL = manuscriptURL.deletingLastPathComponent().appendingPathComponent("images")
@@ -85,6 +113,7 @@ struct ProjectLoader {
 
 private struct CommandLineOptions {
     var exportPDFPath: String?
+    var exportProjectPath: String?
     var manuscriptPath: String?
     var assetDirectoryPath: String?
 
@@ -101,6 +130,12 @@ private struct CommandLineOptions {
 
             if argument == "--export-pdf", index + 1 < arguments.count {
                 exportPDFPath = arguments[index + 1]
+                index += 2
+                continue
+            }
+
+            if argument == "--export-project", index + 1 < arguments.count {
+                exportProjectPath = arguments[index + 1]
                 index += 2
                 continue
             }

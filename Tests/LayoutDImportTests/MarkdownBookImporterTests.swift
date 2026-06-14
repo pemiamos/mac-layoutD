@@ -60,4 +60,27 @@ final class MarkdownBookImporterTests: XCTestCase {
         XCTAssertEqual(project.assets[0].caption, "岩浆通道示意图")
         XCTAssertEqual(project.assets[0].pixelWidth, 0)
     }
+
+    func testImportsFrontMatterAndImageMetadata() {
+        let markdown = """
+        ---
+        title: 深海热泉
+        subtitle: 黑烟囱里的生态系统
+        author: 李四
+        ---
+
+        # 第一章
+
+        ![热泉口照片](vents.png "role=hero; credit=NOAA")
+        """
+
+        let project = MarkdownBookImporter(defaultAuthor: "默认作者").importDocument(markdown: markdown)
+
+        XCTAssertEqual(project.metadata.title, "深海热泉")
+        XCTAssertEqual(project.metadata.subtitle, "黑烟囱里的生态系统")
+        XCTAssertEqual(project.metadata.author, "李四")
+        XCTAssertEqual(project.assets[0].role, .hero)
+        XCTAssertEqual(project.assets[0].credit, "NOAA")
+        XCTAssertEqual(project.assets[0].caption, "热泉口照片")
+    }
 }
