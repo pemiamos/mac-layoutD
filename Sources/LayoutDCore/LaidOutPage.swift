@@ -51,6 +51,7 @@ public enum PageFrameKind: String, Codable, Sendable {
     case image
     case caption
     case callout
+    case table
 }
 
 public enum FrameContent: Codable, Equatable, Sendable {

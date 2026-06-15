@@ -50,6 +50,13 @@ final class CanvasView: NSView {
         setZoomScale(targetScale)
     }
 
+    func scrollToPage(number: Int) {
+        guard let pageRect = pageRect(number: number) else {
+            return
+        }
+        scrollToVisible(pageRect.insetBy(dx: -24, dy: -24))
+    }
+
     private func setZoomScale(_ scale: CGFloat) {
         zoomScale = min(max(scale, 0.35), 3.0)
         updateFrame()
@@ -66,13 +73,9 @@ final class CanvasView: NSView {
     }
 
     private func draw(page: LaidOutPage, project: BookProject) {
-        let pageSize = project.pageSetup.pageSize
-        let pageRect = CGRect(
-            x: canvasInset,
-            y: canvasInset + CGFloat(page.number - 1) * (CGFloat(pageSize.height) * zoomScale + pageGap),
-            width: CGFloat(pageSize.width) * zoomScale,
-            height: CGFloat(pageSize.height) * zoomScale
-        )
+        guard let pageRect = pageRect(number: page.number) else {
+            return
+        }
 
         NSColor.white.setFill()
         pageRect.fill()
@@ -119,7 +122,7 @@ final class CanvasView: NSView {
     }
 
     private func drawText(_ text: String, styleId: String?, project: BookProject, rect: CGRect, kind: PageFrameKind) {
-        if kind == .callout {
+        if kind == .callout || kind == .table {
             NSColor(calibratedRed: 0.88, green: 0.96, blue: 0.93, alpha: 1).setFill()
             rect.fill()
             NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).setStroke()
@@ -219,6 +222,20 @@ final class CanvasView: NSView {
             y: 0,
             width: CGFloat(pageSize.width) * zoomScale + canvasInset * 2,
             height: height
+        )
+    }
+
+    private func pageRect(number: Int) -> CGRect? {
+        guard let project, let document, document.pages.contains(where: { $0.number == number }) else {
+            return nil
+        }
+
+        let pageSize = project.pageSetup.pageSize
+        return CGRect(
+            x: canvasInset,
+            y: canvasInset + CGFloat(number - 1) * (CGFloat(pageSize.height) * zoomScale + pageGap),
+            width: CGFloat(pageSize.width) * zoomScale,
+            height: CGFloat(pageSize.height) * zoomScale
         )
     }
 }

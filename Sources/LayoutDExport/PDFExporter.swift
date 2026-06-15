@@ -55,6 +55,8 @@ public struct PDFExporter {
         for frame in page.frames {
             draw(frame: frame, project: project, in: context, pageHeight: CGFloat(pageSize.height))
         }
+
+        drawPageNumber(page.number, project: project, in: context)
     }
 
     private func draw(frame: PageFrame, project: BookProject, in context: CGContext, pageHeight: CGFloat) {
@@ -68,12 +70,33 @@ public struct PDFExporter {
 
         switch frame.content {
         case .text(let text):
-            drawText(text, styleId: frame.styleId, project: project, rect: rect, context: context)
+            let textRect: CGRect
+            if frame.kind == .callout || frame.kind == .table {
+                drawCalloutBackground(in: rect, context: context)
+                textRect = rect.insetBy(dx: 8, dy: 6)
+            } else {
+                textRect = rect
+            }
+            drawText(text, styleId: frame.styleId, project: project, rect: textRect, context: context)
         case .asset:
             drawImagePlaceholder(frame: frame, project: project, in: context, rect: rect)
         case .empty:
             break
         }
+    }
+
+    private func drawCalloutBackground(in rect: CGRect, context: CGContext) {
+        context.saveGState()
+        context.setFillColor(NSColor(calibratedRed: 0.88, green: 0.96, blue: 0.93, alpha: 1).cgColor)
+        context.fill(rect)
+        context.setStrokeColor(NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).cgColor)
+        context.setLineWidth(0.8)
+        context.stroke(rect)
+
+        let accentRect = CGRect(x: rect.minX, y: rect.minY, width: 4, height: rect.height)
+        context.setFillColor(NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).cgColor)
+        context.fill(accentRect)
+        context.restoreGState()
     }
 
     private func drawText(_ text: String, styleId: String?, project: BookProject, rect: CGRect, context: CGContext) {
@@ -183,6 +206,27 @@ public struct PDFExporter {
         }
 
         context.draw(cgImage, in: drawRect)
+    }
+
+    private func drawPageNumber(_ number: Int, project: BookProject, in context: CGContext) {
+        guard number > 1 else {
+            return
+        }
+
+        let pageSize = project.pageSetup.pageSize
+        let text = "\(number)" as NSString
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 9),
+            .foregroundColor: NSColor.gray
+        ]
+        let size = text.size(withAttributes: attributes)
+        let rect = CGRect(
+            x: CGFloat(pageSize.width) / 2 - size.width / 2,
+            y: 22,
+            width: size.width + 2,
+            height: size.height + 2
+        )
+        text.draw(in: rect, withAttributes: attributes)
     }
 
     private func pdfRect(fromLayoutRect rect: CGRect, pageHeight: CGFloat) -> CGRect {

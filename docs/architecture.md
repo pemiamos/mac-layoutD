@@ -44,8 +44,8 @@ Markdown + image folder
   -> BookProject
   -> LayoutAdvisor proposes LayoutPlan candidates
   -> LayoutEngine validates and produces LaidOutDocument
-  -> CanvasView previews pages
-  -> PDFExporter writes PDF
+  -> CanvasView previews cover / contents / body pages
+  -> PDFExporter writes paginated PDF
 ```
 
 AI 不直接生成最终页面文件。AI 只生成 `LayoutPlan`：页面目标、策略、块类型、内容引用、相对位置和说明。`LayoutEngine` 负责把计划转换为实际页面框架，并检查是否可用。
@@ -56,7 +56,7 @@ AI 不直接生成最终页面文件。AI 只生成 `LayoutPlan`：页面目标�
 
 项目级对象，包含：
 
-- `metadata`：书名、作者、时间。
+- `metadata`：书名、副标题、作者、出版社、ISBN、丛书、关键词、时间。
 - `pageSetup`：开本、页边距、栏数、基线网格。
 - `styles`：中文科普图书默认样式库。
 - `sections`：章节和正文流。
@@ -94,14 +94,29 @@ AI 和模板系统的共同输出格式。它描述“建议如何排”，不�
 - App 可无窗口导出结构化项目：`swift run layoutD -- --export-project /tmp/layoutD-demo.layoutd Samples/demo.md`。
 - App 可打开和保存 `.layoutd` 项目文件。
 - App 可通过 `File -> Export PDF...` 使用保存面板导出当前项目。
+- App 可通过 `File -> Export Preflight Report...` 导出当前项目预检 JSON。
+- App 支持画布缩放：Zoom In、Zoom Out、Actual Size、Fit Width。
+- App 支持上一页/下一页导航，侧栏显示当前页。
 - 结构化文档模型。
 - 默认中文科普样章。
 - 基于 Core Text 文本测量的分页引擎。
+- 排版引擎会生成封面页、目录页、正文页，并按目录插入后的页码重排内容页。
+- 排版引擎支持 `hero`、`comparison` 和 `span=wide` 触发的整版内容宽图片；跨栏图片会设置栏位阻隔线，避免后续右栏文字回到图片上方。
+- 排版引擎会自动把超长正文/知识卡片跨栏拆分，避免生成超高文本框。
+- 排版引擎会对标题执行 keep-with-next 规则，避免标题落在栏底而下一段正文进入下一栏。
+- 排版引擎会自动给未编号图片图注加 `图1`、`图2` 这样的顺序编号。
 - 规则型 LayoutPlan 候选生成器。
-- Markdown 导入器，支持标题、正文、引用、列表和图片引用。
+- Markdown 导入器，支持 front matter 图书元数据、标题、正文、引用、admonition 知识卡片、简单 pipe 表格、列表、图片引用、`span=wide` 图片提示、草稿分隔线/注释过滤和基础页面设置。
+- front matter 可设置 `title`、`subtitle`、`author`、`publisher`、`isbn`、`series`、`keywords`、`columns`、`page`、`page_width_mm`、`page_height_mm`、`margins`、`gutter_mm`、`baseline_grid_pt`。
 - 图片素材扫描器，读取尺寸、DPI 并推断图片角色。
-- 画布和 PDF 导出会优先渲染已扫描到 `sourcePath` 的真实图片，缺失时回退到占位框。
-- 项目检查器会报告缺失章节、缺失正文、缺失图注、低 DPI、重复文件名和源文件缺失。
+- 图片目录可提供 `manifest.csv` / `assets.csv` / `images.csv`，按 `file,caption,role,span,credit` 合并图注、角色、跨栏提示和版权来源。
+- 导入器只把 Markdown 明确引用的图片标记为已使用；素材目录中未引用的图片保留在素材库中供预检提示，不会被排版引擎自动插入正文。
+- 画布和 PDF 导出会优先渲染已扫描到 `sourcePath` 的真实图片，缺失时回退到占位框；知识卡片会以带强调边的色块导出；PDF 会输出页码。
+- 项目检查器会报告缺失章节、缺失正文、缺失图书元数据、ISBN-13 校验失败、未引用素材、缺失图注、预计印刷分辨率低、重复文件名、源文件缺失、缺版权来源和缺失素材引用。
+- 版面预检会检查页码连续性，并用 CoreText 检查文本是否真实放入 frame，报告文本溢出、frame 重叠、越界、空文本 frame 和缺失图片 frame。
+- 版面预检会基于 CoreText 实际分行检查第一层中文禁则，报告行首禁用标点和行尾开括号类标点。
+- App 和 CLI 都可以生成结构化 JSON 预检报告：`swift run layoutD -- --preflight-report /tmp/layoutD-preflight.json Samples/demo.md`；报告包含 `exportReady`、素材摘要和版面 frame 统计。
+- CLI 支持 `swift run layoutD -- --validate Samples/demo.md` 作为质量门：可导出返回 `0`，加载失败或存在 error 级预检问题返回非 0。
 - 示例数据包含真实 PNG 图片：`Samples/images/cell-diagram.png`。
 - PDF 导出边界。
 - 基础测试用例。
@@ -112,7 +127,26 @@ AI 和模板系统的共同输出格式。它描述“建议如何排”，不�
 
 ```text
 swift build: pass
-swift test: pass, 9 tests
+swift test: pass, 38 tests
+Markdown -> PDF export: pass
+Markdown -> .layoutd -> PDF export: pass
+Markdown -> preflight JSON export: pass
+CLI validate success/failure exits: pass
+Wide image PDF page render: pass
+Image manifest import: pass
+Layout defect validation: pass
+Text overflow validation: pass
+Chinese line-break preflight: pass
+Markdown knowledge-card import: pass
+Heading keep-with-next layout: pass
+Markdown draft-marker cleanup: pass
+Callout PDF export: pass
+Front matter margin/gutter import: pass
+Page sequence preflight: pass
+Layout frame summary: pass
+Book metadata import and ISBN preflight: pass
+Legacy .layoutd metadata decode: pass
+Markdown table import and table frame layout: pass
 ```
 
 曾经的阻塞是机器只使用 Command Line Tools 时，`Foundation` / `PackageDescription` 导入出现 SDK 模块冲突。解决方式是安装完整 Xcode，并执行：
@@ -124,10 +158,9 @@ sudo xcodebuild -license accept
 
 ## 下一步开发顺序
 
-1. 修通本机 Xcode/SwiftPM 构建环境。
-2. 把 `LayoutDEngine` 的估算文字高度替换为 Core Text 真实测量。
-3. 把 App 接入 Markdown 文件打开流程，允许用户从真实书稿创建项目。
-4. 增加第一个真实样章数据集。
-5. 扩展画布交互：页面选择、frame 选择、缩放、网格显示开关。
-6. 增加 App 内打开 Markdown 项目的菜单。
-7. 把 AI `LayoutAdvisor` 从规则实现扩展成 provider 接口。
+1. 增加 frame 选择、对象属性面板和手动换图能力。
+2. 加入更完整的中文排版规则：避头尾、标点压缩、孤行/寡行控制。
+3. 引入 AI provider 接口，让 `LayoutAdvisor` 可以基于章节语义生成多套版式候选。
+4. 支持更丰富的导入格式：DOCX、章节级素材包。
+5. 增加更完整的导出预检：目录一致性、页码一致性、文本溢出可视定位。
+6. 增加可编辑版式模板和项目级样式配置。

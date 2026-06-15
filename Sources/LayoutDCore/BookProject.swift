@@ -28,7 +28,11 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         metadata: ProjectMetadata(
             title: "layoutD 科普样章",
             subtitle: "AI 图文排版系统架构样例",
-            author: "layoutD"
+            author: "layoutD",
+            publisher: "layoutD Press",
+            isbn: "9787115546081",
+            series: "AI 图书排版实验",
+            keywords: ["中文排版", "科普图书", "AI"]
         ),
         sections: [
             BookSection(
@@ -79,6 +83,10 @@ public struct ProjectMetadata: Codable, Equatable, Sendable {
     public var title: String
     public var subtitle: String?
     public var author: String
+    public var publisher: String?
+    public var isbn: String?
+    public var series: String?
+    public var keywords: [String]
     public var createdAt: Date
     public var modifiedAt: Date
 
@@ -86,14 +94,60 @@ public struct ProjectMetadata: Codable, Equatable, Sendable {
         title: String,
         subtitle: String? = nil,
         author: String,
+        publisher: String? = nil,
+        isbn: String? = nil,
+        series: String? = nil,
+        keywords: [String] = [],
         createdAt: Date = Date(),
         modifiedAt: Date = Date()
     ) {
         self.title = title
         self.subtitle = subtitle
         self.author = author
+        self.publisher = publisher
+        self.isbn = isbn
+        self.series = series
+        self.keywords = keywords
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case title
+        case subtitle
+        case author
+        case publisher
+        case isbn
+        case series
+        case keywords
+        case createdAt
+        case modifiedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decode(String.self, forKey: .title)
+        subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+        author = try container.decode(String.self, forKey: .author)
+        publisher = try container.decodeIfPresent(String.self, forKey: .publisher)
+        isbn = try container.decodeIfPresent(String.self, forKey: .isbn)
+        series = try container.decodeIfPresent(String.self, forKey: .series)
+        keywords = try container.decodeIfPresent([String].self, forKey: .keywords) ?? []
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        modifiedAt = try container.decodeIfPresent(Date.self, forKey: .modifiedAt) ?? createdAt
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(subtitle, forKey: .subtitle)
+        try container.encode(author, forKey: .author)
+        try container.encodeIfPresent(publisher, forKey: .publisher)
+        try container.encodeIfPresent(isbn, forKey: .isbn)
+        try container.encodeIfPresent(series, forKey: .series)
+        try container.encode(keywords, forKey: .keywords)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(modifiedAt, forKey: .modifiedAt)
     }
 }
 
@@ -149,6 +203,7 @@ public enum ParagraphKind: Codable, Equatable, Sendable {
     case figure(assetId: UUID)
     case caption(assetId: UUID?)
     case callout
+    case table
     case listItem
     case quote
 }

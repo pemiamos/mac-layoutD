@@ -10,18 +10,48 @@ import UniformTypeIdentifiers
 
 let launchProject = ProjectLoader().loadFromCommandLine()
 
-if launchProject.exportPDFURL != nil || launchProject.exportProjectURL != nil {
+if launchProject.exportPDFURL != nil
+    || launchProject.exportProjectURL != nil
+    || launchProject.preflightReportURL != nil
+    || launchProject.validateOnly {
     do {
+        if let loadError = launchProject.loadError {
+            fputs("Load failed: \(loadError)\n", stderr)
+            exit(EXIT_FAILURE)
+        }
+
+        let document = LayoutEngine().layout(project: launchProject.project)
+        let report = ProjectInspector().preflight(project: launchProject.project, document: document)
+
         if let exportProjectURL = launchProject.exportProjectURL {
             let data = try ProjectFile.encode(launchProject.project)
             try data.write(to: exportProjectURL, options: .atomic)
             print("Exported project: \(exportProjectURL.path)")
         }
 
+        if let preflightReportURL = launchProject.preflightReportURL {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(report)
+            try data.write(to: preflightReportURL, options: .atomic)
+            print("Exported preflight report: \(preflightReportURL.path)")
+        }
+
         if let exportPDFURL = launchProject.exportPDFURL {
-            let document = LayoutEngine().layout(project: launchProject.project)
             try PDFExporter().export(document: document, project: launchProject.project, to: exportPDFURL)
             print("Exported PDF: \(exportPDFURL.path)")
+        }
+
+        if launchProject.validateOnly {
+            if report.exportReady {
+                print("Validation passed: \(launchProject.project.metadata.title)")
+            } else {
+                fputs("Validation failed: \(report.severityCounts[IssueSeverity.error.rawValue, default: 0]) error(s)\n", stderr)
+                for issue in report.issues where issue.severity == .error {
+                    fputs("- \(issue.message)\n", stderr)
+                }
+                exit(2)
+            }
         }
         exit(EXIT_SUCCESS)
     } catch {
@@ -75,6 +105,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         workspaceController?.exportPDF()
     }
 
+    @objc private func exportPreflightReport(_ sender: Any?) {
+        workspaceController?.exportPreflightReport()
+    }
+
     @objc private func openProject(_ sender: Any?) {
         workspaceController?.openProject()
     }
@@ -97,6 +131,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func fitWidth(_ sender: Any?) {
         workspaceController?.fitWidth()
+    }
+
+    @objc private func previousPage(_ sender: Any?) {
+        workspaceController?.previousPage()
+    }
+
+    @objc private func nextPage(_ sender: Any?) {
+        workspaceController?.nextPage()
     }
 
     private func buildMainMenu() {
@@ -141,6 +183,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         )
         fileMenu.items.last?.target = self
+        fileMenu.addItem(
+            NSMenuItem(
+                title: "Export Preflight Report...",
+                action: #selector(exportPreflightReport(_:)),
+                keyEquivalent: "r"
+            )
+        )
+        fileMenu.items.last?.target = self
         fileMenuItem.submenu = fileMenu
         mainMenu.addItem(fileMenuItem)
 
@@ -156,6 +206,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             viewMenu.addItem(NSMenuItem(title: item.0, action: item.1, keyEquivalent: item.2))
             viewMenu.items.last?.target = self
         }
+        viewMenu.addItem(NSMenuItem.separator())
+        viewMenu.addItem(
+            NSMenuItem(
+                title: "Previous Page",
+                action: #selector(previousPage(_:)),
+                keyEquivalent: "["
+            )
+        )
+        viewMenu.items.last?.target = self
+        viewMenu.addItem(
+            NSMenuItem(
+                title: "Next Page",
+                action: #selector(nextPage(_:)),
+                keyEquivalent: "]"
+            )
+        )
+        viewMenu.items.last?.target = self
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
 
@@ -174,6 +241,7 @@ final class WorkspaceViewController: NSViewController {
     private let sidebar = NSTextView()
     private let inspector = NSTextView()
     private let canvas = CanvasView()
+    private var currentPageNumber = 1
 
     init(project: BookProject, sourceDescription: String) {
         self.project = project
@@ -242,14 +310,15 @@ final class WorkspaceViewController: NSViewController {
     private func refreshDocument() {
         let document = engine.layout(project: project)
         laidOutDocument = document
+        currentPageNumber = min(max(currentPageNumber, 1), max(document.pages.count, 1))
         canvas.project = project
         canvas.document = document
         view.window?.title = "layoutD - \(project.metadata.title)"
 
         let plans = advisor.proposePlans(for: project, target: .page(1))
-        let issues = inspectorEngine.inspect(project: project) + document.issues
+        let report = inspectorEngine.preflight(project: project, document: document)
         sidebar.string = sidebarText(project: project, document: document)
-        inspector.string = inspectorText(project: project, issues: issues, plans: plans)
+        inspector.string = inspectorText(project: project, report: report, plans: plans)
     }
 
     private func sidebarText(project: BookProject, document: LaidOutDocument) -> String {
@@ -258,6 +327,7 @@ final class WorkspaceViewController: NSViewController {
             sourceDescription,
             project.pageSetup.pageSize.label,
             "Zoom \(Int(canvas.zoomScale * 100))%",
+            "当前页 \(currentPageNumber)",
             "",
             "章节"
         ]
@@ -271,12 +341,23 @@ final class WorkspaceViewController: NSViewController {
         return lines.joined(separator: "\n")
     }
 
-    private func inspectorText(project: BookProject, issues: [LayoutIssue], plans: [LayoutPlan]) -> String {
+    private func inspectorText(project: BookProject, report: PreflightReport, plans: [LayoutPlan]) -> String {
         var lines: [String] = [
             "项目检查",
-            "Issues: \(issues.count)"
+            report.isExportReady ? "状态：可导出" : "状态：需修复错误",
+            ""
         ]
-        lines += issues.map { "[\($0.severity.rawValue)] \($0.message)" }
+        lines += report.summaryLines
+        lines += [
+            "",
+            "Issues: \(report.issues.count)"
+        ]
+        lines += report.issues.map { issue in
+            if let pageNumber = issue.pageNumber {
+                return "[\(issue.severity.rawValue)] p.\(pageNumber) \(issue.message)"
+            }
+            return "[\(issue.severity.rawValue)] \(issue.message)"
+        }
         lines += [
             "",
             "AI LayoutPlan 候选"
@@ -288,6 +369,12 @@ final class WorkspaceViewController: NSViewController {
         lines += [
             "",
             "素材库"
+        ]
+        lines += [
+            "缺图注：\(report.assetSummary.missingCaptions)",
+            "缺来源：\(report.assetSummary.missingCredits)",
+            "低分辨率：\(report.assetSummary.lowResolution)",
+            "未知尺寸：\(report.assetSummary.unknownSize)"
         ]
         lines += project.assets.map { "- \($0.fileName) · \($0.role.rawValue) · \($0.dpi.map { "\($0) DPI" } ?? "DPI unknown")" }
         return lines.joined(separator: "\n")
@@ -320,6 +407,7 @@ final class WorkspaceViewController: NSViewController {
                 let loader = ProjectLoader()
                 self.project = try loader.loadProject(inputURL: url)
                 self.sourceDescription = loader.sourceDescription(for: url)
+                self.currentPageNumber = 1
                 self.refreshDocument()
             } catch {
                 self.showExportResult(message: "Open failed", detail: error.localizedDescription)
@@ -371,6 +459,25 @@ final class WorkspaceViewController: NSViewController {
     func fitWidth() {
         canvas.fitWidth(availableWidth: canvas.enclosingScrollView?.contentView.bounds.width ?? canvas.bounds.width)
         updateZoomLabel()
+        canvas.scrollToPage(number: currentPageNumber)
+    }
+
+    func previousPage() {
+        guard let document = laidOutDocument else {
+            return
+        }
+        currentPageNumber = max(1, currentPageNumber - 1)
+        canvas.scrollToPage(number: currentPageNumber)
+        sidebar.string = sidebarText(project: project, document: document)
+    }
+
+    func nextPage() {
+        guard let document = laidOutDocument else {
+            return
+        }
+        currentPageNumber = min(document.pages.count, currentPageNumber + 1)
+        canvas.scrollToPage(number: currentPageNumber)
+        sidebar.string = sidebarText(project: project, document: document)
     }
 
     private func updateZoomLabel() {
@@ -398,6 +505,36 @@ final class WorkspaceViewController: NSViewController {
                 self.showExportResult(message: "PDF exported", detail: url.path)
             } catch {
                 self.showExportResult(message: "PDF export failed", detail: error.localizedDescription)
+            }
+        }
+    }
+
+    func exportPreflightReport() {
+        let document = laidOutDocument ?? engine.layout(project: project)
+        let report = inspectorEngine.preflight(project: project, document: document)
+        let savePanel = NSSavePanel()
+        savePanel.title = "Export Preflight Report"
+        savePanel.nameFieldStringValue = safeFileName(project.metadata.title) + "-preflight.json"
+        savePanel.allowedContentTypes = [.json]
+        savePanel.canCreateDirectories = true
+
+        guard let window = view.window else {
+            return
+        }
+
+        savePanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = savePanel.url, let self else {
+                return
+            }
+
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let data = try encoder.encode(report)
+                try data.write(to: url, options: .atomic)
+                self.showExportResult(message: "Preflight report exported", detail: url.path)
+            } catch {
+                self.showExportResult(message: "Preflight export failed", detail: error.localizedDescription)
             }
         }
     }

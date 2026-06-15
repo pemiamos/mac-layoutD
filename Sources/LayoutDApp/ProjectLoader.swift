@@ -7,6 +7,9 @@ struct LoadedProject {
     var sourceDescription: String
     var exportPDFURL: URL?
     var exportProjectURL: URL?
+    var preflightReportURL: URL?
+    var validateOnly: Bool
+    var loadError: String?
 }
 
 struct ProjectLoader {
@@ -17,7 +20,10 @@ struct ProjectLoader {
                 project: .sample,
                 sourceDescription: "内置样章",
                 exportPDFURL: options.exportPDFPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                exportProjectURL: options.exportProjectPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
+                exportProjectURL: options.exportProjectPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                preflightReportURL: options.preflightReportPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                validateOnly: options.validateOnly,
+                loadError: nil
             )
         }
 
@@ -31,7 +37,10 @@ struct ProjectLoader {
                 project: project,
                 sourceDescription: sourceDescription(for: manuscriptURL),
                 exportPDFURL: options.exportPDFPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                exportProjectURL: options.exportProjectPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
+                exportProjectURL: options.exportProjectPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                preflightReportURL: options.preflightReportPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                validateOnly: options.validateOnly,
+                loadError: nil
             )
         } catch {
             var project = BookProject.sample
@@ -63,7 +72,10 @@ struct ProjectLoader {
                 project: project,
                 sourceDescription: "导入失败",
                 exportPDFURL: options.exportPDFPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                exportProjectURL: options.exportProjectPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
+                exportProjectURL: options.exportProjectPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                preflightReportURL: options.preflightReportPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                validateOnly: options.validateOnly,
+                loadError: error.localizedDescription
             )
         }
     }
@@ -114,6 +126,8 @@ struct ProjectLoader {
 private struct CommandLineOptions {
     var exportPDFPath: String?
     var exportProjectPath: String?
+    var preflightReportPath: String?
+    var validateOnly = false
     var manuscriptPath: String?
     var assetDirectoryPath: String?
 
@@ -128,6 +142,12 @@ private struct CommandLineOptions {
                 continue
             }
 
+            if argument == "--validate" {
+                validateOnly = true
+                index += 1
+                continue
+            }
+
             if argument == "--export-pdf", index + 1 < arguments.count {
                 exportPDFPath = arguments[index + 1]
                 index += 2
@@ -136,6 +156,12 @@ private struct CommandLineOptions {
 
             if argument == "--export-project", index + 1 < arguments.count {
                 exportProjectPath = arguments[index + 1]
+                index += 2
+                continue
+            }
+
+            if argument == "--preflight-report", index + 1 < arguments.count {
+                preflightReportPath = arguments[index + 1]
                 index += 2
                 continue
             }
