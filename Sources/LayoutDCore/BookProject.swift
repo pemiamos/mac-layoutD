@@ -7,6 +7,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     public var styles: StyleLibrary
     public var sections: [BookSection]
     public var assets: [Asset]
+    public var appliedLayoutPlans: [Int: LayoutPlan]?
+    public var lockedPages: Set<Int>?
 
     public init(
         id: UUID = UUID(),
@@ -14,7 +16,9 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         pageSetup: PageSetup = .scienceBookDefault,
         styles: StyleLibrary = .defaultChineseScience,
         sections: [BookSection] = [],
-        assets: [Asset] = []
+        assets: [Asset] = [],
+        appliedLayoutPlans: [Int: LayoutPlan]? = nil,
+        lockedPages: Set<Int>? = nil
     ) {
         self.id = id
         self.metadata = metadata
@@ -22,6 +26,18 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         self.styles = styles
         self.sections = sections
         self.assets = assets
+        self.appliedLayoutPlans = appliedLayoutPlans
+        self.lockedPages = lockedPages
+    }
+
+    public var safeAppliedLayoutPlans: [Int: LayoutPlan] {
+        get { appliedLayoutPlans ?? [:] }
+        set { appliedLayoutPlans = newValue }
+    }
+
+    public var safeLockedPages: Set<Int> {
+        get { lockedPages ?? [] }
+        set { lockedPages = newValue }
     }
 
     public static let sample = BookProject(

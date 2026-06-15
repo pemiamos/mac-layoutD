@@ -13,6 +13,16 @@ final class CanvasView: NSView {
         }
     }
 
+    var highlightedFrameId: UUID? {
+        didSet { needsDisplay = true }
+    }
+
+    var selectedFrameId: UUID? {
+        didSet { needsDisplay = true }
+    }
+
+    var onFrameSelected: ((UUID?) -> Void)?
+
     private(set) var zoomScale: CGFloat = 1.15
     private let pageGap: CGFloat = 36
     private let canvasInset: CGFloat = 42
@@ -82,21 +92,50 @@ final class CanvasView: NSView {
         NSColor(calibratedWhite: 0.72, alpha: 1).setStroke()
         NSBezierPath(rect: pageRect).stroke()
 
-        drawGuides(project: project, pageRect: pageRect)
+        // Draw padlock icon if the page is locked
+        if project.safeLockedPages.contains(page.number) {
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 14)
+            ]
+            "🔒".draw(at: CGPoint(x: pageRect.maxX - 28, y: pageRect.minY + 12), withAttributes: attributes)
+        }
+
+        // Draw spine guide line if facing pages is enabled and it's not the cover page
+        if project.pageSetup.facingPages && page.number > 1 {
+            NSColor(calibratedWhite: 0.72, alpha: 1).setStroke()
+            let path = NSBezierPath()
+            path.lineWidth = 1.0
+            let spineX = page.number % 2 == 0 ? pageRect.maxX : pageRect.minX
+            path.move(to: CGPoint(x: spineX, y: pageRect.minY))
+            path.line(to: CGPoint(x: spineX, y: pageRect.maxY))
+            path.stroke()
+        }
+
+        drawGuides(project: project, pageRect: pageRect, pageNumber: page.number)
 
         for frame in page.frames {
             draw(frame: frame, project: project, pageRect: pageRect)
         }
 
-        drawPageNumber(page.number, pageRect: pageRect)
+        drawPageNumber(page.number, project: project, pageRect: pageRect)
     }
 
-    private func drawGuides(project: BookProject, pageRect: CGRect) {
+    private func drawGuides(project: BookProject, pageRect: CGRect, pageNumber: Int) {
         let setup = project.pageSetup
+        let leftMargin: CGFloat
+        let rightMargin: CGFloat
+        if setup.facingPages {
+            leftMargin = CGFloat(pageNumber % 2 == 1 ? setup.margins.left : setup.margins.right)
+            rightMargin = CGFloat(pageNumber % 2 == 1 ? setup.margins.right : setup.margins.left)
+        } else {
+            leftMargin = CGFloat(setup.margins.left)
+            rightMargin = CGFloat(setup.margins.right)
+        }
+
         let marginRect = CGRect(
-            x: pageRect.minX + CGFloat(setup.margins.left) * zoomScale,
+            x: pageRect.minX + leftMargin * zoomScale,
             y: pageRect.minY + CGFloat(setup.margins.top) * zoomScale,
-            width: CGFloat(setup.pageSize.width - setup.margins.left - setup.margins.right) * zoomScale,
+            width: CGFloat(setup.pageSize.width - Double(leftMargin + rightMargin)) * zoomScale,
             height: CGFloat(setup.pageSize.height - setup.margins.top - setup.margins.bottom) * zoomScale
         )
         NSColor(calibratedRed: 0.20, green: 0.48, blue: 0.47, alpha: 0.25).setStroke()
@@ -118,6 +157,24 @@ final class CanvasView: NSView {
             drawAssetPlaceholder(assetId: assetId, project: project, rect: rect)
         case .empty:
             break
+        }
+
+        if frame.id == highlightedFrameId {
+            NSColor.red.withAlphaComponent(0.15).setFill()
+            rect.fill()
+            NSColor.red.setStroke()
+            let path = NSBezierPath(rect: rect)
+            path.lineWidth = 2.0
+            path.stroke()
+        }
+
+        if frame.id == selectedFrameId {
+            NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.15).setFill()
+            rect.fill()
+            NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).setStroke()
+            let path = NSBezierPath(rect: rect)
+            path.lineWidth = 2.0
+            path.stroke()
         }
     }
 
@@ -200,29 +257,57 @@ final class CanvasView: NSView {
         label.draw(in: rect.insetBy(dx: 10, dy: 10), withAttributes: attributes)
     }
 
-    private func drawPageNumber(_ number: Int, pageRect: CGRect) {
+    private func drawPageNumber(_ number: Int, project: BookProject, pageRect: CGRect) {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 11),
             .foregroundColor: NSColor.gray
         ]
-        "\(number)".draw(
-            at: CGPoint(x: pageRect.midX - 4, y: pageRect.maxY - 24),
-            withAttributes: attributes
-        )
+        let numStr = "\(number)"
+        let setup = project.pageSetup
+        
+        if setup.facingPages {
+            let leftMargin = CGFloat(number % 2 == 1 ? setup.margins.left : setup.margins.right)
+            let rightMargin = CGFloat(number % 2 == 1 ? setup.margins.right : setup.margins.left)
+            let x: CGFloat
+            if number % 2 == 0 {
+                // Left page, bottom left
+                x = pageRect.minX + leftMargin * zoomScale
+            } else {
+                // Right page, bottom right
+                let numSize = numStr.size(withAttributes: attributes)
+                x = pageRect.maxX - rightMargin * zoomScale - numSize.width
+            }
+            numStr.draw(at: CGPoint(x: x, y: pageRect.maxY - 24), withAttributes: attributes)
+        } else {
+            numStr.draw(
+                at: CGPoint(x: pageRect.midX - 4, y: pageRect.maxY - 24),
+                withAttributes: attributes
+            )
+        }
     }
 
     private func updateFrame() {
         guard let project, let document else { return }
         let pageSize = project.pageSetup.pageSize
-        let height = canvasInset * 2
-            + CGFloat(document.pages.count) * CGFloat(pageSize.height) * zoomScale
-            + CGFloat(max(document.pages.count - 1, 0)) * pageGap
-        frame = CGRect(
-            x: 0,
-            y: 0,
-            width: CGFloat(pageSize.width) * zoomScale + canvasInset * 2,
-            height: height
-        )
+        let pageWidth = CGFloat(pageSize.width) * zoomScale
+        let pageHeight = CGFloat(pageSize.height) * zoomScale
+        
+        if project.pageSetup.facingPages {
+            let width = pageWidth * 2 + canvasInset * 2
+            let S_max = document.pages.count / 2
+            let height = canvasInset * 2 + CGFloat(S_max + 1) * pageHeight + CGFloat(S_max) * pageGap
+            frame = CGRect(x: 0, y: 0, width: width, height: height)
+        } else {
+            let height = canvasInset * 2
+                + CGFloat(document.pages.count) * pageHeight
+                + CGFloat(max(document.pages.count - 1, 0)) * pageGap
+            frame = CGRect(
+                x: 0,
+                y: 0,
+                width: pageWidth + canvasInset * 2,
+                height: height
+            )
+        }
     }
 
     private func pageRect(number: Int) -> CGRect? {
@@ -231,11 +316,57 @@ final class CanvasView: NSView {
         }
 
         let pageSize = project.pageSetup.pageSize
-        return CGRect(
-            x: canvasInset,
-            y: canvasInset + CGFloat(number - 1) * (CGFloat(pageSize.height) * zoomScale + pageGap),
-            width: CGFloat(pageSize.width) * zoomScale,
-            height: CGFloat(pageSize.height) * zoomScale
-        )
+        let pageWidth = CGFloat(pageSize.width) * zoomScale
+        let pageHeight = CGFloat(pageSize.height) * zoomScale
+        
+        if project.pageSetup.facingPages {
+            let centerX = canvasInset + pageWidth
+            if number == 1 {
+                return CGRect(x: centerX, y: canvasInset, width: pageWidth, height: pageHeight)
+            } else {
+                let S = number / 2
+                let y = canvasInset + CGFloat(S) * (pageHeight + pageGap)
+                let x = number % 2 == 0 ? centerX - pageWidth : centerX
+                return CGRect(x: x, y: y, width: pageWidth, height: pageHeight)
+            }
+        } else {
+            return CGRect(
+                x: canvasInset,
+                y: canvasInset + CGFloat(number - 1) * (pageHeight + pageGap),
+                width: pageWidth,
+                height: pageHeight
+            )
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        guard project != nil, let document else { return }
+
+        var hitFrame: PageFrame? = nil
+
+        for page in document.pages {
+            guard let pRect = pageRect(number: page.number) else { continue }
+            if pRect.contains(point) {
+                let localX = (point.x - pRect.minX) / zoomScale
+                let localY = (point.y - pRect.minY) / zoomScale
+                
+                if let found = page.frames.reversed().first(where: { frame in
+                    let fRect = CGRect(x: frame.rect.x, y: frame.rect.y, width: frame.rect.width, height: frame.rect.height)
+                    return fRect.contains(CGPoint(x: localX, y: localY)) && frame.content != .empty
+                }) {
+                    hitFrame = found
+                    break
+                }
+            }
+        }
+
+        if let frame = hitFrame {
+            selectedFrameId = frame.id
+            onFrameSelected?(frame.id)
+        } else {
+            selectedFrameId = nil
+            onFrameSelected?(nil)
+        }
     }
 }

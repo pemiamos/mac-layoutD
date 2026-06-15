@@ -12,6 +12,7 @@ public struct LayoutEngine: LayoutEngineProtocol {
     public func layout(project: BookProject) -> LaidOutDocument {
         var context = LayoutContext(project: project)
         context.addRunningHeader(project.metadata.title)
+        context.applyPlanIfPresent()
 
         for section in project.sections {
             context.addSectionTitle(section.title)
@@ -35,6 +36,7 @@ private struct LayoutContext {
     private var currentColumnTopY: Double
     private var currentColumn: Int = 0
     private var placedAssetIds = Set<UUID>()
+    private var placedParagraphIds = Set<UUID>()
     private var tableOfContents: [TableOfContentsEntry] = []
     private var figureCounter = 0
 
@@ -47,8 +49,8 @@ private struct LayoutContext {
     }
 
     mutating func addRunningHeader(_ title: String) {
-        let setup = project.pageSetup
-        let rect = Rect(x: setup.margins.left, y: 24, width: contentWidth, height: 16)
+        let actualPageNumber = currentPage.number + 2
+        let rect = Rect(x: pageLeftMargin(for: actualPageNumber), y: 24, width: contentWidth, height: 16)
         currentPage.frames.append(
             PageFrame(kind: .text, rect: rect, styleId: StyleID.caption.rawValue, content: .text(title))
         )
@@ -66,6 +68,10 @@ private struct LayoutContext {
         }
 
         for paragraph in story.paragraphs {
+            if placedParagraphIds.contains(paragraph.id) {
+                continue
+            }
+
             if case .figure(let assetId) = paragraph.kind {
                 if let asset = project.assets.first(where: { $0.id == assetId }) {
                     addAsset(asset)
@@ -182,6 +188,10 @@ private struct LayoutContext {
                 style: style,
                 maxHeight: maxSegmentHeight
             )
+            if segment.isEmpty {
+                advanceToNextColumnOrPage()
+                continue
+            }
             let segmentHeight = estimatedTextHeight(text: segment, style: style, width: columnWidth)
             placeTextFrame(segment, height: segmentHeight, style: style, kind: kind, spaceBefore: spaceBefore)
             remainingText.removeFirst(segment.count)
@@ -226,7 +236,9 @@ private struct LayoutContext {
             }
         }
 
-        return smartBreakPrefix(of: text, maximumCount: bestCount)
+        let broken = smartBreakPrefix(of: text, maximumCount: bestCount)
+        let kinsokuPrefix = applyChineseTypesettingRules(candidatePrefix: broken, fullText: text, style: style, maxHeight: maxHeight)
+        return applyWidowOrphanControls(prefix: kinsokuPrefix, fullText: text, style: style, maxHeight: maxHeight)
     }
 
     private func smartBreakPrefix(of text: String, maximumCount: Int) -> String {
@@ -243,6 +255,96 @@ private struct LayoutContext {
         }
 
         return roughPrefix.trimmedForLayout
+    }
+
+    private func applyChineseTypesettingRules(
+        candidatePrefix: String,
+        fullText: String,
+        style: ParagraphStyle,
+        maxHeight: Double
+    ) -> String {
+        var prefix = candidatePrefix
+        
+        for _ in 0..<5 {
+            let prefixCount = prefix.count
+            guard prefixCount > 0, prefixCount < fullText.count else {
+                break
+            }
+            
+            if let lastChar = prefix.last, forbiddenLineEndCharacters.contains(lastChar) {
+                prefix = String(prefix.dropLast())
+                continue
+            }
+            
+            let remainingText = fullText.dropFirst(prefix.count)
+            if let nextChar = remainingText.first, forbiddenLineStartCharacters.contains(nextChar) {
+                let pulledCandidate = prefix + String(nextChar)
+                let height = estimatedTextHeight(text: pulledCandidate, style: style, width: columnWidth)
+                if height <= maxHeight {
+                    prefix = pulledCandidate
+                } else {
+                    if prefix.count > 1 {
+                        prefix = String(prefix.dropLast())
+                    } else {
+                        break
+                    }
+                }
+                continue
+            }
+            
+            break
+        }
+        
+        return prefix.trimmedForLayout
+    }
+
+    private func applyWidowOrphanControls(
+        prefix: String,
+        fullText: String,
+        style: ParagraphStyle,
+        maxHeight: Double
+    ) -> String {
+        let prefix = prefix.trimmedForLayout
+        guard !prefix.isEmpty else { return "" }
+        let remaining = String(fullText.dropFirst(prefix.count)).trimmedForLayout
+        guard !remaining.isEmpty else { return prefix }
+        
+        let prefixHeight = estimatedTextHeight(text: prefix, style: style, width: columnWidth)
+        let prefixLines = max(1, Int(round(prefixHeight / style.lineHeight)))
+        
+        let remainingHeight = estimatedTextHeight(text: String(remaining), style: style, width: columnWidth)
+        let remainingLines = max(1, Int(round(remainingHeight / style.lineHeight)))
+        
+        // 1. Orphan control: If only 1 line fits on current page/column, push the whole paragraph
+        // We only push if we are NOT already at the top of a column/page to prevent infinite loops.
+        if prefixLines == 1 && maxHeight < columnTextHeight {
+            return ""
+        }
+        
+        // 2. Widow control: If only 1 line flows to the next page/column, pull another line from current page
+        if remainingLines == 1 && prefixLines >= 3 {
+            let targetHeight = Double(prefixLines - 1) * style.lineHeight
+            var lowerBound = 1
+            var upperBound = prefix.count
+            var bestCount = 1
+            
+            while lowerBound <= upperBound {
+                let mid = (lowerBound + upperBound) / 2
+                let candidate = String(prefix.prefix(mid)).trimmedForLayout
+                let height = estimatedTextHeight(text: candidate, style: style, width: columnWidth)
+                if height <= targetHeight {
+                    bestCount = max(mid, 1)
+                    lowerBound = mid + 1
+                } else {
+                    upperBound = mid - 1
+                }
+            }
+            
+            let broken = smartBreakPrefix(of: prefix, maximumCount: bestCount)
+            return applyChineseTypesettingRules(candidatePrefix: broken, fullText: prefix, style: style, maxHeight: targetHeight)
+        }
+        
+        return prefix
     }
 
     private mutating func addAsset(_ asset: Asset) {
@@ -374,7 +476,8 @@ private struct LayoutContext {
     private mutating func advanceToNextColumnOrPage() {
         if currentColumn + 1 < project.pageSetup.columns {
             currentColumn += 1
-            cursorX = project.pageSetup.margins.left + Double(currentColumn) * (columnWidth + project.pageSetup.gutter)
+            let actualPageNumber = currentPage.number + 2
+            cursorX = pageLeftMargin(for: actualPageNumber) + Double(currentColumn) * (columnWidth + project.pageSetup.gutter)
             cursorY = currentColumnTopY
         } else {
             advanceToNextPage()
@@ -383,12 +486,15 @@ private struct LayoutContext {
 
     private mutating func advanceToNextPage() {
         pages.append(currentPage)
-        currentPage = LaidOutPage(number: pages.count + 1)
+        let newPageNumber = pages.count + 1
+        currentPage = LaidOutPage(number: newPageNumber)
         currentColumn = 0
-        cursorX = project.pageSetup.margins.left
+        cursorX = pageLeftMargin(for: newPageNumber + 2)
         cursorY = project.pageSetup.margins.top
         currentColumnTopY = project.pageSetup.margins.top
         addRunningHeader(project.metadata.title)
+        
+        applyPlanIfPresent()
     }
 
     private mutating func snapToBaseline() {
@@ -468,10 +574,11 @@ private struct LayoutContext {
     private func makeCoverPage(number: Int) -> LaidOutPage {
         let setup = project.pageSetup
         let contentWidth = setup.pageSize.width - setup.margins.left - setup.margins.right
+        let leftMargin = pageLeftMargin(for: number)
         var frames: [PageFrame] = [
             PageFrame(
                 kind: .text,
-                rect: Rect(x: setup.margins.left, y: 180, width: contentWidth, height: 72),
+                rect: Rect(x: leftMargin, y: 180, width: contentWidth, height: 72),
                 styleId: StyleID.heading1.rawValue,
                 content: .text(project.metadata.title)
             )
@@ -481,7 +588,7 @@ private struct LayoutContext {
             frames.append(
                 PageFrame(
                     kind: .text,
-                    rect: Rect(x: setup.margins.left, y: 266, width: contentWidth, height: 36),
+                    rect: Rect(x: leftMargin, y: 266, width: contentWidth, height: 36),
                     styleId: StyleID.heading2.rawValue,
                     content: .text(subtitle)
                 )
@@ -491,7 +598,7 @@ private struct LayoutContext {
         frames.append(
             PageFrame(
                 kind: .text,
-                rect: Rect(x: setup.margins.left, y: setup.pageSize.height - 150, width: contentWidth, height: 24),
+                rect: Rect(x: leftMargin, y: setup.pageSize.height - 150, width: contentWidth, height: 24),
                 styleId: StyleID.caption.rawValue,
                 content: .text(project.metadata.author)
             )
@@ -501,7 +608,7 @@ private struct LayoutContext {
             frames.append(
                 PageFrame(
                     kind: .text,
-                    rect: Rect(x: setup.margins.left, y: setup.pageSize.height - 120, width: contentWidth, height: 18),
+                    rect: Rect(x: leftMargin, y: setup.pageSize.height - 120, width: contentWidth, height: 18),
                     styleId: StyleID.caption.rawValue,
                     content: .text(publisher)
                 )
@@ -514,6 +621,7 @@ private struct LayoutContext {
     private func makeContentsPage(number: Int, entries: [TableOfContentsEntry]) -> LaidOutPage {
         let setup = project.pageSetup
         let contentWidth = setup.pageSize.width - setup.margins.left - setup.margins.right
+        let leftMargin = pageLeftMargin(for: number)
         let body = entries.isEmpty
             ? "暂无章节"
             : entries.map { entry in
@@ -526,13 +634,13 @@ private struct LayoutContext {
             frames: [
                 PageFrame(
                     kind: .text,
-                    rect: Rect(x: setup.margins.left, y: setup.margins.top, width: contentWidth, height: 42),
+                    rect: Rect(x: leftMargin, y: setup.margins.top, width: contentWidth, height: 42),
                     styleId: StyleID.heading1.rawValue,
                     content: .text("目录")
                 ),
                 PageFrame(
                     kind: .text,
-                    rect: Rect(x: setup.margins.left, y: setup.margins.top + 72, width: contentWidth, height: 420),
+                    rect: Rect(x: leftMargin, y: setup.margins.top + 72, width: contentWidth, height: 420),
                     styleId: StyleID.body.rawValue,
                     content: .text(body)
                 )
@@ -574,7 +682,130 @@ private struct LayoutContext {
     private var remainingColumnHeight: Double {
         project.pageSetup.pageSize.height - project.pageSetup.margins.bottom - cursorY
     }
+
+    mutating func applyPlanIfPresent() {
+        let actualPageNumber = currentPage.number + 2
+        guard let plans = project.appliedLayoutPlans,
+              let plan = plans[actualPageNumber] else {
+            return
+        }
+
+        let pageSize = project.pageSetup.pageSize
+        
+        for block in plan.blocks {
+            let rect = Rect(
+                x: block.frame.x * pageSize.width,
+                y: block.frame.y * pageSize.height,
+                width: block.frame.width * pageSize.width,
+                height: block.frame.height * pageSize.height
+            )
+            
+            let kind: PageFrameKind
+            switch block.kind {
+            case .text: kind = .text
+            case .image: kind = .image
+            case .caption: kind = .caption
+            case .component: kind = .callout
+            }
+            
+            let content: FrameContent
+            switch block.contentReference {
+            case .asset(let assetId):
+                content = .asset(assetId)
+            case .generated(let str):
+                content = .text(str)
+            case .paragraph(let paragraphId):
+                if let paragraph = findParagraph(id: paragraphId) {
+                    content = .text(paragraph.text)
+                    placedParagraphIds.insert(paragraphId)
+                } else {
+                    content = .text("")
+                }
+            case .storyRange(let storyId, let startId, let endId):
+                let texts = collectParagraphTexts(storyId: storyId, startId: startId, endId: endId)
+                content = .text(texts)
+            }
+            
+            let styleId: String?
+            if block.kind == .text {
+                styleId = StyleID.body.rawValue
+            } else if block.kind == .caption {
+                styleId = StyleID.caption.rawValue
+            } else if block.kind == .component {
+                styleId = StyleID.callout.rawValue
+            } else {
+                styleId = nil
+            }
+            
+            currentPage.frames.append(PageFrame(id: block.id, kind: kind, rect: rect, styleId: styleId, content: content))
+        }
+        
+        advanceToNextPage()
+    }
+
+    private func findParagraph(id: UUID) -> Paragraph? {
+        for section in project.sections {
+            for story in section.stories {
+                if let paragraph = story.paragraphs.first(where: { $0.id == id }) {
+                    return paragraph
+                }
+            }
+        }
+        return nil
+    }
+
+    private func findStory(id: UUID) -> Story? {
+        for section in project.sections {
+            if let story = section.stories.first(where: { $0.id == id }) {
+                return story
+            }
+        }
+        return nil
+    }
+
+    private mutating func collectParagraphTexts(storyId: UUID, startId: UUID, endId: UUID) -> String {
+        guard let story = findStory(id: storyId) else {
+            return ""
+        }
+        
+        var collecting = false
+        var texts: [String] = []
+        
+        for paragraph in story.paragraphs {
+            if paragraph.id == startId {
+                collecting = true
+            }
+            if collecting {
+                texts.append(paragraph.text)
+                placedParagraphIds.insert(paragraph.id)
+            }
+            if paragraph.id == endId {
+                break
+            }
+        }
+        
+        return texts.joined(separator: "\n")
+    }
+
+    private func pageLeftMargin(for pageNumber: Int) -> Double {
+        let setup = project.pageSetup
+        if setup.facingPages {
+            return pageNumber % 2 == 1 ? setup.margins.left : setup.margins.right
+        }
+        return setup.margins.left
+    }
+
+    private func pageRightMargin(for pageNumber: Int) -> Double {
+        let setup = project.pageSetup
+        if setup.facingPages {
+            return pageNumber % 2 == 1 ? setup.margins.right : setup.margins.left
+        }
+        return setup.margins.right
+    }
 }
+
+private let forbiddenLineStartCharacters = Set("，。、！？：；）】》」』,.!?:;)]}%")
+private let forbiddenLineEndCharacters = Set("（【《「『([{")
 
 private struct TableOfContentsEntry: Equatable {
     var level: Int

@@ -18,11 +18,27 @@ public enum PDFExportError: Error, LocalizedError {
 public struct PDFExporter {
     public init() {}
 
-    public func export(document: LaidOutDocument, project: BookProject, to url: URL) throws {
+    public func export(
+        document: LaidOutDocument,
+        project: BookProject,
+        to url: URL,
+        pageRange: String? = nil,
+        drawCropMarks: Bool = false,
+        drawGridGuides: Bool = false
+    ) throws {
         let pageSize = CGSize(
             width: CGFloat(project.pageSetup.pageSize.width),
             height: CGFloat(project.pageSetup.pageSize.height)
         )
+        
+        let maxPages = document.pages.count
+        let pagesToExport: Set<Int>
+        if let rangeStr = pageRange {
+            pagesToExport = parsePageRange(rangeStr, maxPages: maxPages)
+        } else {
+            pagesToExport = Set(1...maxPages)
+        }
+        
         let data = NSMutableData()
         var mediaBox = CGRect(origin: .zero, size: pageSize)
         guard let consumer = CGDataConsumer(data: data),
@@ -30,14 +46,186 @@ public struct PDFExporter {
             throw PDFExportError.couldNotCreateContext
         }
 
-        for page in document.pages {
+        let sortedPages = document.pages.sorted(by: { $0.number < $1.number })
+
+        for page in sortedPages {
+            guard pagesToExport.contains(page.number) else {
+                continue
+            }
             context.beginPDFPage(nil)
+            
             draw(page: page, project: project, in: context)
+            
+            if drawCropMarks {
+                drawCropMarksAndBleeds(in: context, pageSize: pageSize)
+            }
+            
+            if drawGridGuides {
+                drawGridAndMarginGuides(in: context, pageNumber: page.number, project: project, pageSize: pageSize)
+            }
+            
             context.endPDFPage()
         }
 
         context.closePDF()
         try data.write(to: url, options: .atomic)
+    }
+
+    private func parsePageRange(_ rangeStr: String, maxPages: Int) -> Set<Int> {
+        var pages = Set<Int>()
+        let cleaned = rangeStr.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.isEmpty || cleaned == "全部" || cleaned.lowercased() == "all" {
+            return Set(1...maxPages)
+        }
+        
+        let parts = cleaned.split(separator: ",")
+        for part in parts {
+            let trimmedPart = part.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedPart.contains("-") {
+                let rangeParts = trimmedPart.split(separator: "-")
+                if rangeParts.count == 2,
+                   let start = Int(rangeParts[0].trimmingCharacters(in: .whitespaces)),
+                   let end = Int(rangeParts[1].trimmingCharacters(in: .whitespaces)) {
+                    let minP = min(start, end)
+                    let maxP = max(start, end)
+                    if minP <= maxP {
+                        for p in minP...maxP {
+                            if p >= 1 && p <= maxPages {
+                                pages.insert(p)
+                            }
+                        }
+                    }
+                }
+            } else if let p = Int(trimmedPart) {
+                if p >= 1 && p <= maxPages {
+                    pages.insert(p)
+                }
+            }
+        }
+        return pages.isEmpty ? Set(1...maxPages) : pages
+    }
+
+    private func drawCropMarksAndBleeds(in context: CGContext, pageSize: CGSize) {
+        context.saveGState()
+        
+        // 1. Bleed guide (3mm = 8.5 pt inside the trim page edges)
+        let bleedDistance: CGFloat = 8.5
+        context.setStrokeColor(NSColor(calibratedRed: 0.8, green: 0.1, blue: 0.1, alpha: 0.8).cgColor)
+        context.setLineWidth(0.5)
+        let bleedRect = CGRect(
+            x: bleedDistance,
+            y: bleedDistance,
+            width: pageSize.width - 2 * bleedDistance,
+            height: pageSize.height - 2 * bleedDistance
+        )
+        context.setLineDash(phase: 0, lengths: [4, 4])
+        context.stroke(bleedRect)
+        
+        // 2. Trim boundary (solid cyan/gray line)
+        context.setLineDash(phase: 0, lengths: [])
+        context.setStrokeColor(NSColor(calibratedRed: 0.1, green: 0.6, blue: 0.8, alpha: 0.8).cgColor)
+        let trimRect = CGRect(x: 0, y: 0, width: pageSize.width, height: pageSize.height)
+        context.stroke(trimRect)
+        
+        // 3. Crop marks at corners
+        context.setStrokeColor(NSColor.black.cgColor)
+        let markLength: CGFloat = 15.0
+        
+        // Top-Left
+        context.move(to: CGPoint(x: 0, y: pageSize.height - bleedDistance))
+        context.addLine(to: CGPoint(x: markLength, y: pageSize.height - bleedDistance))
+        context.move(to: CGPoint(x: bleedDistance, y: pageSize.height))
+        context.addLine(to: CGPoint(x: bleedDistance, y: pageSize.height - markLength))
+        
+        // Top-Right
+        context.move(to: CGPoint(x: pageSize.width, y: pageSize.height - bleedDistance))
+        context.addLine(to: CGPoint(x: pageSize.width - markLength, y: pageSize.height - bleedDistance))
+        context.move(to: CGPoint(x: pageSize.width - bleedDistance, y: pageSize.height))
+        context.addLine(to: CGPoint(x: pageSize.width - bleedDistance, y: pageSize.height - markLength))
+        
+        // Bottom-Left
+        context.move(to: CGPoint(x: 0, y: bleedDistance))
+        context.addLine(to: CGPoint(x: markLength, y: bleedDistance))
+        context.move(to: CGPoint(x: bleedDistance, y: 0))
+        context.addLine(to: CGPoint(x: bleedDistance, y: markLength))
+        
+        // Bottom-Right
+        context.move(to: CGPoint(x: pageSize.width, y: bleedDistance))
+        context.addLine(to: CGPoint(x: pageSize.width - markLength, y: bleedDistance))
+        context.move(to: CGPoint(x: pageSize.width - bleedDistance, y: 0))
+        context.addLine(to: CGPoint(x: pageSize.width - bleedDistance, y: markLength))
+        
+        context.strokePath()
+        context.restoreGState()
+    }
+
+    private func drawGridAndMarginGuides(in context: CGContext, pageNumber: Int, project: BookProject, pageSize: CGSize) {
+        context.saveGState()
+        
+        let setup = project.pageSetup
+        let leftMargin = CGFloat(pageLeftMargin(for: pageNumber, project: project))
+        let rightMargin = CGFloat(pageRightMargin(for: pageNumber, project: project))
+        let contentWidth = pageSize.width - leftMargin - rightMargin
+        
+        // 1. Margins Box
+        context.setStrokeColor(NSColor(calibratedRed: 0.2, green: 0.4, blue: 0.8, alpha: 0.5).cgColor)
+        context.setLineWidth(0.8)
+        
+        let contentRect = CGRect(
+            x: leftMargin,
+            y: CGFloat(setup.margins.bottom),
+            width: contentWidth,
+            height: pageSize.height - CGFloat(setup.margins.top) - CGFloat(setup.margins.bottom)
+        )
+        context.stroke(contentRect)
+        
+        // Column Guides
+        if setup.columns > 1 {
+            context.setStrokeColor(NSColor(calibratedRed: 0.2, green: 0.4, blue: 0.8, alpha: 0.3).cgColor)
+            let colWidth = (Double(contentWidth) - Double(setup.columns - 1) * setup.gutter) / Double(setup.columns)
+            for i in 0..<setup.columns {
+                let colX = Double(leftMargin) + Double(i) * (colWidth + setup.gutter)
+                let colRect = CGRect(
+                    x: CGFloat(colX),
+                    y: CGFloat(setup.margins.bottom),
+                    width: CGFloat(colWidth),
+                    height: contentRect.height
+                )
+                context.stroke(colRect)
+            }
+        }
+        
+        // 2. Baseline Grid
+        context.setStrokeColor(NSColor(calibratedRed: 0.8, green: 0.5, blue: 0.2, alpha: 0.3).cgColor)
+        context.setLineWidth(0.5)
+        
+        let grid = CGFloat(setup.baselineGrid)
+        var y: CGFloat = CGFloat(setup.margins.top)
+        while y <= pageSize.height - CGFloat(setup.margins.bottom) {
+            let pdfY = pageSize.height - y
+            context.move(to: CGPoint(x: leftMargin, y: pdfY))
+            context.addLine(to: CGPoint(x: pageSize.width - rightMargin, y: pdfY))
+            y += grid
+        }
+        context.strokePath()
+        
+        context.restoreGState()
+    }
+
+    private func pageLeftMargin(for pageNumber: Int, project: BookProject) -> Double {
+        let setup = project.pageSetup
+        if setup.facingPages {
+            return pageNumber % 2 == 1 ? setup.margins.left : setup.margins.right
+        }
+        return setup.margins.left
+    }
+
+    private func pageRightMargin(for pageNumber: Int, project: BookProject) -> Double {
+        let setup = project.pageSetup
+        if setup.facingPages {
+            return pageNumber % 2 == 1 ? setup.margins.right : setup.margins.left
+        }
+        return setup.margins.right
     }
 
     private func draw(page: LaidOutPage, project: BookProject, in context: CGContext) {

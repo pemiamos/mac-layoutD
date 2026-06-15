@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import LayoutDCheck
 import LayoutDCore
@@ -6,6 +7,7 @@ import LayoutDDesignAI
 import LayoutDEngine
 import LayoutDExport
 import LayoutDImport
+import SwiftUI
 import UniformTypeIdentifiers
 
 let launchProject = ProjectLoader().loadFromCommandLine()
@@ -231,22 +233,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 final class WorkspaceViewController: NSViewController {
-    private var project: BookProject
+    private var appState: AppState
     private var sourceDescription: String
-    private let engine = LayoutEngine()
-    private let inspectorEngine = ProjectInspector()
-    private let advisor = RuleBasedLayoutAdvisor()
-    private var laidOutDocument: LaidOutDocument?
-
-    private let sidebar = NSTextView()
-    private let inspector = NSTextView()
     private let canvas = CanvasView()
-    private var currentPageNumber = 1
+    private var sidebarHosting: NSHostingView<SidebarView>?
+    private var inspectorHosting: NSHostingView<InspectorView>?
+    private var selectedFrameCancellable: AnyCancellable?
 
     init(project: BookProject, sourceDescription: String) {
-        self.project = project
         self.sourceDescription = sourceDescription
+        self.appState = AppState(project: project)
         super.init(nibName: nil, bundle: nil)
+        
+        self.appState.onLayoutCompleted = { [weak self] proj, doc in
+            guard let self else { return }
+            self.canvas.project = proj
+            self.canvas.document = doc
+            self.view.window?.title = "layoutD - \(proj.metadata.title)"
+        }
+        
+        self.selectedFrameCancellable = appState.$selectedFrameId.sink { [weak self] frameId in
+            self?.canvas.selectedFrameId = frameId
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -262,7 +270,12 @@ final class WorkspaceViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         buildInterface()
-        refreshDocument()
+        canvas.project = appState.project
+        canvas.document = appState.laidOutDocument
+        
+        canvas.onFrameSelected = { [weak self] frameId in
+            self?.appState.selectedFrameId = frameId
+        }
     }
 
     private func buildInterface() {
@@ -272,16 +285,38 @@ final class WorkspaceViewController: NSViewController {
         splitView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(splitView)
 
-        sidebar.isEditable = false
-        sidebar.font = .systemFont(ofSize: 13)
-        sidebar.textContainerInset = NSSize(width: 14, height: 14)
+        let sidebarView = SidebarView(state: appState) { [weak self] pageNum in
+            self?.canvas.scrollToPage(number: pageNum)
+        }
+        let sidebarHost = NSHostingView(rootView: sidebarView)
+        self.sidebarHosting = sidebarHost
 
-        inspector.isEditable = false
-        inspector.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        inspector.textContainerInset = NSSize(width: 14, height: 14)
+        let inspectorView = InspectorView(
+            state: appState,
+            onIssueClick: { [weak self] issue in
+                guard let self else { return }
+                if let page = issue.pageNumber {
+                    self.appState.currentPageNumber = page
+                    self.canvas.scrollToPage(number: page)
+                }
+                self.canvas.highlightedFrameId = issue.frameId
+            },
+            onApplyPlan: { [weak self] plan in
+                guard let self else { return }
+                var currentProject = self.appState.project
+                var plans = currentProject.safeAppliedLayoutPlans
+                if case .page(let pageNum) = plan.target {
+                    plans[pageNum] = plan
+                    currentProject.safeAppliedLayoutPlans = plans
+                    self.appState.project = currentProject
+                }
+            }
+        )
+        let inspectorHost = NSHostingView(rootView: inspectorView)
+        self.inspectorHosting = inspectorHost
 
         let sidebarScroll = NSScrollView()
-        sidebarScroll.documentView = sidebar
+        sidebarScroll.documentView = sidebarHost
         sidebarScroll.hasVerticalScroller = true
 
         let canvasScroll = NSScrollView()
@@ -290,7 +325,7 @@ final class WorkspaceViewController: NSViewController {
         canvasScroll.hasHorizontalScroller = true
 
         let inspectorScroll = NSScrollView()
-        inspectorScroll.documentView = inspector
+        inspectorScroll.documentView = inspectorHost
         inspectorScroll.hasVerticalScroller = true
 
         splitView.addArrangedSubview(sidebarScroll)
@@ -305,79 +340,6 @@ final class WorkspaceViewController: NSViewController {
             sidebarScroll.widthAnchor.constraint(equalToConstant: 250),
             inspectorScroll.widthAnchor.constraint(equalToConstant: 310)
         ])
-    }
-
-    private func refreshDocument() {
-        let document = engine.layout(project: project)
-        laidOutDocument = document
-        currentPageNumber = min(max(currentPageNumber, 1), max(document.pages.count, 1))
-        canvas.project = project
-        canvas.document = document
-        view.window?.title = "layoutD - \(project.metadata.title)"
-
-        let plans = advisor.proposePlans(for: project, target: .page(1))
-        let report = inspectorEngine.preflight(project: project, document: document)
-        sidebar.string = sidebarText(project: project, document: document)
-        inspector.string = inspectorText(project: project, report: report, plans: plans)
-    }
-
-    private func sidebarText(project: BookProject, document: LaidOutDocument) -> String {
-        var lines: [String] = [
-            project.metadata.title,
-            sourceDescription,
-            project.pageSetup.pageSize.label,
-            "Zoom \(Int(canvas.zoomScale * 100))%",
-            "当前页 \(currentPageNumber)",
-            "",
-            "章节"
-        ]
-        lines += project.sections.map { "• \($0.title)" }
-        lines += [
-            "",
-            "页面",
-            "共 \(document.pages.count) 页"
-        ]
-        lines += document.pages.map { "第 \($0.number) 页 · \($0.frames.count) frames" }
-        return lines.joined(separator: "\n")
-    }
-
-    private func inspectorText(project: BookProject, report: PreflightReport, plans: [LayoutPlan]) -> String {
-        var lines: [String] = [
-            "项目检查",
-            report.isExportReady ? "状态：可导出" : "状态：需修复错误",
-            ""
-        ]
-        lines += report.summaryLines
-        lines += [
-            "",
-            "Issues: \(report.issues.count)"
-        ]
-        lines += report.issues.map { issue in
-            if let pageNumber = issue.pageNumber {
-                return "[\(issue.severity.rawValue)] p.\(pageNumber) \(issue.message)"
-            }
-            return "[\(issue.severity.rawValue)] \(issue.message)"
-        }
-        lines += [
-            "",
-            "AI LayoutPlan 候选"
-        ]
-        for plan in plans {
-            lines.append("- \(plan.strategy.rawValue): \(plan.blocks.count) blocks")
-            lines += plan.notes.map { "  \($0)" }
-        }
-        lines += [
-            "",
-            "素材库"
-        ]
-        lines += [
-            "缺图注：\(report.assetSummary.missingCaptions)",
-            "缺来源：\(report.assetSummary.missingCredits)",
-            "低分辨率：\(report.assetSummary.lowResolution)",
-            "未知尺寸：\(report.assetSummary.unknownSize)"
-        ]
-        lines += project.assets.map { "- \($0.fileName) · \($0.role.rawValue) · \($0.dpi.map { "\($0) DPI" } ?? "DPI unknown")" }
-        return lines.joined(separator: "\n")
     }
 
     func openProject() {
@@ -405,10 +367,10 @@ final class WorkspaceViewController: NSViewController {
 
             do {
                 let loader = ProjectLoader()
-                self.project = try loader.loadProject(inputURL: url)
+                let loadedProj = try loader.loadProject(inputURL: url)
                 self.sourceDescription = loader.sourceDescription(for: url)
-                self.currentPageNumber = 1
-                self.refreshDocument()
+                self.appState.currentPageNumber = 1
+                self.appState.project = loadedProj
             } catch {
                 self.showExportResult(message: "Open failed", detail: error.localizedDescription)
             }
@@ -418,7 +380,7 @@ final class WorkspaceViewController: NSViewController {
     func saveProject() {
         let savePanel = NSSavePanel()
         savePanel.title = "Save layoutD Project"
-        savePanel.nameFieldStringValue = safeFileName(project.metadata.title) + ".layoutd"
+        savePanel.nameFieldStringValue = safeFileName(appState.project.metadata.title) + ".layoutd"
         savePanel.allowedContentTypes = [UTType(filenameExtension: "layoutd")].compactMap { $0 }
         savePanel.canCreateDirectories = true
 
@@ -432,7 +394,7 @@ final class WorkspaceViewController: NSViewController {
             }
 
             do {
-                let data = try ProjectFile.encode(self.project)
+                let data = try ProjectFile.encode(self.appState.project)
                 try data.write(to: url, options: .atomic)
                 self.showExportResult(message: "Project saved", detail: url.path)
             } catch {
@@ -443,57 +405,46 @@ final class WorkspaceViewController: NSViewController {
 
     func zoomIn() {
         canvas.zoomIn()
-        updateZoomLabel()
     }
 
     func zoomOut() {
         canvas.zoomOut()
-        updateZoomLabel()
     }
 
     func actualSize() {
         canvas.resetZoom()
-        updateZoomLabel()
     }
 
     func fitWidth() {
         canvas.fitWidth(availableWidth: canvas.enclosingScrollView?.contentView.bounds.width ?? canvas.bounds.width)
-        updateZoomLabel()
-        canvas.scrollToPage(number: currentPageNumber)
+        canvas.scrollToPage(number: appState.currentPageNumber)
     }
 
     func previousPage() {
-        guard let document = laidOutDocument else {
-            return
-        }
-        currentPageNumber = max(1, currentPageNumber - 1)
-        canvas.scrollToPage(number: currentPageNumber)
-        sidebar.string = sidebarText(project: project, document: document)
+        appState.currentPageNumber = max(1, appState.currentPageNumber - 1)
+        canvas.scrollToPage(number: appState.currentPageNumber)
     }
 
     func nextPage() {
-        guard let document = laidOutDocument else {
+        guard let document = appState.laidOutDocument else {
             return
         }
-        currentPageNumber = min(document.pages.count, currentPageNumber + 1)
-        canvas.scrollToPage(number: currentPageNumber)
-        sidebar.string = sidebarText(project: project, document: document)
-    }
-
-    private func updateZoomLabel() {
-        guard let document = laidOutDocument else {
-            return
-        }
-        sidebar.string = sidebarText(project: project, document: document)
+        appState.currentPageNumber = min(document.pages.count, appState.currentPageNumber + 1)
+        canvas.scrollToPage(number: appState.currentPageNumber)
     }
 
     func exportPDF() {
-        let document = laidOutDocument ?? engine.layout(project: project)
+        let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
         let savePanel = NSSavePanel()
         savePanel.title = "Export PDF"
-        savePanel.nameFieldStringValue = safeFileName(project.metadata.title) + ".pdf"
+        savePanel.nameFieldStringValue = safeFileName(appState.project.metadata.title) + ".pdf"
         savePanel.allowedContentTypes = [.pdf]
         savePanel.canCreateDirectories = true
+
+        let settingsState = PDFExportSettingsState()
+        let settingsView = PDFExportSettingsView(state: settingsState)
+        let hostingView = NSHostingView(rootView: settingsView)
+        savePanel.accessoryView = hostingView
 
         savePanel.beginSheetModal(for: view.window!) { [weak self] response in
             guard response == .OK, let url = savePanel.url, let self else {
@@ -501,7 +452,14 @@ final class WorkspaceViewController: NSViewController {
             }
 
             do {
-                try PDFExporter().export(document: document, project: self.project, to: url)
+                try PDFExporter().export(
+                    document: document,
+                    project: self.appState.project,
+                    to: url,
+                    pageRange: settingsState.pageRange.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : settingsState.pageRange,
+                    drawCropMarks: settingsState.drawCropMarks,
+                    drawGridGuides: settingsState.drawGridGuides
+                )
                 self.showExportResult(message: "PDF exported", detail: url.path)
             } catch {
                 self.showExportResult(message: "PDF export failed", detail: error.localizedDescription)
@@ -510,11 +468,11 @@ final class WorkspaceViewController: NSViewController {
     }
 
     func exportPreflightReport() {
-        let document = laidOutDocument ?? engine.layout(project: project)
-        let report = inspectorEngine.preflight(project: project, document: document)
+        let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
+        let report = appState.inspectorEngine.preflight(project: appState.project, document: document)
         let savePanel = NSSavePanel()
         savePanel.title = "Export Preflight Report"
-        savePanel.nameFieldStringValue = safeFileName(project.metadata.title) + "-preflight.json"
+        savePanel.nameFieldStringValue = safeFileName(appState.project.metadata.title) + "-preflight.json"
         savePanel.allowedContentTypes = [.json]
         savePanel.canCreateDirectories = true
 
@@ -557,5 +515,44 @@ final class WorkspaceViewController: NSViewController {
             .components(separatedBy: illegalCharacters)
             .joined(separator: "-")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+class PDFExportSettingsState: ObservableObject {
+    @Published var pageRange: String = ""
+    @Published var drawCropMarks: Bool = false
+    @Published var drawGridGuides: Bool = false
+}
+
+struct PDFExportSettingsView: View {
+    @ObservedObject var state: PDFExportSettingsState
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("PDF 导出选项")
+                .font(.headline)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("页码范围:")
+                        .frame(width: 80, alignment: .leading)
+                    TextField("例如: 3-5, 7", text: $state.pageRange)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 150)
+                }
+                Text("留空导出全部页面，支持 '3-5', '1,3,5' 等")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 85)
+            }
+            
+            Toggle("添加印刷裁切线及出血标记", isOn: $state.drawCropMarks)
+                .toggleStyle(.checkbox)
+            
+            Toggle("添加校对基线网格及页边距指示线", isOn: $state.drawGridGuides)
+                .toggleStyle(.checkbox)
+        }
+        .padding(.all, 16)
+        .frame(width: 320)
     }
 }

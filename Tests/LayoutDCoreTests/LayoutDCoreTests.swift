@@ -1,6 +1,7 @@
 import LayoutDCore
 import LayoutDDesignAI
 import LayoutDEngine
+import LayoutDCheck
 import XCTest
 
 final class LayoutDCoreTests: XCTestCase {
@@ -377,6 +378,338 @@ final class LayoutDCoreTests: XCTestCase {
         let plans = RuleBasedLayoutAdvisor().proposePlans(for: .sample, target: .page(1))
         XCTAssertEqual(plans.count, 3)
         XCTAssertTrue(plans.allSatisfy { !$0.blocks.isEmpty })
+    }
+
+    func testLayoutPlanAppliedSuccessfully() {
+        let planBlock = LayoutPlanBlock(
+            kind: .text,
+            role: "body",
+            frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 0.8),
+            contentReference: .generated("被应用的布局内容")
+        )
+        let plan = LayoutPlan(
+            target: .page(3),
+            strategy: .textLed,
+            blocks: [planBlock],
+            notes: ["计划测试"]
+        )
+        
+        var project = BookProject.sample
+        project.safeAppliedLayoutPlans = [3: plan]
+        
+        let document = LayoutEngine().layout(project: project)
+        
+        XCTAssertTrue(document.pages.count >= 3)
+        let page3 = document.pages[2]
+        
+        let customFrames = page3.frames.filter { frame in
+            if case .text(let t) = frame.content {
+                return t == "被应用的布局内容"
+            }
+            return false
+        }
+        XCTAssertEqual(customFrames.count, 1)
+        
+        let customFrame = customFrames[0]
+        let pageSize = project.pageSetup.pageSize
+        XCTAssertEqual(customFrame.rect.x, 0.1 * pageSize.width)
+        XCTAssertEqual(customFrame.rect.y, 0.1 * pageSize.height)
+        XCTAssertEqual(customFrame.rect.width, 0.8 * pageSize.width)
+        XCTAssertEqual(customFrame.rect.height, 0.8 * pageSize.height)
+    }
+
+    func testChineseLineBreakTypesetting() {
+        let textWithStartViolations = "这是一个非常长的中文测试段落，用来验证排版引擎是否会自动调整行末或行首的避头尾禁则规则。例如：这个位置会发生断行，并且断行后，下一行的第一个字不应该是一个逗号。"
+        
+        var project = BookProject.sample
+        project.sections = [
+            BookSection(
+                title: "测试禁则",
+                stories: [
+                    Story(
+                        title: "正文",
+                        paragraphs: [
+                            Paragraph(
+                                kind: .body,
+                                text: textWithStartViolations,
+                                styleId: StyleID.body.rawValue
+                            )
+                        ]
+                    )
+                ]
+            )
+        ]
+        
+        let document = LayoutEngine().layout(project: project)
+        let inspector = ProjectInspector()
+        let report = inspector.preflight(project: project, document: document)
+        
+        let violations = report.issues.filter { $0.message.contains("存在中文禁则问题") }
+        XCTAssertEqual(violations.count, 0, "There should be no Chinese line break violations in the preflight report after engine adjustments")
+    }
+
+    func testOrphanLineControlPushesParagraphToNextColumn() {
+        var project = BookProject.sample
+        project.pageSetup = PageSetup(
+            pageSize: PageSize(width: 185, height: 104, label: "Test Size"),
+            margins: PageMargins(top: 20, right: 20, bottom: 20, left: 20),
+            columns: 1,
+            gutter: 7,
+            baselineGrid: 16,
+            facingPages: false
+        )
+        
+        var bodyStyle = ParagraphStyle.body
+        bodyStyle.lineHeight = 16
+        bodyStyle.spaceAfter = 0
+        bodyStyle.spaceBefore = 0
+        project.styles.paragraphStyles = [bodyStyle]
+        
+        project.sections = [
+            BookSection(
+                title: "测试孤行",
+                stories: [
+                    Story(
+                        title: "正文",
+                        paragraphs: [
+                            Paragraph(kind: .body, text: "一二三四五六七八九十一二三四五六七八九十", styleId: StyleID.body.rawValue),
+                            Paragraph(kind: .body, text: "这里是第二段的内容，它非常长，会被折成两行排版。一二三四五", styleId: StyleID.body.rawValue)
+                        ]
+                    )
+                ]
+            )
+        ]
+        
+        let document = LayoutEngine().layout(project: project)
+        
+        XCTAssertTrue(document.pages.count >= 5)
+        let page4 = document.pages[3]
+        let page5 = document.pages[4]
+        
+        let p1Frames = page4.frames.filter { $0.styleId == StyleID.body.rawValue }
+        XCTAssertEqual(p1Frames.count, 1)
+        
+        let p2Frames = page5.frames.filter { $0.styleId == StyleID.body.rawValue }
+        XCTAssertGreaterThan(p2Frames.count, 0)
+    }
+
+    func testWidowLineControlPullsLineToNextColumn() {
+        var project = BookProject.sample
+        project.pageSetup = PageSetup(
+            pageSize: PageSize(width: 185, height: 88, label: "Test Size"),
+            margins: PageMargins(top: 20, right: 20, bottom: 20, left: 20),
+            columns: 1,
+            gutter: 7,
+            baselineGrid: 16,
+            facingPages: false
+        )
+        
+        var bodyStyle = ParagraphStyle.body
+        bodyStyle.lineHeight = 16
+        bodyStyle.spaceAfter = 0
+        bodyStyle.spaceBefore = 0
+        project.styles.paragraphStyles = [bodyStyle]
+        
+        project.sections = [
+            BookSection(
+                title: "测试寡行",
+                stories: [
+                    Story(
+                        title: "正文",
+                        paragraphs: [
+                            Paragraph(kind: .body, text: "这里是第一段非常长的正文它一共需要折行成为四行文字来进行排版测试一二三四五六七八", styleId: StyleID.body.rawValue)
+                        ]
+                    )
+                ]
+            )
+        ]
+        
+        let document = LayoutEngine().layout(project: project)
+        
+        XCTAssertTrue(document.pages.count >= 6)
+        let page5 = document.pages[4]
+        
+        let bodyFrames = page5.frames.filter { $0.styleId == StyleID.body.rawValue }
+        XCTAssertEqual(bodyFrames.count, 1)
+        if bodyFrames.count > 0 {
+            XCTAssertEqual(bodyFrames[0].rect.height, 32.0)
+        }
+    }
+
+    func testFacingPagesMarginAsymmetry() {
+        var project = BookProject(
+            metadata: ProjectMetadata(title: "对称边距测试", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: String(repeating: "这是测试对开页左右边距不对称的一段非常长的占位文字，我们需要它足够长以流到下一页。 ", count: 150), styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+        project.pageSetup.facingPages = true
+        project.pageSetup.margins = PageMargins(top: 20, right: 15, bottom: 20, left: 30)
+        
+        let document = LayoutEngine().layout(project: project)
+        // Check page 3 (odd page) - should have left margin 30
+        let page3 = document.pages.first { $0.number == 3 }
+        XCTAssertNotNil(page3)
+        if let page3 = page3 {
+            let bodyFrames = page3.frames.filter { $0.kind == .text && $0.rect.y > 30 }
+            for frame in bodyFrames {
+                XCTAssertEqual(frame.rect.x, 30.0, accuracy: 0.1)
+            }
+        }
+        
+        // Check page 4 (even page) - should have left margin 15
+        let page4 = document.pages.first { $0.number == 4 }
+        XCTAssertNotNil(page4)
+        if let page4 = page4 {
+            let bodyFrames = page4.frames.filter { $0.kind == .text && $0.rect.y > 30 }
+            for frame in bodyFrames {
+                XCTAssertEqual(frame.rect.x, 15.0, accuracy: 0.1)
+            }
+        }
+    }
+
+    func testLockedPageRetainsLayoutPlans() {
+        var project = BookProject(
+            metadata: ProjectMetadata(title: "锁定测试", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "故事",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: String(repeating: "这是测试第一段非常长的正文占位符。 ", count: 25), styleId: StyleID.body.rawValue),
+                                Paragraph(kind: .body, text: String(repeating: "这是测试第二段非常长的正文占位符。 ", count: 25), styleId: StyleID.body.rawValue),
+                                Paragraph(kind: .body, text: String(repeating: "这是测试第三段非常长的正文占位符。 ", count: 25), styleId: StyleID.body.rawValue),
+                                Paragraph(kind: .body, text: String(repeating: "这是测试第四段非常长的正文占位符。 ", count: 25), styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+        // Lay out once
+        let engine = LayoutEngine()
+        let doc1 = engine.layout(project: project)
+        XCTAssertGreaterThanOrEqual(doc1.pages.count, 4)
+        
+        let originalPage4Frames = doc1.pages.first { $0.number == 4 }?.frames ?? []
+        XCTAssertFalse(originalPage4Frames.isEmpty)
+        
+        // Manually lock page 4 using a LayoutPlan helper
+        let plan = freezePageToPlan(pageNum: 4, project: project, laidOutDocument: doc1)
+        var locked = project.lockedPages ?? []
+        locked.insert(4)
+        project.lockedPages = locked
+        
+        var plans = project.appliedLayoutPlans ?? [:]
+        plans[4] = plan
+        project.appliedLayoutPlans = plans
+        
+        // Now, add a lot of text to the first paragraph (page 3)
+        if var section = project.sections.first,
+           var story = section.stories.first,
+           !story.paragraphs.isEmpty {
+            story.paragraphs[0].text = String(repeating: "这是额外插入的非常长的文字，会把原本属于第三页的内容往后挤压。 ", count: 80)
+            section.stories[0] = story
+            project.sections[0] = section
+        }
+        
+        // Relayout the project with the locked page 4 layout plan
+        let doc2 = engine.layout(project: project)
+        
+        let newPage4Frames = doc2.pages.first { $0.number == 4 }?.frames ?? []
+        XCTAssertFalse(newPage4Frames.isEmpty)
+        
+        // The frames of page 4 must be identical in content and geometry to the original page 4 frames!
+        XCTAssertEqual(newPage4Frames.count, originalPage4Frames.count)
+        for i in 0..<newPage4Frames.count {
+            let f1 = originalPage4Frames[i]
+            let f2 = newPage4Frames[i]
+            XCTAssertEqual(f1.rect.x, f2.rect.x, accuracy: 0.01)
+            XCTAssertEqual(f1.rect.y, f2.rect.y, accuracy: 0.01)
+            XCTAssertEqual(f1.rect.width, f2.rect.width, accuracy: 0.01)
+            XCTAssertEqual(f1.rect.height, f2.rect.height, accuracy: 0.01)
+            XCTAssertEqual(f1.content, f2.content)
+        }
+    }
+
+    private func freezePageToPlan(pageNum: Int, project: BookProject, laidOutDocument: LaidOutDocument) -> LayoutPlan {
+        let pageSize = project.pageSetup.pageSize
+        let docPages = laidOutDocument.pages
+        guard let targetPage = docPages.first(where: { $0.number == pageNum }) else {
+            return LayoutPlan(target: .page(pageNum), strategy: .balanced, blocks: [])
+        }
+        
+        var blocks: [LayoutPlanBlock] = []
+        
+        for frame in targetPage.frames {
+            if frame.kind == .text && frame.rect.y == 24 && frame.rect.height == 16 {
+                continue
+            }
+            
+            let normX = frame.rect.x / pageSize.width
+            let normY = frame.rect.y / pageSize.height
+            let normW = frame.rect.width / pageSize.width
+            let normH = frame.rect.height / pageSize.height
+            
+            let kind: LayoutBlockKind
+            switch frame.kind {
+            case .text: kind = .text
+            case .image: kind = .image
+            case .caption: kind = .caption
+            case .callout: kind = .component
+            case .table: kind = .component
+            }
+            
+            let ref: ContentReference
+            switch frame.content {
+            case .asset(let assetId):
+                ref = .asset(assetId)
+            case .text(let text):
+                var foundId: UUID?
+                for section in project.sections {
+                    for story in section.stories {
+                        for paragraph in story.paragraphs {
+                            if paragraph.text == text {
+                                foundId = paragraph.id
+                                break
+                            }
+                        }
+                        if foundId != nil { break }
+                    }
+                    if foundId != nil { break }
+                }
+                if let pid = foundId {
+                    ref = .paragraph(pid)
+                } else {
+                    ref = .generated(text)
+                }
+            case .empty:
+                ref = .generated("")
+            }
+            
+            let block = LayoutPlanBlock(
+                id: frame.id,
+                kind: kind,
+                role: frame.kind.rawValue,
+                frame: Rect(x: normX, y: normY, width: normW, height: normH),
+                contentReference: ref
+            )
+            blocks.append(block)
+        }
+        
+        return LayoutPlan(target: .page(pageNum), strategy: .balanced, blocks: blocks, notes: ["手动自定义版式页"])
     }
 }
 
