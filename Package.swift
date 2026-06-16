@@ -64,6 +64,10 @@ let package = Package(
         .testTarget(
             name: "LayoutDCheckTests",
             dependencies: ["LayoutDCore", "LayoutDCheck"]
+        ),
+        .testTarget(
+            name: "LayoutDAppTests",
+            dependencies: ["LayoutDApp"]
         )
     ]
 )

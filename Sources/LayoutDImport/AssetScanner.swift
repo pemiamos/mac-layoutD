@@ -37,7 +37,8 @@ public struct AssetScanner {
         let pixelHeight = properties[kCGImagePropertyPixelHeight as String] as? Int ?? 0
         let dpiWidth = properties[kCGImagePropertyDPIWidth as String] as? Double
         let dpiHeight = properties[kCGImagePropertyDPIHeight as String] as? Double
-        let entry = manifest[relativePath.normalizedAssetReference]
+        let entry = manifest[normalizedManifestReference(relativePath)]
+            ?? manifest[relativePath.normalizedAssetReference]
 
         return Asset(
             fileName: relativePath,
@@ -94,12 +95,48 @@ public struct AssetScanner {
 
     private func loadManifest(directory: URL) throws -> [String: ManifestEntry] {
         let fileManager = FileManager.default
-        let candidates = ["manifest.csv", "assets.csv", "images.csv"]
-            .map { directory.appendingPathComponent($0) }
-        guard let manifestURL = candidates.first(where: { fileManager.fileExists(atPath: $0.path) }) else {
+        let manifestURLs = manifestURLs(in: directory, fileManager: fileManager)
+        guard !manifestURLs.isEmpty else {
             return [:]
         }
 
+        var entries: [String: ManifestEntry] = [:]
+        for manifestURL in manifestURLs {
+            let baseDirectory = manifestURL.deletingLastPathComponent()
+            let prefix = relativePath(from: directory, to: baseDirectory)
+            let manifestEntries = try loadManifestEntries(
+                manifestURL: manifestURL,
+                relativeDirectoryPrefix: prefix
+            )
+            entries.merge(manifestEntries) { _, nested in nested }
+        }
+
+        return entries
+    }
+
+    private func manifestURLs(in directory: URL, fileManager: FileManager) -> [URL] {
+        let manifestFileNames = Set(["manifest.csv", "assets.csv", "images.csv"])
+        var urls: [URL] = []
+
+        if let enumerator = fileManager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for case let url as URL in enumerator {
+                if manifestFileNames.contains(url.lastPathComponent.lowercased()) {
+                    urls.append(url)
+                }
+            }
+        }
+
+        return urls.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    private func loadManifestEntries(
+        manifestURL: URL,
+        relativeDirectoryPrefix: String?
+    ) throws -> [String: ManifestEntry] {
         let csv = try String(contentsOf: manifestURL, encoding: .utf8)
         let rows = parseCSV(csv)
         guard let header = rows.first else {
@@ -126,7 +163,8 @@ public struct AssetScanner {
             let placement = values["placement"] ?? values["span"]
             let explicitRole = values["role"].flatMap { AssetRole(rawValue: $0) }
             let role = explicitRole ?? widePlacementRole(placement)
-            entries[fileName.normalizedAssetReference] = ManifestEntry(
+            let key = manifestKey(fileName: fileName, relativeDirectoryPrefix: relativeDirectoryPrefix)
+            entries[key] = ManifestEntry(
                 caption: emptyToNil(values["caption"] ?? values["title"] ?? values["图注"]),
                 role: role,
                 credit: emptyToNil(values["credit"] ?? values["source"] ?? values["版权"] ?? values["来源"])
@@ -134,6 +172,35 @@ public struct AssetScanner {
         }
 
         return entries
+    }
+
+    private func manifestKey(fileName: String, relativeDirectoryPrefix: String?) -> String {
+        let trimmed = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let keyPath: String
+        if let relativeDirectoryPrefix, !trimmed.contains("/") {
+            keyPath = "\(relativeDirectoryPrefix)/\(trimmed)"
+        } else {
+            keyPath = trimmed
+        }
+        return normalizedManifestReference(keyPath)
+    }
+
+    private func relativePath(from root: URL, to directory: URL) -> String? {
+        let rootPath = root.resolvingSymlinksInPath().path
+        let directoryPath = directory.resolvingSymlinksInPath().path
+        guard directoryPath.hasPrefix(rootPath + "/") else {
+            return nil
+        }
+        let relative = String(directoryPath.dropFirst(rootPath.count + 1))
+        return relative.isEmpty ? nil : relative
+    }
+
+    private func normalizedManifestReference(_ reference: String) -> String {
+        reference
+            .split(separator: "/")
+            .filter { !$0.isEmpty && $0 != "." }
+            .joined(separator: "/")
+            .lowercased()
     }
 
     private func parseCSV(_ csv: String) -> [[String]] {

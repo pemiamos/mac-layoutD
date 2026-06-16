@@ -1,6 +1,103 @@
 import SwiftUI
 import LayoutDCore
 import LayoutDCheck
+import LayoutDDesignAI
+
+private enum IssueFilter: String, CaseIterable {
+    case all
+    case errors
+    case warnings
+    case info
+
+    var title: String {
+        switch self {
+        case .all:
+            return "全部"
+        case .errors:
+            return "错误"
+        case .warnings:
+            return "警告"
+        case .info:
+            return "信息"
+        }
+    }
+
+    func matches(_ severity: IssueSeverity) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .errors:
+            return severity == .error
+        case .warnings:
+            return severity == .warning
+        case .info:
+            return severity == .info
+        }
+    }
+}
+
+private enum IssueCategoryFilter: String, CaseIterable {
+    case all
+    case metadata
+    case structure
+    case references
+    case assets
+    case pagination
+    case layout
+    case typography
+    case tableOfContents
+    case uncategorized
+
+    var title: String {
+        switch self {
+        case .all:
+            return "全部分类"
+        case .metadata:
+            return "元数据"
+        case .structure:
+            return "结构"
+        case .references:
+            return "引用"
+        case .assets:
+            return "素材"
+        case .pagination:
+            return "页码"
+        case .layout:
+            return "版面"
+        case .typography:
+            return "排印"
+        case .tableOfContents:
+            return "目录"
+        case .uncategorized:
+            return "未分类"
+        }
+    }
+
+    func matches(_ category: PreflightIssueCategory?) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .metadata:
+            return category == .metadata
+        case .structure:
+            return category == .structure
+        case .references:
+            return category == .references
+        case .assets:
+            return category == .assets
+        case .pagination:
+            return category == .pagination
+        case .layout:
+            return category == .layout
+        case .typography:
+            return category == .typography
+        case .tableOfContents:
+            return category == .tableOfContents
+        case .uncategorized:
+            return category == nil
+        }
+    }
+}
 
 struct InspectorView: View {
     @ObservedObject var state: AppState
@@ -9,11 +106,18 @@ struct InspectorView: View {
 
     @State private var selectedElement = true
     @State private var selectedMetadata = true
+    @State private var selectedAssets = true
     @State private var selectedSetup = true
     @State private var selectedStyles = true
     @State private var selectedIssues = true
     @State private var selectedAI = true
     @State private var selectedPageControl = true
+    @State private var issueFilter: IssueFilter = .all
+    @State private var issueCategoryFilter: IssueCategoryFilter = .all
+    @State private var layoutTemplateName = ""
+    @State private var selectedChapterTemplate: ChapterLayoutTemplate = .scienceChapter
+    @State private var selectedChapterTemplateSectionIndex = 0
+    @State private var chapterTemplateStartPage = 3
 
     var body: some View {
         ScrollView {
@@ -43,6 +147,97 @@ struct InspectorView: View {
                             Text("⚠️ 页面已锁定，元素无法在画布上拖拽或修改尺寸。")
                                 .font(.caption)
                                 .foregroundColor(.orange)
+                        }
+
+                        Divider()
+
+                        TextField("模板名称", text: $layoutTemplateName)
+                            .textFieldStyle(.roundedBorder)
+
+                        Button("保存当前页为模板") {
+                            state.saveCurrentPageLayoutAsTemplate(name: layoutTemplateName)
+                            layoutTemplateName = ""
+                        }
+                        .buttonStyle(.bordered)
+
+                        if state.project.safeSavedLayoutTemplates.isEmpty {
+                            Text("暂无已保存版式模板")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("应用已保存模板")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                ForEach(state.project.safeSavedLayoutTemplates) { template in
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            TextField("模板名称", text: Binding(
+                                                get: { template.name },
+                                                set: { state.renameSavedLayoutTemplate(id: template.id, name: $0) }
+                                            ))
+                                            .font(.caption)
+                                            .textFieldStyle(.roundedBorder)
+                                            Text(template.plan.strategy.rawValue)
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        Spacer()
+                                        Button("应用") {
+                                            state.applySavedLayoutTemplate(id: template.id, toPage: state.currentPageNumber)
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .disabled(state.project.safeLockedPages.contains(state.currentPageNumber))
+                                        Button("删除") {
+                                            state.deleteSavedLayoutTemplate(id: template.id)
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .foregroundColor(.red)
+                                    }
+                                }
+                            }
+                        }
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("应用章节模板")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                            Picker("章节", selection: $selectedChapterTemplateSectionIndex) {
+                                ForEach(state.project.sections.indices, id: \.self) { index in
+                                    Text(state.project.sections[index].title).tag(index)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .disabled(state.project.sections.isEmpty)
+
+                            Picker("模板", selection: $selectedChapterTemplate) {
+                                ForEach(ChapterLayoutTemplate.allCases, id: \.self) { template in
+                                    Text(template.displayName).tag(template)
+                                }
+                            }
+                            .pickerStyle(.menu)
+
+                            Stepper(
+                                "起始页：\(chapterTemplateStartPage)",
+                                value: $chapterTemplateStartPage,
+                                in: 1...999
+                            )
+
+                            Button("应用章节模板") {
+                                let maxIndex = max(state.project.sections.count - 1, 0)
+                                selectedChapterTemplateSectionIndex = min(selectedChapterTemplateSectionIndex, maxIndex)
+                                _ = state.applyChapterLayoutTemplate(
+                                    selectedChapterTemplate,
+                                    sectionIndex: selectedChapterTemplateSectionIndex,
+                                    startPage: chapterTemplateStartPage
+                                )
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(state.project.sections.isEmpty)
                         }
                     }
                     .padding(.top, 6)
@@ -164,9 +359,42 @@ struct InspectorView: View {
                                 set: { state.project.metadata.isbn = $0.isEmpty ? nil : $0 }
                             ))
                         }
+                        HStack {
+                            Text("丛书").frame(width: 50, alignment: .leading)
+                            TextField("丛书", text: Binding(
+                                get: { state.project.metadata.series ?? "" },
+                                set: { state.project.metadata.series = $0.isEmpty ? nil : $0 }
+                            ))
+                        }
+                        HStack {
+                            Text("关键词").frame(width: 50, alignment: .leading)
+                            TextField("逗号分隔", text: Binding(
+                                get: { state.project.metadata.keywords.joined(separator: ", ") },
+                                set: { state.project.metadata.keywords = parseKeywords($0) }
+                            ))
+                        }
                     }
                     .padding(.top, 6)
                     .textFieldStyle(.roundedBorder)
+                }
+
+                Divider()
+
+                // Section 2.5: Asset Metadata
+                DisclosureGroup("素材元数据 (\(state.project.assets.count))", isExpanded: $selectedAssets) {
+                    if state.project.assets.isEmpty {
+                        Text("当前项目没有素材")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 6)
+                    } else {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(state.project.assets.indices, id: \.self) { index in
+                                assetRow(index: index)
+                            }
+                        }
+                        .padding(.top, 6)
+                    }
                 }
 
                 Divider()
@@ -183,7 +411,15 @@ struct InspectorView: View {
                         HStack {
                             Text("栏间距 (mm)")
                             Spacer()
-                            Stepper(String(format: "%.1f mm", state.project.pageSetup.gutter), value: $state.project.pageSetup.gutter, in: 2.0...15.0, step: 0.5)
+                            Stepper(
+                                String(format: "%.1f mm", pointsToMillimeters(state.project.pageSetup.gutter)),
+                                value: Binding(
+                                    get: { pointsToMillimeters(state.project.pageSetup.gutter) },
+                                    set: { state.project.pageSetup.gutter = millimetersToPoints($0) }
+                                ),
+                                in: 2.0...15.0,
+                                step: 0.5
+                            )
                         }
                         
                         HStack {
@@ -192,24 +428,59 @@ struct InspectorView: View {
                             Stepper("\(Int(state.project.pageSetup.baselineGrid)) pt", value: $state.project.pageSetup.baselineGrid, in: 8...24, step: 1)
                         }
 
+                        Toggle("对页排版", isOn: $state.project.pageSetup.facingPages)
+                            .toggleStyle(.checkbox)
+
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("页边距 (Margins)")
+                            Text("页边距 (mm)")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             
                             HStack {
                                 Text("上:")
-                                Stepper("\(Int(state.project.pageSetup.margins.top))", value: $state.project.pageSetup.margins.top, in: 10...50)
+                                Stepper(
+                                    String(format: "%.1f", pointsToMillimeters(state.project.pageSetup.margins.top)),
+                                    value: Binding(
+                                        get: { pointsToMillimeters(state.project.pageSetup.margins.top) },
+                                        set: { state.project.pageSetup.margins.top = millimetersToPoints($0) }
+                                    ),
+                                    in: 8.0...40.0,
+                                    step: 0.5
+                                )
                                 Spacer()
                                 Text("下:")
-                                Stepper("\(Int(state.project.pageSetup.margins.bottom))", value: $state.project.pageSetup.margins.bottom, in: 10...50)
+                                Stepper(
+                                    String(format: "%.1f", pointsToMillimeters(state.project.pageSetup.margins.bottom)),
+                                    value: Binding(
+                                        get: { pointsToMillimeters(state.project.pageSetup.margins.bottom) },
+                                        set: { state.project.pageSetup.margins.bottom = millimetersToPoints($0) }
+                                    ),
+                                    in: 8.0...40.0,
+                                    step: 0.5
+                                )
                             }
                             HStack {
                                 Text("左:")
-                                Stepper("\(Int(state.project.pageSetup.margins.left))", value: $state.project.pageSetup.margins.left, in: 10...50)
+                                Stepper(
+                                    String(format: "%.1f", pointsToMillimeters(state.project.pageSetup.margins.left)),
+                                    value: Binding(
+                                        get: { pointsToMillimeters(state.project.pageSetup.margins.left) },
+                                        set: { state.project.pageSetup.margins.left = millimetersToPoints($0) }
+                                    ),
+                                    in: 8.0...40.0,
+                                    step: 0.5
+                                )
                                 Spacer()
                                 Text("右:")
-                                Stepper("\(Int(state.project.pageSetup.margins.right))", value: $state.project.pageSetup.margins.right, in: 10...50)
+                                Stepper(
+                                    String(format: "%.1f", pointsToMillimeters(state.project.pageSetup.margins.right)),
+                                    value: Binding(
+                                        get: { pointsToMillimeters(state.project.pageSetup.margins.right) },
+                                        set: { state.project.pageSetup.margins.right = millimetersToPoints($0) }
+                                    ),
+                                    in: 8.0...40.0,
+                                    step: 0.5
+                                )
                             }
                         }
                         .padding(.top, 4)
@@ -222,6 +493,16 @@ struct InspectorView: View {
                 // Section 4: Styles Editor
                 DisclosureGroup("段落样式参数", isExpanded: $selectedStyles) {
                     VStack(alignment: .leading, spacing: 8) {
+                        Picker("样式模板", selection: Binding(
+                            get: { currentStyleTemplate },
+                            set: { state.applyStyleTemplate($0) }
+                        )) {
+                            ForEach(StyleTemplate.allCases, id: \.self) { template in
+                                Text(template.displayName).tag(template)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
                         ForEach(state.project.styles.paragraphStyles.indices, id: \.self) { index in
                             styleRow(index: index)
                         }
@@ -232,7 +513,7 @@ struct InspectorView: View {
                 Divider()
 
                 // Section 5: Preflight Issues
-                DisclosureGroup("排版问题检查 (\(state.report?.issues.count ?? 0))", isExpanded: $selectedIssues) {
+                DisclosureGroup("排版问题检查 (\(filteredIssueCount))", isExpanded: $selectedIssues) {
                     if let report = state.report {
                         if report.issues.isEmpty {
                             Text("无任何排版问题")
@@ -241,7 +522,36 @@ struct InspectorView: View {
                                 .padding(.vertical, 8)
                         } else {
                             VStack(alignment: .leading, spacing: 6) {
-                                ForEach(report.issues, id: \.id) { issue in
+                                Picker("问题筛选", selection: $issueFilter) {
+                                    ForEach(IssueFilter.allCases, id: \.self) { filter in
+                                        Text(filter.title).tag(filter)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+
+                                Picker("问题分类", selection: $issueCategoryFilter) {
+                                    ForEach(IssueCategoryFilter.allCases, id: \.self) { filter in
+                                        Text(filter.title).tag(filter)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+
+                                if report.issues.contains(where: { $0.autoFixKind != nil }) {
+                                    Button("自动修复可处理问题") {
+                                        state.applyAvailablePreflightFixes()
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                }
+
+                                if filteredIssues(report).isEmpty {
+                                    Text("当前筛选下无问题")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .padding(.vertical, 6)
+                                }
+
+                                ForEach(filteredIssues(report), id: \.id) { issue in
+                                    let location = issueLocation(for: issue, report: report)
                                     Button(action: {
                                         onIssueClick(issue)
                                     }) {
@@ -253,10 +563,33 @@ struct InspectorView: View {
                                                     .foregroundColor(.primary)
                                                     .multilineTextAlignment(.leading)
                                                     .lineLimit(2)
+                                                if let suggestedFix = issue.suggestedFix {
+                                                    Text("建议：\(suggestedFix)")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                        .multilineTextAlignment(.leading)
+                                                        .lineLimit(2)
+                                                }
+                                                if let category = issue.category {
+                                                    Text("分类：\(categoryTitle(category))")
+                                                        .font(.caption2)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                if issue.autoFixKind != nil {
+                                                    Text("可自动修复")
+                                                        .font(.caption2)
+                                                        .foregroundColor(.accentColor)
+                                                }
                                                 if let page = issue.pageNumber {
                                                     Text("第 \(page) 页")
                                                         .font(.caption)
                                                         .foregroundColor(.secondary)
+                                                }
+                                                if let location {
+                                                    Text(locationLabel(location))
+                                                        .font(.caption2)
+                                                        .foregroundColor(.secondary)
+                                                        .monospacedDigit()
                                                 }
                                             }
                                             Spacer()
@@ -334,6 +667,61 @@ struct InspectorView: View {
         .background(Color(NSColor.windowBackgroundColor))
     }
 
+    private var filteredIssueCount: Int {
+        guard let report = state.report else {
+            return 0
+        }
+        return filteredIssues(report).count
+    }
+
+    private func filteredIssues(_ report: PreflightReport) -> [LayoutIssue] {
+        report.issues.filter {
+            issueFilter.matches($0.severity) && issueCategoryFilter.matches($0.category)
+        }
+    }
+
+    private var currentStyleTemplate: StyleTemplate {
+        StyleTemplate.allCases.first {
+            $0.styleLibrary == state.project.styles
+        } ?? .chineseScienceDefault
+    }
+
+    private func issueLocation(for issue: LayoutIssue, report: PreflightReport) -> IssueLocation? {
+        report.issueLocations.first { $0.issueId == issue.id }
+    }
+
+    private func categoryTitle(_ category: PreflightIssueCategory) -> String {
+        switch category {
+        case .metadata:
+            return "元数据"
+        case .structure:
+            return "结构"
+        case .references:
+            return "引用"
+        case .assets:
+            return "素材"
+        case .pagination:
+            return "页码"
+        case .layout:
+            return "版面"
+        case .typography:
+            return "排印"
+        case .tableOfContents:
+            return "目录"
+        }
+    }
+
+    private func locationLabel(_ location: IssueLocation) -> String {
+        String(
+            format: "%@ frame · x %.0f y %.0f w %.0f h %.0f",
+            location.frameKind,
+            location.rect.x,
+            location.rect.y,
+            location.rect.width,
+            location.rect.height
+        )
+    }
+
     // Sub-view: Preflight Header
     private func preflightHeader(report: PreflightReport) -> some View {
         HStack {
@@ -406,6 +794,119 @@ struct InspectorView: View {
         .padding(.all, 8)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
         .cornerRadius(6)
+    }
+
+    // Sub-view: Asset Edit Row
+    private func assetRow(index: Int) -> some View {
+        let asset = state.project.assets[index]
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(asset.fileName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                    Text(assetDetailLabel(asset))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Text(assetUsageLabel(asset.usage))
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(assetUsageColor(asset.usage).opacity(0.15))
+                    .foregroundColor(assetUsageColor(asset.usage))
+                    .cornerRadius(4)
+            }
+
+            Picker("角色", selection: Binding(
+                get: { state.project.assets[index].role },
+                set: { state.project.assets[index].role = $0 }
+            )) {
+                ForEach(AssetRole.allCases, id: \.self) { role in
+                    Text(assetRoleLabel(role)).tag(role)
+                }
+            }
+
+            TextField("图注", text: Binding(
+                get: { state.project.assets[index].caption ?? "" },
+                set: { state.project.assets[index].caption = $0.isEmpty ? nil : $0 }
+            ))
+
+            TextField("版权或来源", text: Binding(
+                get: { state.project.assets[index].credit ?? "" },
+                set: { state.project.assets[index].credit = $0.isEmpty ? nil : $0 }
+            ))
+        }
+        .textFieldStyle(.roundedBorder)
+        .padding(.all, 8)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
+        .cornerRadius(6)
+    }
+
+    private func assetDetailLabel(_ asset: Asset) -> String {
+        let size = asset.pixelWidth > 0 && asset.pixelHeight > 0
+            ? "\(asset.pixelWidth)x\(asset.pixelHeight)"
+            : "尺寸未知"
+        let dpi = asset.dpi.map { "\(Int($0)) DPI" } ?? "DPI ?"
+        return "\(size) · \(dpi)"
+    }
+
+    private func assetUsageLabel(_ usage: AssetUsage) -> String {
+        switch usage {
+        case .unused:
+            return "未用"
+        case .placed:
+            return "已用"
+        case .repeated:
+            return "重复"
+        }
+    }
+
+    private func assetUsageColor(_ usage: AssetUsage) -> Color {
+        switch usage {
+        case .unused:
+            return .secondary
+        case .placed:
+            return Color(nsColor: NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1))
+        case .repeated:
+            return .orange
+        }
+    }
+
+    private func assetRoleLabel(_ role: AssetRole) -> String {
+        switch role {
+        case .hero:
+            return "章节主图"
+        case .diagram:
+            return "示意图"
+        case .photo:
+            return "照片"
+        case .chart:
+            return "图表"
+        case .step:
+            return "步骤图"
+        case .comparison:
+            return "对比图"
+        case .decorative:
+            return "装饰图"
+        }
+    }
+
+    private func parseKeywords(_ text: String) -> [String] {
+        text
+            .split(whereSeparator: { $0 == "," || $0 == "，" })
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func pointsToMillimeters(_ points: Double) -> Double {
+        points / 72 * 25.4
+    }
+
+    private func millimetersToPoints(_ millimeters: Double) -> Double {
+        millimeters / 25.4 * 72
     }
 
     // Sub-view: Issue Icon

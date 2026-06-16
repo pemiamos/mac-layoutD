@@ -26,18 +26,18 @@ public struct PDFExporter {
         drawCropMarks: Bool = false,
         drawGridGuides: Bool = false
     ) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
         let pageSize = CGSize(
             width: CGFloat(project.pageSetup.pageSize.width),
             height: CGFloat(project.pageSetup.pageSize.height)
         )
         
         let maxPages = document.pages.count
-        let pagesToExport: Set<Int>
-        if let rangeStr = pageRange {
-            pagesToExport = parsePageRange(rangeStr, maxPages: maxPages)
-        } else {
-            pagesToExport = Set(1...maxPages)
-        }
+        let pagesToExport = ExportPageRange.parse(pageRange, maxPages: maxPages)
         
         let data = NSMutableData()
         var mediaBox = CGRect(origin: .zero, size: pageSize)
@@ -69,40 +69,6 @@ public struct PDFExporter {
 
         context.closePDF()
         try data.write(to: url, options: .atomic)
-    }
-
-    private func parsePageRange(_ rangeStr: String, maxPages: Int) -> Set<Int> {
-        var pages = Set<Int>()
-        let cleaned = rangeStr.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleaned.isEmpty || cleaned == "全部" || cleaned.lowercased() == "all" {
-            return Set(1...maxPages)
-        }
-        
-        let parts = cleaned.split(separator: ",")
-        for part in parts {
-            let trimmedPart = part.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmedPart.contains("-") {
-                let rangeParts = trimmedPart.split(separator: "-")
-                if rangeParts.count == 2,
-                   let start = Int(rangeParts[0].trimmingCharacters(in: .whitespaces)),
-                   let end = Int(rangeParts[1].trimmingCharacters(in: .whitespaces)) {
-                    let minP = min(start, end)
-                    let maxP = max(start, end)
-                    if minP <= maxP {
-                        for p in minP...maxP {
-                            if p >= 1 && p <= maxPages {
-                                pages.insert(p)
-                            }
-                        }
-                    }
-                }
-            } else if let p = Int(trimmedPart) {
-                if p >= 1 && p <= maxPages {
-                    pages.insert(p)
-                }
-            }
-        }
-        return pages.isEmpty ? Set(1...maxPages) : pages
     }
 
     private func drawCropMarksAndBleeds(in context: CGContext, pageSize: CGSize) {

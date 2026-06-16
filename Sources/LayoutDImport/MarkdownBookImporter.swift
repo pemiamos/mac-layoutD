@@ -44,6 +44,8 @@ private struct MarkdownParser {
     private var calloutBuffer: [String] = []
     private var tableBuffer: [String] = []
     private var assetsByReference: [String: Asset] = [:]
+    private var referenceImageTargets: [String: String] = [:]
+    private var isInsideHTMLComment = false
 
     init(markdown: String, assetCatalog: AssetCatalog, defaultAuthor: String, fallbackTitle: String) {
         self.markdown = markdown
@@ -51,14 +53,16 @@ private struct MarkdownParser {
         self.defaultAuthor = defaultAuthor
         self.fallbackTitle = fallbackTitle
         self.author = defaultAuthor
-        self.assetsByReference = Dictionary(
-            uniqueKeysWithValues: assetCatalog.assets.map { ($0.fileName.normalizedAssetReference, $0) }
-        )
+        self.assetsByReference = assetCatalog.assets.reduce(into: [:]) { indexedAssets, asset in
+            let reference = asset.fileName.normalizedAssetPath
+            indexedAssets[reference] = indexedAssets[reference] ?? asset
+        }
     }
 
     mutating func parse() -> BookProject {
         var lines = markdown.components(separatedBy: .newlines)
         let frontMatter = extractFrontMatter(from: &lines)
+        referenceImageTargets = collectReferenceImageTargets(from: lines)
         title = frontMatter.title
         subtitle = frontMatter.subtitle
         author = frontMatter.author ?? defaultAuthor
@@ -68,12 +72,59 @@ private struct MarkdownParser {
         keywords = frontMatter.keywords
         pageSetup = frontMatter.pageSetup ?? .scienceBookDefault
 
-        for rawLine in lines {
+        var shouldSkipLine = false
+        for index in lines.indices {
+            if shouldSkipLine {
+                shouldSkipLine = false
+                continue
+            }
+
+            let rawLine = lines[index]
             let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if shouldSkipHTMLCommentLine(line) {
+                flushParagraphBuffer()
+                flushCalloutBuffer()
+                flushTableBuffer()
+                continue
+            }
+
             if line.isEmpty {
                 flushParagraphBuffer()
                 flushCalloutBuffer()
                 flushTableBuffer()
+                continue
+            }
+
+            if parseReferenceDefinition(line) != nil {
+                flushParagraphBuffer()
+                flushCalloutBuffer()
+                flushTableBuffer()
+                continue
+            }
+
+            let nextLine = lines.index(after: index) < lines.endIndex
+                ? lines[lines.index(after: index)].trimmingCharacters(in: .whitespaces)
+                : nil
+            if let heading = parseSetextHeading(line: line, nextLine: nextLine) {
+                flushParagraphBuffer()
+                flushCalloutBuffer()
+                flushTableBuffer()
+                if heading.level == 1 {
+                    flushSection()
+                    if title == nil {
+                        title = heading.text
+                    }
+                    currentSectionTitle = heading.text
+                } else {
+                    currentParagraphs.append(
+                        Paragraph(
+                            kind: .heading(level: heading.level),
+                            text: heading.text,
+                            styleId: StyleID.heading2.rawValue
+                        )
+                    )
+                }
+                shouldSkipLine = true
                 continue
             }
 
@@ -95,34 +146,32 @@ private struct MarkdownParser {
                 flushParagraphBuffer()
                 flushCalloutBuffer()
                 flushTableBuffer()
+                if image.anchor == .previousParagraph, addAnchoredImage(image) {
+                    continue
+                }
                 addFigure(image)
                 continue
             }
 
-            if line.hasPrefix("# ") {
+            if let heading = parseHeading(line) {
                 flushParagraphBuffer()
                 flushCalloutBuffer()
                 flushTableBuffer()
-                flushSection()
-                let heading = String(line.dropFirst(2)).trimmed
-                if title == nil {
-                    title = heading
-                }
-                currentSectionTitle = heading
-                continue
-            }
-
-            if line.hasPrefix("## ") {
-                flushParagraphBuffer()
-                flushCalloutBuffer()
-                flushTableBuffer()
-                currentParagraphs.append(
-                    Paragraph(
-                        kind: .heading(level: 2),
-                        text: String(line.dropFirst(3)).trimmed,
-                        styleId: StyleID.heading2.rawValue
+                if heading.level == 1 {
+                    flushSection()
+                    if title == nil {
+                        title = heading.text
+                    }
+                    currentSectionTitle = heading.text
+                } else {
+                    currentParagraphs.append(
+                        Paragraph(
+                            kind: .heading(level: heading.level),
+                            text: heading.text,
+                            styleId: StyleID.heading2.rawValue
+                        )
                     )
-                )
+                }
                 continue
             }
 
@@ -133,14 +182,14 @@ private struct MarkdownParser {
                 continue
             }
 
-            if line.hasPrefix("- ") || line.hasPrefix("* ") {
+            if let listItem = parseListItem(line) {
                 flushParagraphBuffer()
                 flushCalloutBuffer()
                 flushTableBuffer()
                 currentParagraphs.append(
                     Paragraph(
                         kind: .listItem,
-                        text: String(line.dropFirst(2)).trimmed,
+                        text: listItem,
                         styleId: StyleID.body.rawValue
                     )
                 )
@@ -184,7 +233,7 @@ private struct MarkdownParser {
         guard !paragraphBuffer.isEmpty else {
             return
         }
-        let text = paragraphBuffer.joined(separator: " ")
+        let text = normalizeInlineMarkdown(paragraphBuffer.joined(separator: " "))
         currentParagraphs.append(Paragraph(kind: .body, text: text, styleId: StyleID.body.rawValue))
         paragraphBuffer.removeAll(keepingCapacity: true)
     }
@@ -194,7 +243,7 @@ private struct MarkdownParser {
             return
         }
         currentParagraphs.append(
-            Paragraph(kind: .callout, text: calloutBuffer.joined(separator: " "), styleId: StyleID.callout.rawValue)
+            Paragraph(kind: .callout, text: normalizeInlineMarkdown(calloutBuffer.joined(separator: " ")), styleId: StyleID.callout.rawValue)
         )
         calloutBuffer.removeAll(keepingCapacity: true)
     }
@@ -212,7 +261,7 @@ private struct MarkdownParser {
         if !rows.isEmpty {
             let text = rows.map { $0.joined(separator: "    ") }.joined(separator: "\n")
             currentParagraphs.append(
-                Paragraph(kind: .table, text: text, styleId: StyleID.body.rawValue)
+                Paragraph(kind: .table, text: normalizeInlineMarkdown(text), styleId: StyleID.body.rawValue)
             )
         }
 
@@ -242,22 +291,56 @@ private struct MarkdownParser {
         }
 
         if !calloutBuffer.isEmpty {
-            calloutBuffer.append(line)
+            calloutBuffer.append(normalizeInlineMarkdown(line))
             return
         }
 
         currentParagraphs.append(
             Paragraph(
                 kind: .quote,
-                text: line,
+                text: normalizeInlineMarkdown(line),
                 styleId: StyleID.callout.rawValue
             )
         )
     }
 
     private mutating func addFigure(_ image: MarkdownImage) {
+        let asset = placedAsset(for: image)
+        currentParagraphs.append(
+            Paragraph(
+                kind: .figure(assetId: asset.id),
+                text: image.caption ?? asset.fileName,
+                styleId: StyleID.caption.rawValue
+            )
+        )
+    }
+
+    private mutating func addAnchoredImage(_ image: MarkdownImage) -> Bool {
+        guard let paragraphIndex = currentParagraphs.indices.last else {
+            return false
+        }
+
+        let asset = placedAsset(for: image)
+        if !currentParagraphs[paragraphIndex].anchoredAssetIds.contains(asset.id) {
+            currentParagraphs[paragraphIndex].anchoredAssetIds.append(asset.id)
+        }
+        return true
+    }
+
+    private mutating func placedAsset(for image: MarkdownImage) -> Asset {
         var asset: Asset
-        if let catalogAsset = assetCatalog.asset(
+        if let existingAsset = indexedAsset(matching: image.path) {
+            asset = existingAsset
+            if asset.caption == nil {
+                asset.caption = image.caption
+            }
+            if asset.credit == nil {
+                asset.credit = image.credit
+            }
+            if let role = image.role {
+                asset.role = role
+            }
+        } else if let catalogAsset = assetCatalog.asset(
             matching: image.path,
             caption: image.caption,
             role: image.role,
@@ -275,29 +358,61 @@ private struct MarkdownParser {
             )
         }
 
-        asset.usage = .placed
-        assetsByReference[asset.fileName.normalizedAssetReference] = asset
-        currentParagraphs.append(
-            Paragraph(
-                kind: .figure(assetId: asset.id),
-                text: image.caption ?? asset.fileName,
-                styleId: StyleID.caption.rawValue
-            )
-        )
+        asset.usage = asset.usage == .placed || asset.usage == .repeated ? .repeated : .placed
+        assetsByReference[asset.fileName.normalizedAssetPath] = asset
+        return asset
+    }
+
+    private func indexedAsset(matching reference: String) -> Asset? {
+        for path in reference.normalizedAssetLookupPaths {
+            if let exactAsset = assetsByReference[path] {
+                return exactAsset
+            }
+        }
+
+        let normalizedReference = reference.normalizedAssetReference
+        return assetsByReference.values
+            .filter { $0.fileName.normalizedAssetReference == normalizedReference }
+            .sorted { $0.fileName.localizedStandardCompare($1.fileName) == .orderedAscending }
+            .first
     }
 
     private func parseImage(_ line: String) -> MarkdownImage? {
-        guard line.hasPrefix("!["),
-              let captionEnd = line.range(of: "]("),
-              line.hasSuffix(")") else {
+        guard line.hasPrefix("![") else {
             return nil
         }
 
         let captionStart = line.index(line.startIndex, offsetBy: 2)
-        let caption = String(line[captionStart..<captionEnd.lowerBound]).trimmed
-        let pathStart = captionEnd.upperBound
-        let pathEnd = line.index(before: line.endIndex)
-        let target = String(line[pathStart..<pathEnd]).trimmed
+        guard let captionEnd = line[captionStart...].firstIndex(of: "]") else {
+            return nil
+        }
+        let caption = String(line[captionStart..<captionEnd]).trimmed
+
+        let markerStart = line.index(after: captionEnd)
+        guard markerStart < line.endIndex else {
+            return nil
+        }
+
+        let target: String
+        if line[markerStart] == "(",
+           line.hasSuffix(")") {
+            let pathStart = line.index(after: markerStart)
+            let pathEnd = line.index(before: line.endIndex)
+            target = String(line[pathStart..<pathEnd]).trimmed
+        } else if line[markerStart] == "[",
+                  line.hasSuffix("]") {
+            let labelStart = line.index(after: markerStart)
+            let labelEnd = line.index(before: line.endIndex)
+            let rawLabel = String(line[labelStart..<labelEnd]).trimmed
+            let label = rawLabel.isEmpty ? caption : rawLabel
+            guard let referenceTarget = referenceImageTargets[normalizedReferenceLabel(label)] else {
+                return nil
+            }
+            target = referenceTarget
+        } else {
+            return nil
+        }
+
         let parsedTarget = parseImageTarget(target)
         let path = parsedTarget.path
 
@@ -306,18 +421,110 @@ private struct MarkdownParser {
         }
 
         return MarkdownImage(
-            caption: caption.isEmpty ? nil : caption,
+            caption: caption.isEmpty ? nil : normalizeInlineMarkdown(caption),
             path: path,
             role: parsedTarget.role,
-            credit: parsedTarget.credit
+            credit: parsedTarget.credit,
+            anchor: parsedTarget.anchor
         )
     }
 
-    private func isNonContentLine(_ line: String) -> Bool {
-        if line.hasPrefix("<!--"), line.hasSuffix("-->") {
-            return true
+    private func parseHeading(_ line: String) -> MarkdownHeading? {
+        var level = 0
+        for character in line {
+            if character == "#" {
+                level += 1
+                continue
+            }
+            break
         }
 
+        guard (1...6).contains(level) else {
+            return nil
+        }
+
+        let markerEnd = line.index(line.startIndex, offsetBy: level)
+        guard markerEnd < line.endIndex, line[markerEnd] == " " else {
+            return nil
+        }
+
+        let text = normalizeInlineMarkdown(String(line[line.index(after: markerEnd)...]).trimmed)
+        guard !text.isEmpty else {
+            return nil
+        }
+
+        return MarkdownHeading(level: level, text: text)
+    }
+
+    private func parseSetextHeading(line: String, nextLine: String?) -> MarkdownHeading? {
+        guard let nextLine,
+              !line.isEmpty,
+              !line.hasPrefix("> "),
+              !isTableLine(line),
+              parseImage(line) == nil,
+              parseListItem(line) == nil else {
+            return nil
+        }
+
+        let compactUnderline = nextLine.replacingOccurrences(of: " ", with: "")
+        guard compactUnderline.count >= 3 else {
+            return nil
+        }
+
+        let level: Int
+        if compactUnderline.allSatisfy({ $0 == "=" }) {
+            level = 1
+        } else if compactUnderline.allSatisfy({ $0 == "-" }) {
+            level = 2
+        } else {
+            return nil
+        }
+
+        let text = normalizeInlineMarkdown(line)
+        guard !text.isEmpty else {
+            return nil
+        }
+        return MarkdownHeading(level: level, text: text)
+    }
+
+    private func parseListItem(_ line: String) -> String? {
+        if line.hasPrefix("- ") || line.hasPrefix("* ") {
+            let text = normalizeInlineMarkdown(String(line.dropFirst(2)).trimmed)
+            return text.isEmpty ? nil : text
+        }
+
+        var digitCount = 0
+        for character in line {
+            if character.isNumber {
+                digitCount += 1
+                continue
+            }
+            break
+        }
+
+        guard digitCount > 0 else {
+            return nil
+        }
+
+        let markerIndex = line.index(line.startIndex, offsetBy: digitCount)
+        guard markerIndex < line.endIndex, line[markerIndex] == "." || line[markerIndex] == ")" else {
+            return nil
+        }
+
+        let textStart = line.index(after: markerIndex)
+        guard textStart < line.endIndex, line[textStart] == " " else {
+            return nil
+        }
+
+        let marker = String(line[..<textStart]).trimmed
+        let text = normalizeInlineMarkdown(String(line[line.index(after: textStart)...]).trimmed)
+        guard !text.isEmpty else {
+            return nil
+        }
+        return "\(marker) \(text)"
+    }
+
+    private func isNonContentLine(_ line: String) -> Bool {
         let compactLine = line.replacingOccurrences(of: " ", with: "")
         guard compactLine.count >= 3 else {
             return false
@@ -326,6 +533,25 @@ private struct MarkdownParser {
         return compactLine.allSatisfy { $0 == "-" }
             || compactLine.allSatisfy { $0 == "*" }
             || compactLine.allSatisfy { $0 == "_" }
+    }
+
+    private mutating func shouldSkipHTMLCommentLine(_ line: String) -> Bool {
+        if isInsideHTMLComment {
+            if line.contains("-->") {
+                isInsideHTMLComment = false
+            }
+            return true
+        }
+
+        guard let start = line.range(of: "<!--") else {
+            return false
+        }
+
+        let afterStart = line[start.upperBound...]
+        if !afterStart.contains("-->") {
+            isInsideHTMLComment = true
+        }
+        return true
     }
 
     private func isTableLine(_ line: String) -> Bool {
@@ -352,7 +578,143 @@ private struct MarkdownParser {
 
         return trimmedLine
             .split(separator: "|", omittingEmptySubsequences: false)
-            .map { String($0).trimmed }
+            .map { normalizeInlineMarkdown(String($0).trimmed) }
+    }
+
+    private func normalizeInlineMarkdown(_ text: String) -> String {
+        var result = replacingMarkdownLinks(in: text)
+        result = strippingPairedInlineDelimiter("**", from: result)
+        result = strippingPairedInlineDelimiter("__", from: result)
+        result = strippingPairedInlineDelimiter("*", from: result)
+        result = strippingPairedInlineDelimiter("_", from: result)
+        result = strippingPairedInlineDelimiter("`", from: result)
+        result = result.replacingOccurrences(of: "\\*", with: "*")
+        result = result.replacingOccurrences(of: "\\_", with: "_")
+        result = result.replacingOccurrences(of: "\\`", with: "`")
+        result = result.replacingOccurrences(of: "\\[", with: "[")
+        result = result.replacingOccurrences(of: "\\]", with: "]")
+        return result
+    }
+
+    private func replacingMarkdownLinks(in text: String) -> String {
+        var output = ""
+        var index = text.startIndex
+
+        while index < text.endIndex {
+            guard text[index] == "[",
+                  let labelEnd = text[index...].firstIndex(of: "]") else {
+                output.append(text[index])
+                index = text.index(after: index)
+                continue
+            }
+
+            let parenStart = text.index(after: labelEnd)
+            guard parenStart < text.endIndex,
+                  text[parenStart] == "(",
+                  let parenEnd = text[parenStart...].firstIndex(of: ")") else {
+                output.append(text[index])
+                index = text.index(after: index)
+                continue
+            }
+
+            let labelStart = text.index(after: index)
+            output.append(contentsOf: text[labelStart..<labelEnd])
+            index = text.index(after: parenEnd)
+        }
+
+        return output
+    }
+
+    private func strippingPairedInlineDelimiter(_ delimiter: String, from text: String) -> String {
+        var result = text
+
+        while let opening = firstDelimiterIndex(in: result, delimiter: delimiter, startingAt: result.startIndex, kind: .opening),
+              let closing = firstDelimiterIndex(
+                in: result,
+                delimiter: delimiter,
+                startingAt: result.index(opening, offsetBy: delimiter.count),
+                kind: .closing
+              ) {
+            let closingEnd = result.index(closing, offsetBy: delimiter.count)
+            result.removeSubrange(closing..<closingEnd)
+
+            let openingEnd = result.index(opening, offsetBy: delimiter.count)
+            result.removeSubrange(opening..<openingEnd)
+        }
+
+        return result
+    }
+
+    private func firstDelimiterIndex(
+        in text: String,
+        delimiter: String,
+        startingAt startIndex: String.Index,
+        kind: InlineDelimiterKind
+    ) -> String.Index? {
+        var searchStart = startIndex
+        while searchStart < text.endIndex,
+              let range = text.range(of: delimiter, range: searchStart..<text.endIndex) {
+            if isValidInlineDelimiter(range, in: text, kind: kind) {
+                return range.lowerBound
+            }
+            searchStart = range.upperBound
+        }
+        return nil
+    }
+
+    private func isValidInlineDelimiter(
+        _ range: Range<String.Index>,
+        in text: String,
+        kind: InlineDelimiterKind
+    ) -> Bool {
+        guard !isEscapedDelimiter(at: range.lowerBound, in: text) else {
+            return false
+        }
+
+        switch kind {
+        case .opening:
+            guard range.upperBound < text.endIndex else {
+                return false
+            }
+            let nextCharacter = text[range.upperBound]
+            return !nextCharacter.isWhitespace && boundaryBefore(range.lowerBound, in: text)
+        case .closing:
+            guard range.lowerBound > text.startIndex else {
+                return false
+            }
+            let previousIndex = text.index(before: range.lowerBound)
+            let previousCharacter = text[previousIndex]
+            return !previousCharacter.isWhitespace
+        }
+    }
+
+    private func isEscapedDelimiter(at index: String.Index, in text: String) -> Bool {
+        guard index > text.startIndex else {
+            return false
+        }
+
+        let previousIndex = text.index(before: index)
+        return text[previousIndex] == "\\"
+    }
+
+    private func boundaryBefore(_ index: String.Index, in text: String) -> Bool {
+        guard index > text.startIndex else {
+            return true
+        }
+
+        let previousCharacter = text[text.index(before: index)]
+        return isInlineDelimiterBoundary(previousCharacter)
+    }
+
+    private func isInlineDelimiterBoundary(_ character: Character) -> Bool {
+        if character.isWhitespace {
+            return true
+        }
+
+        let punctuation = CharacterSet.punctuationCharacters.union(
+            CharacterSet(charactersIn: "，。、；：！？（）【】《》「」『』“”‘’、")
+        )
+        return character.unicodeScalars.allSatisfy { punctuation.contains($0) }
     }
 
     private func extractFrontMatter(from lines: inout [String]) -> FrontMatter {
@@ -522,18 +884,91 @@ private struct MarkdownParser {
     }
 
     private func parseImageTarget(_ target: String) -> ParsedImageTarget {
-        guard let quoteStart = target.firstIndex(of: "\""),
-              let quoteEnd = target.lastIndex(of: "\""),
-              quoteStart != quoteEnd else {
-            return ParsedImageTarget(path: target.trimmed, role: nil, credit: nil)
+        guard let imageTarget = parsedImageTargetMetadata(target) else {
+            return ParsedImageTarget(path: normalizedImagePath(target), role: nil, credit: nil, anchor: nil)
         }
 
-        let path = String(target[..<quoteStart]).trimmed
-        let metadata = String(target[target.index(after: quoteStart)..<quoteEnd])
-        let values = parseMetadata(metadata)
+        let values = parseMetadata(imageTarget.metadata)
         let role = parsedRole(values)
-        let credit = values["credit"]
-        return ParsedImageTarget(path: path, role: role, credit: credit)
+        let credit = parsedCredit(values)
+        let anchor = parsedImageAnchor(values)
+        return ParsedImageTarget(path: imageTarget.path, role: role, credit: credit, anchor: anchor)
+    }
+
+    private func parsedImageTargetMetadata(_ target: String) -> (path: String, metadata: String)? {
+        let trimmedTarget = target.trimmed
+        guard let quoteEnd = trimmedTarget.indices.last else {
+            return nil
+        }
+
+        let quote = trimmedTarget[quoteEnd]
+        guard quote == "\"" || quote == "'" else {
+            return nil
+        }
+
+        var index = quoteEnd
+        while index > trimmedTarget.startIndex {
+            index = trimmedTarget.index(before: index)
+            if trimmedTarget[index] == quote, !isEscapedDelimiter(at: index, in: trimmedTarget) {
+                let path = String(trimmedTarget[..<index]).trimmed
+                let metadataStart = trimmedTarget.index(after: index)
+                let metadata = String(trimmedTarget[metadataStart..<quoteEnd])
+                guard !path.isEmpty else {
+                    return nil
+                }
+                return (normalizedImagePath(path), metadata)
+            }
+        }
+
+        return nil
+    }
+
+    private func normalizedImagePath(_ path: String) -> String {
+        var path = path.trimmed
+        if path.hasPrefix("<"), path.hasSuffix(">"), path.count >= 2 {
+            path.removeFirst()
+            path.removeLast()
+            path = path.trimmed
+        }
+        return path
+    }
+
+    private func collectReferenceImageTargets(from lines: [String]) -> [String: String] {
+        lines.reduce(into: [String: String]()) { targets, rawLine in
+            guard let definition = parseReferenceDefinition(rawLine.trimmingCharacters(in: .whitespaces)) else {
+                return
+            }
+
+            targets[definition.label] = definition.target
+        }
+    }
+
+    private func parseReferenceDefinition(_ line: String) -> (label: String, target: String)? {
+        guard line.hasPrefix("["),
+              let labelEnd = line.firstIndex(of: "]") else {
+            return nil
+        }
+
+        let colonIndex = line.index(after: labelEnd)
+        guard colonIndex < line.endIndex, line[colonIndex] == ":" else {
+            return nil
+        }
+
+        let labelStart = line.index(after: line.startIndex)
+        let label = normalizedReferenceLabel(String(line[labelStart..<labelEnd]))
+        let targetStart = line.index(after: colonIndex)
+        let target = String(line[targetStart...]).trimmed
+        guard !label.isEmpty, !target.isEmpty else {
+            return nil
+        }
+        return (label, target)
+    }
+
+    private func normalizedReferenceLabel(_ label: String) -> String {
+        label
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+            .lowercased()
     }
 
     private func parseAdmonitionStart(_ line: String) -> String? {
@@ -543,7 +978,7 @@ private struct MarkdownParser {
 
         let markerStart = line.index(line.startIndex, offsetBy: 2)
         let marker = String(line[markerStart..<closing]).uppercased()
-        let title = String(line[line.index(after: closing)...]).trimmed
+        let title = normalizeInlineMarkdown(String(line[line.index(after: closing)...]).trimmed)
         let label = admonitionLabel(marker)
         guard !label.isEmpty else {
             return nil
@@ -582,6 +1017,32 @@ private struct MarkdownParser {
         return nil
     }
 
+    private func parsedCredit(_ values: [String: String]) -> String? {
+        values["credit"] ?? values["source"] ?? values["版权"] ?? values["来源"]
+    }
+
+    private func parsedImageAnchor(_ values: [String: String]) -> MarkdownImageAnchor? {
+        let explicitAnchor = values["anchor"] ?? values["attach"] ?? values["anchored"]
+        if let explicitAnchor, isPreviousParagraphAnchor(explicitAnchor) {
+            return .previousParagraph
+        }
+
+        if let placement = values["placement"], isPreviousParagraphAnchor(placement) {
+            return .previousParagraph
+        }
+
+        return nil
+    }
+
+    private func isPreviousParagraphAnchor(_ value: String) -> Bool {
+        switch value.lowercased() {
+        case "previous", "previous-paragraph", "paragraph", "inline", "anchor", "anchored":
+            return true
+        default:
+            return false
+        }
+    }
+
     private func parseMetadata(_ metadata: String) -> [String: String] {
         metadata
             .components(separatedBy: CharacterSet(charactersIn: ";,"))
@@ -603,6 +1064,21 @@ private struct MarkdownImage {
     var path: String
     var role: AssetRole?
     var credit: String?
+    var anchor: MarkdownImageAnchor?
+}
+
+private enum MarkdownImageAnchor {
+    case previousParagraph
+}
+
+private enum InlineDelimiterKind {
+    case opening
+    case closing
+}
+
+private struct MarkdownHeading {
+    var level: Int
+    var text: String
 }
 
 private struct FrontMatter {
@@ -620,6 +1096,7 @@ private struct ParsedImageTarget {
     var path: String
     var role: AssetRole?
     var credit: String?
+    var anchor: MarkdownImageAnchor?
 }
 
 private extension String {

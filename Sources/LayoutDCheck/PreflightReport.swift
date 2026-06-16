@@ -7,8 +7,10 @@ public struct PreflightReport: Codable, Equatable, Sendable {
     public var exportReady: Bool
     public var issues: [LayoutIssue]
     public var severityCounts: [String: Int]
+    public var categoryCounts: [String: Int]
     public var assetSummary: AssetPreflightSummary
     public var layoutSummary: LayoutPreflightSummary?
+    public var issueLocations: [IssueLocation]
     public var pageCount: Int?
 
     public init(
@@ -21,9 +23,11 @@ public struct PreflightReport: Codable, Equatable, Sendable {
         self.generatedAt = generatedAt
         self.issues = issues
         self.severityCounts = Dictionary(grouping: issues, by: { $0.severity.rawValue }).mapValues(\.count)
+        self.categoryCounts = Dictionary(grouping: issues.compactMap(\.category), by: { $0.rawValue }).mapValues(\.count)
         self.exportReady = severityCounts[IssueSeverity.error.rawValue, default: 0] == 0
         self.assetSummary = AssetPreflightSummary(project: project)
         self.layoutSummary = document.map(LayoutPreflightSummary.init(document:))
+        self.issueLocations = document.map { IssueLocation.locations(for: issues, document: $0) } ?? []
         self.pageCount = document?.pages.count
     }
 
@@ -51,7 +55,79 @@ public struct PreflightReport: Codable, Equatable, Sendable {
             lines.append("Tables: \(layoutSummary.tableFrames)")
         }
 
+        if !issueLocations.isEmpty {
+            lines.append("Located issues: \(issueLocations.count)")
+        }
+
+        if !categoryCounts.isEmpty {
+            lines.append("Issue categories: \(categoryCounts.count)")
+        }
+
         return lines
+    }
+}
+
+public struct IssueLocation: Codable, Equatable, Sendable {
+    public var issueId: UUID
+    public var pageNumber: Int
+    public var frameId: UUID
+    public var frameKind: String
+    public var rect: Rect
+    public var contentSummary: String?
+
+    public init(
+        issueId: UUID,
+        pageNumber: Int,
+        frameId: UUID,
+        frameKind: String,
+        rect: Rect,
+        contentSummary: String? = nil
+    ) {
+        self.issueId = issueId
+        self.pageNumber = pageNumber
+        self.frameId = frameId
+        self.frameKind = frameKind
+        self.rect = rect
+        self.contentSummary = contentSummary
+    }
+
+    static func locations(for issues: [LayoutIssue], document: LaidOutDocument) -> [IssueLocation] {
+        let framesById = Dictionary(uniqueKeysWithValues: document.pages.flatMap { page in
+            page.frames.map { frame in
+                (frame.id, (page.number, frame))
+            }
+        })
+
+        return issues.compactMap { issue in
+            guard let frameId = issue.frameId,
+                  let (pageNumber, frame) = framesById[frameId] else {
+                return nil
+            }
+
+            return IssueLocation(
+                issueId: issue.id,
+                pageNumber: issue.pageNumber ?? pageNumber,
+                frameId: frame.id,
+                frameKind: frame.kind.rawValue,
+                rect: frame.rect,
+                contentSummary: contentSummary(for: frame.content)
+            )
+        }
+    }
+
+    private static func contentSummary(for content: FrameContent) -> String? {
+        switch content {
+        case .text(let text):
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                return nil
+            }
+            return String(trimmed.prefix(40))
+        case .asset(let assetId):
+            return "asset:\(assetId.uuidString)"
+        case .empty:
+            return nil
+        }
     }
 }
 
@@ -83,6 +159,7 @@ public struct AssetPreflightSummary: Codable, Equatable, Sendable {
     public var missingSources: Int
     public var lowResolution: Int
     public var unknownSize: Int
+    public var repeatedUse: Int
 
     public init(project: BookProject) {
         let assets = project.assets
@@ -102,6 +179,7 @@ public struct AssetPreflightSummary: Codable, Equatable, Sendable {
             return effectiveDPI < 220
         }.count
         unknownSize = assets.filter { $0.pixelWidth <= 0 || $0.pixelHeight <= 0 }.count
+        repeatedUse = assets.filter { $0.usage == .repeated }.count
     }
 }
 

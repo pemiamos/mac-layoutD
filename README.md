@@ -15,7 +15,7 @@ This repository currently contains a Swift Package scaffold:
 
 - `LayoutDCore`: document model, typography, assets, page geometry, layout plan types.
 - `LayoutDEngine`: deterministic pagination and frame generation.
-- `LayoutDDesignAI`: rule-based AI-advisor boundary that can later call model providers.
+- `LayoutDDesignAI`: rule-based and provider-backed AI-advisor boundary for structured `LayoutPlan` candidates.
 - `LayoutDImport`: Markdown manuscript importer and image asset scanner.
 - `LayoutDCheck`: project and asset issue inspection.
 - `LayoutDExport`: PDF export boundary.
@@ -39,17 +39,32 @@ swift run layoutD -- Samples/demo.md
 
 Inside the app:
 
-- `File -> Open Project or Markdown...` opens `.layoutd`, `.json`, `.md`, `.markdown`, or `.txt`.
+- `File -> Open Project, Markdown, or Chapter Package...` opens `.layoutd`, `.json`, `.md`, `.markdown`, `.txt`, or a chapter package directory.
 - `File -> Save Project...` saves the current structured project as `.layoutd`.
 - `File -> Export PDF...` exports the current layout.
+- `File -> Export PNG Previews...` exports page preview images as `page-001.png`, `page-002.png`, and so on.
 - `File -> Export Preflight Report...` exports the current project checks as JSON.
+- `File -> Import Layout Templates...` and `Export Layout Templates...` move saved layout templates between projects.
 - `View -> Zoom In`, `Zoom Out`, `Actual Size`, and `Fit Width` control the canvas scale.
 - `View -> Previous Page` and `Next Page` jump through the page stack.
+- The left sidebar shows asset role, usage state, pixel size, DPI, and captions; the inspector can edit asset role, caption, and credit/source.
+- The inspector edits book metadata including title, subtitle, author, publisher, ISBN, series, and keywords, plus page setup values in millimeters and facing-page layout.
+- The inspector can apply project-level style templates: Chinese science default, compact study guide, and image-rich science.
+- The inspector can apply reusable chapter layout templates to a selected section and write the resulting page plans into the project.
+- Clicking a canvas frame selects it for inspector-based coordinate/size edits; selected image frames can be reassigned to another project asset.
+- Clicking a frame-level preflight issue scrolls to the page, highlights and selects the frame, and shows its kind/rect location in the issue list.
+- The page sidebar shows lightweight thumbnails based on laid-out frames, with text/image/component counts and lock state.
 
 To preview a manuscript with an image folder:
 
 ```bash
 swift run layoutD -- path/to/manuscript.md path/to/images
+```
+
+To preview a chapter package directory, place the manuscript at `manuscript.md`, `book.md`, `chapter.md`, `content.md`, or `README.md`; alternatively place multiple files in `chapters/*.md` and they will be imported in filename order. Assets can live in `images/` or `assets/`:
+
+```bash
+swift run layoutD -- path/to/chapter-package
 ```
 
 To export an imported manuscript to PDF without opening the app window:
@@ -58,10 +73,46 @@ To export an imported manuscript to PDF without opening the app window:
 swift run layoutD -- --export-pdf /tmp/layoutD-demo.pdf Samples/demo.md
 ```
 
+PDF export also supports page ranges and proofing guides:
+
+```bash
+swift run layoutD -- --export-pdf /tmp/layoutD-proof.pdf --pdf-pages 1,3 --pdf-crop-marks --pdf-grid-guides Samples/demo.md
+```
+
 To export a structured layoutD project file:
 
 ```bash
 swift run layoutD -- --export-project /tmp/layoutD-demo.layoutd Samples/demo.md
+```
+
+To export saved layout templates as a reusable library:
+
+```bash
+swift run layoutD -- --export-templates /tmp/layoutD-templates.json /tmp/layoutD-demo.layoutd
+```
+
+To import a template library before exporting or validating:
+
+```bash
+swift run layoutD -- --import-templates /tmp/layoutD-templates.json --export-project /tmp/layoutD-with-templates.layoutd Samples/demo.md
+```
+
+To apply a reusable chapter template while exporting a project:
+
+```bash
+swift run layoutD -- --apply-chapter-template scienceChapter --chapter-template-start-page 3 --export-project /tmp/layoutD-chapter-plan.layoutd Samples/demo.md
+```
+
+To export page preview PNG files without opening the app window:
+
+```bash
+swift run layoutD -- --export-png /tmp/layoutD-pages Samples/demo.md
+```
+
+PNG export also supports page ranges and output scale:
+
+```bash
+swift run layoutD -- --export-png /tmp/layoutD-pages --png-pages 1,3 --png-scale 1.5 Samples/demo.md
 ```
 
 To export a machine-readable preflight report:
@@ -77,6 +128,12 @@ swift run layoutD -- --validate Samples/demo.md
 ```
 
 `--validate` exits with `0` when `exportReady` is true and exits non-zero when loading fails or blocking preflight errors exist.
+
+CLI export and validation can also apply conservative preflight fixes before producing outputs:
+
+```bash
+swift run layoutD -- --apply-preflight-fixes --export-project /tmp/layoutD-fixed.layoutd Samples/demo.md
+```
 
 To export PDF from a saved layoutD project:
 
@@ -97,11 +154,17 @@ The first UI is intentionally minimal. It exists to validate the architecture an
 `LayoutDImport` provides the first MVP input path:
 
 - Parse optional YAML-like front matter for book metadata (`title`, `subtitle`, `author`, `publisher`, `isbn`, `series`, `keywords`) and page setup (`columns`, `page`, `page_width_mm`, `page_height_mm`, `margins`, `gutter_mm`, `baseline_grid_pt`).
-- Parse Markdown headings, body paragraphs, quotes, admonition-style knowledge cards, simple pipe tables, list items, and image references while ignoring draft separators and HTML comments.
-- Convert Markdown images such as `![图注](images/demo.png "role=diagram; credit=作者")` into structured figure paragraphs.
+- Parse Markdown ATX headings from level 1 through 6, Setext level 1/2 headings, body paragraphs, quotes, admonition-style knowledge cards, simple pipe tables, unordered and ordered list items, and image references while ignoring draft separators and single-line or multi-line HTML comments.
+- Clean common inline Markdown markers in imported text, including links, emphasis, strong emphasis, inline code, and escaped marker characters, while preserving literal symbols in terms and formulas such as `snake_case` or `3 * 4`.
+- Convert inline or reference-style Markdown images such as `![图注](images/demo.png "role=diagram; credit=作者")` and `![图注][demo]` into structured figure paragraphs.
+- Read image metadata from double-quoted or single-quoted Markdown title parameters, including `credit`, `source`, `来源`, and `版权` aliases for image attribution.
+- Accept angle-bracket image destinations such as `![图注](<images/cell detail.png>)` for filenames containing spaces.
+- Use `anchor=previous` on Markdown images to attach an image to the preceding paragraph instead of creating a standalone figure paragraph.
 - Use `span=wide`, `placement=wide`, `role=hero`, or `role=comparison` to request full content-width image placement.
 - Scan an image directory with ImageIO and read pixel size, DPI, extension, and inferred image role.
-- Merge optional `manifest.csv`, `assets.csv`, or `images.csv` metadata from the image directory.
+- Merge optional `manifest.csv`, `assets.csv`, or `images.csv` metadata from the image directory, including per-chapter manifests stored in nested asset folders.
+- Load a chapter package directory by finding a root Markdown manuscript or ordered `chapters/*.md` files, then scanning `images/` or `assets/` automatically.
+- Match image references against scanned assets by exact relative path first, including chapter-package `assets/` or `images/` prefixes, with filename-only matching as a fallback for simple manuscripts.
 - Keep unreferenced image files in the asset library for preflight, without automatically placing them into the manuscript layout.
 - Return a `BookProject` that can be passed directly into `LayoutDEngine`.
 
@@ -124,6 +187,10 @@ baseline_grid_pt: 14
 ---
 
 ![线粒体像城市里的发电站](images/cell-diagram.png "span=wide; credit=layoutD")
+
+细胞膜像城市的边界，控制物质进出。
+
+![细胞膜局部结构](images/membrane-detail.png "anchor=previous; role=diagram; credit=layoutD")
 ```
 
 Image metadata can also live beside the images:
@@ -159,35 +226,86 @@ The deterministic engine currently generates:
 - Two-column Chinese science-book body pages on a 185mm x 260mm page setup.
 - Image frames sized by asset role and aspect ratio.
 - Image placement only for figures explicitly referenced by the manuscript or anchored to a paragraph.
+- Lightweight page thumbnails in the navigation sidebar, derived from the same `LaidOutPage` frames used by canvas/PDF export.
+- Sidebar asset library with role, usage state, pixel size, DPI, and caption summary, plus inspector editing for asset role, caption, and credit/source.
 - Full content-width image placement for hero/comparison/wide images, with a column barrier that prevents later text from overlapping the image.
 - Automatic cross-column splitting for long body/callout text.
 - Heading keep-with-next behavior to avoid stranded headings at the bottom of a column.
+- Automatic spacing between adjacent Chinese ideographs and ASCII letters/numbers in laid-out text.
 - Automatic figure caption numbering when captions do not already start with `图`.
 - Captions, visually boxed callouts, running headers, and exported page numbers.
-- Layout/project issues for incomplete book metadata, invalid ISBN-13, unreferenced library images, missing captions, effective print DPI, missing source images, duplicate filenames, missing asset references, empty structure, broken page sequences, extreme paragraph overflow, Chinese line-break punctuation violations, text overflow inside frames, frame overlap, out-of-bounds frames, empty text frames, and missing image frames.
-- JSON preflight reports with issue counts, asset summary, layout frame summary including table frames, page count, and explicit `exportReady`.
+- Page preview PNG export for quick review or downstream thumbnails, including page-range and output-scale options.
+- Canvas frame selection with inspector-based manual positioning and image replacement, constrained to valid page bounds and minimum frame size; preflight issue clicks select the affected frame for immediate editing.
+- Reusable page-level layout templates for text-led, image-led, balanced image/text, and knowledge-card pages, shared by the rule-based layout advisor.
+- Reusable chapter-level layout templates that produce page-keyed plan sets for science chapters, image-rich chapters, and study-guide chapters, with App and CLI application into `appliedLayoutPlans`.
+- Saved layout templates in project data, with retargeting support for reusing a saved `LayoutPlan` on another page, spread, or section; the inspector can save the current page as a template, apply saved templates to the current page, rename templates, and delete stale templates. App and CLI template libraries can export/import saved templates across projects.
+- Layout/project issues for incomplete book metadata, invalid ISBN-13, unreferenced library images, repeated image use, missing captions, effective print DPI, missing source images, duplicate filenames, missing asset references, empty structure, broken page sequences, table-of-contents page drift, extreme paragraph overflow, Chinese line-break punctuation violations including common Chinese quotes/brackets, text overflow inside frames, frame overlap, out-of-bounds frames, empty text frames, and missing image frames.
+- JSON preflight reports with issue counts, category counts, asset summary, layout frame summary including table frames, page count, explicit `exportReady`, frame-level `issueLocations`, and `suggestedFix` guidance for common issues, plus inspector severity/category filtering for focused issue review.
+- Conservative preflight auto-fixes for missing publisher/keywords, invalid ISBN removal, missing asset captions/credits, and stale source paths, exposed from the inspector and CLI for issues that advertise an `autoFixKind`.
+- Inspector editing for book metadata, image metadata, styles, project-level style templates, and page setup with millimeter-based spacing controls and facing-page toggle.
 
 Current verification:
 
 ```text
-swift test: pass, 38 tests
+swift test: pass, 97 tests
 Markdown -> PDF export: pass
 Markdown -> .layoutd -> PDF export: pass
+Multi-file chapter package -> .layoutd export: pass
+Multi-file chapter package validate: pass
+Chapter package asset reference matching: pass
+Markdown -> PNG preview export: pass
 Markdown -> preflight JSON export: pass
 CLI validate success/failure exits: pass
 Wide image PDF page render: pass
 Image manifest import: pass
+Nested chapter asset manifest import: pass
 Layout defect validation: pass
 Text overflow validation: pass
 Chinese line-break preflight: pass
+Chinese/Western text spacing: pass
+AI provider advisor fallback and semantic context: pass
+Project-level style templates: pass
+Page-level layout templates: pass
+Chapter-level layout templates: pass
+CLI chapter template application: pass
+Saved layout template reuse: pass
+Layout template library import/export: pass
+Chapter package loader tests: pass
+Duplicate nested asset basename import: pass
+Exact nested asset path matching: pass
+Nested chapter package asset CLI matching: pass
+Preflight auto-fix entry: pass
+CLI preflight auto-fix: pass
+Preflight issue categories: pass
 Markdown knowledge-card import: pass
 Heading keep-with-next layout: pass
 Markdown draft-marker cleanup: pass
+Multi-line HTML comment cleanup: pass
+Multi-line HTML comment CLI export: pass
 Callout PDF export: pass
 Front matter margin/gutter import: pass
 Page sequence preflight: pass
+Table-of-contents consistency preflight: pass
 Layout frame summary: pass
 Book metadata import and ISBN preflight: pass
 Legacy .layoutd metadata decode: pass
 Markdown table import and table frame layout: pass
+Repeated image reference import and preflight: pass
+Nested Markdown heading import: pass
+Nested Markdown heading CLI export: pass
+Ordered Markdown list import: pass
+Ordered Markdown list CLI export: pass
+Inline Markdown cleanup import: pass
+Inline Markdown cleanup CLI export: pass
+Inline Markdown literal symbol preservation: pass
+Markdown anchored image import: pass
+Markdown anchored image CLI export: pass
+Anchored image layout placement: pass
+Single-quoted Markdown image metadata: pass
+Angle-bracket Markdown image path import: pass
+Inline image source metadata import: pass
+Credited image preflight: pass
+Setext Markdown heading import: pass
+Reference-style Markdown image import: pass
+Shortcut reference-style Markdown image import: pass
 ```

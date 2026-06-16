@@ -48,6 +48,29 @@ final class AssetScannerTests: XCTestCase {
         XCTAssertEqual(assets[0].caption, "开场跨栏图")
         XCTAssertEqual(assets[0].credit, "layoutD")
     }
+
+    func testScannerMergesNestedChapterManifestMetadata() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-asset-scanner-\(UUID().uuidString)")
+        let chapterDirectory = directory.appendingPathComponent("chapter-01")
+        try FileManager.default.createDirectory(at: chapterDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try samplePNGData.write(to: chapterDirectory.appendingPathComponent("cell.png"))
+        let manifest = """
+        file,caption,role,credit
+        cell.png,第一章细胞图,diagram,chapter team
+        """
+        try manifest.write(to: chapterDirectory.appendingPathComponent("assets.csv"), atomically: true, encoding: .utf8)
+
+        let assets = try AssetScanner().scan(directory: directory)
+
+        XCTAssertEqual(assets.count, 1)
+        XCTAssertEqual(assets[0].fileName, "chapter-01/cell.png")
+        XCTAssertEqual(assets[0].caption, "第一章细胞图")
+        XCTAssertEqual(assets[0].role, .diagram)
+        XCTAssertEqual(assets[0].credit, "chapter team")
+    }
 }
 
 private let samplePNGData = Data(base64Encoded: """

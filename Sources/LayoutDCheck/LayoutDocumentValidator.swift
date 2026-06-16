@@ -10,6 +10,7 @@ public struct LayoutDocumentValidator {
         let assetIds = Set(project.assets.map(\.id))
 
         issues.append(contentsOf: validatePageSequence(document.pages))
+        issues.append(contentsOf: validateTableOfContents(document.pages, project: project))
 
         for page in document.pages {
             issues.append(contentsOf: validateFrames(page.frames, page: page, project: project, assetIds: assetIds))
@@ -21,7 +22,7 @@ public struct LayoutDocumentValidator {
 
     private func validatePageSequence(_ pages: [LaidOutPage]) -> [LayoutIssue] {
         guard !pages.isEmpty else {
-            return [LayoutIssue(severity: .error, message: "文档没有可导出的页面")]
+            return [LayoutIssue(severity: .error, message: "文档没有可导出的页面", category: .pagination)]
         }
 
         var issues: [LayoutIssue] = []
@@ -32,7 +33,7 @@ public struct LayoutDocumentValidator {
 
         for number in duplicateNumbers.sorted() {
             issues.append(
-                LayoutIssue(severity: .error, message: "文档存在重复页码：\(number)", pageNumber: number)
+                LayoutIssue(severity: .error, message: "文档存在重复页码：\(number)", category: .pagination, pageNumber: number)
             )
         }
 
@@ -42,12 +43,142 @@ public struct LayoutDocumentValidator {
             issues.append(
                 LayoutIssue(
                     severity: .error,
-                    message: "文档页码不连续，应为 1...\(pages.count)，实际为 \(actualNumbers)"
+                    message: "文档页码不连续，应为 1...\(pages.count)，实际为 \(actualNumbers)",
+                    category: .pagination
                 )
             )
         }
 
         return issues
+    }
+
+    private func validateTableOfContents(_ pages: [LaidOutPage], project: BookProject) -> [LayoutIssue] {
+        guard let contentsPage = pages.first(where: { $0.number == 2 }) else {
+            return []
+        }
+
+        let entries = contentsEntries(from: contentsPage)
+        let expectedTitles = expectedContentsTitles(project: project)
+        let visibleTitlePages = visibleTitlePages(in: pages, matching: expectedTitles)
+        let pageNumbers = Set(pages.map(\.number))
+        var issues: [LayoutIssue] = []
+
+        for entry in entries {
+            if !pageNumbers.contains(entry.pageNumber) {
+                issues.append(
+                    LayoutIssue(
+                        severity: .error,
+                        message: "目录引用了不存在的页码：\(entry.title) -> \(entry.pageNumber)",
+                        category: .tableOfContents,
+                        pageNumber: contentsPage.number,
+                        frameId: entry.frameId
+                    )
+                )
+                continue
+            }
+
+            if let actualPages = visibleTitlePages[entry.title], !actualPages.contains(entry.pageNumber) {
+                let actual = actualPages.sorted().map(String.init).joined(separator: ",")
+                issues.append(
+                    LayoutIssue(
+                        severity: .warning,
+                        message: "目录页码不一致：\(entry.title) 标为第 \(entry.pageNumber) 页，实际标题在第 \(actual) 页",
+                        category: .tableOfContents,
+                        pageNumber: contentsPage.number,
+                        frameId: entry.frameId
+                    )
+                )
+            }
+        }
+
+        let entryTitles = Set(entries.map(\.title))
+        for title in visibleTitlePages.keys.sorted() where !entryTitles.contains(title) {
+            issues.append(
+                LayoutIssue(
+                    severity: .warning,
+                    message: "目录缺少可见标题：\(title)",
+                    category: .tableOfContents,
+                    pageNumber: contentsPage.number
+                )
+            )
+        }
+
+        return issues
+    }
+
+    private func contentsEntries(from page: LaidOutPage) -> [ContentsEntry] {
+        page.frames.flatMap { frame -> [ContentsEntry] in
+            guard case .text(let text) = frame.content else {
+                return []
+            }
+
+            return text
+                .split(separator: "\n", omittingEmptySubsequences: true)
+                .compactMap { line in
+                    contentsEntry(from: String(line), frameId: frame.id)
+                }
+        }
+    }
+
+    private func contentsEntry(from line: String, frameId: UUID) -> ContentsEntry? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != "目录", trimmed != "暂无章节" else {
+            return nil
+        }
+
+        let pattern = #"^(.+?)\s+(\d+)$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
+              match.numberOfRanges == 3,
+              let titleRange = Range(match.range(at: 1), in: trimmed),
+              let pageRange = Range(match.range(at: 2), in: trimmed),
+              let pageNumber = Int(trimmed[pageRange]) else {
+            return nil
+        }
+
+        let title = String(trimmed[titleRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else {
+            return nil
+        }
+
+        return ContentsEntry(title: title, pageNumber: pageNumber, frameId: frameId)
+    }
+
+    private func expectedContentsTitles(project: BookProject) -> Set<String> {
+        var titles = Set<String>()
+        for section in project.sections {
+            let sectionTitle = section.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !sectionTitle.isEmpty {
+                titles.insert(sectionTitle)
+            }
+
+            for story in section.stories {
+                let storyTitle = story.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !storyTitle.isEmpty {
+                    titles.insert(storyTitle)
+                }
+            }
+        }
+        return titles
+    }
+
+    private func visibleTitlePages(in pages: [LaidOutPage], matching expectedTitles: Set<String>) -> [String: Set<Int>] {
+        var result: [String: Set<Int>] = [:]
+        for page in pages where page.number != 2 {
+            for frame in page.frames {
+                guard case .text(let text) = frame.content else {
+                    continue
+                }
+
+                let title = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard expectedTitles.contains(title) else {
+                    continue
+                }
+
+                result[title, default: []].insert(page.number)
+            }
+        }
+        return result
     }
 
     private func validateFrames(
@@ -65,6 +196,8 @@ public struct LayoutDocumentValidator {
                     LayoutIssue(
                         severity: .error,
                         message: "页面 \(page.number) 存在无效尺寸 frame",
+                        category: .layout,
+                        suggestedFix: "选中该 frame 后增大宽高，或恢复该页的流式排版。",
                         pageNumber: page.number,
                         frameId: frame.id
                     )
@@ -76,6 +209,8 @@ public struct LayoutDocumentValidator {
                     LayoutIssue(
                         severity: .error,
                         message: "页面 \(page.number) 存在越界 frame",
+                        category: .layout,
+                        suggestedFix: "选中该 frame 后调整 x/y/宽高，使其完全落在页面范围内。",
                         pageNumber: page.number,
                         frameId: frame.id
                     )
@@ -89,6 +224,7 @@ public struct LayoutDocumentValidator {
                         LayoutIssue(
                             severity: .warning,
                             message: "页面 \(page.number) 存在空文本 frame",
+                            category: .layout,
                             pageNumber: page.number,
                             frameId: frame.id
                         )
@@ -99,6 +235,8 @@ public struct LayoutDocumentValidator {
                         LayoutIssue(
                             severity: .error,
                             message: "页面 \(page.number) 存在文本溢出 frame",
+                            category: .layout,
+                            suggestedFix: "增大文本框高度、降低字号/行高，或恢复流式排版让正文重新分页。",
                             pageNumber: page.number,
                             frameId: frame.id
                         )
@@ -111,6 +249,8 @@ public struct LayoutDocumentValidator {
                         LayoutIssue(
                             severity: .error,
                             message: "页面 \(page.number) 存在缺失图片 frame",
+                            category: .references,
+                            suggestedFix: "更换为项目素材库中存在的图片，或重新导入包含该素材的图片目录。",
                             pageNumber: page.number,
                             frameId: frame.id
                         )
@@ -171,22 +311,24 @@ public struct LayoutDocumentValidator {
             }
 
             var issues: [LayoutIssue] = []
-            if let firstCharacter = trimmed.first, forbiddenLineStartCharacters.contains(firstCharacter) {
+            if let firstCharacter = trimmed.first, ChineseLineBreakRules.forbidsLineStart(firstCharacter) {
                 issues.append(
                     LayoutIssue(
                         severity: .warning,
                         message: "页面 \(page.number) 存在中文禁则问题：行首出现禁用标点「\(firstCharacter)」",
+                        category: .typography,
                         pageNumber: page.number,
                         frameId: frame.id
                     )
                 )
             }
 
-            if let lastCharacter = trimmed.last, forbiddenLineEndCharacters.contains(lastCharacter) {
+            if let lastCharacter = trimmed.last, ChineseLineBreakRules.forbidsLineEnd(lastCharacter) {
                 issues.append(
                     LayoutIssue(
                         severity: .warning,
                         message: "页面 \(page.number) 存在中文禁则问题：行尾出现禁用标点「\(lastCharacter)」",
+                        category: .typography,
                         pageNumber: page.number,
                         frameId: frame.id
                     )
@@ -308,6 +450,8 @@ public struct LayoutDocumentValidator {
                     LayoutIssue(
                         severity: .error,
                         message: "页面 \(page.number) 存在 frame 重叠",
+                        category: .layout,
+                        suggestedFix: "选中重叠 frame 后移动或缩小，必要时恢复该页的流式排版。",
                         pageNumber: page.number,
                         frameId: second.id
                     )
@@ -324,8 +468,11 @@ public struct LayoutDocumentValidator {
     }
 }
 
-private let forbiddenLineStartCharacters = Set("，。、！？：；）】》」』,.!?:;)]}%")
-private let forbiddenLineEndCharacters = Set("（【《「『([{")
+private struct ContentsEntry {
+    var title: String
+    var pageNumber: Int
+    var frameId: UUID
+}
 
 private extension Rect {
     var maxX: Double { x + width }

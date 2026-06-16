@@ -47,6 +47,161 @@ final class MarkdownBookImporterTests: XCTestCase {
         XCTAssertEqual(paragraphs.filter { $0.kind == .listItem }.count, 2)
     }
 
+    func testImportsOrderedMarkdownLists() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 实验步骤
+
+            1. 准备烧杯
+            2) 加入清水
+            10. 记录现象
+            3.NoSpace should stay body text
+            """
+        )
+
+        let paragraphs = project.sections[0].stories[0].paragraphs
+        let listItems = paragraphs.filter { $0.kind == .listItem }.map(\.text)
+        XCTAssertEqual(listItems, ["1. 准备烧杯", "2) 加入清水", "10. 记录现象"])
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .body && $0.text == "3.NoSpace should stay body text"
+        })
+    }
+
+    func testStripsCommonInlineMarkdownFromImportedText() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # **细胞**链接
+
+            正文包含 **重点**、`ATP` 和 [能量分子](https://example.com)。
+
+            ## __小节__ `代码`
+
+            - *无序* 列表
+            1. 有序 [列表](https://example.com/list)
+
+            > [!NOTE] **知识卡**
+            > 这里有 `术语` 和 [链接](https://example.com/note)。
+
+            ![**图片**图注](diagram.png)
+
+            | 指标 | 说明 |
+            | --- | --- |
+            | **ATP** | [能量](https://example.com/energy) |
+            """
+        )
+
+        XCTAssertEqual(project.metadata.title, "细胞链接")
+        let paragraphs = project.sections[0].stories[0].paragraphs
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .body && $0.text == "正文包含 重点、ATP 和 能量分子。"
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .heading(level: 2) && $0.text == "小节 代码"
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .listItem && $0.text == "无序 列表"
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .listItem && $0.text == "1. 有序 列表"
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .callout && $0.text == "知识点：知识卡 这里有 术语 和 链接。"
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .table && $0.text == "指标    说明\nATP    能量"
+        })
+        XCTAssertEqual(project.assets.first?.caption, "图片图注")
+    }
+
+    func testInlineMarkdownCleanupPreservesLiteralSymbols() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 公式与术语
+
+            正文保留 snake_case、3 * 4、ATP_synthase 和 \\*字面星号\\*，但清理 **重点**、_术语_ 与 `code_value`。
+
+            - 列表保留 file_name.png 和 2 * 3
+            """
+        )
+
+        let paragraphs = project.sections[0].stories[0].paragraphs
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .body
+                && $0.text == "正文保留 snake_case、3 * 4、ATP_synthase 和 *字面星号*，但清理 重点、术语 与 code_value。"
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .listItem && $0.text == "列表保留 file_name.png 和 2 * 3"
+        })
+    }
+
+    func testImportsNestedMarkdownHeadings() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 第一章
+
+            ## 二级小节
+
+            ### 三级小节
+
+            ###### 六级提示
+
+            ####NoSpace should stay body text
+            """
+        )
+
+        let paragraphs = project.sections[0].stories[0].paragraphs
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .heading(level: 2)
+                && $0.text == "二级小节"
+                && $0.styleId == StyleID.heading2.rawValue
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .heading(level: 3)
+                && $0.text == "三级小节"
+                && $0.styleId == StyleID.heading2.rawValue
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .heading(level: 6)
+                && $0.text == "六级提示"
+                && $0.styleId == StyleID.heading2.rawValue
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .body && $0.text == "####NoSpace should stay body text"
+        })
+    }
+
+    func testImportsSetextMarkdownHeadings() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            细胞里的城市
+            ===
+
+            细胞是一座高度组织化的城市。
+
+            能量系统
+            ---
+
+            线粒体负责转换能量。
+            """
+        )
+
+        XCTAssertEqual(project.metadata.title, "细胞里的城市")
+        XCTAssertEqual(project.sections.count, 1)
+        XCTAssertEqual(project.sections[0].title, "细胞里的城市")
+
+        let paragraphs = project.sections[0].stories[0].paragraphs
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .body && $0.text == "细胞是一座高度组织化的城市。"
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .heading(level: 2) && $0.text == "能量系统"
+        })
+        XCTAssertTrue(paragraphs.contains {
+            $0.kind == .body && $0.text == "线粒体负责转换能量。"
+        })
+        XCTAssertFalse(paragraphs.contains { $0.text == "===" || $0.text == "---" })
+    }
+
     func testCreatesPlaceholderAssetForUnscannedImageReference() {
         let project = MarkdownBookImporter().importDocument(
             markdown: """
@@ -61,6 +216,128 @@ final class MarkdownBookImporterTests: XCTestCase {
         XCTAssertEqual(project.assets[0].caption, "岩浆通道示意图")
         XCTAssertEqual(project.assets[0].pixelWidth, 0)
         XCTAssertEqual(project.assets[0].usage, .placed)
+    }
+
+    func testMarksRepeatedImageReferences() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 重复用图
+
+            ![第一次图注](images/cell.png)
+
+            这里继续解释正文。
+
+            ![第二次图注](images/cell.png)
+            """
+        )
+
+        XCTAssertEqual(project.assets.count, 1)
+        XCTAssertEqual(project.assets[0].fileName, "images/cell.png")
+        XCTAssertEqual(project.assets[0].usage, .repeated)
+
+        let figures = project.sections[0].stories[0].paragraphs.filter {
+            if case .figure = $0.kind {
+                return true
+            }
+            return false
+        }
+        XCTAssertEqual(figures.count, 2)
+    }
+
+    func testDuplicateNestedAssetBasenamesArePreservedDuringImport() {
+        let firstAsset = Asset(
+            fileName: "chapter-01/figure.png",
+            role: .diagram,
+            caption: "第一章图片",
+            pixelWidth: 1200,
+            pixelHeight: 800
+        )
+        let secondAsset = Asset(
+            fileName: "chapter-02/figure.png",
+            role: .photo,
+            caption: "第二章图片",
+            pixelWidth: 1200,
+            pixelHeight: 800
+        )
+
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 重名素材
+
+            ![](figure.png)
+            """,
+            assetCatalog: AssetCatalog(assets: [firstAsset, secondAsset])
+        )
+
+        XCTAssertEqual(project.assets.count, 2)
+        XCTAssertEqual(project.assets.map(\.fileName), ["chapter-01/figure.png", "chapter-02/figure.png"])
+        let chapterOneAsset = project.assets.filter { $0.fileName == "chapter-01/figure.png" }.first
+        let chapterTwoAsset = project.assets.filter { $0.fileName == "chapter-02/figure.png" }.first
+        XCTAssertEqual(chapterOneAsset?.usage, .placed)
+        XCTAssertEqual(chapterTwoAsset?.usage, .unused)
+    }
+
+    func testNestedAssetReferencesPreferExactRelativePath() {
+        let firstAsset = Asset(
+            fileName: "chapter-01/figure.png",
+            role: .diagram,
+            caption: "第一章图片",
+            pixelWidth: 1200,
+            pixelHeight: 800
+        )
+        let secondAsset = Asset(
+            fileName: "chapter-02/figure.png",
+            role: .photo,
+            caption: "第二章图片",
+            pixelWidth: 1200,
+            pixelHeight: 800
+        )
+
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 精确路径素材
+
+            ![](chapter-02/figure.png)
+            """,
+            assetCatalog: AssetCatalog(assets: [firstAsset, secondAsset])
+        )
+
+        XCTAssertEqual(project.assets.count, 2)
+        let chapterOneAsset = project.assets.filter { $0.fileName == "chapter-01/figure.png" }.first
+        let chapterTwoAsset = project.assets.filter { $0.fileName == "chapter-02/figure.png" }.first
+        XCTAssertEqual(chapterOneAsset?.usage, .unused)
+        XCTAssertEqual(chapterTwoAsset?.usage, .placed)
+    }
+
+    func testChapterPackageAssetRootPrefixIsIgnoredForNestedReferences() {
+        let firstAsset = Asset(
+            fileName: "chapter-01/figure.png",
+            role: .diagram,
+            caption: "第一章图片",
+            pixelWidth: 1200,
+            pixelHeight: 800
+        )
+        let secondAsset = Asset(
+            fileName: "chapter-02/figure.png",
+            role: .photo,
+            caption: "第二章图片",
+            pixelWidth: 1200,
+            pixelHeight: 800
+        )
+
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 章节包路径素材
+
+            ![](../assets/chapter-02/figure.png)
+            """,
+            assetCatalog: AssetCatalog(assets: [firstAsset, secondAsset])
+        )
+
+        let chapterOneAsset = project.assets.filter { $0.fileName == "chapter-01/figure.png" }.first
+        let chapterTwoAsset = project.assets.filter { $0.fileName == "chapter-02/figure.png" }.first
+        XCTAssertEqual(chapterOneAsset?.usage, .unused)
+        XCTAssertEqual(chapterTwoAsset?.usage, .placed)
     }
 
     func testImportsFrontMatterAndImageMetadata() {
@@ -94,6 +371,121 @@ final class MarkdownBookImporterTests: XCTestCase {
         XCTAssertEqual(project.assets[0].caption, "热泉口照片")
     }
 
+    func testImportsSingleQuotedImageMetadata() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 单引号图片元数据
+
+            正文说明细胞结构。
+
+            ![细胞结构图](images/cell.png 'role=diagram; credit=layoutD; anchor=previous')
+            """
+        )
+
+        let asset = project.assets[0]
+        let body = project.sections[0].stories[0].paragraphs.first { $0.kind == .body }
+        XCTAssertEqual(asset.fileName, "images/cell.png")
+        XCTAssertEqual(asset.role, .diagram)
+        XCTAssertEqual(asset.credit, "layoutD")
+        XCTAssertEqual(asset.caption, "细胞结构图")
+        XCTAssertEqual(body?.anchoredAssetIds, [asset.id])
+    }
+
+    func testImportsImageSourceMetadataAsCredit() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 图片来源元数据
+
+            ![显微照片](cell.png "role=photo; source=NASA")
+            """
+        )
+
+        XCTAssertEqual(project.assets[0].fileName, "cell.png")
+        XCTAssertEqual(project.assets[0].role, .photo)
+        XCTAssertEqual(project.assets[0].credit, "NASA")
+        XCTAssertEqual(project.assets[0].caption, "显微照片")
+    }
+
+    func testImportsReferenceStyleMarkdownImage() {
+        let knownAsset = Asset(
+            fileName: "images/cell detail.png",
+            role: .photo,
+            pixelWidth: 1200,
+            pixelHeight: 800
+        )
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # Reference 图片
+
+            正文说明细胞结构。
+
+            ![细胞结构图][cell-detail]
+
+            [cell-detail]: <images/cell detail.png> 'role=diagram; source=NASA; anchor=previous'
+            """,
+            assetCatalog: AssetCatalog(assets: [knownAsset])
+        )
+
+        let asset = project.assets[0]
+        let paragraphs = project.sections[0].stories[0].paragraphs
+        let body = paragraphs.first { $0.kind == .body }
+
+        XCTAssertEqual(asset.id, knownAsset.id)
+        XCTAssertEqual(asset.fileName, "images/cell detail.png")
+        XCTAssertEqual(asset.role, .diagram)
+        XCTAssertEqual(asset.credit, "NASA")
+        XCTAssertEqual(asset.caption, "细胞结构图")
+        XCTAssertEqual(body?.anchoredAssetIds, [knownAsset.id])
+        XCTAssertFalse(paragraphs.contains { $0.text.contains("[cell-detail]:") })
+    }
+
+    func testImportsShortcutReferenceStyleMarkdownImage() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # Shortcut Reference 图片
+
+            ![细胞结构图][]
+
+            [细胞结构图]: cell.png "role=diagram; credit=layoutD"
+            """
+        )
+
+        XCTAssertEqual(project.assets[0].fileName, "cell.png")
+        XCTAssertEqual(project.assets[0].role, .diagram)
+        XCTAssertEqual(project.assets[0].credit, "layoutD")
+        XCTAssertEqual(project.assets[0].caption, "细胞结构图")
+        XCTAssertTrue(project.sections[0].stories[0].paragraphs.contains {
+            if case .figure = $0.kind {
+                return true
+            }
+            return false
+        })
+    }
+
+    func testImportsAngleBracketImagePath() {
+        let knownAsset = Asset(
+            fileName: "images/cell detail.png",
+            role: .photo,
+            pixelWidth: 1200,
+            pixelHeight: 800
+        )
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 尖括号图片路径
+
+            ![细胞局部图](<images/cell detail.png> "role=diagram; credit=layoutD")
+            """,
+            assetCatalog: AssetCatalog(assets: [knownAsset])
+        )
+
+        XCTAssertEqual(project.assets.count, 1)
+        XCTAssertEqual(project.assets[0].id, knownAsset.id)
+        XCTAssertEqual(project.assets[0].fileName, "images/cell detail.png")
+        XCTAssertEqual(project.assets[0].role, .diagram)
+        XCTAssertEqual(project.assets[0].credit, "layoutD")
+        XCTAssertEqual(project.assets[0].usage, .placed)
+    }
+
     func testImageSpanWideActsAsHeroPlacementHint() {
         let markdown = """
         # 细胞里的城市
@@ -105,6 +497,58 @@ final class MarkdownBookImporterTests: XCTestCase {
 
         XCTAssertEqual(project.assets[0].role, .hero)
         XCTAssertEqual(project.assets[0].credit, "layoutD")
+    }
+
+    func testImageCanAnchorToPreviousParagraph() {
+        let knownAsset = Asset(
+            fileName: "images/cell-detail.png",
+            role: .diagram,
+            pixelWidth: 1200,
+            pixelHeight: 900
+        )
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 细胞里的城市
+
+            线粒体是细胞里负责能量转换的重要结构。
+
+            ![线粒体局部结构](images/cell-detail.png "anchor=previous; credit=layoutD")
+            """,
+            assetCatalog: AssetCatalog(assets: [knownAsset])
+        )
+
+        let paragraphs = project.sections[0].stories[0].paragraphs
+        let body = paragraphs.first { $0.kind == .body }
+        XCTAssertEqual(body?.anchoredAssetIds, [knownAsset.id])
+        XCTAssertFalse(paragraphs.contains {
+            if case .figure = $0.kind {
+                return true
+            }
+            return false
+        })
+        XCTAssertEqual(project.assets[0].caption, "线粒体局部结构")
+        XCTAssertEqual(project.assets[0].credit, "layoutD")
+        XCTAssertEqual(project.assets[0].usage, .placed)
+    }
+
+    func testAnchoredImageWithoutPreviousParagraphFallsBackToFigure() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 细胞里的城市
+
+            ![开场图](opening.png "anchor=previous")
+            """
+        )
+
+        let paragraphs = project.sections[0].stories[0].paragraphs
+        XCTAssertTrue(paragraphs.contains {
+            if case .figure = $0.kind {
+                return true
+            }
+            return false
+        })
+        XCTAssertTrue(paragraphs.allSatisfy { $0.anchoredAssetIds.isEmpty })
+        XCTAssertEqual(project.assets[0].usage, .placed)
     }
 
     func testImportsPageSetupFromFrontMatter() {
@@ -185,6 +629,11 @@ final class MarkdownBookImporterTests: XCTestCase {
             ---
 
             <!-- TODO: 这里后续补图 -->
+
+            <!--
+            编辑备注：这一段不应进入导入结果。
+            图片还需要重新确认。
+            -->
 
             正文后半段。
             """

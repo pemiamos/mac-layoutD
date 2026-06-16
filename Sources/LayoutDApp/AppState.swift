@@ -143,19 +143,13 @@ final class AppState: ObservableObject {
         if let idx = plan.blocks.firstIndex(where: { $0.id == frameId }) {
             let pageSize = project.pageSetup.pageSize
             var block = plan.blocks[idx]
-            
-            if let newX = x {
-                block.frame.x = newX / pageSize.width
-            }
-            if let newY = y {
-                block.frame.y = newY / pageSize.height
-            }
-            if let newW = width {
-                block.frame.width = newW / pageSize.width
-            }
-            if let newH = height {
-                block.frame.height = newH / pageSize.height
-            }
+            block.updateAbsoluteFrame(
+                pageSize: pageSize,
+                x: x,
+                y: y,
+                width: width,
+                height: height
+            )
             
             plan.blocks[idx] = block
             plan.notes = ["手动修改元素坐标"]
@@ -204,6 +198,69 @@ final class AppState: ObservableObject {
         guard let frameId = selectedFrameId,
               let pageNum = findPageNumber(for: frameId) else { return }
         clearCustomLayoutForPage(number: pageNum)
+    }
+
+    func applyLayoutPlan(_ plan: LayoutPlan) {
+        guard case .page(let pageNum) = plan.target else { return }
+
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
+    }
+
+    func saveCurrentPageLayoutAsTemplate(name: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let templateName = trimmedName.isEmpty ? "第 \(currentPageNumber) 页版式" : trimmedName
+        let plan = freezePageToPlan(pageNum: currentPageNumber)
+
+        var currentProject = project
+        var templates = currentProject.safeSavedLayoutTemplates
+        templates.append(SavedLayoutTemplate(name: templateName, plan: plan))
+        currentProject.safeSavedLayoutTemplates = templates
+        self.project = currentProject
+    }
+
+    func applySavedLayoutTemplate(id: UUID, toPage pageNum: Int) {
+        guard let template = project.safeSavedLayoutTemplates.first(where: { $0.id == id }) else { return }
+        applyLayoutPlan(template.makePlan(target: .page(pageNum)))
+    }
+
+    func renameSavedLayoutTemplate(id: UUID, name: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
+        var currentProject = project
+        var templates = currentProject.safeSavedLayoutTemplates
+        guard let index = templates.firstIndex(where: { $0.id == id }) else { return }
+
+        templates[index].name = trimmedName
+        templates[index].modifiedAt = Date()
+        currentProject.safeSavedLayoutTemplates = templates
+        self.project = currentProject
+    }
+
+    func deleteSavedLayoutTemplate(id: UUID) {
+        var currentProject = project
+        var templates = currentProject.safeSavedLayoutTemplates
+        templates.removeAll { $0.id == id }
+        currentProject.safeSavedLayoutTemplates = templates
+        self.project = currentProject
+    }
+
+    func applyChapterLayoutTemplate(_ template: ChapterLayoutTemplate, sectionIndex: Int, startPage: Int) -> Int {
+        var currentProject = project
+        let appliedCount = currentProject.applyChapterLayoutTemplate(
+            template,
+            sectionIndex: sectionIndex,
+            startPage: startPage
+        )
+        guard appliedCount > 0 else {
+            return 0
+        }
+        self.project = currentProject
+        return appliedCount
     }
 
     func lockPage(number: Int) {
@@ -261,5 +318,21 @@ final class AppState: ObservableObject {
             currentProject.styles.paragraphStyles = styles
             self.project = currentProject
         }
+    }
+
+    func applyStyleTemplate(_ template: StyleTemplate) {
+        var currentProject = project
+        currentProject.styles = template.styleLibrary
+        self.project = currentProject
+    }
+
+    func applyAvailablePreflightFixes() {
+        guard let report else { return }
+        let result = PreflightAutoFixer().applyAvailableFixes(
+            to: project,
+            issues: report.issues
+        )
+        guard !result.appliedFixes.isEmpty else { return }
+        self.project = result.project
     }
 }

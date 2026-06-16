@@ -35,6 +35,19 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(project.metadata.keywords, [])
     }
 
+    func testStyleTemplatesProvideDistinctProjectLevelStyles() {
+        XCTAssertEqual(StyleTemplate.allCases.count, 3)
+        XCTAssertEqual(StyleTemplate.chineseScienceDefault.styleLibrary, .defaultChineseScience)
+
+        let defaultBody = StyleTemplate.chineseScienceDefault.styleLibrary.paragraphStyle(id: StyleID.body.rawValue)
+        let compactBody = StyleTemplate.compactStudyGuide.styleLibrary.paragraphStyle(id: StyleID.body.rawValue)
+        let imageRichHeading = StyleTemplate.imageRichScience.styleLibrary.paragraphStyle(id: StyleID.heading1.rawValue)
+
+        XCTAssertLessThan(compactBody.fontSize, defaultBody.fontSize)
+        XCTAssertLessThan(compactBody.lineHeight, defaultBody.lineHeight)
+        XCTAssertGreaterThan(imageRichHeading.fontSize, ParagraphStyle.heading1.fontSize)
+    }
+
     func testLayoutEngineCreatesPagesAndFrames() {
         let document = LayoutEngine().layout(project: .sample)
         XCTAssertFalse(document.pages.isEmpty)
@@ -53,6 +66,35 @@ final class LayoutDCoreTests: XCTestCase {
             }
             return false
         } == true)
+    }
+
+    func testLayoutEngineAddsSpacingBetweenChineseAndWesternText() {
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "中西文空隙", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: "细胞ATP可以通过3D模型观察", styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+
+        let document = LayoutEngine().layout(project: project)
+        let bodyTexts = document.pages.flatMap(\.frames).compactMap { frame -> String? in
+            guard frame.styleId == StyleID.body.rawValue, case .text(let text) = frame.content else {
+                return nil
+            }
+            return text
+        }
+
+        XCTAssertTrue(bodyTexts.contains("细胞 ATP 可以通过 3D 模型观察"))
     }
 
     func testLayoutEngineDoesNotPlaceFigureAssetTwice() {
@@ -121,6 +163,56 @@ final class LayoutDCoreTests: XCTestCase {
 
         let frames = LayoutEngine().layout(project: project).pages.flatMap(\.frames)
         XCTAssertFalse(frames.contains { $0.content == .asset(asset.id) })
+    }
+
+    func testLayoutEnginePlacesAnchoredAssetAfterParagraph() {
+        let asset = Asset(
+            fileName: "anchored.png",
+            role: .diagram,
+            caption: "段落配图",
+            pixelWidth: 1200,
+            pixelHeight: 800,
+            dpi: 300
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "锚定图片布局", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(
+                                    kind: .body,
+                                    text: "这段正文后面应该紧跟锚定图片。",
+                                    styleId: StyleID.body.rawValue,
+                                    anchoredAssetIds: [asset.id]
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ],
+            assets: [asset]
+        )
+
+        let frames = LayoutEngine().layout(project: project).pages.flatMap(\.frames)
+        let bodyIndex = frames.firstIndex { frame in
+            frame.content == .text("这段正文后面应该紧跟锚定图片。")
+        }
+        let assetIndex = frames.firstIndex { frame in
+            frame.content == .asset(asset.id)
+        }
+        let captionIndex = frames.firstIndex { frame in
+            frame.content == .text("图1 段落配图")
+        }
+
+        XCTAssertNotNil(bodyIndex)
+        XCTAssertNotNil(assetIndex)
+        XCTAssertNotNil(captionIndex)
+        XCTAssertLessThan(bodyIndex ?? 0, assetIndex ?? 0)
+        XCTAssertLessThan(assetIndex ?? 0, captionIndex ?? 0)
     }
 
     func testHeroImageGetsMoreVerticalSpaceThanDecorativeImage() {
@@ -380,6 +472,146 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertTrue(plans.allSatisfy { !$0.blocks.isEmpty })
     }
 
+    func testPageLayoutTemplatesProduceValidNormalizedBlocks() {
+        for template in PageLayoutTemplate.allCases {
+            let plan = template.makePlan(
+                target: .page(1),
+                projectTitle: BookProject.sample.metadata.title,
+                primaryAsset: BookProject.sample.assets.first
+            )
+
+            XCTAssertNotNil(plan, template.displayName)
+            XCTAssertEqual(plan?.strategy, template.strategy)
+            XCTAssertTrue(plan?.blocks.isEmpty == false)
+
+            for block in plan?.blocks ?? [] {
+                XCTAssertGreaterThan(block.frame.width, 0)
+                XCTAssertGreaterThan(block.frame.height, 0)
+                XCTAssertGreaterThanOrEqual(block.frame.x, 0)
+                XCTAssertGreaterThanOrEqual(block.frame.y, 0)
+                XCTAssertLessThanOrEqual(block.frame.x + block.frame.width, 1)
+                XCTAssertLessThanOrEqual(block.frame.y + block.frame.height, 1)
+            }
+        }
+    }
+
+    func testPageLayoutTemplateCatalogSkipsImageTemplatesWithoutAssets() {
+        var project = BookProject.sample
+        project.assets = []
+
+        let plans = PageLayoutTemplateCatalog().plans(for: project, target: .page(1))
+
+        XCTAssertEqual(plans.map(\.strategy), [.textLed, .knowledgeCard])
+        XCTAssertFalse(plans.flatMap(\.blocks).contains { block in
+            if case .asset = block.contentReference { return true }
+            return false
+        })
+    }
+
+    func testChapterLayoutTemplateCreatesPageKeyedPlanSet() {
+        let project = BookProject.sample
+        let section = project.sections[0]
+
+        let planSet = ChapterLayoutTemplate.imageRichChapter.makePlanSet(
+            for: section,
+            in: project,
+            startPage: 4
+        )
+
+        XCTAssertEqual(planSet.template, .imageRichChapter)
+        XCTAssertEqual(planSet.sectionId, section.id)
+        XCTAssertEqual(planSet.plansByPage.keys.sorted(), [4, 5, 6])
+        XCTAssertEqual(planSet.plansByPage[4]?.target, .page(4))
+        XCTAssertEqual(planSet.plansByPage[4]?.strategy, .imageLed)
+        XCTAssertTrue(planSet.plansByPage.values.allSatisfy { !$0.blocks.isEmpty })
+    }
+
+    func testChapterLayoutTemplateSkipsUnavailableImagePages() {
+        var project = BookProject.sample
+        project.assets = []
+        let section = project.sections[0]
+
+        let planSet = ChapterLayoutTemplate.imageRichChapter.makePlanSet(
+            for: section,
+            in: project,
+            startPage: 8
+        )
+
+        XCTAssertEqual(planSet.plansByPage.keys.sorted(), [10])
+        XCTAssertEqual(planSet.plansByPage[10]?.strategy, .textLed)
+    }
+
+    func testApplyingChapterLayoutTemplateStoresPlansInProject() {
+        var project = BookProject.sample
+
+        let appliedCount = project.applyChapterLayoutTemplate(
+            .scienceChapter,
+            sectionIndex: 0,
+            startPage: 5
+        )
+
+        XCTAssertEqual(appliedCount, 3)
+        XCTAssertEqual(project.safeAppliedLayoutPlans.keys.sorted(), [5, 6, 7])
+        XCTAssertEqual(project.safeAppliedLayoutPlans[5]?.strategy, .textLed)
+        XCTAssertEqual(project.safeAppliedLayoutPlans[6]?.strategy, .balanced)
+        XCTAssertEqual(project.safeAppliedLayoutPlans[7]?.strategy, .knowledgeCard)
+    }
+
+    func testApplyingChapterLayoutTemplateSkipsInvalidSectionIndex() {
+        var project = BookProject.sample
+
+        let appliedCount = project.applyChapterLayoutTemplate(
+            .studyGuideChapter,
+            sectionIndex: 99,
+            startPage: 3
+        )
+
+        XCTAssertEqual(appliedCount, 0)
+        XCTAssertTrue(project.safeAppliedLayoutPlans.isEmpty)
+    }
+
+    func testLayoutPlanRequestBuildsSemanticContext() {
+        let request = LayoutPlanRequest(project: .sample, target: .page(3))
+
+        XCTAssertEqual(request.context.title, BookProject.sample.metadata.title)
+        XCTAssertEqual(request.context.sectionSummaries.first?.title, "第一章 重新理解图文排版")
+        XCTAssertEqual(request.context.sectionSummaries.first?.storyTitles, ["图像不只是正文的附件"])
+        XCTAssertEqual(request.context.sectionSummaries.first?.paragraphCount, 4)
+        XCTAssertEqual(request.context.sectionSummaries.first?.calloutCount, 1)
+        XCTAssertEqual(request.context.assetSummaries.first?.fileName, "sample-diagram.png")
+        XCTAssertEqual(request.context.assetSummaries.first?.role, AssetRole.diagram.rawValue)
+    }
+
+    func testProviderBackedAdvisorUsesProviderPlans() {
+        let expectedPlan = LayoutPlan(
+            target: .page(5),
+            strategy: .knowledgeCard,
+            blocks: [
+                LayoutPlanBlock(
+                    kind: .component,
+                    role: "knowledge-card",
+                    frame: Rect(x: 0.1, y: 0.2, width: 0.8, height: 0.2),
+                    contentReference: .generated("模型生成的知识卡片")
+                )
+            ],
+            notes: ["provider"]
+        )
+        let advisor = ProviderBackedLayoutAdvisor(provider: StaticPlanProvider(plans: [expectedPlan]))
+
+        let plans = advisor.proposePlans(for: .sample, target: .page(5))
+
+        XCTAssertEqual(plans, [expectedPlan])
+    }
+
+    func testProviderBackedAdvisorFallsBackWhenProviderFails() {
+        let advisor = ProviderBackedLayoutAdvisor(provider: FailingPlanProvider())
+
+        let plans = advisor.proposePlans(for: .sample, target: .page(2))
+
+        XCTAssertEqual(plans.count, 3)
+        XCTAssertTrue(plans.contains { $0.strategy == .imageLed })
+    }
+
     func testLayoutPlanAppliedSuccessfully() {
         let planBlock = LayoutPlanBlock(
             kind: .text,
@@ -418,6 +650,92 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(customFrame.rect.height, 0.8 * pageSize.height)
     }
 
+    func testSavedLayoutTemplateRetargetsPlanAndRegeneratesBlockIDs() {
+        let block = LayoutPlanBlock(
+            kind: .component,
+            role: "knowledge-card",
+            frame: Rect(x: 0.12, y: 0.56, width: 0.76, height: 0.22),
+            contentReference: .generated("复用模板")
+        )
+        let plan = LayoutPlan(
+            target: .page(2),
+            strategy: .knowledgeCard,
+            blocks: [block],
+            notes: ["saved"]
+        )
+        let template = SavedLayoutTemplate(name: "章节复习卡", plan: plan)
+
+        let reused = template.makePlan(target: .page(9))
+
+        XCTAssertEqual(reused.target, .page(9))
+        XCTAssertEqual(reused.strategy, plan.strategy)
+        XCTAssertEqual(reused.blocks.map(\.frame), plan.blocks.map(\.frame))
+        XCTAssertNotEqual(reused.blocks.first?.id, block.id)
+    }
+
+    func testProjectStoresSavedLayoutTemplates() {
+        let plan = PageLayoutTemplate.knowledgeCardPage.makePlan(
+            target: .page(1),
+            projectTitle: BookProject.sample.metadata.title
+        )
+        XCTAssertNotNil(plan)
+
+        var project = BookProject.sample
+        project.safeSavedLayoutTemplates = [
+            SavedLayoutTemplate(name: "知识卡片", plan: plan!)
+        ]
+
+        XCTAssertEqual(project.safeSavedLayoutTemplates.count, 1)
+        XCTAssertEqual(project.safeSavedLayoutTemplates.first?.name, "知识卡片")
+        XCTAssertEqual(project.safeSavedLayoutTemplates.first?.plan.strategy, .knowledgeCard)
+    }
+
+    func testLayoutTemplateLibraryRoundTripsSavedTemplates() throws {
+        let plan = LayoutPlan(
+            target: .page(1),
+            strategy: .textLed,
+            blocks: [
+                LayoutPlanBlock(
+                    kind: .text,
+                    role: "body",
+                    frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 0.7),
+                    contentReference: .generated("模板正文")
+                )
+            ]
+        )
+        var project = BookProject.sample
+        project.safeSavedLayoutTemplates = [
+            SavedLayoutTemplate(name: "正文模板", plan: plan)
+        ]
+
+        let data = try LayoutTemplateLibrary.encode(LayoutTemplateLibrary(project: project))
+        let decoded = try LayoutTemplateLibrary.decode(data)
+
+        XCTAssertEqual(decoded.formatVersion, 1)
+        XCTAssertEqual(decoded.sourceProjectTitle, project.metadata.title)
+        XCTAssertEqual(decoded.templates.map(\.name), ["正文模板"])
+        XCTAssertEqual(decoded.templates.first?.plan.strategy, .textLed)
+    }
+
+    func testImportingLayoutTemplateLibraryAvoidsDuplicateIDsAndNames() {
+        let plan = LayoutPlan(target: .page(1), strategy: .knowledgeCard, blocks: [])
+        let existing = SavedLayoutTemplate(name: "复习卡", plan: plan)
+        let importedDuplicateID = SavedLayoutTemplate(id: existing.id, name: "复习卡", plan: plan)
+        let importedNameConflict = SavedLayoutTemplate(name: "复习卡", plan: plan)
+        let importedUnique = SavedLayoutTemplate(name: "图文模板", plan: plan)
+
+        var project = BookProject.sample
+        project.safeSavedLayoutTemplates = [existing]
+        project.importLayoutTemplateLibrary(
+            LayoutTemplateLibrary(
+                templates: [importedDuplicateID, importedNameConflict, importedUnique]
+            )
+        )
+
+        XCTAssertEqual(project.safeSavedLayoutTemplates.count, 3)
+        XCTAssertEqual(project.safeSavedLayoutTemplates.map(\.name), ["复习卡", "复习卡 2", "图文模板"])
+    }
+
     func testChineseLineBreakTypesetting() {
         let textWithStartViolations = "这是一个非常长的中文测试段落，用来验证排版引擎是否会自动调整行末或行首的避头尾禁则规则。例如：这个位置会发生断行，并且断行后，下一行的第一个字不应该是一个逗号。"
         
@@ -446,6 +764,19 @@ final class LayoutDCoreTests: XCTestCase {
         
         let violations = report.issues.filter { $0.message.contains("存在中文禁则问题") }
         XCTAssertEqual(violations.count, 0, "There should be no Chinese line break violations in the preflight report after engine adjustments")
+    }
+
+    func testChineseLineBreakRulesCoverCommonQuotesAndBrackets() {
+        XCTAssertTrue(ChineseLineBreakRules.forbidsLineStart("”"))
+        XCTAssertTrue(ChineseLineBreakRules.forbidsLineStart("’"))
+        XCTAssertTrue(ChineseLineBreakRules.forbidsLineStart("〉"))
+        XCTAssertTrue(ChineseLineBreakRules.forbidsLineStart("〕"))
+        XCTAssertTrue(ChineseLineBreakRules.forbidsLineEnd("“"))
+        XCTAssertTrue(ChineseLineBreakRules.forbidsLineEnd("‘"))
+        XCTAssertTrue(ChineseLineBreakRules.forbidsLineEnd("〈"))
+        XCTAssertTrue(ChineseLineBreakRules.forbidsLineEnd("〔"))
+        XCTAssertFalse(ChineseLineBreakRules.forbidsLineStart("中"))
+        XCTAssertFalse(ChineseLineBreakRules.forbidsLineEnd("文"))
     }
 
     func testOrphanLineControlPushesParagraphToNextColumn() {
@@ -644,6 +975,60 @@ final class LayoutDCoreTests: XCTestCase {
         }
     }
 
+    func testLayoutPlanBlockFrameEditingClampsToPageBounds() {
+        let pageSize = PageSize(width: 200, height: 300, label: "test")
+        var block = LayoutPlanBlock(
+            kind: .image,
+            role: "image",
+            frame: Rect(x: 0.25, y: 0.25, width: 0.25, height: 0.25),
+            contentReference: .generated("image")
+        )
+
+        block.updateAbsoluteFrame(pageSize: pageSize, x: -40, y: -20, width: 500, height: 500)
+
+        let frame = block.absoluteFrame(pageSize: pageSize)
+        XCTAssertEqual(frame.x, 0, accuracy: 0.01)
+        XCTAssertEqual(frame.y, 0, accuracy: 0.01)
+        XCTAssertEqual(frame.width, 200, accuracy: 0.01)
+        XCTAssertEqual(frame.height, 300, accuracy: 0.01)
+    }
+
+    func testLayoutPlanBlockFrameEditingPreservesMinimumSize() {
+        let pageSize = PageSize(width: 200, height: 300, label: "test")
+        var block = LayoutPlanBlock(
+            kind: .text,
+            role: "text",
+            frame: Rect(x: 0.5, y: 0.5, width: 0.25, height: 0.25),
+            contentReference: .generated("正文")
+        )
+
+        block.updateAbsoluteFrame(pageSize: pageSize, x: 190, y: 290, width: -5, height: 0)
+
+        let frame = block.absoluteFrame(pageSize: pageSize)
+        XCTAssertEqual(frame.width, 12, accuracy: 0.01)
+        XCTAssertEqual(frame.height, 12, accuracy: 0.01)
+        XCTAssertEqual(frame.x, 188, accuracy: 0.01)
+        XCTAssertEqual(frame.y, 288, accuracy: 0.01)
+    }
+
+    func testLayoutPlanBlockFrameEditingNormalizesNonFiniteValues() {
+        let pageSize = PageSize(width: 200, height: 300, label: "test")
+        var block = LayoutPlanBlock(
+            kind: .text,
+            role: "text",
+            frame: Rect(x: .infinity, y: .nan, width: .infinity, height: -.infinity),
+            contentReference: .generated("正文")
+        )
+
+        block.updateAbsoluteFrame(pageSize: pageSize)
+
+        let frame = block.absoluteFrame(pageSize: pageSize)
+        XCTAssertEqual(frame.x, 0, accuracy: 0.01)
+        XCTAssertEqual(frame.y, 0, accuracy: 0.01)
+        XCTAssertEqual(frame.width, 12, accuracy: 0.01)
+        XCTAssertEqual(frame.height, 12, accuracy: 0.01)
+    }
+
     private func freezePageToPlan(pageNum: Int, project: BookProject, laidOutDocument: LaidOutDocument) -> LayoutPlan {
         let pageSize = project.pageSetup.pageSize
         let docPages = laidOutDocument.pages
@@ -710,6 +1095,24 @@ final class LayoutDCoreTests: XCTestCase {
         }
         
         return LayoutPlan(target: .page(pageNum), strategy: .balanced, blocks: blocks, notes: ["手动自定义版式页"])
+    }
+}
+
+private struct StaticPlanProvider: LayoutPlanProvider {
+    var plans: [LayoutPlan]
+
+    func proposePlans(request: LayoutPlanRequest) throws -> [LayoutPlan] {
+        plans
+    }
+}
+
+private struct FailingPlanProvider: LayoutPlanProvider {
+    enum Failure: Error {
+        case unavailable
+    }
+
+    func proposePlans(request: LayoutPlanRequest) throws -> [LayoutPlan] {
+        throw Failure.unavailable
     }
 }
 

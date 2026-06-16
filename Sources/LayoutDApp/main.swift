@@ -10,10 +10,46 @@ import LayoutDImport
 import SwiftUI
 import UniformTypeIdentifiers
 
+let commandLineUsage = """
+layoutD
+
+Usage:
+  swift run layoutD -- [options] [manuscript.md|project.layoutd|chapter-directory] [image-directory]
+
+Options:
+  --export-pdf PATH          Export a proof PDF without opening the app window.
+  --pdf-pages RANGE          Limit PDF export to pages such as "1,3" or "2-5".
+  --pdf-crop-marks          Add crop and bleed guide marks to PDF export.
+  --pdf-grid-guides         Add margin, column, and baseline guides to PDF export.
+  --export-png DIRECTORY    Export page preview PNG files.
+  --png-pages RANGE         Limit PNG export to pages such as "1,3" or "2-5".
+  --png-scale VALUE         Set PNG output scale, default 2.0.
+  --export-project PATH     Export a structured .layoutd project file.
+  --export-templates PATH   Export saved layout templates as a reusable JSON library.
+  --import-templates PATH   Import a layout template library before export or validation.
+  --apply-chapter-template NAME
+                            Apply a chapter template: scienceChapter, imageRichChapter, or studyGuideChapter.
+  --chapter-template-section N
+                            Section number for --apply-chapter-template, default 1.
+  --chapter-template-start-page N
+                            First page for --apply-chapter-template plans, default 3.
+  --preflight-report PATH   Export preflight JSON.
+  --validate                Run preflight as a CLI quality gate.
+  --apply-preflight-fixes   Apply conservative auto-fixes before export or validation.
+  --help, -h                Show this help.
+"""
+
 let launchProject = ProjectLoader().loadFromCommandLine()
 
+if launchProject.showHelp {
+    print(commandLineUsage)
+    exit(EXIT_SUCCESS)
+}
+
 if launchProject.exportPDFURL != nil
+    || launchProject.exportPNGDirectoryURL != nil
     || launchProject.exportProjectURL != nil
+    || launchProject.exportTemplateLibraryURL != nil
     || launchProject.preflightReportURL != nil
     || launchProject.validateOnly {
     do {
@@ -22,31 +58,84 @@ if launchProject.exportPDFURL != nil
             exit(EXIT_FAILURE)
         }
 
-        let document = LayoutEngine().layout(project: launchProject.project)
-        let report = ProjectInspector().preflight(project: launchProject.project, document: document)
+        var project = launchProject.project
+        var document = LayoutEngine().layout(project: project)
+        var report = ProjectInspector().preflight(project: project, document: document)
+
+        if let chapterLayoutTemplate = launchProject.chapterLayoutTemplate {
+            let appliedCount = project.applyChapterLayoutTemplate(
+                chapterLayoutTemplate,
+                sectionIndex: launchProject.chapterLayoutTemplateSectionIndex,
+                startPage: launchProject.chapterLayoutTemplateStartPage
+            )
+            document = LayoutEngine().layout(project: project)
+            report = ProjectInspector().preflight(project: project, document: document)
+            print("Applied chapter template: \(chapterLayoutTemplate.rawValue), \(appliedCount) page plan(s)")
+        }
+
+        if launchProject.applyPreflightFixes {
+            let result = PreflightAutoFixer().applyAvailableFixes(
+                to: project,
+                issues: report.issues
+            )
+            if !result.appliedFixes.isEmpty {
+                project = result.project
+                document = LayoutEngine().layout(project: project)
+                report = ProjectInspector().preflight(project: project, document: document)
+            }
+            print("Applied preflight fixes: \(result.appliedFixes.count)")
+        }
 
         if let exportProjectURL = launchProject.exportProjectURL {
-            let data = try ProjectFile.encode(launchProject.project)
+            let data = try ProjectFile.encode(projectForSaving(project))
+            try createParentDirectory(for: exportProjectURL)
             try data.write(to: exportProjectURL, options: .atomic)
             print("Exported project: \(exportProjectURL.path)")
+        }
+
+        if let exportTemplateLibraryURL = launchProject.exportTemplateLibraryURL {
+            let library = LayoutTemplateLibrary(project: project)
+            let data = try LayoutTemplateLibrary.encode(library)
+            try createParentDirectory(for: exportTemplateLibraryURL)
+            try data.write(to: exportTemplateLibraryURL, options: .atomic)
+            print("Exported layout templates: \(library.templates.count) template(s) to \(exportTemplateLibraryURL.path)")
         }
 
         if let preflightReportURL = launchProject.preflightReportURL {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(report)
+            try createParentDirectory(for: preflightReportURL)
             try data.write(to: preflightReportURL, options: .atomic)
             print("Exported preflight report: \(preflightReportURL.path)")
         }
 
         if let exportPDFURL = launchProject.exportPDFURL {
-            try PDFExporter().export(document: document, project: launchProject.project, to: exportPDFURL)
+            try PDFExporter().export(
+                document: document,
+                project: project,
+                to: exportPDFURL,
+                pageRange: launchProject.exportPDFPageRange,
+                drawCropMarks: launchProject.exportPDFDrawCropMarks,
+                drawGridGuides: launchProject.exportPDFDrawGridGuides
+            )
             print("Exported PDF: \(exportPDFURL.path)")
+        }
+
+        if let exportPNGDirectoryURL = launchProject.exportPNGDirectoryURL {
+            let outputURLs = try PNGExporter().export(
+                document: document,
+                project: project,
+                to: exportPNGDirectoryURL,
+                pageRange: launchProject.exportPNGPageRange,
+                scale: launchProject.exportPNGScale
+            )
+            print("Exported PNG previews: \(outputURLs.count) file(s) to \(exportPNGDirectoryURL.path)")
         }
 
         if launchProject.validateOnly {
             if report.exportReady {
-                print("Validation passed: \(launchProject.project.metadata.title)")
+                print("Validation passed: \(project.metadata.title)")
             } else {
                 fputs("Validation failed: \(report.severityCounts[IssueSeverity.error.rawValue, default: 0]) error(s)\n", stderr)
                 for issue in report.issues where issue.severity == .error {
@@ -68,6 +157,19 @@ app.delegate = delegate
 app.setActivationPolicy(.regular)
 app.activate(ignoringOtherApps: true)
 app.run()
+
+func createParentDirectory(for url: URL) throws {
+    try FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+    )
+}
+
+func projectForSaving(_ project: BookProject) -> BookProject {
+    var project = project
+    project.metadata.modifiedAt = Date()
+    return project
+}
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
@@ -107,8 +209,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         workspaceController?.exportPDF()
     }
 
+    @objc private func exportPNGPreviews(_ sender: Any?) {
+        workspaceController?.exportPNGPreviews()
+    }
+
     @objc private func exportPreflightReport(_ sender: Any?) {
         workspaceController?.exportPreflightReport()
+    }
+
+    @objc private func importLayoutTemplates(_ sender: Any?) {
+        workspaceController?.importLayoutTemplates()
+    }
+
+    @objc private func exportLayoutTemplates(_ sender: Any?) {
+        workspaceController?.exportLayoutTemplates()
     }
 
     @objc private func openProject(_ sender: Any?) {
@@ -162,7 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let fileMenu = NSMenu(title: "File")
         fileMenu.addItem(
             NSMenuItem(
-                title: "Open Project or Markdown...",
+                title: "Open Project, Markdown, or Chapter Package...",
                 action: #selector(openProject(_:)),
                 keyEquivalent: "o"
             )
@@ -187,9 +301,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fileMenu.items.last?.target = self
         fileMenu.addItem(
             NSMenuItem(
+                title: "Export PNG Previews...",
+                action: #selector(exportPNGPreviews(_:)),
+                keyEquivalent: "p"
+            )
+        )
+        fileMenu.items.last?.target = self
+        fileMenu.addItem(
+            NSMenuItem(
                 title: "Export Preflight Report...",
                 action: #selector(exportPreflightReport(_:)),
                 keyEquivalent: "r"
+            )
+        )
+        fileMenu.items.last?.target = self
+        fileMenu.addItem(NSMenuItem.separator())
+        fileMenu.addItem(
+            NSMenuItem(
+                title: "Import Layout Templates...",
+                action: #selector(importLayoutTemplates(_:)),
+                keyEquivalent: "i"
+            )
+        )
+        fileMenu.items.last?.target = self
+        fileMenu.addItem(
+            NSMenuItem(
+                title: "Export Layout Templates...",
+                action: #selector(exportLayoutTemplates(_:)),
+                keyEquivalent: "t"
             )
         )
         fileMenu.items.last?.target = self
@@ -299,17 +438,12 @@ final class WorkspaceViewController: NSViewController {
                     self.appState.currentPageNumber = page
                     self.canvas.scrollToPage(number: page)
                 }
+                self.appState.selectedFrameId = issue.frameId
                 self.canvas.highlightedFrameId = issue.frameId
             },
             onApplyPlan: { [weak self] plan in
                 guard let self else { return }
-                var currentProject = self.appState.project
-                var plans = currentProject.safeAppliedLayoutPlans
-                if case .page(let pageNum) = plan.target {
-                    plans[pageNum] = plan
-                    currentProject.safeAppliedLayoutPlans = plans
-                    self.appState.project = currentProject
-                }
+                self.appState.applyLayoutPlan(plan)
             }
         )
         let inspectorHost = NSHostingView(rootView: inspectorView)
@@ -344,9 +478,9 @@ final class WorkspaceViewController: NSViewController {
 
     func openProject() {
         let openPanel = NSOpenPanel()
-        openPanel.title = "Open Project or Markdown Manuscript"
+        openPanel.title = "Open Project, Markdown Manuscript, or Chapter Package"
         openPanel.allowsMultipleSelection = false
-        openPanel.canChooseDirectories = false
+        openPanel.canChooseDirectories = true
         openPanel.canChooseFiles = true
         openPanel.allowedContentTypes = [
             UTType(filenameExtension: "layoutd"),
@@ -394,7 +528,9 @@ final class WorkspaceViewController: NSViewController {
             }
 
             do {
-                let data = try ProjectFile.encode(self.appState.project)
+                let project = projectForSaving(self.appState.project)
+                self.appState.project = project
+                let data = try ProjectFile.encode(project)
                 try data.write(to: url, options: .atomic)
                 self.showExportResult(message: "Project saved", detail: url.path)
             } catch {
@@ -467,6 +603,47 @@ final class WorkspaceViewController: NSViewController {
         }
     }
 
+    func exportPNGPreviews() {
+        let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Export PNG Previews"
+        openPanel.prompt = "Export"
+        openPanel.canChooseDirectories = true
+        openPanel.canChooseFiles = false
+        openPanel.canCreateDirectories = true
+        openPanel.allowsMultipleSelection = false
+
+        let settingsState = PNGExportSettingsState()
+        let settingsView = PNGExportSettingsView(state: settingsState)
+        openPanel.accessoryView = NSHostingView(rootView: settingsView)
+
+        guard let window = view.window else {
+            return
+        }
+
+        openPanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = openPanel.url, let self else {
+                return
+            }
+
+            do {
+                let outputURLs = try PNGExporter().export(
+                    document: document,
+                    project: self.appState.project,
+                    to: url,
+                    pageRange: settingsState.pageRange.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : settingsState.pageRange,
+                    scale: settingsState.scale
+                )
+                self.showExportResult(
+                    message: "PNG previews exported",
+                    detail: "\(outputURLs.count) file(s) written to \(url.path)"
+                )
+            } catch {
+                self.showExportResult(message: "PNG export failed", detail: error.localizedDescription)
+            }
+        }
+    }
+
     func exportPreflightReport() {
         let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
         let report = appState.inspectorEngine.preflight(project: appState.project, document: document)
@@ -493,6 +670,74 @@ final class WorkspaceViewController: NSViewController {
                 self.showExportResult(message: "Preflight report exported", detail: url.path)
             } catch {
                 self.showExportResult(message: "Preflight export failed", detail: error.localizedDescription)
+            }
+        }
+    }
+
+    func importLayoutTemplates() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Import Layout Templates"
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        openPanel.allowedContentTypes = [
+            UTType.json,
+            UTType(filenameExtension: "layoutd-templates")
+        ].compactMap { $0 }
+
+        guard let window = view.window else {
+            return
+        }
+
+        openPanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = openPanel.url, let self else {
+                return
+            }
+
+            do {
+                let data = try Data(contentsOf: url)
+                let library = try LayoutTemplateLibrary.decode(data)
+                var project = self.appState.project
+                let beforeCount = project.safeSavedLayoutTemplates.count
+                project.importLayoutTemplateLibrary(library)
+                let importedCount = project.safeSavedLayoutTemplates.count - beforeCount
+                self.appState.project = project
+                self.showExportResult(
+                    message: "Layout templates imported",
+                    detail: "\(importedCount) template(s) imported from \(url.path)"
+                )
+            } catch {
+                self.showExportResult(message: "Template import failed", detail: error.localizedDescription)
+            }
+        }
+    }
+
+    func exportLayoutTemplates() {
+        let savePanel = NSSavePanel()
+        savePanel.title = "Export Layout Templates"
+        savePanel.nameFieldStringValue = safeFileName(appState.project.metadata.title) + "-templates.layoutd-templates"
+        savePanel.allowedContentTypes = [UTType(filenameExtension: "layoutd-templates")].compactMap { $0 }
+        savePanel.canCreateDirectories = true
+
+        guard let window = view.window else {
+            return
+        }
+
+        savePanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = savePanel.url, let self else {
+                return
+            }
+
+            do {
+                let library = LayoutTemplateLibrary(project: self.appState.project)
+                let data = try LayoutTemplateLibrary.encode(library)
+                try data.write(to: url, options: .atomic)
+                self.showExportResult(
+                    message: "Layout templates exported",
+                    detail: "\(library.templates.count) template(s) written to \(url.path)"
+                )
+            } catch {
+                self.showExportResult(message: "Template export failed", detail: error.localizedDescription)
             }
         }
     }
@@ -551,6 +796,44 @@ struct PDFExportSettingsView: View {
             
             Toggle("添加校对基线网格及页边距指示线", isOn: $state.drawGridGuides)
                 .toggleStyle(.checkbox)
+        }
+        .padding(.all, 16)
+        .frame(width: 320)
+    }
+}
+
+class PNGExportSettingsState: ObservableObject {
+    @Published var pageRange: String = ""
+    @Published var scale: Double = 2.0
+}
+
+struct PNGExportSettingsView: View {
+    @ObservedObject var state: PNGExportSettingsState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("PNG 预览导出选项")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("页码范围:")
+                        .frame(width: 80, alignment: .leading)
+                    TextField("例如: 1-3, 5", text: $state.pageRange)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 150)
+                }
+                Text("留空导出全部页面")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 85)
+            }
+
+            HStack {
+                Text("输出倍率:")
+                    .frame(width: 80, alignment: .leading)
+                Stepper(String(format: "%.1fx", state.scale), value: $state.scale, in: 0.5...4.0, step: 0.5)
+            }
         }
         .padding(.all, 16)
         .frame(width: 320)

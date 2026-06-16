@@ -8,6 +8,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     public var sections: [BookSection]
     public var assets: [Asset]
     public var appliedLayoutPlans: [Int: LayoutPlan]?
+    public var savedLayoutTemplates: [SavedLayoutTemplate]?
     public var lockedPages: Set<Int>?
 
     public init(
@@ -18,6 +19,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         sections: [BookSection] = [],
         assets: [Asset] = [],
         appliedLayoutPlans: [Int: LayoutPlan]? = nil,
+        savedLayoutTemplates: [SavedLayoutTemplate]? = nil,
         lockedPages: Set<Int>? = nil
     ) {
         self.id = id
@@ -27,12 +29,18 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         self.sections = sections
         self.assets = assets
         self.appliedLayoutPlans = appliedLayoutPlans
+        self.savedLayoutTemplates = savedLayoutTemplates
         self.lockedPages = lockedPages
     }
 
     public var safeAppliedLayoutPlans: [Int: LayoutPlan] {
         get { appliedLayoutPlans ?? [:] }
         set { appliedLayoutPlans = newValue }
+    }
+
+    public var safeSavedLayoutTemplates: [SavedLayoutTemplate] {
+        get { savedLayoutTemplates ?? [] }
+        set { savedLayoutTemplates = newValue }
     }
 
     public var safeLockedPages: Set<Int> {

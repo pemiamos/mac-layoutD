@@ -26,12 +26,54 @@ final class ProjectInspectorTests: XCTestCase {
             ]
         )
 
-        let messages = ProjectInspector().inspect(project: project).map(\.message)
+        let issues = ProjectInspector().inspect(project: project)
+        let messages = issues.map(\.message)
         XCTAssertTrue(messages.contains { $0.contains("缺少图注") })
         XCTAssertTrue(messages.contains { $0.contains("分辨率低于 220 DPI") })
         XCTAssertTrue(messages.contains { $0.contains("源文件不存在") })
         XCTAssertTrue(messages.contains { $0.contains("图片文件名重复") })
         XCTAssertTrue(messages.contains { $0.contains("缺少版权或来源信息") })
+        XCTAssertTrue(issues.contains {
+            $0.message.contains("缺少图注")
+                && $0.suggestedFix?.contains("caption") == true
+        })
+        XCTAssertTrue(issues.contains {
+            $0.message.contains("缺少图注")
+                && $0.autoFixKind == .fillMissingAssetCaptions
+        })
+    }
+
+    func testAssetWithCreditDoesNotReportMissingSource() {
+        let asset = Asset(
+            fileName: "credited.png",
+            role: .photo,
+            caption: "已有图注",
+            credit: "NASA",
+            pixelWidth: 1200,
+            pixelHeight: 800,
+            dpi: 300
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "来源检查", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .figure(assetId: asset.id), text: "已有图注", styleId: StyleID.caption.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ],
+            assets: [asset]
+        )
+
+        let messages = ProjectInspector().inspect(project: project).map(\.message)
+
+        XCTAssertFalse(messages.contains { $0.contains("缺少版权或来源信息") })
     }
 
     func testReportsEmptyProjectStructure() {
@@ -40,6 +82,10 @@ final class ProjectInspectorTests: XCTestCase {
         XCTAssertTrue(issues.contains { $0.message == "项目没有章节" })
         XCTAssertTrue(issues.contains { $0.message == "项目没有正文流" })
         XCTAssertTrue(issues.contains { $0.message == "项目没有正文段落" })
+        XCTAssertTrue(issues.contains {
+            $0.message == "项目没有章节"
+                && $0.suggestedFix?.contains("Markdown") == true
+        })
     }
 
     func testReportsMetadataProblems() {
@@ -65,6 +111,91 @@ final class ProjectInspectorTests: XCTestCase {
         XCTAssertTrue(messages.contains("项目缺少出版社信息"))
         XCTAssertTrue(messages.contains("项目缺少关键词"))
         XCTAssertTrue(messages.contains("项目 ISBN-13 校验失败：9787115546082"))
+        XCTAssertTrue(ProjectInspector().inspect(project: invalidISBNProject).allSatisfy { $0.category != nil })
+    }
+
+    func testPreflightIssuesExposeAutoFixKinds() {
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "自动修复", author: "layoutD", isbn: "9787115546082"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: "正文", styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ],
+            assets: [
+                Asset(
+                    fileName: "demo-figure.png",
+                    sourcePath: "/missing/demo-figure.png",
+                    role: .diagram,
+                    pixelWidth: 1200,
+                    pixelHeight: 800,
+                    dpi: 300
+                )
+            ]
+        )
+
+        let issues = ProjectInspector().inspect(project: project)
+
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .fillMissingPublisher })
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .fillMissingKeywords })
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .removeInvalidISBN })
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .fillMissingAssetCaptions })
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .fillMissingAssetCredits })
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .clearMissingAssetSourcePaths })
+    }
+
+    func testPreflightAutoFixerAppliesConservativeProjectFixes() {
+        let asset = Asset(
+            fileName: "cell-diagram.png",
+            sourcePath: "/missing/cell-diagram.png",
+            role: .diagram,
+            pixelWidth: 1200,
+            pixelHeight: 800,
+            dpi: 300
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "自动修复样章", author: "layoutD", isbn: "9787115546082"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: "正文", styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ],
+            assets: [asset]
+        )
+        let issues = ProjectInspector().inspect(project: project)
+
+        let result = PreflightAutoFixer().applyAvailableFixes(to: project, issues: issues)
+        let fixed = result.project
+
+        XCTAssertTrue(result.appliedFixes.contains(.fillMissingPublisher))
+        XCTAssertTrue(result.appliedFixes.contains(.fillMissingKeywords))
+        XCTAssertTrue(result.appliedFixes.contains(.removeInvalidISBN))
+        XCTAssertTrue(result.appliedFixes.contains(.fillMissingAssetCaptions))
+        XCTAssertTrue(result.appliedFixes.contains(.fillMissingAssetCredits))
+        XCTAssertTrue(result.appliedFixes.contains(.clearMissingAssetSourcePaths))
+        XCTAssertEqual(result.changedAssetIds, [asset.id])
+        XCTAssertEqual(fixed.metadata.publisher, "待补充出版社")
+        XCTAssertEqual(fixed.metadata.keywords, ["自动修复样章"])
+        XCTAssertNil(fixed.metadata.isbn)
+        XCTAssertEqual(fixed.assets.first?.caption, "cell diagram")
+        XCTAssertEqual(fixed.assets.first?.credit, "待补充来源")
+        XCTAssertNil(fixed.assets.first?.sourcePath)
     }
 
     func testValidBookMetadataDoesNotReportMetadataProblems() {
@@ -173,6 +304,42 @@ final class ProjectInspectorTests: XCTestCase {
         XCTAssertFalse(report.issues.contains { $0.message == "图片 referenced.png 在素材库中但未被正文引用" })
     }
 
+    func testReportsRepeatedAssetUse() {
+        let repeated = Asset(
+            fileName: "repeat.png",
+            role: .diagram,
+            caption: "重复图片",
+            pixelWidth: 1200,
+            pixelHeight: 800,
+            dpi: 300,
+            usage: .repeated
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "重复用图", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .figure(assetId: repeated.id), text: "重复图片", styleId: StyleID.caption.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ],
+            assets: [repeated]
+        )
+
+        let report = ProjectInspector().preflight(project: project)
+
+        XCTAssertTrue(report.issues.contains {
+            $0.severity == .warning && $0.message == "图片 repeat.png 被重复使用"
+        })
+        XCTAssertEqual(report.assetSummary.repeatedUse, 1)
+    }
+
     func testPreflightReportSummarizesAssetsAndPages() {
         let asset = Asset(
             fileName: "figure.png",
@@ -211,8 +378,11 @@ final class ProjectInspectorTests: XCTestCase {
         XCTAssertEqual(report.assetSummary.lowResolution, 1)
         XCTAssertEqual(report.assetSummary.unknownSize, 1)
         XCTAssertEqual(report.layoutSummary?.totalFrames, 0)
+        XCTAssertEqual(report.categoryCounts[PreflightIssueCategory.metadata.rawValue], 2)
+        XCTAssertEqual(report.categoryCounts[PreflightIssueCategory.assets.rawValue], 5)
         XCTAssertTrue(report.summaryLines.contains("Pages: 1"))
         XCTAssertTrue(report.summaryLines.contains("Frames: 0"))
+        XCTAssertTrue(report.summaryLines.contains("Issue categories: 2"))
     }
 
     func testPreflightReportSummarizesLayoutFrames() {
@@ -255,6 +425,89 @@ final class ProjectInspectorTests: XCTestCase {
         XCTAssertEqual(report.layoutSummary?.imageFrames, 1)
         XCTAssertEqual(report.layoutSummary?.tableFrames, 1)
         XCTAssertEqual(report.layoutSummary?.emptyFrames, 1)
+    }
+
+    func testPreflightReportCountsLayoutIssueCategories() {
+        let frameId = UUID()
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "分类统计", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: "正文", styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+        let page = LaidOutPage(
+            number: 1,
+            frames: [
+                PageFrame(
+                    id: frameId,
+                    kind: .text,
+                    rect: Rect(x: 20, y: 20, width: 0, height: 30),
+                    content: .empty
+                )
+            ]
+        )
+
+        let report = ProjectInspector().preflight(
+            project: project,
+            document: LaidOutDocument(projectId: project.id, pages: [page])
+        )
+
+        XCTAssertEqual(report.categoryCounts[PreflightIssueCategory.layout.rawValue], 1)
+        XCTAssertTrue(report.issues.contains {
+            $0.frameId == frameId && $0.category == .layout
+        })
+    }
+
+    func testPreflightReportIncludesIssueLocationsForFrameProblems() throws {
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "问题定位", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: "正文", styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+        let frameId = UUID()
+        let frame = PageFrame(
+            id: frameId,
+            kind: .text,
+            rect: Rect(x: 10, y: 20, width: 80, height: 10),
+            styleId: StyleID.body.rawValue,
+            content: .text("这是一段会溢出小文本框的正文，用于测试预检报告能否导出 frame 定位。")
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
+
+        let report = ProjectInspector().preflight(project: project, document: document)
+
+        let location = try XCTUnwrap(report.issueLocations.first { $0.frameId == frameId })
+        XCTAssertEqual(location.pageNumber, 1)
+        XCTAssertEqual(location.frameKind, PageFrameKind.text.rawValue)
+        XCTAssertEqual(location.rect, frame.rect)
+        XCTAssertTrue(location.contentSummary?.contains("这是一段会溢出") == true)
+        XCTAssertTrue(report.summaryLines.contains("Located issues: \(report.issueLocations.count)"))
+        XCTAssertTrue(report.issues.contains {
+            $0.frameId == frameId
+                && $0.message.contains("文本溢出")
+                && $0.suggestedFix?.contains("增大文本框高度") == true
+        })
     }
 
     func testPreflightReportsLayoutDocumentDefects() {
@@ -342,6 +595,94 @@ final class ProjectInspectorTests: XCTestCase {
         })
     }
 
+    func testPreflightReportsTableOfContentsPageMismatch() {
+        let project = contentsValidationProject()
+        let document = LaidOutDocument(
+            projectId: project.id,
+            pages: [
+                LaidOutPage(number: 1),
+                LaidOutPage(
+                    number: 2,
+                    frames: [
+                        PageFrame(kind: .text, rect: Rect(x: 40, y: 40, width: 300, height: 80), styleId: StyleID.body.rawValue, content: .text("第一章  4"))
+                    ]
+                ),
+                LaidOutPage(
+                    number: 3,
+                    frames: [
+                        PageFrame(kind: .text, rect: Rect(x: 40, y: 40, width: 300, height: 80), styleId: StyleID.heading1.rawValue, content: .text("第一章"))
+                    ]
+                ),
+                LaidOutPage(number: 4)
+            ]
+        )
+
+        let report = ProjectInspector().preflight(project: project, document: document)
+
+        XCTAssertTrue(report.isExportReady)
+        XCTAssertTrue(report.issues.contains {
+            $0.severity == .warning && $0.message.contains("目录页码不一致：第一章 标为第 4 页，实际标题在第 3 页")
+        })
+    }
+
+    func testPreflightReportsTableOfContentsMissingReferencedPage() {
+        let project = contentsValidationProject()
+        let document = LaidOutDocument(
+            projectId: project.id,
+            pages: [
+                LaidOutPage(number: 1),
+                LaidOutPage(
+                    number: 2,
+                    frames: [
+                        PageFrame(kind: .text, rect: Rect(x: 40, y: 40, width: 300, height: 80), styleId: StyleID.body.rawValue, content: .text("第一章  9"))
+                    ]
+                ),
+                LaidOutPage(
+                    number: 3,
+                    frames: [
+                        PageFrame(kind: .text, rect: Rect(x: 40, y: 40, width: 300, height: 80), styleId: StyleID.heading1.rawValue, content: .text("第一章"))
+                    ]
+                )
+            ]
+        )
+
+        let report = ProjectInspector().preflight(project: project, document: document)
+
+        XCTAssertFalse(report.isExportReady)
+        XCTAssertTrue(report.issues.contains {
+            $0.severity == .error && $0.message.contains("目录引用了不存在的页码：第一章 -> 9")
+        })
+    }
+
+    func testPreflightReportsMissingTableOfContentsEntryForVisibleTitle() {
+        let project = contentsValidationProject()
+        let document = LaidOutDocument(
+            projectId: project.id,
+            pages: [
+                LaidOutPage(number: 1),
+                LaidOutPage(
+                    number: 2,
+                    frames: [
+                        PageFrame(kind: .text, rect: Rect(x: 40, y: 40, width: 300, height: 80), styleId: StyleID.body.rawValue, content: .text("暂无章节"))
+                    ]
+                ),
+                LaidOutPage(
+                    number: 3,
+                    frames: [
+                        PageFrame(kind: .text, rect: Rect(x: 40, y: 40, width: 300, height: 80), styleId: StyleID.heading1.rawValue, content: .text("第一章"))
+                    ]
+                )
+            ]
+        )
+
+        let report = ProjectInspector().preflight(project: project, document: document)
+
+        XCTAssertTrue(report.isExportReady)
+        XCTAssertTrue(report.issues.contains {
+            $0.severity == .warning && $0.message.contains("目录缺少可见标题：第一章")
+        })
+    }
+
     func testPreflightReportsBrokenPageSequence() {
         let project = BookProject(
             metadata: ProjectMetadata(title: "页序检查", author: "layoutD"),
@@ -373,5 +714,24 @@ final class ProjectInspectorTests: XCTestCase {
         XCTAssertFalse(report.isExportReady)
         XCTAssertTrue(report.issues.contains { $0.message == "文档存在重复页码：3" })
         XCTAssertTrue(report.issues.contains { $0.message.contains("文档页码不连续") })
+    }
+
+    private func contentsValidationProject() -> BookProject {
+        BookProject(
+            metadata: ProjectMetadata(title: "目录检查", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: "正文", styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
     }
 }

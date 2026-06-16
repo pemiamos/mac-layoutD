@@ -64,6 +64,9 @@ public struct LayoutIssue: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
     public var severity: IssueSeverity
     public var message: String
+    public var category: PreflightIssueCategory?
+    public var suggestedFix: String?
+    public var autoFixKind: PreflightAutoFixKind?
     public var pageNumber: Int?
     public var frameId: UUID?
 
@@ -71,12 +74,18 @@ public struct LayoutIssue: Codable, Equatable, Sendable, Identifiable {
         id: UUID = UUID(),
         severity: IssueSeverity,
         message: String,
+        category: PreflightIssueCategory? = nil,
+        suggestedFix: String? = nil,
+        autoFixKind: PreflightAutoFixKind? = nil,
         pageNumber: Int? = nil,
         frameId: UUID? = nil
     ) {
         self.id = id
         self.severity = severity
         self.message = message
+        self.category = category
+        self.suggestedFix = suggestedFix
+        self.autoFixKind = autoFixKind
         self.pageNumber = pageNumber
         self.frameId = frameId
     }
@@ -86,4 +95,24 @@ public enum IssueSeverity: String, Codable, Sendable {
     case info
     case warning
     case error
+}
+
+public enum PreflightIssueCategory: String, Codable, CaseIterable, Sendable {
+    case metadata
+    case structure
+    case references
+    case assets
+    case pagination
+    case layout
+    case typography
+    case tableOfContents
+}
+
+public enum PreflightAutoFixKind: String, Codable, CaseIterable, Sendable {
+    case fillMissingPublisher
+    case fillMissingKeywords
+    case removeInvalidISBN
+    case fillMissingAssetCaptions
+    case fillMissingAssetCredits
+    case clearMissingAssetSourcePaths
 }

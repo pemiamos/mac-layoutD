@@ -22,6 +22,50 @@ public struct LayoutPlan: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+public extension LayoutPlan {
+    func retargeted(to target: LayoutTarget, regenerateBlockIDs: Bool = true) -> LayoutPlan {
+        LayoutPlan(
+            target: target,
+            strategy: strategy,
+            blocks: blocks.map { block in
+                if regenerateBlockIDs {
+                    var copy = block
+                    copy.id = UUID()
+                    return copy
+                }
+                return block
+            },
+            notes: notes
+        )
+    }
+}
+
+public struct SavedLayoutTemplate: Codable, Equatable, Sendable, Identifiable {
+    public var id: UUID
+    public var name: String
+    public var plan: LayoutPlan
+    public var createdAt: Date
+    public var modifiedAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        plan: LayoutPlan,
+        createdAt: Date = Date(),
+        modifiedAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.plan = plan
+        self.createdAt = createdAt
+        self.modifiedAt = modifiedAt
+    }
+
+    public func makePlan(target: LayoutTarget, regenerateBlockIDs: Bool = true) -> LayoutPlan {
+        plan.retargeted(to: target, regenerateBlockIDs: regenerateBlockIDs)
+    }
+}
+
 public enum LayoutTarget: Codable, Equatable, Sendable {
     case page(Int)
     case spread(Int)

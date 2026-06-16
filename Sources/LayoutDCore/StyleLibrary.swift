@@ -36,6 +36,66 @@ public struct StyleLibrary: Codable, Equatable, Sendable {
             ColorToken(id: "warning", hex: "#B3541E")
         ]
     )
+
+    public static let compactStudyGuide = StyleLibrary(
+        paragraphStyles: [
+            .heading1.with(fontSize: 19, lineHeight: 26, spaceBefore: 14, spaceAfter: 10),
+            .heading2.with(fontSize: 13.5, lineHeight: 19, spaceBefore: 8, spaceAfter: 6),
+            .body.with(fontSize: 9.5, lineHeight: 14, firstLineIndent: 19, spaceAfter: 3),
+            .caption.with(fontSize: 7.8, lineHeight: 10.5, spaceAfter: 6),
+            .callout.with(fontSize: 10, lineHeight: 15, spaceBefore: 6, spaceAfter: 6)
+        ],
+        colors: [
+            ColorToken(id: "ink", hex: "#1F2933"),
+            ColorToken(id: "paper", hex: "#FAFAF7"),
+            ColorToken(id: "accent", hex: "#2F6F9F"),
+            ColorToken(id: "warning", hex: "#A15C14")
+        ]
+    )
+
+    public static let imageRichScience = StyleLibrary(
+        paragraphStyles: [
+            .heading1.with(fontSize: 24, lineHeight: 32, spaceBefore: 20, spaceAfter: 16),
+            .heading2.with(fontSize: 16, lineHeight: 23, spaceBefore: 14, spaceAfter: 10),
+            .body.with(fontSize: 10.8, lineHeight: 17, firstLineIndent: 21.6, spaceAfter: 5),
+            .caption.with(fontSize: 9, lineHeight: 13, spaceAfter: 9),
+            .callout.with(fontSize: 11.5, lineHeight: 18, spaceBefore: 9, spaceAfter: 9)
+        ],
+        colors: [
+            ColorToken(id: "ink", hex: "#111827"),
+            ColorToken(id: "paper", hex: "#F5F7F4"),
+            ColorToken(id: "accent", hex: "#1F7A5C"),
+            ColorToken(id: "warning", hex: "#B04718")
+        ]
+    )
+}
+
+public enum StyleTemplate: String, Codable, CaseIterable, Sendable {
+    case chineseScienceDefault
+    case compactStudyGuide
+    case imageRichScience
+
+    public var displayName: String {
+        switch self {
+        case .chineseScienceDefault:
+            return "中文科普默认"
+        case .compactStudyGuide:
+            return "紧凑学习手册"
+        case .imageRichScience:
+            return "图像强化科普"
+        }
+    }
+
+    public var styleLibrary: StyleLibrary {
+        switch self {
+        case .chineseScienceDefault:
+            return .defaultChineseScience
+        case .compactStudyGuide:
+            return .compactStudyGuide
+        case .imageRichScience:
+            return .imageRichScience
+        }
+    }
 }
 
 public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
@@ -126,6 +186,27 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         spaceAfter: 8,
         colorToken: "accent"
     )
+
+    public func with(
+        fontSize: Double? = nil,
+        lineHeight: Double? = nil,
+        firstLineIndent: Double? = nil,
+        spaceBefore: Double? = nil,
+        spaceAfter: Double? = nil,
+        colorToken: String? = nil
+    ) -> ParagraphStyle {
+        ParagraphStyle(
+            id: id,
+            displayName: displayName,
+            fontName: fontName,
+            fontSize: fontSize ?? self.fontSize,
+            lineHeight: lineHeight ?? self.lineHeight,
+            firstLineIndent: firstLineIndent ?? self.firstLineIndent,
+            spaceBefore: spaceBefore ?? self.spaceBefore,
+            spaceAfter: spaceAfter ?? self.spaceAfter,
+            colorToken: colorToken ?? self.colorToken
+        )
+    }
 }
 
 public struct ColorToken: Codable, Equatable, Sendable, Identifiable {

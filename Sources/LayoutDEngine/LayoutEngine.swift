@@ -80,6 +80,7 @@ private struct LayoutContext {
                         LayoutIssue(
                             severity: .warning,
                             message: "书稿引用了不存在的图片素材",
+                            category: .references,
                             pageNumber: currentPage.number
                         )
                     )
@@ -137,6 +138,7 @@ private struct LayoutContext {
                 LayoutIssue(
                     severity: .info,
                     message: "文本段落高度超过单栏可用高度，已自动跨栏拆分",
+                    category: .layout,
                     pageNumber: currentPage.number
                 )
             )
@@ -271,13 +273,13 @@ private struct LayoutContext {
                 break
             }
             
-            if let lastChar = prefix.last, forbiddenLineEndCharacters.contains(lastChar) {
+            if let lastChar = prefix.last, ChineseLineBreakRules.forbidsLineEnd(lastChar) {
                 prefix = String(prefix.dropLast())
                 continue
             }
             
             let remainingText = fullText.dropFirst(prefix.count)
-            if let nextChar = remainingText.first, forbiddenLineStartCharacters.contains(nextChar) {
+            if let nextChar = remainingText.first, ChineseLineBreakRules.forbidsLineStart(nextChar) {
                 let pulledCandidate = prefix + String(nextChar)
                 let height = estimatedTextHeight(text: pulledCandidate, style: style, width: columnWidth)
                 if height <= maxHeight {
@@ -374,6 +376,7 @@ private struct LayoutContext {
                 LayoutIssue(
                     severity: .warning,
                     message: "图片 \(asset.fileName) 缺少图注",
+                    category: .assets,
                     pageNumber: currentPage.number
                 )
             )
@@ -384,6 +387,7 @@ private struct LayoutContext {
                 LayoutIssue(
                     severity: .warning,
                     message: "图片 \(asset.fileName) 预计印刷分辨率低于 220 DPI",
+                    category: .assets,
                     pageNumber: currentPage.number
                 )
             )
@@ -503,9 +507,32 @@ private struct LayoutContext {
     }
 
     private func normalizedText(_ text: String) -> String {
-        text
+        let collapsed = text
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmedForLayout
+        return normalizedCJKWesternSpacing(collapsed)
+    }
+
+    private func normalizedCJKWesternSpacing(_ text: String) -> String {
+        guard text.count > 1 else { return text }
+
+        var result = ""
+        var previous: Character?
+
+        for character in text {
+            if let previous, shouldInsertSpaceBetween(previous, character), result.last != " " {
+                result.append(" ")
+            }
+            result.append(character)
+            previous = character
+        }
+
+        return result
+    }
+
+    private func shouldInsertSpaceBetween(_ left: Character, _ right: Character) -> Bool {
+        (left.isCJKIdeograph && right.isWesternAlphanumeric)
+            || (left.isWesternAlphanumeric && right.isCJKIdeograph)
     }
 
     private func estimatedTextHeight(text: String, style: ParagraphStyle, width: Double) -> Double {
@@ -657,6 +684,9 @@ private struct LayoutContext {
             id: issue.id,
             severity: issue.severity,
             message: issue.message,
+            category: issue.category,
+            suggestedFix: issue.suggestedFix,
+            autoFixKind: issue.autoFixKind,
             pageNumber: issue.pageNumber.map { $0 + offset },
             frameId: issue.frameId
         )
@@ -804,9 +834,6 @@ private struct LayoutContext {
     }
 }
 
-private let forbiddenLineStartCharacters = Set("，。、！？：；）】》」』,.!?:;)]}%")
-private let forbiddenLineEndCharacters = Set("（【《「『([{")
-
 private struct TableOfContentsEntry: Equatable {
     var level: Int
     var title: String
@@ -816,5 +843,26 @@ private struct TableOfContentsEntry: Equatable {
 private extension String {
     var trimmedForLayout: String {
         trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private extension Character {
+    var isCJKIdeograph: Bool {
+        unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(scalar.value)
+                || (0x3400...0x4DBF).contains(scalar.value)
+                || (0x20000...0x2A6DF).contains(scalar.value)
+                || (0x2A700...0x2B73F).contains(scalar.value)
+                || (0x2B740...0x2B81F).contains(scalar.value)
+                || (0x2B820...0x2CEAF).contains(scalar.value)
+        }
+    }
+
+    var isWesternAlphanumeric: Bool {
+        unicodeScalars.allSatisfy { scalar in
+            (65...90).contains(scalar.value)
+                || (97...122).contains(scalar.value)
+                || (48...57).contains(scalar.value)
+        }
     }
 }

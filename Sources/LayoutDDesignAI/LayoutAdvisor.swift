@@ -5,97 +5,106 @@ public protocol LayoutAdvisor: Sendable {
     func proposePlans(for project: BookProject, target: LayoutTarget) -> [LayoutPlan]
 }
 
-public struct RuleBasedLayoutAdvisor: LayoutAdvisor {
-    public init() {}
+public protocol LayoutPlanProvider: Sendable {
+    func proposePlans(request: LayoutPlanRequest) throws -> [LayoutPlan]
+}
+
+public struct LayoutPlanRequest: Sendable {
+    public var project: BookProject
+    public var target: LayoutTarget
+    public var context: LayoutPlanContext
+
+    public init(project: BookProject, target: LayoutTarget, context: LayoutPlanContext? = nil) {
+        self.project = project
+        self.target = target
+        self.context = context ?? LayoutPlanContext(project: project)
+    }
+}
+
+public struct LayoutPlanContext: Codable, Equatable, Sendable {
+    public var title: String
+    public var subtitle: String?
+    public var keywords: [String]
+    public var sectionSummaries: [SectionSummary]
+    public var assetSummaries: [AssetSummary]
+
+    public init(project: BookProject) {
+        title = project.metadata.title
+        subtitle = project.metadata.subtitle
+        keywords = project.metadata.keywords
+        sectionSummaries = project.sections.map(SectionSummary.init(section:))
+        assetSummaries = project.assets.map(AssetSummary.init(asset:))
+    }
+}
+
+public struct SectionSummary: Codable, Equatable, Sendable {
+    public var title: String
+    public var storyTitles: [String]
+    public var paragraphCount: Int
+    public var figureCount: Int
+    public var calloutCount: Int
+    public var tableCount: Int
+
+    public init(section: BookSection) {
+        title = section.title
+        storyTitles = section.stories.map(\.title)
+        let paragraphs = section.stories.flatMap(\.paragraphs)
+        paragraphCount = paragraphs.count
+        figureCount = paragraphs.filter {
+            if case .figure = $0.kind { return true }
+            return false
+        }.count
+        calloutCount = paragraphs.filter { $0.kind == .callout }.count
+        tableCount = paragraphs.filter { $0.kind == .table }.count
+    }
+}
+
+public struct AssetSummary: Codable, Equatable, Sendable {
+    public var fileName: String
+    public var role: String
+    public var usage: String
+    public var caption: String?
+    public var pixelWidth: Int
+    public var pixelHeight: Int
+
+    public init(asset: Asset) {
+        fileName = asset.fileName
+        role = asset.role.rawValue
+        usage = asset.usage.rawValue
+        caption = asset.caption
+        pixelWidth = asset.pixelWidth
+        pixelHeight = asset.pixelHeight
+    }
+}
+
+public struct ProviderBackedLayoutAdvisor<Provider: LayoutPlanProvider>: LayoutAdvisor {
+    public var provider: Provider
+    public var fallback: RuleBasedLayoutAdvisor
+
+    public init(provider: Provider, fallback: RuleBasedLayoutAdvisor = RuleBasedLayoutAdvisor()) {
+        self.provider = provider
+        self.fallback = fallback
+    }
 
     public func proposePlans(for project: BookProject, target: LayoutTarget) -> [LayoutPlan] {
-        let imageAssets = project.assets.filter { $0.role != .decorative }
-        guard let firstAsset = imageAssets.first else {
-            return [textLedPlan(project: project, target: target)]
+        let request = LayoutPlanRequest(project: project, target: target)
+        guard let plans = try? provider.proposePlans(request: request), !plans.isEmpty else {
+            return fallback.proposePlans(for: project, target: target)
         }
+        return plans
+    }
+}
 
-        return [
-            imageLedPlan(asset: firstAsset, target: target),
-            balancedPlan(asset: firstAsset, target: target),
-            textLedPlan(project: project, target: target)
-        ]
+public struct RuleBasedLayoutAdvisor: LayoutAdvisor {
+    public var catalog: PageLayoutTemplateCatalog
+
+    public init(catalog: PageLayoutTemplateCatalog = PageLayoutTemplateCatalog(
+        templates: [.imageLedPage, .balancedImageText, .textLedPage]
+    )) {
+        self.catalog = catalog
     }
 
-    private func imageLedPlan(asset: Asset, target: LayoutTarget) -> LayoutPlan {
-        LayoutPlan(
-            target: target,
-            strategy: .imageLed,
-            blocks: [
-                LayoutPlanBlock(
-                    kind: .image,
-                    role: "hero",
-                    frame: Rect(x: 0.08, y: 0.10, width: 0.56, height: 0.46),
-                    contentReference: .asset(asset.id)
-                ),
-                LayoutPlanBlock(
-                    kind: .caption,
-                    role: "caption",
-                    frame: Rect(x: 0.08, y: 0.58, width: 0.56, height: 0.08),
-                    contentReference: .generated(asset.caption ?? "待补充图注")
-                ),
-                LayoutPlanBlock(
-                    kind: .text,
-                    role: "body",
-                    frame: Rect(x: 0.68, y: 0.10, width: 0.24, height: 0.70),
-                    contentReference: .generated("正文流入区")
-                )
-            ],
-            notes: ["图片承担主要解释功能，适合科普概念页或章节开篇页。"]
-        )
-    }
-
-    private func balancedPlan(asset: Asset, target: LayoutTarget) -> LayoutPlan {
-        LayoutPlan(
-            target: target,
-            strategy: .balanced,
-            blocks: [
-                LayoutPlanBlock(
-                    kind: .text,
-                    role: "body",
-                    frame: Rect(x: 0.08, y: 0.12, width: 0.40, height: 0.72),
-                    contentReference: .generated("正文流入区")
-                ),
-                LayoutPlanBlock(
-                    kind: .image,
-                    role: "supporting",
-                    frame: Rect(x: 0.54, y: 0.16, width: 0.38, height: 0.34),
-                    contentReference: .asset(asset.id)
-                ),
-                LayoutPlanBlock(
-                    kind: .caption,
-                    role: "caption",
-                    frame: Rect(x: 0.54, y: 0.52, width: 0.38, height: 0.08),
-                    contentReference: .generated(asset.caption ?? "待补充图注")
-                )
-            ],
-            notes: ["正文和图片权重均衡，适合解释密度较高的内页。"]
-        )
-    }
-
-    private func textLedPlan(project: BookProject, target: LayoutTarget) -> LayoutPlan {
-        LayoutPlan(
-            target: target,
-            strategy: .textLed,
-            blocks: [
-                LayoutPlanBlock(
-                    kind: .text,
-                    role: "body",
-                    frame: Rect(x: 0.10, y: 0.10, width: 0.80, height: 0.72),
-                    contentReference: .generated(project.metadata.title)
-                ),
-                LayoutPlanBlock(
-                    kind: .component,
-                    role: "knowledge-card",
-                    frame: Rect(x: 0.10, y: 0.84, width: 0.80, height: 0.10),
-                    contentReference: .generated("可转化为知识卡片的重点解释")
-                )
-            ],
-            notes: ["正文阅读优先，适合叙述性强的页面。"]
-        )
+    public func proposePlans(for project: BookProject, target: LayoutTarget) -> [LayoutPlan] {
+        catalog.plans(for: project, target: target)
     }
 }
