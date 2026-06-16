@@ -101,26 +101,29 @@ public struct PNGExporter {
             }
             drawText(text, styleId: frame.styleId, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context)
         case .asset(let assetId):
-            drawAsset(assetId: assetId, project: project, in: rect, context: context)
+            drawAsset(assetId: assetId, isLeftHalf: nil, project: project, in: rect, context: context)
+        case .spreadAsset(let assetId, let isLeftHalf):
+            drawAsset(assetId: assetId, isLeftHalf: isLeftHalf, project: project, in: rect, context: context)
         case .empty:
             break
         }
     }
 
     private func drawText(_ text: String, styleId: String?, project: BookProject, in rect: CGRect, context: CGContext) {
-        context.saveGState()
         let style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+        let attributedString = ChineseTypesetting.makeAttributedString(
+            text: text,
+            style: style,
+            foregroundColor: NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).cgColor
+        )
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
         path.addRect(rect)
-
-        let attributed = CFAttributedStringCreate(nil, text as CFString, textAttributes(style: style))
-        let framesetter = CTFramesetterCreateWithAttributedString(attributed!)
-        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: text.count), path, nil)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: attributedString.length), path, nil)
         CTFrameDraw(frame, context)
-        context.restoreGState()
     }
 
-    private func drawAsset(assetId: UUID, project: BookProject, in rect: CGRect, context: CGContext) {
+    private func drawAsset(assetId: UUID, isLeftHalf: Bool?, project: BookProject, in rect: CGRect, context: CGContext) {
         guard let asset = project.assets.first(where: { $0.id == assetId }),
               let sourcePath = asset.sourcePath,
               let image = NSImage(contentsOfFile: sourcePath) else {
@@ -135,31 +138,70 @@ public struct PNGExporter {
         context.setFillColor(NSColor(calibratedWhite: 0.96, alpha: 1).cgColor)
         context.fill(rect)
 
-        let imageSize = image.size
-        guard imageSize.width > 0, imageSize.height > 0 else {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
         }
 
-        let imageAspect = imageSize.width / imageSize.height
-        let rectAspect = rect.width / rect.height
-        let drawRect: CGRect
-        if imageAspect > rectAspect {
-            let height = rect.width / imageAspect
-            drawRect = CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height)
+        context.saveGState()
+        context.clip(to: rect)
+
+        if let isLeft = isLeftHalf {
+            let pageSize = project.pageSetup.pageSize
+            let leftMargin = pageLeftMargin(for: 2, project: project)
+            let rightMargin = pageRightMargin(for: 3, project: project)
+            let leftWidth = pageSize.width - leftMargin
+            let rightWidth = pageSize.width - rightMargin
+            let totalWidth = leftWidth + rightWidth
+
+            let drawRect: CGRect
+            if isLeft {
+                drawRect = CGRect(x: rect.minX, y: rect.minY, width: CGFloat(totalWidth), height: rect.height)
+            } else {
+                drawRect = CGRect(x: rect.minX - CGFloat(leftWidth), y: rect.minY, width: CGFloat(totalWidth), height: rect.height)
+            }
+            context.draw(cgImage, in: drawRect)
         } else {
-            let width = rect.height * imageAspect
-            drawRect = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: rect.height)
+            let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+            let imageAspect = imageSize.width / imageSize.height
+            let rectAspect = rect.width / rect.height
+            let drawRect: CGRect
+            if imageAspect > rectAspect {
+                let height = rect.width / imageAspect
+                drawRect = CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height)
+            } else {
+                let width = rect.height * imageAspect
+                drawRect = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: rect.height)
+            }
+            context.draw(cgImage, in: drawRect)
         }
 
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
-        image.draw(in: drawRect)
-        NSGraphicsContext.restoreGraphicsState()
+        context.restoreGState()
         context.setStrokeColor(NSColor(calibratedWhite: 0.62, alpha: 1).cgColor)
         context.stroke(rect)
     }
 
+    private func pageLeftMargin(for pageNumber: Int, project: BookProject) -> Double {
+        let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: pageNumber)
+        if setup.facingPages {
+            return pageNumber % 2 == 1 ? margins.left : margins.right
+        }
+        return margins.left
+    }
+
+    private func pageRightMargin(for pageNumber: Int, project: BookProject) -> Double {
+        let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: pageNumber)
+        if setup.facingPages {
+            return pageNumber % 2 == 1 ? margins.right : margins.left
+        }
+        return margins.right
+    }
+
     private func drawPageNumber(_ number: Int, project: BookProject, in context: CGContext) {
+        guard project.resolvedShowHeadersFooters(for: number) else {
+            return
+        }
         let pageSize = project.pageSetup.pageSize
         let text = "\(number)"
         let rect = CGRect(x: pageSize.width / 2 - 12, y: pageSize.height - 28, width: 24, height: 14)

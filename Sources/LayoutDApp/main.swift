@@ -487,7 +487,8 @@ final class WorkspaceViewController: NSViewController {
             UTType.json,
             UTType(filenameExtension: "md"),
             UTType(filenameExtension: "markdown"),
-            UTType(filenameExtension: "txt")
+            UTType(filenameExtension: "txt"),
+            UTType(filenameExtension: "docx")
         ].compactMap { $0 }
 
         guard let window = view.window else {

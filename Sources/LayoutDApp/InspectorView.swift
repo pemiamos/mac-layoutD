@@ -48,6 +48,29 @@ private enum IssueCategoryFilter: String, CaseIterable {
     case tableOfContents
     case uncategorized
 
+    var preflightCategory: PreflightIssueCategory? {
+        switch self {
+        case .all, .uncategorized:
+            return nil
+        case .metadata:
+            return .metadata
+        case .structure:
+            return .structure
+        case .references:
+            return .references
+        case .assets:
+            return .assets
+        case .pagination:
+            return .pagination
+        case .layout:
+            return .layout
+        case .typography:
+            return .typography
+        case .tableOfContents:
+            return .tableOfContents
+        }
+    }
+
     var title: String {
         switch self {
         case .all:
@@ -171,30 +194,35 @@ struct InspectorView: View {
                                     .foregroundColor(.secondary)
 
                                 ForEach(state.project.safeSavedLayoutTemplates) { template in
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            TextField("模板名称", text: Binding(
-                                                get: { template.name },
-                                                set: { state.renameSavedLayoutTemplate(id: template.id, name: $0) }
-                                            ))
-                                            .font(.caption)
-                                            .textFieldStyle(.roundedBorder)
-                                            Text(template.plan.strategy.rawValue)
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                TextField("模板名称", text: Binding(
+                                                    get: { template.name },
+                                                    set: { state.renameSavedLayoutTemplate(id: template.id, name: $0) }
+                                                ))
+                                                .font(.caption)
+                                                .textFieldStyle(.roundedBorder)
+                                                Text(template.plan.strategy.rawValue)
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            Spacer()
+                                            Button("应用") {
+                                                state.applySavedLayoutTemplate(id: template.id, toPage: state.currentPageNumber)
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .disabled(state.project.safeLockedPages.contains(state.currentPageNumber))
+                                            Button("删除") {
+                                                state.deleteSavedLayoutTemplate(id: template.id)
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .foregroundColor(.red)
                                         }
-                                        Spacer()
-                                        Button("应用") {
-                                            state.applySavedLayoutTemplate(id: template.id, toPage: state.currentPageNumber)
-                                        }
-                                        .buttonStyle(.bordered)
-                                        .disabled(state.project.safeLockedPages.contains(state.currentPageNumber))
-                                        Button("删除") {
-                                            state.deleteSavedLayoutTemplate(id: template.id)
-                                        }
-                                        .buttonStyle(.bordered)
-                                        .foregroundColor(.red)
+
+                                        TemplateParametersEditorView(template: template, state: state)
                                     }
+                                    .padding(.vertical, 4)
                                 }
                             }
                         }
@@ -536,11 +564,21 @@ struct InspectorView: View {
                                 }
                                 .pickerStyle(.menu)
 
-                                if report.issues.contains(where: { $0.autoFixKind != nil }) {
-                                    Button("自动修复可处理问题") {
-                                        state.applyAvailablePreflightFixes()
+                                HStack(spacing: 8) {
+                                    if report.issues.contains(where: { $0.autoFixKind != nil }) {
+                                        Button("自动修复全部") {
+                                            state.applyAvailablePreflightFixes()
+                                        }
+                                        .buttonStyle(.borderedProminent)
                                     }
-                                    .buttonStyle(.borderedProminent)
+
+                                    if let selectedCategory = issueCategoryFilter.preflightCategory,
+                                       report.issues.contains(where: { $0.category == selectedCategory && $0.autoFixKind != nil }) {
+                                        Button("自动修复当前分类") {
+                                            state.applyPreflightFixes(in: selectedCategory)
+                                        }
+                                        .buttonStyle(.bordered)
+                                    }
                                 }
 
                                 if filteredIssues(report).isEmpty {
@@ -552,9 +590,7 @@ struct InspectorView: View {
 
                                 ForEach(filteredIssues(report), id: \.id) { issue in
                                     let location = issueLocation(for: issue, report: report)
-                                    Button(action: {
-                                        onIssueClick(issue)
-                                    }) {
+                                    VStack(alignment: .leading, spacing: 6) {
                                         HStack(alignment: .top, spacing: 6) {
                                             issueIcon(issue.severity)
                                             VStack(alignment: .leading, spacing: 2) {
@@ -575,11 +611,6 @@ struct InspectorView: View {
                                                         .font(.caption2)
                                                         .foregroundColor(.secondary)
                                                 }
-                                                if issue.autoFixKind != nil {
-                                                    Text("可自动修复")
-                                                        .font(.caption2)
-                                                        .foregroundColor(.accentColor)
-                                                }
                                                 if let page = issue.pageNumber {
                                                     Text("第 \(page) 页")
                                                         .font(.caption)
@@ -593,12 +624,23 @@ struct InspectorView: View {
                                                 }
                                             }
                                             Spacer()
+                                            
+                                            if let fix = issue.autoFixKind {
+                                                Button("修复") {
+                                                    state.applyPreflightFix(fix, targetingAssetId: issue.assetId, targetingFrameId: issue.frameId)
+                                                }
+                                                .buttonStyle(.bordered)
+                                                .controlSize(.small)
+                                            }
                                         }
-                                        .padding(.all, 8)
-                                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                                        .cornerRadius(6)
                                     }
-                                    .buttonStyle(.plain)
+                                    .padding(.all, 8)
+                                    .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                                    .cornerRadius(6)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        onIssueClick(issue)
+                                    }
                                 }
                             }
                             .padding(.top, 6)
@@ -891,6 +933,8 @@ struct InspectorView: View {
             return "对比图"
         case .decorative:
             return "装饰图"
+        case .spread:
+            return "跨页图"
         }
     }
 
@@ -929,3 +973,183 @@ struct InspectorView: View {
             .font(.system(size: 14))
     }
 }
+
+struct TemplateParametersEditorView: View {
+    let template: SavedLayoutTemplate
+    let state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Margins override
+            HStack {
+                Toggle("自定义边距", isOn: Binding(
+                    get: { template.plan.marginOverride != nil },
+                    set: { enable in
+                        let newMargins = enable ? (template.plan.marginOverride ?? state.project.pageSetup.margins) : nil
+                        state.updateSavedLayoutTemplateParameters(
+                            id: template.id,
+                            marginOverride: newMargins,
+                            columnsOverride: template.plan.columnsOverride,
+                            showHeadersFooters: template.plan.showHeadersFooters
+                        )
+                    }
+                ))
+                .font(.caption2)
+                
+                Spacer()
+            }
+            
+            if let margins = template.plan.marginOverride {
+                VStack(spacing: 4) {
+                    HStack(spacing: 8) {
+                        HStack(spacing: 2) {
+                            Text("上:").font(.caption2).foregroundColor(.secondary)
+                            TextField("", value: Binding(
+                                get: { margins.top },
+                                set: { val in
+                                    var m = margins
+                                    m.top = val
+                                    state.updateSavedLayoutTemplateParameters(
+                                        id: template.id,
+                                        marginOverride: m,
+                                        columnsOverride: template.plan.columnsOverride,
+                                        showHeadersFooters: template.plan.showHeadersFooters
+                                    )
+                                }
+                            ), format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 45)
+                        }
+                        HStack(spacing: 2) {
+                            Text("下:").font(.caption2).foregroundColor(.secondary)
+                            TextField("", value: Binding(
+                                get: { margins.bottom },
+                                set: { val in
+                                    var m = margins
+                                    m.bottom = val
+                                    state.updateSavedLayoutTemplateParameters(
+                                        id: template.id,
+                                        marginOverride: m,
+                                        columnsOverride: template.plan.columnsOverride,
+                                        showHeadersFooters: template.plan.showHeadersFooters
+                                    )
+                                }
+                            ), format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 45)
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        HStack(spacing: 2) {
+                            Text("左:").font(.caption2).foregroundColor(.secondary)
+                            TextField("", value: Binding(
+                                get: { margins.left },
+                                set: { val in
+                                    var m = margins
+                                    m.left = val
+                                    state.updateSavedLayoutTemplateParameters(
+                                        id: template.id,
+                                        marginOverride: m,
+                                        columnsOverride: template.plan.columnsOverride,
+                                        showHeadersFooters: template.plan.showHeadersFooters
+                                    )
+                                }
+                            ), format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 45)
+                        }
+                        HStack(spacing: 2) {
+                            Text("右:").font(.caption2).foregroundColor(.secondary)
+                            TextField("", value: Binding(
+                                get: { margins.right },
+                                set: { val in
+                                    var m = margins
+                                    m.right = val
+                                    state.updateSavedLayoutTemplateParameters(
+                                        id: template.id,
+                                        marginOverride: m,
+                                        columnsOverride: template.plan.columnsOverride,
+                                        showHeadersFooters: template.plan.showHeadersFooters
+                                    )
+                                }
+                            ), format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 45)
+                        }
+                    }
+                }
+            }
+            
+            // Columns override
+            HStack {
+                Toggle("自定义分栏", isOn: Binding(
+                    get: { template.plan.columnsOverride != nil },
+                    set: { enable in
+                        let cols = enable ? (template.plan.columnsOverride ?? state.project.pageSetup.columns) : nil
+                        state.updateSavedLayoutTemplateParameters(
+                            id: template.id,
+                            marginOverride: template.plan.marginOverride,
+                            columnsOverride: cols,
+                            showHeadersFooters: template.plan.showHeadersFooters
+                        )
+                    }
+                ))
+                .font(.caption2)
+                
+                Spacer()
+                
+                if let cols = template.plan.columnsOverride {
+                    Picker("", selection: Binding(
+                        get: { cols },
+                        set: { val in
+                            state.updateSavedLayoutTemplateParameters(
+                                id: template.id,
+                                marginOverride: template.plan.marginOverride,
+                                columnsOverride: val,
+                                showHeadersFooters: template.plan.showHeadersFooters
+                            )
+                        }
+                    )) {
+                        ForEach(1...4, id: \.self) { c in
+                            Text("\(c) 栏").tag(c)
+                        }
+                    }
+                    .frame(width: 70)
+                    .labelsHidden()
+                }
+            }
+            
+            // Show Headers & Footers
+            Picker("页眉页脚", selection: Binding(
+                get: {
+                    if let show = template.plan.showHeadersFooters {
+                        return show ? 1 : 2
+                    }
+                    return 0
+                },
+                set: { val in
+                    let opt: Bool?
+                    if val == 1 { opt = true }
+                    else if val == 2 { opt = false }
+                    else { opt = nil }
+                    state.updateSavedLayoutTemplateParameters(
+                        id: template.id,
+                        marginOverride: template.plan.marginOverride,
+                        columnsOverride: template.plan.columnsOverride,
+                        showHeadersFooters: opt
+                    )
+                }
+            )) {
+                Text("默认").tag(0)
+                Text("显示").tag(1)
+                Text("隐藏").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
+        .padding(6)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(4)
+    }
+}
+

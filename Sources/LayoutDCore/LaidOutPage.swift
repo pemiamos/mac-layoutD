@@ -57,6 +57,7 @@ public enum PageFrameKind: String, Codable, Sendable {
 public enum FrameContent: Codable, Equatable, Sendable {
     case text(String)
     case asset(UUID)
+    case spreadAsset(assetId: UUID, isLeftHalf: Bool)
     case empty
 }
 
@@ -69,6 +70,7 @@ public struct LayoutIssue: Codable, Equatable, Sendable, Identifiable {
     public var autoFixKind: PreflightAutoFixKind?
     public var pageNumber: Int?
     public var frameId: UUID?
+    public var assetId: UUID?
 
     public init(
         id: UUID = UUID(),
@@ -78,7 +80,8 @@ public struct LayoutIssue: Codable, Equatable, Sendable, Identifiable {
         suggestedFix: String? = nil,
         autoFixKind: PreflightAutoFixKind? = nil,
         pageNumber: Int? = nil,
-        frameId: UUID? = nil
+        frameId: UUID? = nil,
+        assetId: UUID? = nil
     ) {
         self.id = id
         self.severity = severity
@@ -88,6 +91,7 @@ public struct LayoutIssue: Codable, Equatable, Sendable, Identifiable {
         self.autoFixKind = autoFixKind
         self.pageNumber = pageNumber
         self.frameId = frameId
+        self.assetId = assetId
     }
 }
 
@@ -115,4 +119,11 @@ public enum PreflightAutoFixKind: String, Codable, CaseIterable, Sendable {
     case fillMissingAssetCaptions
     case fillMissingAssetCredits
     case clearMissingAssetSourcePaths
+    
+    // New cases
+    case fillMissingAuthor
+    case fillMissingSubtitle
+    case removeEmptyTextFrames
+    case constrainOutOfBoundsFrames
+    case downgradeLowDPIAssetRoles
 }

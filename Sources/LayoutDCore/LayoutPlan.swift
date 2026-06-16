@@ -6,25 +6,35 @@ public struct LayoutPlan: Codable, Equatable, Sendable, Identifiable {
     public var strategy: LayoutStrategy
     public var blocks: [LayoutPlanBlock]
     public var notes: [String]
+    public var marginOverride: PageMargins?
+    public var columnsOverride: Int?
+    public var showHeadersFooters: Bool?
 
     public init(
         id: UUID = UUID(),
         target: LayoutTarget,
         strategy: LayoutStrategy,
         blocks: [LayoutPlanBlock],
-        notes: [String] = []
+        notes: [String] = [],
+        marginOverride: PageMargins? = nil,
+        columnsOverride: Int? = nil,
+        showHeadersFooters: Bool? = nil
     ) {
         self.id = id
         self.target = target
         self.strategy = strategy
         self.blocks = blocks
         self.notes = notes
+        self.marginOverride = marginOverride
+        self.columnsOverride = columnsOverride
+        self.showHeadersFooters = showHeadersFooters
     }
 }
 
 public extension LayoutPlan {
     func retargeted(to target: LayoutTarget, regenerateBlockIDs: Bool = true) -> LayoutPlan {
         LayoutPlan(
+            id: UUID(),
             target: target,
             strategy: strategy,
             blocks: blocks.map { block in
@@ -35,7 +45,10 @@ public extension LayoutPlan {
                 }
                 return block
             },
-            notes: notes
+            notes: notes,
+            marginOverride: marginOverride,
+            columnsOverride: columnsOverride,
+            showHeadersFooters: showHeadersFooters
         )
     }
 }

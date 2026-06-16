@@ -155,6 +155,8 @@ struct ProjectLoader {
         case "layoutd", "json":
             let data = try Data(contentsOf: inputURL)
             return try ProjectFile.decode(data)
+        case "docx":
+            return try DocxBookImporter().importDocument(docxURL: inputURL, assetDirectoryURL: assetDirectoryURL)
         default:
             return try loadMarkdownProject(manuscriptURL: inputURL, assetDirectoryURL: assetDirectoryURL)
         }
@@ -168,6 +170,8 @@ struct ProjectLoader {
         switch inputURL.pathExtension.lowercased() {
         case "layoutd", "json":
             return "项目：\(inputURL.lastPathComponent)"
+        case "docx":
+            return "Word导入：\(inputURL.lastPathComponent)"
         default:
             return "导入：\(inputURL.lastPathComponent)"
         }
@@ -196,11 +200,46 @@ struct ProjectLoader {
             packageURL: packageURL,
             explicitAssetDirectoryURL: assetDirectoryURL
         )
-        return MarkdownBookImporter(defaultAuthor: NSUserName()).importDocument(
+        var project = MarkdownBookImporter(defaultAuthor: NSUserName()).importDocument(
             markdown: markdown,
             assetCatalog: AssetCatalog(assets: assets),
             fallbackTitle: packageURL.lastPathComponent
         )
+        
+        let stylesURL = packageURL.appendingPathComponent("styles.json")
+        let stylesAltURL = packageURL.appendingPathComponent("styles.layoutd-styles")
+        var stylesData = try? Data(contentsOf: stylesURL)
+        if stylesData == nil {
+            stylesData = try? Data(contentsOf: stylesAltURL)
+        }
+        if let stylesData,
+           let styleLibrary = try? JSONDecoder().decode(StyleLibrary.self, from: stylesData) {
+            project.styles = styleLibrary
+        }
+        
+        let templatesURL = packageURL.appendingPathComponent("templates.json")
+        let templatesAltURL = packageURL.appendingPathComponent("templates.layoutd-templates")
+        var templatesData = try? Data(contentsOf: templatesURL)
+        if templatesData == nil {
+            templatesData = try? Data(contentsOf: templatesAltURL)
+        }
+        if let templatesData,
+           let templateLibrary = try? LayoutTemplateLibrary.decode(templatesData) {
+            project.importLayoutTemplateLibrary(templateLibrary)
+        }
+        
+        let metadataURL = packageURL.appendingPathComponent("metadata.json")
+        let bookJSONURL = packageURL.appendingPathComponent("book.json")
+        var metadataData = try? Data(contentsOf: metadataURL)
+        if metadataData == nil {
+            metadataData = try? Data(contentsOf: bookJSONURL)
+        }
+        if let metadataData,
+           let metadata = try? JSONDecoder().decode(ProjectMetadata.self, from: metadataData) {
+            project.metadata = metadata
+        }
+        
+        return project
     }
 
     private func packageManuscriptURLs(_ packageURL: URL) throws -> [URL] {

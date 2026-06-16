@@ -1013,6 +1013,9 @@ private struct MarkdownParser {
         if placement == "wide" || placement == "full" || placement == "full-width" {
             return .hero
         }
+        if placement == "spread" || placement == "cross-page" {
+            return .spread
+        }
 
         return nil
     }

@@ -106,7 +106,7 @@ final class AppState: ObservableObject {
             
             let ref: ContentReference
             switch frame.content {
-            case .asset(let assetId):
+            case .asset(let assetId), .spreadAsset(let assetId, _):
                 ref = .asset(assetId)
             case .text(let text):
                 if let paragraph = findParagraphByText(text) {
@@ -249,6 +249,24 @@ final class AppState: ObservableObject {
         self.project = currentProject
     }
 
+    func updateSavedLayoutTemplateParameters(
+        id: UUID,
+        marginOverride: PageMargins?,
+        columnsOverride: Int?,
+        showHeadersFooters: Bool?
+    ) {
+        var currentProject = project
+        var templates = currentProject.safeSavedLayoutTemplates
+        guard let index = templates.firstIndex(where: { $0.id == id }) else { return }
+
+        templates[index].plan.marginOverride = marginOverride
+        templates[index].plan.columnsOverride = columnsOverride
+        templates[index].plan.showHeadersFooters = showHeadersFooters
+        templates[index].modifiedAt = Date()
+        currentProject.safeSavedLayoutTemplates = templates
+        self.project = currentProject
+    }
+
     func applyChapterLayoutTemplate(_ template: ChapterLayoutTemplate, sectionIndex: Int, startPage: Int) -> Int {
         var currentProject = project
         let appliedCount = currentProject.applyChapterLayoutTemplate(
@@ -331,6 +349,28 @@ final class AppState: ObservableObject {
         let result = PreflightAutoFixer().applyAvailableFixes(
             to: project,
             issues: report.issues
+        )
+        guard !result.appliedFixes.isEmpty else { return }
+        self.project = result.project
+    }
+
+    func applyPreflightFix(_ fix: PreflightAutoFixKind, targetingAssetId: UUID? = nil, targetingFrameId: UUID? = nil) {
+        let result = PreflightAutoFixer().applyFixes(
+            [fix],
+            to: project,
+            targetingAssetId: targetingAssetId,
+            targetingFrameId: targetingFrameId
+        )
+        guard !result.appliedFixes.isEmpty else { return }
+        self.project = result.project
+    }
+
+    func applyPreflightFixes(in category: PreflightIssueCategory) {
+        guard let report else { return }
+        let categoryIssues = report.issues.filter { $0.category == category }
+        let result = PreflightAutoFixer().applyAvailableFixes(
+            to: project,
+            issues: categoryIssues
         )
         guard !result.appliedFixes.isEmpty else { return }
         self.project = result.project

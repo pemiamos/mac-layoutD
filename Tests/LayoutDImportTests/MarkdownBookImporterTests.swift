@@ -663,4 +663,19 @@ final class MarkdownBookImporterTests: XCTestCase {
         XCTAssertEqual(table?.styleId, StyleID.body.rawValue)
         XCTAssertEqual(table?.text, "指标    数值\n细胞数量    约 37 万亿\n平均直径    10 微米")
     }
+
+    func testImportsSpreadImageMetadata() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 跨页图导入
+            
+            ![跨页图](spread.png "span=spread; credit=NASA")
+            """
+        )
+        
+        let asset = project.assets.first { $0.fileName == "spread.png" }
+        XCTAssertNotNil(asset)
+        XCTAssertEqual(asset?.role, .spread)
+        XCTAssertEqual(asset?.credit, "NASA")
+    }
 }

@@ -48,6 +48,26 @@ public struct ProjectInspector {
             }
         }
 
+        if metadata.author.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append(LayoutIssue(
+                severity: .warning,
+                message: "项目缺少作者信息",
+                category: .metadata,
+                suggestedFix: "在图书元数据中填写 author，或在 Markdown front matter 增加 author。",
+                autoFixKind: .fillMissingAuthor
+            ))
+        }
+
+        if metadata.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            issues.append(LayoutIssue(
+                severity: .info,
+                message: "项目缺少副标题",
+                category: .metadata,
+                suggestedFix: "在图书元数据中填写 subtitle，以丰富图书信息。",
+                autoFixKind: .fillMissingSubtitle
+            ))
+        }
+
         return issues
     }
 
@@ -139,7 +159,8 @@ public struct ProjectInspector {
                         message: "图片 \(asset.fileName) 缺少图注",
                         category: .assets,
                         suggestedFix: "在 Markdown 图片 alt 文本或 assets.csv 的 caption 字段中补充图注。",
-                        autoFixKind: .fillMissingAssetCaptions
+                        autoFixKind: .fillMissingAssetCaptions,
+                        assetId: asset.id
                     )
                 )
             }
@@ -152,7 +173,8 @@ public struct ProjectInspector {
                         message: "图片 \(asset.fileName) 缺少版权或来源信息",
                         category: .assets,
                         suggestedFix: "在图片标题参数或 manifest 的 credit/source 字段中记录来源。",
-                        autoFixKind: .fillMissingAssetCredits
+                        autoFixKind: .fillMissingAssetCredits,
+                        assetId: asset.id
                     )
                 )
             }
@@ -169,7 +191,9 @@ public struct ProjectInspector {
                         severity: .warning,
                         message: "图片 \(asset.fileName) 预计印刷分辨率低于 220 DPI",
                         category: .assets,
-                        suggestedFix: "替换为更高分辨率图片，或将图片角色改为较小版面宽度的配图。"
+                        suggestedFix: "替换为更高分辨率图片，或将图片角色改为较小版面宽度的配图。",
+                        autoFixKind: .downgradeLowDPIAssetRoles,
+                        assetId: asset.id
                     )
                 )
             }
@@ -182,7 +206,8 @@ public struct ProjectInspector {
                         message: "图片 \(asset.fileName) 的源文件不存在",
                         category: .assets,
                         suggestedFix: "重新选择图片文件，或清除失效 sourcePath 以避免导出时继续查找不存在的文件。",
-                        autoFixKind: .clearMissingAssetSourcePaths
+                        autoFixKind: .clearMissingAssetSourcePaths,
+                        assetId: asset.id
                     )
                 )
             }

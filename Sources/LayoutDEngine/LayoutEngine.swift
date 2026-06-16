@@ -43,13 +43,19 @@ private struct LayoutContext {
     init(project: BookProject) {
         self.project = project
         self.currentPage = LaidOutPage(number: 1)
-        self.cursorX = project.pageSetup.margins.left
-        self.cursorY = project.pageSetup.margins.top
-        self.currentColumnTopY = project.pageSetup.margins.top
+        let initialPageNumber = 3
+        let margins = project.resolvedMargins(for: initialPageNumber)
+        let facingPages = project.pageSetup.facingPages
+        self.cursorX = facingPages ? (initialPageNumber % 2 == 1 ? margins.left : margins.right) : margins.left
+        self.cursorY = margins.top
+        self.currentColumnTopY = margins.top
     }
 
     mutating func addRunningHeader(_ title: String) {
         let actualPageNumber = currentPage.number + 2
+        guard project.resolvedShowHeadersFooters(for: actualPageNumber) else {
+            return
+        }
         let rect = Rect(x: pageLeftMargin(for: actualPageNumber), y: 24, width: contentWidth, height: 16)
         currentPage.frames.append(
             PageFrame(kind: .text, rect: rect, styleId: StyleID.caption.rawValue, content: .text(title))
@@ -350,6 +356,10 @@ private struct LayoutContext {
     }
 
     private mutating func addAsset(_ asset: Asset) {
+        if asset.role == .spread {
+            addSpreadAsset(asset)
+            return
+        }
         placedAssetIds.insert(asset.id)
         figureCounter += 1
         let imageWidth = imageWidth(for: asset)
@@ -399,6 +409,87 @@ private struct LayoutContext {
         }
     }
 
+    private mutating func addSpreadAsset(_ asset: Asset) {
+        placedAssetIds.insert(asset.id)
+        figureCounter += 1
+        
+        let setup = project.pageSetup
+        let pageWidth = setup.pageSize.width
+        let leftMargin = pageLeftMargin(for: 2)
+        let rightMargin = pageRightMargin(for: 3)
+        let totalWidth = (pageWidth - leftMargin) + (pageWidth - rightMargin)
+        
+        let desiredHeight = imageHeight(for: asset, width: totalWidth)
+        let requiredHeight = desiredHeight + 42
+        
+        if (currentPage.number + 2) % 2 == 1 {
+            advanceToNextPage()
+        }
+        
+        let bottomLimit = setup.pageSize.height - setup.margins.bottom
+        if cursorY + requiredHeight > bottomLimit {
+            advanceToNextPage()
+            advanceToNextPage()
+        }
+        
+        let leftX = pageLeftMargin(for: currentPage.number + 2)
+        let leftWidth = pageWidth - leftX
+        let leftRect = Rect(x: leftX, y: cursorY, width: leftWidth, height: desiredHeight)
+        currentPage.frames.append(PageFrame(
+            kind: .image,
+            rect: leftRect,
+            content: .spreadAsset(assetId: asset.id, isLeftHalf: true)
+        ))
+        
+        let spreadY = cursorY
+        
+        advanceToNextPage()
+        
+        let rightWidth = pageWidth - pageRightMargin(for: currentPage.number + 2)
+        let rightRect = Rect(x: 0, y: spreadY, width: rightWidth, height: desiredHeight)
+        currentPage.frames.append(PageFrame(
+            kind: .image,
+            rect: rightRect,
+            content: .spreadAsset(assetId: asset.id, isLeftHalf: false)
+        ))
+        
+        cursorY = spreadY + desiredHeight + 4
+        
+        if let caption = asset.caption {
+            let captionText = numberedCaption(caption, number: figureCounter)
+            let captionRect = Rect(x: 0, y: cursorY, width: rightWidth, height: 28)
+            currentPage.frames.append(PageFrame(
+                kind: .caption,
+                rect: captionRect,
+                styleId: StyleID.caption.rawValue,
+                content: .text(captionText)
+            ))
+            cursorY += 34
+        } else {
+            issues.append(
+                LayoutIssue(
+                    severity: .warning,
+                    message: "图片 \(asset.fileName) 缺少图注",
+                    category: .assets,
+                    pageNumber: currentPage.number
+                )
+            )
+        }
+        
+        if let effectiveDPI = effectiveDPI(asset: asset, widthPoints: totalWidth), effectiveDPI < 220 {
+            issues.append(
+                LayoutIssue(
+                    severity: .warning,
+                    message: "图片 \(asset.fileName) 预计印刷分辨率低于 220 DPI",
+                    category: .assets,
+                    pageNumber: currentPage.number
+                )
+            )
+        }
+        
+        snapToBaseline()
+    }
+
     private func imageWidth(for asset: Asset) -> Double {
         shouldSpanColumns(asset) ? contentWidth : columnWidth
     }
@@ -412,13 +503,14 @@ private struct LayoutContext {
             advanceToNextPage()
         }
 
-        let bottomLimit = project.pageSetup.pageSize.height - project.pageSetup.margins.bottom
+        let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
+        let bottomLimit = project.pageSetup.pageSize.height - margins.bottom
         if cursorY + requiredHeight > bottomLimit {
             advanceToNextPage()
         }
 
         currentColumn = 0
-        cursorX = project.pageSetup.margins.left
+        cursorX = pageLeftMargin(for: currentAbsolutePageNumber)
     }
 
     private func imageHeight(for asset: Asset, width: Double) -> Double {
@@ -443,6 +535,9 @@ private struct LayoutContext {
         case .decorative:
             roleMultiplier = 0.65
             maximumHeight = 120
+        case .spread:
+            roleMultiplier = 0.90
+            maximumHeight = 320
         }
 
         return max(86, min(naturalHeight * roleMultiplier, maximumHeight))
@@ -471,14 +566,16 @@ private struct LayoutContext {
     }
 
     private mutating func advanceIfNeeded(_ requiredHeight: Double) {
-        let bottomLimit = project.pageSetup.pageSize.height - project.pageSetup.margins.bottom
+        let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
+        let bottomLimit = project.pageSetup.pageSize.height - margins.bottom
         guard cursorY + requiredHeight > bottomLimit else { return }
 
         advanceToNextColumnOrPage()
     }
 
     private mutating func advanceToNextColumnOrPage() {
-        if currentColumn + 1 < project.pageSetup.columns {
+        let columns = project.resolvedColumns(for: currentAbsolutePageNumber)
+        if currentColumn + 1 < columns {
             currentColumn += 1
             let actualPageNumber = currentPage.number + 2
             cursorX = pageLeftMargin(for: actualPageNumber) + Double(currentColumn) * (columnWidth + project.pageSetup.gutter)
@@ -493,9 +590,11 @@ private struct LayoutContext {
         let newPageNumber = pages.count + 1
         currentPage = LaidOutPage(number: newPageNumber)
         currentColumn = 0
-        cursorX = pageLeftMargin(for: newPageNumber + 2)
-        cursorY = project.pageSetup.margins.top
-        currentColumnTopY = project.pageSetup.margins.top
+        let absPageNum = newPageNumber + 2
+        let margins = project.resolvedMargins(for: absPageNum)
+        cursorX = pageLeftMargin(for: absPageNum)
+        cursorY = margins.top
+        currentColumnTopY = margins.top
         addRunningHeader(project.metadata.title)
         
         applyPlanIfPresent()
@@ -536,12 +635,8 @@ private struct LayoutContext {
     }
 
     private func estimatedTextHeight(text: String, style: ParagraphStyle, width: Double) -> Double {
-        let attributedString = CFAttributedStringCreate(
-            nil,
-            text as CFString,
-            textAttributes(style: style)
-        )
-        let framesetter = CTFramesetterCreateWithAttributedString(attributedString!)
+        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style)
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let constraint = CGSize(width: width, height: .greatestFiniteMagnitude)
         let size = CTFramesetterSuggestFrameSizeWithConstraints(
             framesetter,
@@ -553,54 +648,12 @@ private struct LayoutContext {
         return max(ceil(size.height), style.lineHeight)
     }
 
-    private func textAttributes(style: ParagraphStyle) -> CFDictionary {
-        let font = CTFontCreateWithName(style.fontName as CFString, style.fontSize, nil)
-        var minimumLineHeight = CGFloat(style.lineHeight)
-        var maximumLineHeight = CGFloat(style.lineHeight)
-        var firstLineIndent = CGFloat(style.firstLineIndent)
-        var lineBreakMode = CTLineBreakMode.byWordWrapping
 
-        return withUnsafePointer(to: &minimumLineHeight) { minimumLineHeightPointer in
-            withUnsafePointer(to: &maximumLineHeight) { maximumLineHeightPointer in
-                withUnsafePointer(to: &firstLineIndent) { firstLineIndentPointer in
-                    withUnsafePointer(to: &lineBreakMode) { lineBreakModePointer in
-                        let settings = [
-                            CTParagraphStyleSetting(
-                                spec: .minimumLineHeight,
-                                valueSize: MemoryLayout<CGFloat>.size,
-                                value: minimumLineHeightPointer
-                            ),
-                            CTParagraphStyleSetting(
-                                spec: .maximumLineHeight,
-                                valueSize: MemoryLayout<CGFloat>.size,
-                                value: maximumLineHeightPointer
-                            ),
-                            CTParagraphStyleSetting(
-                                spec: .firstLineHeadIndent,
-                                valueSize: MemoryLayout<CGFloat>.size,
-                                value: firstLineIndentPointer
-                            ),
-                            CTParagraphStyleSetting(
-                                spec: .lineBreakMode,
-                                valueSize: MemoryLayout<CTLineBreakMode>.size,
-                                value: lineBreakModePointer
-                            )
-                        ]
-                        let paragraphStyle = CTParagraphStyleCreate(settings, settings.count)
-
-                        return [
-                            kCTFontAttributeName: font,
-                            kCTParagraphStyleAttributeName: paragraphStyle
-                        ] as CFDictionary
-                    }
-                }
-            }
-        }
-    }
 
     private func makeCoverPage(number: Int) -> LaidOutPage {
         let setup = project.pageSetup
-        let contentWidth = setup.pageSize.width - setup.margins.left - setup.margins.right
+        let margins = project.resolvedMargins(for: number)
+        let contentWidth = setup.pageSize.width - margins.left - margins.right
         let leftMargin = pageLeftMargin(for: number)
         var frames: [PageFrame] = [
             PageFrame(
@@ -647,7 +700,8 @@ private struct LayoutContext {
 
     private func makeContentsPage(number: Int, entries: [TableOfContentsEntry]) -> LaidOutPage {
         let setup = project.pageSetup
-        let contentWidth = setup.pageSize.width - setup.margins.left - setup.margins.right
+        let margins = project.resolvedMargins(for: number)
+        let contentWidth = setup.pageSize.width - margins.left - margins.right
         let leftMargin = pageLeftMargin(for: number)
         let body = entries.isEmpty
             ? "暂无章节"
@@ -661,13 +715,13 @@ private struct LayoutContext {
             frames: [
                 PageFrame(
                     kind: .text,
-                    rect: Rect(x: leftMargin, y: setup.margins.top, width: contentWidth, height: 42),
+                    rect: Rect(x: leftMargin, y: margins.top, width: contentWidth, height: 42),
                     styleId: StyleID.heading1.rawValue,
                     content: .text("目录")
                 ),
                 PageFrame(
                     kind: .text,
-                    rect: Rect(x: leftMargin, y: setup.margins.top + 72, width: contentWidth, height: 420),
+                    rect: Rect(x: leftMargin, y: margins.top + 72, width: contentWidth, height: 420),
                     styleId: StyleID.body.rawValue,
                     content: .text(body)
                 )
@@ -692,25 +746,33 @@ private struct LayoutContext {
         )
     }
 
+    private var currentAbsolutePageNumber: Int {
+        currentPage.number + 2
+    }
+
     private var contentWidth: Double {
         let setup = project.pageSetup
-        return setup.pageSize.width - setup.margins.left - setup.margins.right
+        let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
+        return setup.pageSize.width - margins.left - margins.right
     }
 
     private var columnWidth: Double {
         let setup = project.pageSetup
-        let totalGutter = Double(max(setup.columns - 1, 0)) * setup.gutter
-        return (contentWidth - totalGutter) / Double(max(setup.columns, 1))
+        let columns = project.resolvedColumns(for: currentAbsolutePageNumber)
+        let totalGutter = Double(max(columns - 1, 0)) * setup.gutter
+        return (contentWidth - totalGutter) / Double(max(columns, 1))
     }
 
     private var columnTextHeight: Double {
-        project.pageSetup.pageSize.height
-            - project.pageSetup.margins.top
-            - project.pageSetup.margins.bottom
+        let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
+        return setup.pageSize.height - margins.top - margins.bottom
     }
 
     private var remainingColumnHeight: Double {
-        project.pageSetup.pageSize.height - project.pageSetup.margins.bottom - cursorY
+        let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
+        return setup.pageSize.height - margins.bottom - cursorY
     }
 
     mutating func applyPlanIfPresent() {
@@ -770,7 +832,9 @@ private struct LayoutContext {
             currentPage.frames.append(PageFrame(id: block.id, kind: kind, rect: rect, styleId: styleId, content: content))
         }
         
-        advanceToNextPage()
+        if !plan.blocks.isEmpty {
+            advanceToNextPage()
+        }
     }
 
     private func findParagraph(id: UUID) -> Paragraph? {
@@ -819,18 +883,20 @@ private struct LayoutContext {
 
     private func pageLeftMargin(for pageNumber: Int) -> Double {
         let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: pageNumber)
         if setup.facingPages {
-            return pageNumber % 2 == 1 ? setup.margins.left : setup.margins.right
+            return pageNumber % 2 == 1 ? margins.left : margins.right
         }
-        return setup.margins.left
+        return margins.left
     }
 
     private func pageRightMargin(for pageNumber: Int) -> Double {
         let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: pageNumber)
         if setup.facingPages {
-            return pageNumber % 2 == 1 ? setup.margins.right : setup.margins.left
+            return pageNumber % 2 == 1 ? margins.right : margins.left
         }
-        return setup.margins.right
+        return margins.right
     }
 }
 

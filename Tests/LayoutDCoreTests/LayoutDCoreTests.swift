@@ -1059,7 +1059,7 @@ final class LayoutDCoreTests: XCTestCase {
             
             let ref: ContentReference
             switch frame.content {
-            case .asset(let assetId):
+            case .asset(let assetId), .spreadAsset(let assetId, _):
                 ref = .asset(assetId)
             case .text(let text):
                 var foundId: UUID?
@@ -1095,6 +1095,133 @@ final class LayoutDCoreTests: XCTestCase {
         }
         
         return LayoutPlan(target: .page(pageNum), strategy: .balanced, blocks: blocks, notes: ["手动自定义版式页"])
+    }
+
+    func testChinesePunctuationCompression() {
+        let text = "测），试"
+        let attrString = NSMutableAttributedString(string: text)
+        ChineseTypesetting.applyPunctuationCompression(to: attrString, fontSize: 16.0)
+
+        // Index 1 is the closing parenthesis '）'.
+        let attrs = attrString.attributes(at: 1, effectiveRange: nil)
+        let kern = attrs[NSAttributedString.Key(kCTKernAttributeName as String)] as? Double
+        XCTAssertNotNil(kern)
+        XCTAssertEqual(kern!, -8.0)
+    }
+
+    func testSpreadImagePlacement() {
+        let setup = PageSetup(
+            pageSize: PageSize(width: 200, height: 300, label: "test"),
+            margins: PageMargins(top: 20, right: 20, bottom: 20, left: 20),
+            columns: 1,
+            gutter: 0,
+            baselineGrid: 10,
+            facingPages: true
+        )
+        let assetId = UUID()
+        let asset = Asset(
+            id: assetId,
+            fileName: "spread.png",
+            sourcePath: nil,
+            role: .spread,
+            caption: "跨页大图图注",
+            pixelWidth: 800,
+            pixelHeight: 400
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "跨页测试", author: "layoutD"),
+            pageSetup: setup,
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "正文",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: "正文第一段，先占一部分空间。这是为了测试跨页大图是否能自动翻页到偶数页开始排版。", styleId: StyleID.body.rawValue),
+                                Paragraph(kind: .figure(assetId: assetId), text: "", styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ],
+            assets: [asset]
+        )
+
+        let document = LayoutEngine().layout(project: project)
+        let pages = document.pages
+        XCTAssertTrue(pages.count >= 2)
+
+        var foundLeft = false
+        var foundRight = false
+        var leftPageNum = 0
+        var rightPageNum = 0
+
+        for page in pages {
+            for frame in page.frames {
+                if case .spreadAsset(let id, let isLeft) = frame.content, id == assetId {
+                    if isLeft {
+                        foundLeft = true
+                        leftPageNum = page.number
+                    } else {
+                        foundRight = true
+                        rightPageNum = page.number
+                    }
+                }
+            }
+        }
+
+        XCTAssertTrue(foundLeft, "Should place left half of spread asset")
+        XCTAssertTrue(foundRight, "Should place right half of spread asset")
+        XCTAssertEqual(rightPageNum, leftPageNum + 1, "Left and right halves must be on consecutive pages")
+        XCTAssertEqual((leftPageNum + 2) % 2, 0, "Left page of the spread must be an even page number")
+    }
+
+    func testLayoutPlanOverridesApplyDynamically() {
+        let marginOverride = PageMargins(top: 80, right: 90, bottom: 100, left: 110)
+        let plan = LayoutPlan(
+            target: .page(3),
+            strategy: .textLed,
+            blocks: [],
+            marginOverride: marginOverride,
+            columnsOverride: 1,
+            showHeadersFooters: false
+        )
+        
+        var project = BookProject.sample
+        project.sections = [
+            BookSection(
+                title: "第一章",
+                stories: [
+                    Story(
+                        title: "故事",
+                        paragraphs: [
+                            Paragraph(kind: .body, text: "这是一段用来测试自定义页边距和分栏的测试文字。", styleId: StyleID.body.rawValue)
+                        ]
+                    )
+                ]
+            )
+        ]
+        project.safeAppliedLayoutPlans = [3: plan]
+        
+        let document = LayoutEngine().layout(project: project)
+        
+        XCTAssertGreaterThanOrEqual(document.pages.count, 3)
+        
+        let page3 = document.pages[2]
+        XCTAssertEqual(page3.number, 3)
+        
+        let runningHeaders = page3.frames.filter { frame in
+            frame.styleId == StyleID.caption.rawValue && frame.rect.y == 24
+        }
+        XCTAssertTrue(runningHeaders.isEmpty, "Page 3 should not contain a running header when showHeadersFooters is false")
+        
+        let textFrames = page3.frames.filter { $0.styleId == StyleID.body.rawValue }
+        XCTAssertEqual(textFrames.count, 1)
+        
+        let textFrame = textFrames[0]
+        XCTAssertEqual(textFrame.rect.x, 110.0, accuracy: 0.01)
+        XCTAssertEqual(textFrame.rect.width, 324.41, accuracy: 0.01)
     }
 }
 

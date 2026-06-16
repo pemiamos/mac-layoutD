@@ -268,6 +268,8 @@ struct SidebarView: View {
             return "rectangle.split.2x1.fill"
         case .decorative:
             return "sparkles"
+        case .spread:
+            return "photo.on.rectangle"
         }
     }
 

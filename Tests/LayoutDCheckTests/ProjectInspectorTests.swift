@@ -378,7 +378,7 @@ final class ProjectInspectorTests: XCTestCase {
         XCTAssertEqual(report.assetSummary.lowResolution, 1)
         XCTAssertEqual(report.assetSummary.unknownSize, 1)
         XCTAssertEqual(report.layoutSummary?.totalFrames, 0)
-        XCTAssertEqual(report.categoryCounts[PreflightIssueCategory.metadata.rawValue], 2)
+        XCTAssertEqual(report.categoryCounts[PreflightIssueCategory.metadata.rawValue], 3)
         XCTAssertEqual(report.categoryCounts[PreflightIssueCategory.assets.rawValue], 5)
         XCTAssertTrue(report.summaryLines.contains("Pages: 1"))
         XCTAssertTrue(report.summaryLines.contains("Frames: 0"))
@@ -714,6 +714,109 @@ final class ProjectInspectorTests: XCTestCase {
         XCTAssertFalse(report.isExportReady)
         XCTAssertTrue(report.issues.contains { $0.message == "文档存在重复页码：3" })
         XCTAssertTrue(report.issues.contains { $0.message.contains("文档页码不连续") })
+    }
+
+    func testPreflightAutoFixerAppliesNewAndTargetedFixes() {
+        let asset1 = Asset(
+            id: UUID(),
+            fileName: "low_dpi.png",
+            role: .hero,
+            pixelWidth: 20,
+            pixelHeight: 20,
+            dpi: 72
+        )
+        let asset2 = Asset(
+            id: UUID(),
+            fileName: "normal_dpi.png",
+            role: .hero,
+            pixelWidth: 2000,
+            pixelHeight: 2000,
+            dpi: 300
+        )
+        
+        let frameId1 = UUID()
+        let frameId2 = UUID()
+        let plan = LayoutPlan(
+            target: .page(3),
+            strategy: .balanced,
+            blocks: [
+                LayoutPlanBlock(
+                    id: frameId1,
+                    kind: .text,
+                    role: "body",
+                    frame: Rect(x: -0.1, y: 1.2, width: 0.5, height: 0.5), // out of bounds
+                    contentReference: .generated("") // empty
+                ),
+                LayoutPlanBlock(
+                    id: frameId2,
+                    kind: .text,
+                    role: "body",
+                    frame: Rect(x: 0.1, y: 0.1, width: 0.5, height: 0.5), // inside bounds
+                    contentReference: .generated("正文")
+                )
+            ]
+        )
+        
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "新修复测试", subtitle: "", author: ""),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: "正文", styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ],
+            assets: [asset1, asset2],
+            appliedLayoutPlans: [3: plan]
+        )
+        
+        // 1. Inspect issues
+        let inspector = ProjectInspector()
+        let document = LaidOutDocument(
+            projectId: project.id,
+            pages: [
+                LaidOutPage(number: 3, frames: [
+                    PageFrame(id: frameId1, kind: .text, rect: Rect(x: -10, y: 300, width: 100, height: 100), content: .text("")),
+                    PageFrame(id: frameId2, kind: .text, rect: Rect(x: 20, y: 20, width: 100, height: 100), content: .text("正文"))
+                ])
+            ]
+        )
+        let report = inspector.preflight(project: project, document: document)
+        let issues = report.issues
+        
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .fillMissingAuthor })
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .fillMissingSubtitle })
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .downgradeLowDPIAssetRoles })
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .removeEmptyTextFrames })
+        XCTAssertTrue(issues.contains { $0.autoFixKind == .constrainOutOfBoundsFrames })
+        
+        // 2. Test targeted fix: author only
+        let fixer = PreflightAutoFixer()
+        let resultAuthor = fixer.applyFixes([.fillMissingAuthor], to: project)
+        XCTAssertFalse(resultAuthor.project.metadata.author.isEmpty)
+        XCTAssertEqual(resultAuthor.project.metadata.subtitle, "") // Subtitle remains unchanged
+        
+        // 3. Test targeted fix for asset1 low DPI downgrade
+        let resultDPI = fixer.applyFixes([.downgradeLowDPIAssetRoles], to: project, targetingAssetId: asset1.id)
+        XCTAssertEqual(resultDPI.project.assets.first(where: { $0.id == asset1.id })?.role, .diagram) // hero -> diagram
+        XCTAssertEqual(resultDPI.project.assets.first(where: { $0.id == asset2.id })?.role, .hero) // unaffected
+        
+        // 4. Test targeted fix for out of bounds frame1 snap
+        let resultConstrain = fixer.applyFixes([.constrainOutOfBoundsFrames], to: project, targetingFrameId: frameId1)
+        let constrainedBlock = resultConstrain.project.appliedLayoutPlans?[3]?.blocks.first { $0.id == frameId1 }
+        XCTAssertEqual(constrainedBlock?.frame.x, 0.0)
+        XCTAssertEqual(constrainedBlock?.frame.y, 0.5) // constrained y from 1.2 to 1.0 - 0.5 = 0.5
+        
+        // 5. Test targeted fix for empty text frame1 removal
+        let resultRemove = fixer.applyFixes([.removeEmptyTextFrames], to: project, targetingFrameId: frameId1)
+        XCTAssertEqual(resultRemove.project.appliedLayoutPlans?[3]?.blocks.count, 1)
+        XCTAssertEqual(resultRemove.project.appliedLayoutPlans?[3]?.blocks.first?.id, frameId2)
     }
 
     private func contentsValidationProject() -> BookProject {

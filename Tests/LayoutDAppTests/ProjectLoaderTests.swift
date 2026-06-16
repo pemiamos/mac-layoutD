@@ -73,6 +73,51 @@ final class ProjectLoaderTests: XCTestCase {
         }
     }
 
+    func testChapterPackageLoadsExtraConfigs() throws {
+        let packageURL = try makeTemporaryPackage()
+        defer { try? FileManager.default.removeItem(at: packageURL) }
+
+        // Write manuscript
+        try """
+        # 第一章
+        内容。
+        """.write(to: packageURL.appendingPathComponent("manuscript.md"), atomically: true, encoding: .utf8)
+
+        // Write metadata.json
+        let metadata = ProjectMetadata(
+            title: "配置加载标题",
+            subtitle: "配置副标题",
+            author: "测试作者",
+            publisher: "测试出版社",
+            isbn: "9787115546081",
+            series: "丛书名",
+            keywords: ["关键字1", "关键字2"]
+        )
+        let metadataData = try JSONEncoder().encode(metadata)
+        try metadataData.write(to: packageURL.appendingPathComponent("metadata.json"))
+
+        // Write styles.json
+        let styles = StyleLibrary.defaultChineseScience
+        let stylesData = try JSONEncoder().encode(styles)
+        try stylesData.write(to: packageURL.appendingPathComponent("styles.json"))
+
+        // Write templates.json
+        let templates = LayoutTemplateLibrary(templates: [
+            SavedLayoutTemplate(name: "测试包模板", plan: LayoutPlan(target: .page(3), strategy: .balanced, blocks: []))
+        ])
+        let templatesData = try LayoutTemplateLibrary.encode(templates)
+        try templatesData.write(to: packageURL.appendingPathComponent("templates.json"))
+
+        let project = try ProjectLoader().loadProject(inputURL: packageURL)
+
+        XCTAssertEqual(project.metadata.title, "配置加载标题")
+        XCTAssertEqual(project.metadata.subtitle, "配置副标题")
+        XCTAssertEqual(project.metadata.author, "测试作者")
+        XCTAssertEqual(project.styles, styles)
+        XCTAssertEqual(project.safeSavedLayoutTemplates.count, 1)
+        XCTAssertEqual(project.safeSavedLayoutTemplates[0].name, "测试包模板")
+    }
+
     private func makeTemporaryPackage() throws -> URL {
         let packageURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("layoutd-project-loader-\(UUID().uuidString)")

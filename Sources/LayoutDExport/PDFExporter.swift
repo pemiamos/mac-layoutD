@@ -129,6 +129,8 @@ public struct PDFExporter {
         context.saveGState()
         
         let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: pageNumber)
+        let columns = project.resolvedColumns(for: pageNumber)
         let leftMargin = CGFloat(pageLeftMargin(for: pageNumber, project: project))
         let rightMargin = CGFloat(pageRightMargin(for: pageNumber, project: project))
         let contentWidth = pageSize.width - leftMargin - rightMargin
@@ -139,21 +141,21 @@ public struct PDFExporter {
         
         let contentRect = CGRect(
             x: leftMargin,
-            y: CGFloat(setup.margins.bottom),
+            y: CGFloat(margins.bottom),
             width: contentWidth,
-            height: pageSize.height - CGFloat(setup.margins.top) - CGFloat(setup.margins.bottom)
+            height: pageSize.height - CGFloat(margins.top) - CGFloat(margins.bottom)
         )
         context.stroke(contentRect)
         
         // Column Guides
-        if setup.columns > 1 {
+        if columns > 1 {
             context.setStrokeColor(NSColor(calibratedRed: 0.2, green: 0.4, blue: 0.8, alpha: 0.3).cgColor)
-            let colWidth = (Double(contentWidth) - Double(setup.columns - 1) * setup.gutter) / Double(setup.columns)
-            for i in 0..<setup.columns {
+            let colWidth = (Double(contentWidth) - Double(columns - 1) * setup.gutter) / Double(columns)
+            for i in 0..<columns {
                 let colX = Double(leftMargin) + Double(i) * (colWidth + setup.gutter)
                 let colRect = CGRect(
                     x: CGFloat(colX),
-                    y: CGFloat(setup.margins.bottom),
+                    y: CGFloat(margins.bottom),
                     width: CGFloat(colWidth),
                     height: contentRect.height
                 )
@@ -166,8 +168,8 @@ public struct PDFExporter {
         context.setLineWidth(0.5)
         
         let grid = CGFloat(setup.baselineGrid)
-        var y: CGFloat = CGFloat(setup.margins.top)
-        while y <= pageSize.height - CGFloat(setup.margins.bottom) {
+        var y: CGFloat = CGFloat(margins.top)
+        while y <= pageSize.height - CGFloat(margins.bottom) {
             let pdfY = pageSize.height - y
             context.move(to: CGPoint(x: leftMargin, y: pdfY))
             context.addLine(to: CGPoint(x: pageSize.width - rightMargin, y: pdfY))
@@ -180,18 +182,20 @@ public struct PDFExporter {
 
     private func pageLeftMargin(for pageNumber: Int, project: BookProject) -> Double {
         let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: pageNumber)
         if setup.facingPages {
-            return pageNumber % 2 == 1 ? setup.margins.left : setup.margins.right
+            return pageNumber % 2 == 1 ? margins.left : margins.right
         }
-        return setup.margins.left
+        return margins.left
     }
 
     private func pageRightMargin(for pageNumber: Int, project: BookProject) -> Double {
         let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: pageNumber)
         if setup.facingPages {
-            return pageNumber % 2 == 1 ? setup.margins.right : setup.margins.left
+            return pageNumber % 2 == 1 ? margins.right : margins.left
         }
-        return setup.margins.right
+        return margins.right
     }
 
     private func draw(page: LaidOutPage, project: BookProject, in context: CGContext) {
@@ -232,7 +236,7 @@ public struct PDFExporter {
                 textRect = rect
             }
             drawText(text, styleId: frame.styleId, project: project, rect: textRect, context: context)
-        case .asset:
+        case .asset, .spreadAsset:
             drawImagePlaceholder(frame: frame, project: project, in: context, rect: rect)
         case .empty:
             break
@@ -255,55 +259,17 @@ public struct PDFExporter {
 
     private func drawText(_ text: String, styleId: String?, project: BookProject, rect: CGRect, context: CGContext) {
         let style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
-        let font = CTFontCreateWithName(style.fontName as CFString, style.fontSize, nil)
-        var minimumLineHeight = CGFloat(style.lineHeight)
-        var maximumLineHeight = CGFloat(style.lineHeight)
-        var firstLineIndent = CGFloat(style.firstLineIndent)
-        var lineBreakMode = CTLineBreakMode.byWordWrapping
-        let paragraphStyle = withUnsafePointer(to: &minimumLineHeight) { minimumLineHeightPointer in
-            withUnsafePointer(to: &maximumLineHeight) { maximumLineHeightPointer in
-                withUnsafePointer(to: &firstLineIndent) { firstLineIndentPointer in
-                    withUnsafePointer(to: &lineBreakMode) { lineBreakModePointer in
-                        let settings = [
-                            CTParagraphStyleSetting(
-                                spec: .minimumLineHeight,
-                                valueSize: MemoryLayout<CGFloat>.size,
-                                value: minimumLineHeightPointer
-                            ),
-                            CTParagraphStyleSetting(
-                                spec: .maximumLineHeight,
-                                valueSize: MemoryLayout<CGFloat>.size,
-                                value: maximumLineHeightPointer
-                            ),
-                            CTParagraphStyleSetting(
-                                spec: .firstLineHeadIndent,
-                                valueSize: MemoryLayout<CGFloat>.size,
-                                value: firstLineIndentPointer
-                            ),
-                            CTParagraphStyleSetting(
-                                spec: .lineBreakMode,
-                                valueSize: MemoryLayout<CTLineBreakMode>.size,
-                                value: lineBreakModePointer
-                            )
-                        ]
-                        return CTParagraphStyleCreate(settings, settings.count)
-                    }
-                }
-            }
-        }
-
-        let attributes = [
-            kCTFontAttributeName: font,
-            kCTForegroundColorAttributeName: NSColor.black.cgColor,
-            kCTParagraphStyleAttributeName: paragraphStyle
-        ] as CFDictionary
-        let attributedString = CFAttributedStringCreate(nil, text as CFString, attributes)!
+        let attributedString = ChineseTypesetting.makeAttributedString(
+            text: text,
+            style: style,
+            foregroundColor: NSColor.black.cgColor
+        )
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
         path.addRect(rect)
         let frame = CTFramesetterCreateFrame(
             framesetter,
-            CFRange(location: 0, length: CFAttributedStringGetLength(attributedString)),
+            CFRange(location: 0, length: attributedString.length),
             path,
             nil
         )
@@ -314,11 +280,24 @@ public struct PDFExporter {
     }
 
     private func drawImagePlaceholder(frame: PageFrame, project: BookProject, in context: CGContext, rect: CGRect) {
-        if case .asset(let id) = frame.content,
+        var assetId: UUID? = nil
+        var isLeftHalf: Bool? = nil
+
+        switch frame.content {
+        case .asset(let id):
+            assetId = id
+        case .spreadAsset(let id, let isLeft):
+            assetId = id
+            isLeftHalf = isLeft
+        default:
+            break
+        }
+
+        if let id = assetId,
            let asset = project.assets.first(where: { $0.id == id }),
            let sourcePath = asset.sourcePath,
            let image = NSImage(contentsOfFile: sourcePath) {
-            drawImage(image, in: rect, context: context)
+            drawImage(image, isLeftHalf: isLeftHalf, in: rect, project: project, context: context)
             return
         }
 
@@ -328,8 +307,7 @@ public struct PDFExporter {
         context.stroke(rect)
 
         let label: String
-        if case .asset(let id) = frame.content,
-           let asset = project.assets.first(where: { $0.id == id }) {
+        if let id = assetId, let asset = project.assets.first(where: { $0.id == id }) {
             label = asset.fileName
         } else {
             label = "Image"
@@ -342,28 +320,52 @@ public struct PDFExporter {
         label.draw(in: rect.insetBy(dx: 8, dy: 8), withAttributes: attributes)
     }
 
-    private func drawImage(_ image: NSImage, in rect: CGRect, context: CGContext) {
+    private func drawImage(_ image: NSImage, isLeftHalf: Bool?, in rect: CGRect, project: BookProject, context: CGContext) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
         }
 
-        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
-        let imageAspect = imageSize.width / imageSize.height
-        let rectAspect = rect.width / rect.height
-        let drawRect: CGRect
-        if imageAspect > rectAspect {
-            let height = rect.width / imageAspect
-            drawRect = CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height)
+        context.saveGState()
+        context.clip(to: rect)
+
+        if let isLeft = isLeftHalf {
+            let pageSize = project.pageSetup.pageSize
+            let leftMargin = pageLeftMargin(for: 2, project: project)
+            let rightMargin = pageRightMargin(for: 3, project: project)
+            let leftWidth = pageSize.width - leftMargin
+            let rightWidth = pageSize.width - rightMargin
+            let totalWidth = leftWidth + rightWidth
+
+            let drawRect: CGRect
+            if isLeft {
+                drawRect = CGRect(x: rect.minX, y: rect.minY, width: CGFloat(totalWidth), height: rect.height)
+            } else {
+                drawRect = CGRect(x: rect.minX - CGFloat(leftWidth), y: rect.minY, width: CGFloat(totalWidth), height: rect.height)
+            }
+            context.draw(cgImage, in: drawRect)
         } else {
-            let width = rect.height * imageAspect
-            drawRect = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: rect.height)
+            let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+            let imageAspect = imageSize.width / imageSize.height
+            let rectAspect = rect.width / rect.height
+            let drawRect: CGRect
+            if imageAspect > rectAspect {
+                let height = rect.width / imageAspect
+                drawRect = CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height)
+            } else {
+                let width = rect.height * imageAspect
+                drawRect = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: rect.height)
+            }
+            context.draw(cgImage, in: drawRect)
         }
 
-        context.draw(cgImage, in: drawRect)
+        context.restoreGState()
     }
 
     private func drawPageNumber(_ number: Int, project: BookProject, in context: CGContext) {
         guard number > 1 else {
+            return
+        }
+        guard project.resolvedShowHeadersFooters(for: number) else {
             return
         }
 

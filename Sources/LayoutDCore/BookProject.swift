@@ -231,3 +231,33 @@ public enum ParagraphKind: Codable, Equatable, Sendable {
     case listItem
     case quote
 }
+
+public extension BookProject {
+    func resolvedMargins(for pageNumber: Int) -> PageMargins {
+        if let plans = appliedLayoutPlans,
+           let plan = plans[pageNumber],
+           let marginOverride = plan.marginOverride {
+            return marginOverride
+        }
+        return pageSetup.margins
+    }
+
+    func resolvedColumns(for pageNumber: Int) -> Int {
+        if let plans = appliedLayoutPlans,
+           let plan = plans[pageNumber],
+           let columnsOverride = plan.columnsOverride {
+            return columnsOverride
+        }
+        return pageSetup.columns
+    }
+
+    func resolvedShowHeadersFooters(for pageNumber: Int) -> Bool {
+        if let plans = appliedLayoutPlans,
+           let plan = plans[pageNumber],
+           let showOverride = plan.showHeadersFooters {
+            return showOverride
+        }
+        return true
+    }
+}
+

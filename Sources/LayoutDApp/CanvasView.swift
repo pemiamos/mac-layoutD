@@ -122,21 +122,22 @@ final class CanvasView: NSView {
 
     private func drawGuides(project: BookProject, pageRect: CGRect, pageNumber: Int) {
         let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: pageNumber)
         let leftMargin: CGFloat
         let rightMargin: CGFloat
         if setup.facingPages {
-            leftMargin = CGFloat(pageNumber % 2 == 1 ? setup.margins.left : setup.margins.right)
-            rightMargin = CGFloat(pageNumber % 2 == 1 ? setup.margins.right : setup.margins.left)
+            leftMargin = CGFloat(pageNumber % 2 == 1 ? margins.left : margins.right)
+            rightMargin = CGFloat(pageNumber % 2 == 1 ? margins.right : margins.left)
         } else {
-            leftMargin = CGFloat(setup.margins.left)
-            rightMargin = CGFloat(setup.margins.right)
+            leftMargin = CGFloat(margins.left)
+            rightMargin = CGFloat(margins.right)
         }
 
         let marginRect = CGRect(
             x: pageRect.minX + leftMargin * zoomScale,
-            y: pageRect.minY + CGFloat(setup.margins.top) * zoomScale,
+            y: pageRect.minY + CGFloat(margins.top) * zoomScale,
             width: CGFloat(setup.pageSize.width - Double(leftMargin + rightMargin)) * zoomScale,
-            height: CGFloat(setup.pageSize.height - setup.margins.top - setup.margins.bottom) * zoomScale
+            height: CGFloat(setup.pageSize.height - margins.top - margins.bottom) * zoomScale
         )
         NSColor(calibratedRed: 0.20, green: 0.48, blue: 0.47, alpha: 0.25).setStroke()
         NSBezierPath(rect: marginRect).stroke()
@@ -154,7 +155,9 @@ final class CanvasView: NSView {
         case .text(let text):
             drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind)
         case .asset(let assetId):
-            drawAssetPlaceholder(assetId: assetId, project: project, rect: rect)
+            drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect)
+        case .spreadAsset(let assetId, let isLeftHalf):
+            drawAssetPlaceholder(assetId: assetId, isLeftHalf: isLeftHalf, project: project, rect: rect)
         case .empty:
             break
         }
@@ -197,13 +200,15 @@ final class CanvasView: NSView {
             .foregroundColor: NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1),
             .paragraphStyle: paragraph
         ]
-        text.draw(in: rect.insetBy(dx: 4, dy: 2), withAttributes: attributes)
+        let attrString = NSMutableAttributedString(string: text, attributes: attributes)
+        ChineseTypesetting.applyPunctuationCompression(to: attrString, fontSize: Double(font.pointSize))
+        attrString.draw(in: rect.insetBy(dx: 4, dy: 2))
     }
 
-    private func drawAssetPlaceholder(assetId: UUID, project: BookProject, rect: CGRect) {
+    private func drawAssetPlaceholder(assetId: UUID, isLeftHalf: Bool?, project: BookProject, rect: CGRect) {
         let asset = project.assets.first { $0.id == assetId }
         if let image = loadImage(asset: asset) {
-            drawImage(image, in: rect)
+            drawImage(image, isLeftHalf: isLeftHalf, rect: rect, project: project)
             drawImageLabel(asset?.fileName ?? "Image", in: rect)
             return
         }
@@ -224,7 +229,7 @@ final class CanvasView: NSView {
         return NSImage(contentsOfFile: sourcePath)
     }
 
-    private func drawImage(_ image: NSImage, in rect: CGRect) {
+    private func drawImage(_ image: NSImage, isLeftHalf: Bool?, rect: CGRect, project: BookProject) {
         NSColor(calibratedWhite: 0.96, alpha: 1).setFill()
         rect.fill()
 
@@ -233,20 +238,60 @@ final class CanvasView: NSView {
             return
         }
 
-        let imageAspect = imageSize.width / imageSize.height
-        let rectAspect = rect.width / rect.height
-        let drawRect: CGRect
-        if imageAspect > rectAspect {
-            let height = rect.width / imageAspect
-            drawRect = CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height)
+        NSGraphicsContext.current?.saveGraphicsState()
+        let path = NSBezierPath(rect: rect)
+        path.addClip()
+
+        if let isLeft = isLeftHalf {
+            let pageSize = project.pageSetup.pageSize
+            let leftMargin = pageLeftMargin(for: 2, project: project)
+            let rightMargin = pageRightMargin(for: 3, project: project)
+            let leftWidth = CGFloat(pageSize.width - leftMargin) * zoomScale
+            let rightWidth = CGFloat(pageSize.width - rightMargin) * zoomScale
+            let totalWidth = leftWidth + rightWidth
+
+            let drawRect: CGRect
+            if isLeft {
+                drawRect = CGRect(x: rect.minX, y: rect.minY, width: totalWidth, height: rect.height)
+            } else {
+                drawRect = CGRect(x: rect.minX - leftWidth, y: rect.minY, width: totalWidth, height: rect.height)
+            }
+            image.draw(in: drawRect)
         } else {
-            let width = rect.height * imageAspect
-            drawRect = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: rect.height)
+            let imageAspect = imageSize.width / imageSize.height
+            let rectAspect = rect.width / rect.height
+            let drawRect: CGRect
+            if imageAspect > rectAspect {
+                let height = rect.width / imageAspect
+                drawRect = CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height)
+            } else {
+                let width = rect.height * imageAspect
+                drawRect = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: rect.height)
+            }
+            image.draw(in: drawRect)
         }
 
-        image.draw(in: drawRect)
+        NSGraphicsContext.current?.restoreGraphicsState()
         NSColor(calibratedWhite: 0.62, alpha: 1).setStroke()
         NSBezierPath(rect: rect).stroke()
+    }
+
+    private func pageLeftMargin(for pageNumber: Int, project: BookProject) -> Double {
+        let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: pageNumber)
+        if setup.facingPages {
+            return pageNumber % 2 == 1 ? margins.left : margins.right
+        }
+        return margins.left
+    }
+
+    private func pageRightMargin(for pageNumber: Int, project: BookProject) -> Double {
+        let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: pageNumber)
+        if setup.facingPages {
+            return pageNumber % 2 == 1 ? margins.right : margins.left
+        }
+        return margins.right
     }
 
     private func drawImageLabel(_ label: String, in rect: CGRect) {
@@ -258,16 +303,21 @@ final class CanvasView: NSView {
     }
 
     private func drawPageNumber(_ number: Int, project: BookProject, pageRect: CGRect) {
+        guard project.resolvedShowHeadersFooters(for: number) else {
+            return
+        }
+
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 11),
             .foregroundColor: NSColor.gray
         ]
         let numStr = "\(number)"
         let setup = project.pageSetup
+        let margins = project.resolvedMargins(for: number)
         
         if setup.facingPages {
-            let leftMargin = CGFloat(number % 2 == 1 ? setup.margins.left : setup.margins.right)
-            let rightMargin = CGFloat(number % 2 == 1 ? setup.margins.right : setup.margins.left)
+            let leftMargin = CGFloat(number % 2 == 1 ? margins.left : margins.right)
+            let rightMargin = CGFloat(number % 2 == 1 ? margins.right : margins.left)
             let x: CGFloat
             if number % 2 == 0 {
                 // Left page, bottom left

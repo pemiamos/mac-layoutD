@@ -123,7 +123,7 @@ public struct IssueLocation: Codable, Equatable, Sendable {
                 return nil
             }
             return String(trimmed.prefix(40))
-        case .asset(let assetId):
+        case .asset(let assetId), .spreadAsset(let assetId, _):
             return "asset:\(assetId.uuidString)"
         case .empty:
             return nil

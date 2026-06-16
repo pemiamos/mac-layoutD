@@ -45,6 +45,7 @@ public enum AssetRole: String, Codable, CaseIterable, Sendable {
     case step
     case comparison
     case decorative
+    case spread
 }
 
 public enum AssetUsage: String, Codable, Sendable {

@@ -211,6 +211,7 @@ public struct LayoutDocumentValidator {
                         message: "页面 \(page.number) 存在越界 frame",
                         category: .layout,
                         suggestedFix: "选中该 frame 后调整 x/y/宽高，使其完全落在页面范围内。",
+                        autoFixKind: .constrainOutOfBoundsFrames,
                         pageNumber: page.number,
                         frameId: frame.id
                     )
@@ -225,6 +226,8 @@ public struct LayoutDocumentValidator {
                             severity: .warning,
                             message: "页面 \(page.number) 存在空文本 frame",
                             category: .layout,
+                            suggestedFix: "在排版计划中移除此空文本框，或填入文本内容。",
+                            autoFixKind: .removeEmptyTextFrames,
                             pageNumber: page.number,
                             frameId: frame.id
                         )
@@ -243,7 +246,7 @@ public struct LayoutDocumentValidator {
                     )
                 }
                 issues.append(contentsOf: validateChineseLineBreaks(text, in: frame, page: page, project: project))
-            case .asset(let assetId):
+            case .asset(let assetId), .spreadAsset(let assetId, _):
                 if !assetIds.contains(assetId) {
                     issues.append(
                         LayoutIssue(
@@ -429,7 +432,7 @@ public struct LayoutDocumentValidator {
             switch frame.content {
             case .empty:
                 return false
-            case .text, .asset:
+            case .text, .asset, .spreadAsset:
                 return frame.rect.width > 0 && frame.rect.height > 0
             }
         }
