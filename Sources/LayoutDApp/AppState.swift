@@ -230,6 +230,16 @@ final class AppState: ObservableObject {
         applyLayoutPlan(template.makePlan(target: .page(pageNum)))
     }
 
+    func applyPageLayoutTemplate(_ template: PageLayoutTemplate, toPage pageNum: Int) {
+        let primaryAsset = project.assets.first { $0.role != .decorative }
+        guard let plan = template.makePlan(
+            target: .page(pageNum),
+            projectTitle: project.metadata.title,
+            primaryAsset: primaryAsset
+        ) else { return }
+        applyLayoutPlan(plan)
+    }
+
     func renameSavedLayoutTemplate(id: UUID, name: String) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }

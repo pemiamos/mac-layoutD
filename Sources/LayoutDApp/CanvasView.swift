@@ -92,6 +92,19 @@ final class CanvasView: NSView {
         NSColor(calibratedWhite: 0.72, alpha: 1).setStroke()
         NSBezierPath(rect: pageRect).stroke()
 
+        // Draw bleed boundary
+        let bleedMM = project.pageSetup.bleedMM ?? 3.0
+        let bleedPoints = CGFloat(bleedMM * 72.0 / 25.4)
+        let bleedOffset = bleedPoints * zoomScale
+        let bleedRect = pageRect.insetBy(dx: -bleedOffset, dy: -bleedOffset)
+        
+        let bleedPath = NSBezierPath(rect: bleedRect)
+        bleedPath.lineWidth = 1.0
+        let dashedPattern: [CGFloat] = [4.0, 4.0]
+        bleedPath.setLineDash(dashedPattern, count: dashedPattern.count, phase: 0.0)
+        NSColor.red.setStroke()
+        bleedPath.stroke()
+
         // Draw padlock icon if the page is locked
         if project.safeLockedPages.contains(page.number) {
             let attributes: [NSAttributedString.Key: Any] = [

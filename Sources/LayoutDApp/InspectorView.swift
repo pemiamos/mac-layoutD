@@ -141,6 +141,7 @@ struct InspectorView: View {
     @State private var selectedChapterTemplate: ChapterLayoutTemplate = .scienceChapter
     @State private var selectedChapterTemplateSectionIndex = 0
     @State private var chapterTemplateStartPage = 3
+    @State private var selectedPageTemplate: PageLayoutTemplate = .textLedPage
 
     var body: some View {
         ScrollView {
@@ -224,6 +225,30 @@ struct InspectorView: View {
                                     }
                                     .padding(.vertical, 4)
                                 }
+                            }
+                        }
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("系统页模板")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                            HStack {
+                                Picker("模板", selection: $selectedPageTemplate) {
+                                    ForEach(PageLayoutTemplate.allCases, id: \.self) { template in
+                                        Text(template.displayName).tag(template)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+
+                                Button("应用") {
+                                    state.applyPageLayoutTemplate(selectedPageTemplate, toPage: state.currentPageNumber)
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(state.project.safeLockedPages.contains(state.currentPageNumber))
                             }
                         }
 
