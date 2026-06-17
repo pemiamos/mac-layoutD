@@ -21,10 +21,12 @@ Options:
   --pdf-pages RANGE          Limit PDF export to pages such as "1,3" or "2-5".
   --pdf-crop-marks          Add crop and bleed guide marks to PDF export.
   --pdf-grid-guides         Add margin, column, and baseline guides to PDF export.
+  --pdf-version VERSION     Select PDF/X print version: none, pdfx1a, or pdfx3.
   --export-png DIRECTORY    Export page preview PNG files.
   --png-pages RANGE         Limit PNG export to pages such as "1,3" or "2-5".
   --png-scale VALUE         Set PNG output scale, default 2.0.
   --export-project PATH     Export a structured .layoutd project file.
+  --export-package PATH     Export a packaged ZIP resource bundle (.layoutd-pack).
   --export-templates PATH   Export saved layout templates as a reusable JSON library.
   --import-templates PATH   Import a layout template library before export or validation.
   --apply-chapter-template NAME
@@ -49,6 +51,7 @@ if launchProject.showHelp {
 if launchProject.exportPDFURL != nil
     || launchProject.exportPNGDirectoryURL != nil
     || launchProject.exportProjectURL != nil
+    || launchProject.exportPackageURL != nil
     || launchProject.exportTemplateLibraryURL != nil
     || launchProject.preflightReportURL != nil
     || launchProject.validateOnly {
@@ -93,6 +96,11 @@ if launchProject.exportPDFURL != nil
             print("Exported project: \(exportProjectURL.path)")
         }
 
+        if let exportPackageURL = launchProject.exportPackageURL {
+            try ResourceBundlePackager().package(project: project, to: exportPackageURL)
+            print("Exported project package: \(exportPackageURL.path)")
+        }
+
         if let exportTemplateLibraryURL = launchProject.exportTemplateLibraryURL {
             let library = LayoutTemplateLibrary(project: project)
             let data = try LayoutTemplateLibrary.encode(library)
@@ -117,7 +125,8 @@ if launchProject.exportPDFURL != nil
                 to: exportPDFURL,
                 pageRange: launchProject.exportPDFPageRange,
                 drawCropMarks: launchProject.exportPDFDrawCropMarks,
-                drawGridGuides: launchProject.exportPDFDrawGridGuides
+                drawGridGuides: launchProject.exportPDFDrawGridGuides,
+                pdfxVersion: launchProject.pdfxVersion
             )
             print("Exported PDF: \(exportPDFURL.path)")
         }
@@ -217,6 +226,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         workspaceController?.exportPreflightReport()
     }
 
+    @objc private func exportProjectPackage(_ sender: Any?) {
+        workspaceController?.exportProjectPackage()
+    }
+
     @objc private func importLayoutTemplates(_ sender: Any?) {
         workspaceController?.importLayoutTemplates()
     }
@@ -312,6 +325,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 title: "Export Preflight Report...",
                 action: #selector(exportPreflightReport(_:)),
                 keyEquivalent: "r"
+            )
+        )
+        fileMenu.items.last?.target = self
+        fileMenu.addItem(
+            NSMenuItem(
+                title: "Export Project Package...",
+                action: #selector(exportProjectPackage(_:)),
+                keyEquivalent: "k"
             )
         )
         fileMenu.items.last?.target = self
@@ -595,7 +616,8 @@ final class WorkspaceViewController: NSViewController {
                     to: url,
                     pageRange: settingsState.pageRange.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : settingsState.pageRange,
                     drawCropMarks: settingsState.drawCropMarks,
-                    drawGridGuides: settingsState.drawGridGuides
+                    drawGridGuides: settingsState.drawGridGuides,
+                    pdfxVersion: settingsState.pdfxVersion
                 )
                 self.showExportResult(message: "PDF exported", detail: url.path)
             } catch {
@@ -671,6 +693,34 @@ final class WorkspaceViewController: NSViewController {
                 self.showExportResult(message: "Preflight report exported", detail: url.path)
             } catch {
                 self.showExportResult(message: "Preflight export failed", detail: error.localizedDescription)
+            }
+        }
+    }
+
+    func exportProjectPackage() {
+        let savePanel = NSSavePanel()
+        savePanel.title = "Export Project Package"
+        savePanel.nameFieldStringValue = safeFileName(appState.project.metadata.title) + ".layoutd-pack"
+        savePanel.allowedContentTypes = [
+            UTType(filenameExtension: "layoutd-pack"),
+            UTType.zip
+        ].compactMap { $0 }
+        savePanel.canCreateDirectories = true
+
+        guard let window = view.window else {
+            return
+        }
+
+        savePanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = savePanel.url, let self else {
+                return
+            }
+
+            do {
+                try ResourceBundlePackager().package(project: self.appState.project, to: url)
+                self.showExportResult(message: "Project package exported", detail: url.path)
+            } catch {
+                self.showExportResult(message: "Package export failed", detail: error.localizedDescription)
             }
         }
     }
@@ -768,6 +818,7 @@ class PDFExportSettingsState: ObservableObject {
     @Published var pageRange: String = ""
     @Published var drawCropMarks: Bool = false
     @Published var drawGridGuides: Bool = false
+    @Published var pdfxVersion: PDFXVersion = .none
 }
 
 struct PDFExportSettingsView: View {
@@ -792,6 +843,18 @@ struct PDFExportSettingsView: View {
                     .padding(.leading, 85)
             }
             
+            HStack {
+                Text("印刷标准:")
+                    .frame(width: 80, alignment: .leading)
+                Picker("", selection: $state.pdfxVersion) {
+                    Text("无 (标准 PDF)").tag(PDFXVersion.none)
+                    Text("PDF/X-1a (CMYK 印刷)").tag(PDFXVersion.pdfx1a)
+                    Text("PDF/X-3 (色彩管理)").tag(PDFXVersion.pdfx3)
+                }
+                .pickerStyle(.menu)
+                .frame(width: 200)
+            }
+            
             Toggle("添加印刷裁切线及出血标记", isOn: $state.drawCropMarks)
                 .toggleStyle(.checkbox)
             
@@ -799,7 +862,7 @@ struct PDFExportSettingsView: View {
                 .toggleStyle(.checkbox)
         }
         .padding(.all, 16)
-        .frame(width: 320)
+        .frame(width: 340)
     }
 }
 

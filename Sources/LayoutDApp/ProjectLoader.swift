@@ -2,6 +2,7 @@ import Foundation
 import LayoutDCore
 import LayoutDDesignAI
 import LayoutDImport
+import LayoutDExport
 
 struct LoadedProject {
     var project: BookProject
@@ -23,6 +24,8 @@ struct LoadedProject {
     var chapterLayoutTemplateStartPage: Int
     var showHelp: Bool
     var loadError: String?
+    var exportPackageURL: URL?
+    var pdfxVersion: PDFXVersion
 }
 
 struct ProjectLoader {
@@ -61,7 +64,9 @@ struct ProjectLoader {
                 chapterLayoutTemplateSectionIndex: options.chapterLayoutTemplateSectionIndex,
                 chapterLayoutTemplateStartPage: options.chapterLayoutTemplateStartPage,
                 showHelp: options.showHelp,
-                loadError: loadError
+                loadError: loadError,
+                exportPackageURL: options.exportPackagePath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                pdfxVersion: options.pdfxVersion
             )
         }
 
@@ -94,7 +99,9 @@ struct ProjectLoader {
                 chapterLayoutTemplateSectionIndex: options.chapterLayoutTemplateSectionIndex,
                 chapterLayoutTemplateStartPage: options.chapterLayoutTemplateStartPage,
                 showHelp: options.showHelp,
-                loadError: nil
+                loadError: nil,
+                exportPackageURL: options.exportPackagePath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                pdfxVersion: options.pdfxVersion
             )
         } catch {
             var project = BookProject.sample
@@ -141,7 +148,9 @@ struct ProjectLoader {
                 chapterLayoutTemplateSectionIndex: options.chapterLayoutTemplateSectionIndex,
                 chapterLayoutTemplateStartPage: options.chapterLayoutTemplateStartPage,
                 showHelp: options.showHelp,
-                loadError: error.localizedDescription
+                loadError: error.localizedDescription,
+                exportPackageURL: options.exportPackagePath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                pdfxVersion: options.pdfxVersion
             )
         }
     }
@@ -351,6 +360,8 @@ private struct CommandLineOptions {
     var showHelp = false
     var manuscriptPath: String?
     var assetDirectoryPath: String?
+    var exportPackagePath: String?
+    var pdfxVersion: PDFXVersion = .none
 
     init(arguments: [String]) {
         var positionalArguments: [String] = []
@@ -467,6 +478,25 @@ private struct CommandLineOptions {
 
             if argument == "--preflight-report", index + 1 < arguments.count {
                 preflightReportPath = arguments[index + 1]
+                index += 2
+                continue
+            }
+
+            if argument == "--export-package", index + 1 < arguments.count {
+                exportPackagePath = arguments[index + 1]
+                index += 2
+                continue
+            }
+
+            if argument == "--pdf-version", index + 1 < arguments.count {
+                let val = arguments[index + 1].lowercased()
+                if val == "pdfx1a" || val == "1a" {
+                    pdfxVersion = .pdfx1a
+                } else if val == "pdfx3" || val == "3" {
+                    pdfxVersion = .pdfx3
+                } else {
+                    pdfxVersion = .none
+                }
                 index += 2
                 continue
             }
