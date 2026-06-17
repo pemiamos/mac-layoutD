@@ -39,8 +39,16 @@ public struct PDFExporter {
         let maxPages = document.pages.count
         let pagesToExport = ExportPageRange.parse(pageRange, maxPages: maxPages)
         
+        let bleedMM = project.pageSetup.bleedMM ?? 3.0
+        let bleedPoints = CGFloat(bleedMM * 72.0 / 25.4)
+        let cropMarkMargin: CGFloat = 20.0
+        let extraOffset = drawCropMarks ? (bleedPoints + cropMarkMargin) : 0.0
+        
+        let mediaWidth = pageSize.width + 2 * extraOffset
+        let mediaHeight = pageSize.height + 2 * extraOffset
+        
         let data = NSMutableData()
-        var mediaBox = CGRect(origin: .zero, size: pageSize)
+        var mediaBox = CGRect(x: 0, y: 0, width: mediaWidth, height: mediaHeight)
         guard let consumer = CGDataConsumer(data: data),
               let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
             throw PDFExportError.couldNotCreateContext
@@ -54,14 +62,26 @@ public struct PDFExporter {
             }
             context.beginPDFPage(nil)
             
+            context.saveGState()
+            if extraOffset > 0 {
+                context.translateBy(x: extraOffset, y: extraOffset)
+            }
+            
             draw(page: page, project: project, in: context)
             
+            context.restoreGState()
+            
             if drawCropMarks {
-                drawCropMarksAndBleeds(in: context, pageSize: pageSize)
+                drawCropMarksAndBleeds(in: context, trimSize: pageSize, bleedPoints: bleedPoints, cropMargin: cropMarkMargin)
             }
             
             if drawGridGuides {
+                context.saveGState()
+                if extraOffset > 0 {
+                    context.translateBy(x: extraOffset, y: extraOffset)
+                }
                 drawGridAndMarginGuides(in: context, pageNumber: page.number, project: project, pageSize: pageSize)
+                context.restoreGState()
             }
             
             context.endPDFPage()
@@ -71,55 +91,85 @@ public struct PDFExporter {
         try data.write(to: url, options: .atomic)
     }
 
-    private func drawCropMarksAndBleeds(in context: CGContext, pageSize: CGSize) {
+    private func drawCropMarksAndBleeds(
+        in context: CGContext,
+        trimSize: CGSize,
+        bleedPoints: CGFloat,
+        cropMargin: CGFloat
+    ) {
         context.saveGState()
         
-        // 1. Bleed guide (3mm = 8.5 pt inside the trim page edges)
-        let bleedDistance: CGFloat = 8.5
+        let extraOffset = bleedPoints + cropMargin
+        let mediaWidth = trimSize.width + 2 * extraOffset
+        let mediaHeight = trimSize.height + 2 * extraOffset
+        
+        // 1. Bleed box boundary (dashed red line)
         context.setStrokeColor(NSColor(calibratedRed: 0.8, green: 0.1, blue: 0.1, alpha: 0.8).cgColor)
         context.setLineWidth(0.5)
         let bleedRect = CGRect(
-            x: bleedDistance,
-            y: bleedDistance,
-            width: pageSize.width - 2 * bleedDistance,
-            height: pageSize.height - 2 * bleedDistance
+            x: cropMargin,
+            y: cropMargin,
+            width: mediaWidth - 2 * cropMargin,
+            height: mediaHeight - 2 * cropMargin
         )
         context.setLineDash(phase: 0, lengths: [4, 4])
         context.stroke(bleedRect)
         
-        // 2. Trim boundary (solid cyan/gray line)
+        // 2. Trim box boundary (solid cyan/gray line)
         context.setLineDash(phase: 0, lengths: [])
         context.setStrokeColor(NSColor(calibratedRed: 0.1, green: 0.6, blue: 0.8, alpha: 0.8).cgColor)
-        let trimRect = CGRect(x: 0, y: 0, width: pageSize.width, height: pageSize.height)
+        let trimRect = CGRect(
+            x: extraOffset,
+            y: extraOffset,
+            width: trimSize.width,
+            height: trimSize.height
+        )
         context.stroke(trimRect)
         
-        // 3. Crop marks at corners
+        // 3. Crop marks at corners pointing to the trim box corners
         context.setStrokeColor(NSColor.black.cgColor)
-        let markLength: CGFloat = 15.0
+        context.setLineWidth(0.5)
         
-        // Top-Left
-        context.move(to: CGPoint(x: 0, y: pageSize.height - bleedDistance))
-        context.addLine(to: CGPoint(x: markLength, y: pageSize.height - bleedDistance))
-        context.move(to: CGPoint(x: bleedDistance, y: pageSize.height))
-        context.addLine(to: CGPoint(x: bleedDistance, y: pageSize.height - markLength))
+        let gap: CGFloat = 3.0 // gap between crop mark and trim box
+        let length: CGFloat = 12.0 // length of crop mark
         
-        // Top-Right
-        context.move(to: CGPoint(x: pageSize.width, y: pageSize.height - bleedDistance))
-        context.addLine(to: CGPoint(x: pageSize.width - markLength, y: pageSize.height - bleedDistance))
-        context.move(to: CGPoint(x: pageSize.width - bleedDistance, y: pageSize.height))
-        context.addLine(to: CGPoint(x: pageSize.width - bleedDistance, y: pageSize.height - markLength))
+        // Coordinates of the 4 trim corners
+        let xLeft = extraOffset
+        let xRight = mediaWidth - extraOffset
+        let yBottom = extraOffset
+        let yTop = mediaHeight - extraOffset
         
-        // Bottom-Left
-        context.move(to: CGPoint(x: 0, y: bleedDistance))
-        context.addLine(to: CGPoint(x: markLength, y: bleedDistance))
-        context.move(to: CGPoint(x: bleedDistance, y: 0))
-        context.addLine(to: CGPoint(x: bleedDistance, y: markLength))
+        // Top-Left corner
+        // Horizontal line
+        context.move(to: CGPoint(x: xLeft - gap - length, y: yTop))
+        context.addLine(to: CGPoint(x: xLeft - gap, y: yTop))
+        // Vertical line
+        context.move(to: CGPoint(x: xLeft, y: yTop + gap))
+        context.addLine(to: CGPoint(x: xLeft, y: yTop + gap + length))
         
-        // Bottom-Right
-        context.move(to: CGPoint(x: pageSize.width, y: bleedDistance))
-        context.addLine(to: CGPoint(x: pageSize.width - markLength, y: bleedDistance))
-        context.move(to: CGPoint(x: pageSize.width - bleedDistance, y: 0))
-        context.addLine(to: CGPoint(x: pageSize.width - bleedDistance, y: markLength))
+        // Top-Right corner
+        // Horizontal line
+        context.move(to: CGPoint(x: xRight + gap, y: yTop))
+        context.addLine(to: CGPoint(x: xRight + gap + length, y: yTop))
+        // Vertical line
+        context.move(to: CGPoint(x: xRight, y: yTop + gap))
+        context.addLine(to: CGPoint(x: xRight, y: yTop + gap + length))
+        
+        // Bottom-Left corner
+        // Horizontal line
+        context.move(to: CGPoint(x: xLeft - gap - length, y: yBottom))
+        context.addLine(to: CGPoint(x: xLeft - gap, y: yBottom))
+        // Vertical line
+        context.move(to: CGPoint(x: xLeft, y: yBottom - gap - length))
+        context.addLine(to: CGPoint(x: xLeft, y: yBottom - gap))
+        
+        // Bottom-Right corner
+        // Horizontal line
+        context.move(to: CGPoint(x: xRight + gap, y: yBottom))
+        context.addLine(to: CGPoint(x: xRight + gap + length, y: yBottom))
+        // Vertical line
+        context.move(to: CGPoint(x: xRight, y: yBottom - gap - length))
+        context.addLine(to: CGPoint(x: xRight, y: yBottom - gap))
         
         context.strokePath()
         context.restoreGState()
@@ -218,13 +268,52 @@ public struct PDFExporter {
     }
 
     private func draw(frame: PageFrame, project: BookProject, in context: CGContext, pageHeight: CGFloat) {
+        let style: ParagraphStyle
+        if frame.kind == .footnote {
+            style = ParagraphStyle(
+                id: "footnote",
+                displayName: "脚注",
+                fontName: "Songti SC",
+                fontSize: 8.5,
+                lineHeight: 11,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 4,
+                colorToken: "ink"
+            )
+        } else if frame.kind == .sideNote {
+            style = ParagraphStyle(
+                id: "sideNote",
+                displayName: "旁注",
+                fontName: "Songti SC",
+                fontSize: 6.0,
+                lineHeight: 8.0,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 2,
+                colorToken: "ink"
+            )
+        } else {
+            style = project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue)
+        }
+
+        let extraWidth = (frame.kind == .text || frame.kind == .footnote || frame.kind == .sideNote) ? CGFloat(style.fontSize * 0.5) : 0.0
+
         let layoutRect = CGRect(
             x: CGFloat(frame.rect.x),
             y: CGFloat(frame.rect.y),
-            width: CGFloat(frame.rect.width),
+            width: CGFloat(frame.rect.width) + extraWidth,
             height: CGFloat(frame.rect.height)
         )
         let rect = pdfRect(fromLayoutRect: layoutRect, pageHeight: pageHeight)
+
+        if frame.kind == .footnoteDivider {
+            context.saveGState()
+            context.setFillColor(NSColor.black.cgColor)
+            context.fill(rect)
+            context.restoreGState()
+            return
+        }
 
         switch frame.content {
         case .text(let text):
@@ -235,7 +324,7 @@ public struct PDFExporter {
             } else {
                 textRect = rect
             }
-            drawText(text, styleId: frame.styleId, project: project, rect: textRect, context: context)
+            drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, rect: textRect, context: context)
         case .asset, .spreadAsset:
             drawImagePlaceholder(frame: frame, project: project, in: context, rect: rect)
         case .empty:
@@ -257,8 +346,36 @@ public struct PDFExporter {
         context.restoreGState()
     }
 
-    private func drawText(_ text: String, styleId: String?, project: BookProject, rect: CGRect, context: CGContext) {
-        let style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind, project: BookProject, rect: CGRect, context: CGContext) {
+        let style: ParagraphStyle
+        if kind == .footnote {
+            style = ParagraphStyle(
+                id: "footnote",
+                displayName: "脚注",
+                fontName: "Songti SC",
+                fontSize: 8.5,
+                lineHeight: 11,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 4,
+                colorToken: "ink"
+            )
+        } else if kind == .sideNote {
+            style = ParagraphStyle(
+                id: "sideNote",
+                displayName: "旁注",
+                fontName: "Songti SC",
+                fontSize: 6.0,
+                lineHeight: 8.0,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 2,
+                colorToken: "ink"
+            )
+        } else {
+            style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+        }
+
         let attributedString = ChineseTypesetting.makeAttributedString(
             text: text,
             style: style,

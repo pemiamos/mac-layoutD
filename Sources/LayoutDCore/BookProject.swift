@@ -205,19 +205,35 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
     public var text: String
     public var styleId: String
     public var anchoredAssetIds: [UUID]
+    public var anchoredFootnoteIds: [UUID]?
+    public var anchoredSideNoteIds: [UUID]?
 
     public init(
         id: UUID = UUID(),
         kind: ParagraphKind,
         text: String,
         styleId: String,
-        anchoredAssetIds: [UUID] = []
+        anchoredAssetIds: [UUID] = [],
+        anchoredFootnoteIds: [UUID]? = nil,
+        anchoredSideNoteIds: [UUID]? = nil
     ) {
         self.id = id
         self.kind = kind
         self.text = text
         self.styleId = styleId
         self.anchoredAssetIds = anchoredAssetIds
+        self.anchoredFootnoteIds = anchoredFootnoteIds
+        self.anchoredSideNoteIds = anchoredSideNoteIds
+    }
+
+    public var safeAnchoredFootnoteIds: [UUID] {
+        get { anchoredFootnoteIds ?? [] }
+        set { anchoredFootnoteIds = newValue }
+    }
+
+    public var safeAnchoredSideNoteIds: [UUID] {
+        get { anchoredSideNoteIds ?? [] }
+        set { anchoredSideNoteIds = newValue }
     }
 }
 
@@ -230,6 +246,8 @@ public enum ParagraphKind: Codable, Equatable, Sendable {
     case table
     case listItem
     case quote
+    case footnote(number: Int)
+    case sideNote
 }
 
 public extension BookProject {

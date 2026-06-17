@@ -102,6 +102,9 @@ final class AppState: ObservableObject {
             case .caption: kind = .caption
             case .callout: kind = .component
             case .table: kind = .component
+            case .footnote: kind = .text
+            case .footnoteDivider: kind = .component
+            case .sideNote: kind = .text
             }
             
             let ref: ContentReference

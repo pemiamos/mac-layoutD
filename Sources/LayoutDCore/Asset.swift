@@ -53,3 +53,24 @@ public enum AssetUsage: String, Codable, Sendable {
     case placed
     case repeated
 }
+
+import ImageIO
+import CoreGraphics
+
+public extension Asset {
+    func detectColorModelAndActualDPI() -> (colorModel: String?, dpi: Double?) {
+        guard let sourcePath = self.sourcePath,
+              FileManager.default.fileExists(atPath: sourcePath) else {
+            return (nil, nil)
+        }
+        let url = URL(fileURLWithPath: sourcePath)
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else {
+            return (nil, nil)
+        }
+        
+        let colorModel = props[kCGImagePropertyColorModel] as? String
+        let dpiWidth = props[kCGImagePropertyDPIWidth] as? Double
+        return (colorModel, dpiWidth)
+    }
+}

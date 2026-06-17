@@ -39,14 +39,44 @@ private struct LayoutContext {
     private var placedParagraphIds = Set<UUID>()
     private var tableOfContents: [TableOfContentsEntry] = []
     private var figureCounter = 0
+    
+    private var currentPageFootnoteParagraphs: [Paragraph] = []
+    private var currentPageSideNoteParagraphs: [(Paragraph, Double)] = []
+    
+    private var footnoteStyle: ParagraphStyle {
+        ParagraphStyle(
+            id: "footnote",
+            displayName: "脚注",
+            fontName: "Songti SC",
+            fontSize: 8.5,
+            lineHeight: 11,
+            firstLineIndent: 0,
+            spaceBefore: 0,
+            spaceAfter: 4,
+            colorToken: "ink"
+        )
+    }
+
+    private var sideNoteStyle: ParagraphStyle {
+        ParagraphStyle(
+            id: "sideNote",
+            displayName: "旁注",
+            fontName: "Songti SC",
+            fontSize: 6.0,
+            lineHeight: 8.0,
+            firstLineIndent: 0,
+            spaceBefore: 0,
+            spaceAfter: 2,
+            colorToken: "ink"
+        )
+    }
 
     init(project: BookProject) {
         self.project = project
         self.currentPage = LaidOutPage(number: 1)
         let initialPageNumber = 3
         let margins = project.resolvedMargins(for: initialPageNumber)
-        let facingPages = project.pageSetup.facingPages
-        self.cursorX = facingPages ? (initialPageNumber % 2 == 1 ? margins.left : margins.right) : margins.left
+        self.cursorX = margins.left
         self.cursorY = margins.top
         self.currentColumnTopY = margins.top
     }
@@ -78,6 +108,13 @@ private struct LayoutContext {
                 continue
             }
 
+            switch paragraph.kind {
+            case .footnote, .sideNote:
+                continue
+            default:
+                break
+            }
+
             if case .figure(let assetId) = paragraph.kind {
                 if let asset = project.assets.first(where: { $0.id == assetId }) {
                     addAsset(asset)
@@ -96,7 +133,21 @@ private struct LayoutContext {
 
             let style = project.styles.paragraphStyle(id: paragraph.styleId)
             let frameKind = frameKind(for: paragraph.kind)
-            addText(paragraph.text, style: style, kind: frameKind)
+            
+            let minReqHeight = style.lineHeight + style.spaceBefore + style.spaceAfter
+            if remainingColumnHeight < minReqHeight {
+                advanceToNextColumnOrPage()
+            }
+            
+            for fnId in paragraph.safeAnchoredFootnoteIds {
+                if let fnParagraph = story.paragraphs.first(where: { $0.id == fnId }) {
+                    if !currentPageFootnoteParagraphs.contains(where: { $0.id == fnId }) {
+                        currentPageFootnoteParagraphs.append(fnParagraph)
+                    }
+                }
+            }
+            
+            addText(paragraph.text, style: style, kind: frameKind, anchoredSideNoteIds: paragraph.safeAnchoredSideNoteIds)
 
             for assetId in paragraph.anchoredAssetIds {
                 if let asset = project.assets.first(where: { $0.id == assetId }) {
@@ -107,6 +158,7 @@ private struct LayoutContext {
     }
 
     mutating func finish() -> LaidOutDocument {
+        layoutFootnotesAndSideNotesOnCurrentPage()
         if !currentPage.frames.isEmpty || pages.isEmpty {
             pages.append(currentPage)
         }
@@ -132,7 +184,7 @@ private struct LayoutContext {
         )
     }
 
-    private mutating func addText(_ text: String, style: ParagraphStyle, kind: PageFrameKind) {
+    private mutating func addText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = []) {
         let text = normalizedText(text)
         let height = estimatedTextHeight(text: text, style: style, width: columnWidth)
         if shouldKeepHeadingWithNext(style: style, height: height) {
@@ -148,11 +200,11 @@ private struct LayoutContext {
                     pageNumber: currentPage.number
                 )
             )
-            addFlowingText(text, style: style, kind: kind)
+            addFlowingText(text, style: style, kind: kind, anchoredSideNoteIds: anchoredSideNoteIds)
             return
         }
 
-        placeTextFrame(text, height: height, style: style, kind: kind, spaceBefore: style.spaceBefore)
+        placeTextFrame(text, height: height, style: style, kind: kind, spaceBefore: style.spaceBefore, anchoredSideNoteIds: anchoredSideNoteIds)
     }
 
     private func frameKind(for paragraphKind: ParagraphKind) -> PageFrameKind {
@@ -161,6 +213,10 @@ private struct LayoutContext {
             return .callout
         case .table:
             return .table
+        case .footnote:
+            return .footnote
+        case .sideNote:
+            return .sideNote
         default:
             return .text
         }
@@ -177,33 +233,84 @@ private struct LayoutContext {
         return remainingColumnHeight < requiredHeight && remainingColumnHeight < columnTextHeight
     }
 
-    private mutating func addFlowingText(_ text: String, style: ParagraphStyle, kind: PageFrameKind) {
-        var remainingText = text
+    private mutating func addFlowingText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = []) {
+        let lines = ChineseTypesetting.breakTextIntoLines(
+            text,
+            style: style,
+            columnWidth: columnWidth,
+            hangingWidth: style.fontSize * 0.5
+        )
+        
+        var remainingLines = lines
         var isFirstSegment = true
-
-        while !remainingText.isEmpty {
+        
+        while !remainingLines.isEmpty {
             let spaceBefore = isFirstSegment ? style.spaceBefore : 0
             if remainingColumnHeight < style.lineHeight + spaceBefore + style.spaceAfter {
                 advanceToNextColumnOrPage()
             }
-
+            
             let maxSegmentHeight = max(
                 style.lineHeight,
                 remainingColumnHeight - spaceBefore - style.spaceAfter
             )
-            let segment = fittingPrefix(
-                of: remainingText,
-                style: style,
-                maxHeight: maxSegmentHeight
-            )
-            if segment.isEmpty {
+            
+            // Find how many lines can fit in maxSegmentHeight
+            var linesInSegment: [String] = []
+            var currentHeight = 0.0
+            
+            for line in remainingLines {
+                let lineNeed = linesInSegment.isEmpty ? (style.lineHeight + spaceBefore) : style.lineHeight
+                if currentHeight + lineNeed <= maxSegmentHeight {
+                    linesInSegment.append(line)
+                    currentHeight += lineNeed
+                } else {
+                    break
+                }
+            }
+            
+            // Apply widow/orphan controls
+            let fittedCount = linesInSegment.count
+            let totalCount = remainingLines.count
+            let remainingCount = totalCount - fittedCount
+            
+            var finalFittedCount = fittedCount
+            
+            if remainingCount > 0 {
+                // Orphan control: if only 1 line fits and it's not the top of the column
+                if fittedCount == 1 && remainingColumnHeight < columnTextHeight {
+                    finalFittedCount = 0
+                }
+                // Widow control: if only 1 line is left for the next page/column
+                else if remainingCount == 1 {
+                    if fittedCount >= 3 {
+                        // pull one line
+                        finalFittedCount = fittedCount - 1
+                    } else if fittedCount == 2 && remainingColumnHeight < columnTextHeight {
+                        // push all to next page/column
+                        finalFittedCount = 0
+                    }
+                }
+            }
+            
+            if finalFittedCount == 0 {
                 advanceToNextColumnOrPage()
                 continue
             }
-            let segmentHeight = estimatedTextHeight(text: segment, style: style, width: columnWidth)
-            placeTextFrame(segment, height: segmentHeight, style: style, kind: kind, spaceBefore: spaceBefore)
-            remainingText.removeFirst(segment.count)
-            remainingText = remainingText.trimmedForLayout
+            
+            let segmentText = remainingLines.prefix(finalFittedCount).joined(separator: "\n")
+            let segmentHeight = Double(finalFittedCount) * style.lineHeight
+            
+            placeTextFrame(
+                segmentText,
+                height: segmentHeight,
+                style: style,
+                kind: kind,
+                spaceBefore: spaceBefore,
+                anchoredSideNoteIds: isFirstSegment ? anchoredSideNoteIds : []
+            )
+            
+            remainingLines.removeFirst(finalFittedCount)
             isFirstSegment = false
         }
     }
@@ -213,12 +320,20 @@ private struct LayoutContext {
         height: Double,
         style: ParagraphStyle,
         kind: PageFrameKind,
-        spaceBefore: Double
+        spaceBefore: Double,
+        anchoredSideNoteIds: [UUID] = []
     ) {
         advanceIfNeeded(height + spaceBefore + style.spaceAfter)
         cursorY += spaceBefore
         let rect = Rect(x: cursorX, y: cursorY, width: columnWidth, height: height)
         currentPage.frames.append(PageFrame(kind: kind, rect: rect, styleId: style.id, content: .text(text)))
+        
+        for snId in anchoredSideNoteIds {
+            if let snParagraph = findParagraph(id: snId) {
+                currentPageSideNoteParagraphs.append((snParagraph, cursorY))
+            }
+        }
+        
         cursorY += height + style.spaceAfter
         snapToBaseline()
     }
@@ -426,7 +541,7 @@ private struct LayoutContext {
             advanceToNextPage()
         }
         
-        let bottomLimit = setup.pageSize.height - setup.margins.bottom
+        let bottomLimit = resolvedBottomLimit(for: currentPage.number + 2)
         if cursorY + requiredHeight > bottomLimit {
             advanceToNextPage()
             advanceToNextPage()
@@ -503,8 +618,7 @@ private struct LayoutContext {
             advanceToNextPage()
         }
 
-        let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
-        let bottomLimit = project.pageSetup.pageSize.height - margins.bottom
+        let bottomLimit = resolvedBottomLimit(for: currentAbsolutePageNumber)
         if cursorY + requiredHeight > bottomLimit {
             advanceToNextPage()
         }
@@ -566,8 +680,7 @@ private struct LayoutContext {
     }
 
     private mutating func advanceIfNeeded(_ requiredHeight: Double) {
-        let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
-        let bottomLimit = project.pageSetup.pageSize.height - margins.bottom
+        let bottomLimit = resolvedBottomLimit(for: currentAbsolutePageNumber)
         guard cursorY + requiredHeight > bottomLimit else { return }
 
         advanceToNextColumnOrPage()
@@ -586,6 +699,7 @@ private struct LayoutContext {
     }
 
     private mutating func advanceToNextPage() {
+        layoutFootnotesAndSideNotesOnCurrentPage()
         pages.append(currentPage)
         let newPageNumber = pages.count + 1
         currentPage = LaidOutPage(number: newPageNumber)
@@ -646,6 +760,107 @@ private struct LayoutContext {
             nil
         )
         return max(ceil(size.height), style.lineHeight)
+    }
+
+    private func estimatedFootnoteHeight(_ paragraph: Paragraph) -> Double {
+        let text = paragraph.text
+        let style = footnoteStyle
+        let width = contentWidth
+        return estimatedTextHeight(text: text, style: style, width: width)
+    }
+
+    private var currentPageFootnoteHeight: Double {
+        if currentPageFootnoteParagraphs.isEmpty {
+            return 0.0
+        }
+        return currentPageFootnoteParagraphs.reduce(0.0) { sum, p in
+            sum + estimatedFootnoteHeight(p)
+        }
+    }
+
+    private func resolvedBottomLimit(for pageNumber: Int) -> Double {
+        let margins = project.resolvedMargins(for: pageNumber)
+        let fnHeight = currentPageFootnoteHeight
+        let baseBottomLimit = project.pageSetup.pageSize.height - margins.bottom
+        if fnHeight > 0 {
+            return baseBottomLimit - fnHeight - 24
+        }
+        return baseBottomLimit
+    }
+
+    private mutating func layoutFootnotesAndSideNotesOnCurrentPage() {
+        if !currentPageFootnoteParagraphs.isEmpty {
+            let margins = project.resolvedMargins(for: currentPage.number + 2)
+            let baseBottomLimit = project.pageSetup.pageSize.height - margins.bottom
+            let totalFnHeight = currentPageFootnoteHeight
+            
+            let dividerY = baseBottomLimit - totalFnHeight - 24 + 6
+            let dividerRect = Rect(
+                x: pageLeftMargin(for: currentPage.number + 2),
+                y: dividerY,
+                width: 60,
+                height: 1
+            )
+            currentPage.frames.append(PageFrame(
+                kind: .footnoteDivider,
+                rect: dividerRect,
+                content: .empty
+            ))
+            
+            var currentY = baseBottomLimit - totalFnHeight
+            for fnParagraph in currentPageFootnoteParagraphs {
+                let fnHeight = estimatedFootnoteHeight(fnParagraph)
+                let fnRect = Rect(
+                    x: pageLeftMargin(for: currentPage.number + 2),
+                    y: currentY,
+                    width: contentWidth,
+                    height: fnHeight
+                )
+                currentPage.frames.append(PageFrame(
+                    kind: .footnote,
+                    rect: fnRect,
+                    styleId: "footnote",
+                    content: .text(fnParagraph.text)
+                ))
+                currentY += fnHeight
+            }
+        }
+        
+        if !currentPageSideNoteParagraphs.isEmpty {
+            let absPageNum = currentPage.number + 2
+            let margins = project.resolvedMargins(for: absPageNum)
+            let pageSize = project.pageSetup.pageSize
+            let facingPages = project.pageSetup.facingPages
+            
+            let isEvenPage = absPageNum % 2 == 0
+            let sideNoteWidth = 42.0
+            let gap = 6.0
+            
+            let x: Double
+            if facingPages {
+                if isEvenPage {
+                    x = margins.left - sideNoteWidth - gap
+                } else {
+                    x = pageSize.width - margins.right + gap
+                }
+            } else {
+                x = pageSize.width - margins.right + gap
+            }
+            
+            for (snParagraph, refY) in currentPageSideNoteParagraphs {
+                let snHeight = estimatedTextHeight(text: snParagraph.text, style: sideNoteStyle, width: sideNoteWidth)
+                let rect = Rect(x: x, y: refY, width: sideNoteWidth, height: snHeight)
+                currentPage.frames.append(PageFrame(
+                    kind: .sideNote,
+                    rect: rect,
+                    styleId: "sideNote",
+                    content: .text(snParagraph.text)
+                ))
+            }
+        }
+        
+        currentPageFootnoteParagraphs.removeAll()
+        currentPageSideNoteParagraphs.removeAll()
     }
 
 
@@ -764,15 +979,12 @@ private struct LayoutContext {
     }
 
     private var columnTextHeight: Double {
-        let setup = project.pageSetup
         let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
-        return setup.pageSize.height - margins.top - margins.bottom
+        return resolvedBottomLimit(for: currentAbsolutePageNumber) - margins.top
     }
 
     private var remainingColumnHeight: Double {
-        let setup = project.pageSetup
-        let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
-        return setup.pageSize.height - margins.bottom - cursorY
+        return resolvedBottomLimit(for: currentAbsolutePageNumber) - cursorY
     }
 
     mutating func applyPlanIfPresent() {
@@ -906,11 +1118,7 @@ private struct TableOfContentsEntry: Equatable {
     var pageNumber: Int
 }
 
-private extension String {
-    var trimmedForLayout: String {
-        trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
+
 
 private extension Character {
     var isCJKIdeograph: Bool {

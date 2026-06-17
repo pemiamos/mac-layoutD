@@ -2,6 +2,7 @@ import LayoutDCore
 import LayoutDDesignAI
 import LayoutDEngine
 import LayoutDCheck
+import LayoutDImport
 import XCTest
 
 final class LayoutDCoreTests: XCTestCase {
@@ -1055,6 +1056,9 @@ final class LayoutDCoreTests: XCTestCase {
             case .caption: kind = .caption
             case .callout: kind = .component
             case .table: kind = .component
+            case .footnote: kind = .text
+            case .footnoteDivider: kind = .component
+            case .sideNote: kind = .text
             }
             
             let ref: ContentReference
@@ -1222,6 +1226,169 @@ final class LayoutDCoreTests: XCTestCase {
         let textFrame = textFrames[0]
         XCTAssertEqual(textFrame.rect.x, 110.0, accuracy: 0.01)
         XCTAssertEqual(textFrame.rect.width, 324.41, accuracy: 0.01)
+    }
+
+    func testFootnotesAndMarginalNotesLayout() {
+        let markdown = """
+        ---
+        title: "测试书稿"
+        author: "排版引擎"
+        ---
+        
+        # 第一章 测试
+        
+        这是一段包含脚注的正文。[^fn1] 另外这一段还有一个旁注。
+        
+        > [!SIDE] 这是一个测试旁注
+        > 这是旁注的详细内容，它将被放置在页面的侧边栏。
+        
+        这是另一段文本，也包含脚注。[^fn2] 脚注是底部的额外说明信息。
+        
+        [^fn1]: 这是第一个脚注的实际内容。
+        [^fn2]: 这是第二个脚注的实际内容，用来测试堆叠。
+        """
+        
+        let importer = MarkdownBookImporter()
+        let project = importer.importDocument(markdown: markdown)
+        
+        XCTAssertEqual(project.metadata.title, "测试书稿")
+        
+        let section = project.sections.first
+        XCTAssertNotNil(section)
+        let story = section?.stories.first
+        XCTAssertNotNil(story)
+        
+        let bodyParagraphs = story?.paragraphs.filter { $0.kind == ParagraphKind.body } ?? []
+        XCTAssertEqual(bodyParagraphs.count, 2)
+        
+        let p1 = bodyParagraphs[0]
+        XCTAssertTrue(p1.text.contains("¹"))
+        XCTAssertEqual(p1.safeAnchoredFootnoteIds.count, 1)
+        XCTAssertEqual(p1.safeAnchoredSideNoteIds.count, 1)
+        
+        let p2 = bodyParagraphs[1]
+        XCTAssertTrue(p2.text.contains("²"))
+        XCTAssertEqual(p2.safeAnchoredFootnoteIds.count, 1)
+        
+        let footnoteParagraphs = story?.paragraphs.filter {
+            if case .footnote = $0.kind { return true }
+            return false
+        } ?? []
+        XCTAssertEqual(footnoteParagraphs.count, 2)
+        
+        let sideNoteParagraphs = story?.paragraphs.filter { $0.kind == ParagraphKind.sideNote } ?? []
+        XCTAssertEqual(sideNoteParagraphs.count, 1)
+        
+        let document = LayoutEngine().layout(project: project)
+        XCTAssertGreaterThanOrEqual(document.pages.count, 3)
+        
+        let page = document.pages[2]
+        
+        let footnoteFrames = page.frames.filter { $0.kind == PageFrameKind.footnote }
+        XCTAssertEqual(footnoteFrames.count, 2)
+        
+        let dividerFrames = page.frames.filter { $0.kind == PageFrameKind.footnoteDivider }
+        XCTAssertEqual(dividerFrames.count, 1)
+        
+        let sideNoteFrames = page.frames.filter { $0.kind == PageFrameKind.sideNote }
+        XCTAssertEqual(sideNoteFrames.count, 1)
+        
+        let f1 = footnoteFrames[0]
+        let f2 = footnoteFrames[1]
+        XCTAssertLessThan(f1.rect.y, f2.rect.y)
+        
+        let bodyFrames = page.frames.filter { $0.styleId == StyleID.body.rawValue }
+        if let bodyFrame = bodyFrames.first {
+            let sideNoteFrame = sideNoteFrames[0]
+            XCTAssertEqual(sideNoteFrame.rect.y, bodyFrame.rect.y, accuracy: 0.1)
+        }
+    }
+
+    func testChineseTypographyHangingAndAvoidKinsoku() {
+        let style = ParagraphStyle(
+            id: "body",
+            displayName: "正文",
+            fontName: "Songti SC",
+            fontSize: 10,
+            lineHeight: 14,
+            firstLineIndent: 0,
+            spaceBefore: 0,
+            spaceAfter: 0,
+            colorToken: "ink"
+        )
+        
+        // Let's check a line ending with a comma that is just wider than columnWidth (e.g. 50 pt).
+        // Since estimatedTextWidth for "测试文本" is about 40 pt, and "测试文本，" is about 50 pt.
+        // We will test if the line breaks correctly and allows the comma to hang.
+        let text = "测试文本，后续内容"
+        let lines = ChineseTypesetting.breakTextIntoLines(text, style: style, columnWidth: 45.0, hangingWidth: 6.0)
+        XCTAssertFalse(lines.isEmpty)
+        // If comma hangs, the first line should contain the comma!
+        XCTAssertTrue(lines[0].contains("，"))
+        
+        // Test avoid illegal line start (forbiddenLineStartCharacters)
+        let textForbiddenStart = "长文本，测试"
+        let linesForbidden = ChineseTypesetting.breakTextIntoLines(textForbiddenStart, style: style, columnWidth: 35.0, hangingWidth: 0.0)
+        // Commas are forbidden at line start, so the first line should not end just before the comma and leave the comma at the start of the next line!
+        if linesForbidden.count > 1 {
+            XCTAssertFalse(linesForbidden[1].hasPrefix("，"))
+        }
+    }
+
+    func testPreflightImageResolutionAndColorSpaceWarnings() throws {
+        // Create a temporary real RGB PNG image
+        let cgContext = CGContext(
+            data: nil,
+            width: 10,
+            height: 10,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        let bitmapRep = NSBitmapImageRep(cgImage: cgContext.makeImage()!)
+        let data = try XCTUnwrap(bitmapRep.representation(using: .png, properties: [:]))
+        
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-test-preflight-asset-\(UUID().uuidString)")
+            .appendingPathExtension("png")
+        try data.write(to: tempURL)
+        
+        defer {
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+        
+        let asset = Asset(
+            fileName: "temp-asset.png",
+            sourcePath: tempURL.path,
+            role: .diagram,
+            pixelWidth: 10,
+            pixelHeight: 10,
+            dpi: 150 // low raw DPI (< 300)
+        )
+        
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "预检测试", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(title: "第一章", paragraphs: [Paragraph(kind: .body, text: "内容", styleId: StyleID.body.rawValue)])
+                    ]
+                )
+            ],
+            assets: [asset]
+        )
+        let document = LayoutEngine().layout(project: project)
+        let report = ProjectInspector().preflight(project: project, document: document)
+        
+        // RGB warning should trigger
+        let rgbWarning = report.issues.first { $0.message.contains("颜色空间为 RGB") }
+        XCTAssertNotNil(rgbWarning)
+        
+        // Low raw DPI warning should trigger for diagram role
+        let lowDPIWarning = report.issues.first { $0.message.contains("原始分辨率") && $0.message.contains("DPI") }
+        XCTAssertNotNil(lowDPIWarning)
     }
 }
 

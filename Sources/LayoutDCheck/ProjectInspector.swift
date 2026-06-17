@@ -198,6 +198,48 @@ public struct ProjectInspector {
                 )
             }
 
+            // RGB vs CMYK color space check
+            let (detectedModel, fileDPI) = asset.detectColorModelAndActualDPI()
+            if let model = detectedModel, model == "RGB" {
+                issues.append(
+                    LayoutIssue(
+                        severity: .warning,
+                        message: "图片 \(asset.fileName) 的颜色空间为 RGB，印刷建议转换为 CMYK",
+                        category: .assets,
+                        suggestedFix: "在图像编辑器中将颜色模式转换为 CMYK 并在项目设置中更新图片。",
+                        assetId: asset.id
+                    )
+                )
+            }
+
+            // Hero/Diagram/Spread DPI >= 300 check
+            if asset.pixelWidth > 0, asset.role == .hero || asset.role == .diagram || asset.role == .spread {
+                let checkDPI = fileDPI ?? asset.dpi ?? 0.0
+                if checkDPI > 0 && checkDPI < 300 {
+                    issues.append(
+                        LayoutIssue(
+                            severity: .warning,
+                            message: "大图/图示图片 \(asset.fileName) 原始分辨率为 \(Int(checkDPI)) DPI，低于印刷标准的 300 DPI",
+                            category: .assets,
+                            suggestedFix: "替换为高清晰度图片以确保印刷质量。",
+                            assetId: asset.id
+                        )
+                    )
+                }
+
+                if let effDPI = asset.effectiveDPI(pageSetup: project.pageSetup), effDPI < 300 {
+                    issues.append(
+                        LayoutIssue(
+                            severity: .warning,
+                            message: "大图/图示图片 \(asset.fileName) 在版面中的预计印刷分辨率低于 300 DPI (当前为 \(Int(effDPI)) DPI)",
+                            category: .assets,
+                            suggestedFix: "替换为更高分辨率图片，或将图片角色改为较小版面宽度的配图。",
+                            assetId: asset.id
+                        )
+                    )
+                }
+            }
+
             if let sourcePath = asset.sourcePath,
                !FileManager.default.fileExists(atPath: sourcePath) {
                 issues.append(

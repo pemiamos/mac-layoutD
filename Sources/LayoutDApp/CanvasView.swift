@@ -144,12 +144,49 @@ final class CanvasView: NSView {
     }
 
     private func draw(frame: PageFrame, project: BookProject, pageRect: CGRect) {
+        let style: ParagraphStyle
+        if frame.kind == .footnote {
+            style = ParagraphStyle(
+                id: "footnote",
+                displayName: "脚注",
+                fontName: "Songti SC",
+                fontSize: 8.5,
+                lineHeight: 11,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 4,
+                colorToken: "ink"
+            )
+        } else if frame.kind == .sideNote {
+            style = ParagraphStyle(
+                id: "sideNote",
+                displayName: "旁注",
+                fontName: "Songti SC",
+                fontSize: 6.0,
+                lineHeight: 8.0,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 2,
+                colorToken: "ink"
+            )
+        } else {
+            style = project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue)
+        }
+
+        let extraWidth = (frame.kind == .text || frame.kind == .footnote || frame.kind == .sideNote) ? CGFloat(style.fontSize * 0.5) : 0.0
+
         let rect = CGRect(
             x: pageRect.minX + CGFloat(frame.rect.x) * zoomScale,
             y: pageRect.minY + CGFloat(frame.rect.y) * zoomScale,
-            width: CGFloat(frame.rect.width) * zoomScale,
+            width: (CGFloat(frame.rect.width) + extraWidth) * zoomScale,
             height: CGFloat(frame.rect.height) * zoomScale
         )
+
+        if frame.kind == .footnoteDivider {
+            NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).setFill()
+            rect.fill()
+            return
+        }
 
         switch frame.content {
         case .text(let text):
@@ -189,7 +226,35 @@ final class CanvasView: NSView {
             NSBezierPath(rect: rect).stroke()
         }
 
-        let style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+        let style: ParagraphStyle
+        if kind == .footnote {
+            style = ParagraphStyle(
+                id: "footnote",
+                displayName: "脚注",
+                fontName: "Songti SC",
+                fontSize: 8.5,
+                lineHeight: 11,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 4,
+                colorToken: "ink"
+            )
+        } else if kind == .sideNote {
+            style = ParagraphStyle(
+                id: "sideNote",
+                displayName: "旁注",
+                fontName: "Songti SC",
+                fontSize: 6.0,
+                lineHeight: 8.0,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 2,
+                colorToken: "ink"
+            )
+        } else {
+            style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+        }
+
         let font = NSFont(name: style.fontName, size: CGFloat(style.fontSize) * zoomScale) ?? .systemFont(ofSize: CGFloat(style.fontSize) * zoomScale)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = max(CGFloat(style.lineHeight - style.fontSize), 0) * zoomScale

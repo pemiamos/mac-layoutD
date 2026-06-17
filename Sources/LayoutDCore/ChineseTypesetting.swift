@@ -101,4 +101,122 @@ public enum ChineseTypesetting {
             }
         }
     }
+
+    public static func estimatedTextWidth(text: String, style: ParagraphStyle) -> Double {
+        let attrString = makeAttributedString(text: text, style: style)
+        let line = CTLineCreateWithAttributedString(attrString)
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        let width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+        return Double(width)
+    }
+
+    public static func breakTextIntoLines(
+        _ text: String,
+        style: ParagraphStyle,
+        columnWidth: Double,
+        hangingWidth: Double = 0.0
+    ) -> [String] {
+        let trimmedText = text.trimmedForLayout
+        guard !trimmedText.isEmpty else { return [] }
+        
+        let hangableCharacters = Set<Character>("，。、；：）】〕》〉」』”’.,")
+        func isHangable(_ char: Character) -> Bool {
+            hangableCharacters.contains(char)
+        }
+
+        var lines: [String] = []
+        var remaining = trimmedText
+        
+        while !remaining.isEmpty {
+            let count = remaining.count
+            var k = count
+            
+            // Find baseline k using binary search
+            var low = 1
+            var high = count
+            var bestK = 1
+            
+            while low <= high {
+                let mid = (low + high) / 2
+                let prefix = String(remaining.prefix(mid))
+                let width = estimatedTextWidth(text: prefix, style: style)
+                if width <= columnWidth {
+                    bestK = mid
+                    low = mid + 1
+                } else {
+                    high = mid - 1
+                }
+            }
+            
+            k = bestK
+            
+            // If we didn't consume the whole string, apply hanging and line-breaking rules
+            if k < count {
+                // 1. Punctuation hanging
+                if hangingWidth > 0 {
+                    var tempK = k
+                    while tempK < count {
+                        let nextChar = remaining[remaining.index(remaining.startIndex, offsetBy: tempK)]
+                        if isHangable(nextChar) {
+                            let candidatePrefix = String(remaining.prefix(tempK + 1))
+                            let width = estimatedTextWidth(text: candidatePrefix, style: style)
+                            if width <= columnWidth + hangingWidth {
+                                tempK += 1
+                                k = tempK
+                            } else {
+                                break
+                            }
+                        } else {
+                            break
+                        }
+                    }
+                }
+                
+                // 2. Adjust for forbidden line start/end
+                for _ in 0..<5 { // prevent infinite loop
+                    guard k > 1 && k < count else { break }
+                    
+                    let lastChar = remaining[remaining.index(remaining.startIndex, offsetBy: k - 1)]
+                    let nextChar = remaining[remaining.index(remaining.startIndex, offsetBy: k)]
+                    
+                    // If last char of current line is forbidden at end, push it to next line
+                    if ChineseLineBreakRules.forbidsLineEnd(lastChar) {
+                        k -= 1
+                        continue
+                    }
+                    
+                    // If first char of next line is forbidden at start, pull it to current line or push previous char
+                    if ChineseLineBreakRules.forbidsLineStart(nextChar) {
+                        // Try to pull it
+                        let candidatePrefix = String(remaining.prefix(k + 1))
+                        let width = estimatedTextWidth(text: candidatePrefix, style: style)
+                        let maxAllowedWidth = columnWidth + (isHangable(nextChar) ? hangingWidth : 0.0)
+                        if width <= maxAllowedWidth {
+                            k += 1
+                        } else {
+                            // Push previous char to next line
+                            k -= 1
+                        }
+                        continue
+                    }
+                    
+                    break
+                }
+            }
+            
+            let line = String(remaining.prefix(k)).trimmedForLayout
+            if line.isEmpty {
+                let firstChar = String(remaining.prefix(1))
+                lines.append(firstChar)
+                remaining = String(remaining.dropFirst(1)).trimmedForLayout
+            } else {
+                lines.append(line)
+                remaining = String(remaining.dropFirst(k)).trimmedForLayout
+            }
+        }
+        
+        return lines
+    }
 }

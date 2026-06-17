@@ -459,6 +459,20 @@ struct InspectorView: View {
                         Toggle("对页排版", isOn: $state.project.pageSetup.facingPages)
                             .toggleStyle(.checkbox)
 
+                        HStack {
+                            Text("印刷出血 (mm)")
+                            Spacer()
+                            Stepper(
+                                String(format: "%.1f mm", state.project.pageSetup.bleedMM ?? 3.0),
+                                value: Binding(
+                                    get: { state.project.pageSetup.bleedMM ?? 3.0 },
+                                    set: { state.project.pageSetup.bleedMM = $0 }
+                                ),
+                                in: 0.0...10.0,
+                                step: 0.5
+                            )
+                        }
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text("页边距 (mm)")
                                 .font(.caption)

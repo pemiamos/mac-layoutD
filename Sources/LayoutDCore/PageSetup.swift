@@ -7,6 +7,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
     public var gutter: Double
     public var baselineGrid: Double
     public var facingPages: Bool
+    public var bleedMM: Double?
 
     public init(
         pageSize: PageSize,
@@ -14,7 +15,8 @@ public struct PageSetup: Codable, Equatable, Sendable {
         columns: Int,
         gutter: Double,
         baselineGrid: Double,
-        facingPages: Bool
+        facingPages: Bool,
+        bleedMM: Double? = 3.0
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -22,6 +24,22 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.gutter = gutter
         self.baselineGrid = baselineGrid
         self.facingPages = facingPages
+        self.bleedMM = bleedMM
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case pageSize, margins, columns, gutter, baselineGrid, facingPages, bleedMM
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.pageSize = try container.decode(PageSize.self, forKey: .pageSize)
+        self.margins = try container.decode(PageMargins.self, forKey: .margins)
+        self.columns = try container.decode(Int.self, forKey: .columns)
+        self.gutter = try container.decode(Double.self, forKey: .gutter)
+        self.baselineGrid = try container.decode(Double.self, forKey: .baselineGrid)
+        self.facingPages = try container.decode(Bool.self, forKey: .facingPages)
+        self.bleedMM = try container.decodeIfPresent(Double.self, forKey: .bleedMM) ?? 3.0
     }
 
     public static let scienceBookDefault = PageSetup(
@@ -30,7 +48,8 @@ public struct PageSetup: Codable, Equatable, Sendable {
         columns: 2,
         gutter: 18,
         baselineGrid: 14,
-        facingPages: true
+        facingPages: true,
+        bleedMM: 3.0
     )
 }
 
@@ -71,5 +90,11 @@ public struct Rect: Codable, Equatable, Sendable {
         self.y = y
         self.width = width
         self.height = height
+    }
+}
+
+public extension String {
+    var trimmedForLayout: String {
+        trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

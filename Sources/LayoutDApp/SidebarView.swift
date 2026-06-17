@@ -230,6 +230,12 @@ struct SidebarView: View {
             color = .secondary.opacity(0.55)
         case .text:
             color = .primary.opacity(0.35)
+        case .footnote:
+            color = .primary.opacity(0.35)
+        case .footnoteDivider:
+            color = .secondary.opacity(0.4)
+        case .sideNote:
+            color = .primary.opacity(0.35)
         }
 
         return GeometryReader { proxy in

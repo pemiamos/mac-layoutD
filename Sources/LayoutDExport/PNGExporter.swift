@@ -28,14 +28,24 @@ public struct PNGExporter {
         project: BookProject,
         to directoryURL: URL,
         pageRange: String? = nil,
-        scale: Double = 2.0
+        scale: Double = 2.0,
+        drawCropMarks: Bool = false
     ) throws -> [URL] {
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
         let safeScale = max(scale, 0.25)
         let pageSize = project.pageSetup.pageSize
-        let pixelWidth = Int(ceil(pageSize.width * safeScale))
-        let pixelHeight = Int(ceil(pageSize.height * safeScale))
+        
+        let bleedMM = project.pageSetup.bleedMM ?? 3.0
+        let bleedPoints = CGFloat(bleedMM * 72.0 / 25.4)
+        let cropMargin: CGFloat = 20.0
+        let extraOffset = drawCropMarks ? (bleedPoints + cropMargin) : 0.0
+        
+        let mediaWidth = pageSize.width + 2 * extraOffset
+        let mediaHeight = pageSize.height + 2 * extraOffset
+        
+        let pixelWidth = Int(ceil(mediaWidth * safeScale))
+        let pixelHeight = Int(ceil(mediaHeight * safeScale))
         let pagesToExport = ExportPageRange.parse(pageRange, maxPages: document.pages.count)
         var outputURLs: [URL] = []
 
@@ -53,7 +63,17 @@ public struct PNGExporter {
             }
 
             context.scaleBy(x: safeScale, y: safeScale)
+            
+            context.saveGState()
+            if extraOffset > 0 {
+                context.translateBy(x: extraOffset, y: extraOffset)
+            }
             draw(page: page, project: project, in: context)
+            context.restoreGState()
+            
+            if drawCropMarks {
+                drawCropMarksAndBleeds(in: context, trimSize: CGSize(width: pageSize.width, height: pageSize.height), bleedPoints: bleedPoints, cropMargin: cropMargin)
+            }
 
             guard let image = context.makeImage() else {
                 throw PNGExportError.couldNotCreateImage
@@ -84,12 +104,51 @@ public struct PNGExporter {
     }
 
     private func draw(frame: PageFrame, project: BookProject, in context: CGContext) {
+        let style: ParagraphStyle
+        if frame.kind == .footnote {
+            style = ParagraphStyle(
+                id: "footnote",
+                displayName: "脚注",
+                fontName: "Songti SC",
+                fontSize: 8.5,
+                lineHeight: 11,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 4,
+                colorToken: "ink"
+            )
+        } else if frame.kind == .sideNote {
+            style = ParagraphStyle(
+                id: "sideNote",
+                displayName: "旁注",
+                fontName: "Songti SC",
+                fontSize: 6.0,
+                lineHeight: 8.0,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 2,
+                colorToken: "ink"
+            )
+        } else {
+            style = project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue)
+        }
+
+        let extraWidth = (frame.kind == .text || frame.kind == .footnote || frame.kind == .sideNote) ? CGFloat(style.fontSize * 0.5) : 0.0
+
         let rect = CGRect(
             x: frame.rect.x,
             y: frame.rect.y,
-            width: frame.rect.width,
+            width: frame.rect.width + extraWidth,
             height: frame.rect.height
         )
+
+        if frame.kind == .footnoteDivider {
+            context.saveGState()
+            context.setFillColor(NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).cgColor)
+            context.fill(rect)
+            context.restoreGState()
+            return
+        }
 
         switch frame.content {
         case .text(let text):
@@ -99,7 +158,7 @@ public struct PNGExporter {
                 context.setStrokeColor(NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).cgColor)
                 context.stroke(rect, width: 0.8)
             }
-            drawText(text, styleId: frame.styleId, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context)
+            drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context)
         case .asset(let assetId):
             drawAsset(assetId: assetId, isLeftHalf: nil, project: project, in: rect, context: context)
         case .spreadAsset(let assetId, let isLeftHalf):
@@ -109,8 +168,36 @@ public struct PNGExporter {
         }
     }
 
-    private func drawText(_ text: String, styleId: String?, project: BookProject, in rect: CGRect, context: CGContext) {
-        let style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind = .text, project: BookProject, in rect: CGRect, context: CGContext) {
+        let style: ParagraphStyle
+        if kind == .footnote {
+            style = ParagraphStyle(
+                id: "footnote",
+                displayName: "脚注",
+                fontName: "Songti SC",
+                fontSize: 8.5,
+                lineHeight: 11,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 4,
+                colorToken: "ink"
+            )
+        } else if kind == .sideNote {
+            style = ParagraphStyle(
+                id: "sideNote",
+                displayName: "旁注",
+                fontName: "Songti SC",
+                fontSize: 6.0,
+                lineHeight: 8.0,
+                firstLineIndent: 0,
+                spaceBefore: 0,
+                spaceAfter: 2,
+                colorToken: "ink"
+            )
+        } else {
+            style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+        }
+
         let attributedString = ChineseTypesetting.makeAttributedString(
             text: text,
             style: style,
@@ -243,5 +330,88 @@ public struct PNGExporter {
                 }
             }
         }
+    }
+
+    private func drawCropMarksAndBleeds(
+        in context: CGContext,
+        trimSize: CGSize,
+        bleedPoints: CGFloat,
+        cropMargin: CGFloat
+    ) {
+        context.saveGState()
+        
+        let extraOffset = bleedPoints + cropMargin
+        let mediaWidth = trimSize.width + 2 * extraOffset
+        let mediaHeight = trimSize.height + 2 * extraOffset
+        
+        // 1. Bleed box boundary (dashed red line)
+        context.setStrokeColor(NSColor(calibratedRed: 0.8, green: 0.1, blue: 0.1, alpha: 0.8).cgColor)
+        context.setLineWidth(0.5)
+        let bleedRect = CGRect(
+            x: cropMargin,
+            y: cropMargin,
+            width: mediaWidth - 2 * cropMargin,
+            height: mediaHeight - 2 * cropMargin
+        )
+        context.setLineDash(phase: 0, lengths: [4, 4])
+        context.stroke(bleedRect)
+        
+        // 2. Trim box boundary (solid cyan/gray line)
+        context.setLineDash(phase: 0, lengths: [])
+        context.setStrokeColor(NSColor(calibratedRed: 0.1, green: 0.6, blue: 0.8, alpha: 0.8).cgColor)
+        let trimRect = CGRect(
+            x: extraOffset,
+            y: extraOffset,
+            width: trimSize.width,
+            height: trimSize.height
+        )
+        context.stroke(trimRect)
+        
+        // 3. Crop marks at corners
+        context.setStrokeColor(NSColor.black.cgColor)
+        context.setLineWidth(0.5)
+        
+        let gap: CGFloat = 3.0
+        let length: CGFloat = 12.0
+        
+        let xLeft = extraOffset
+        let xRight = mediaWidth - extraOffset
+        let yTop = extraOffset
+        let yBottom = mediaHeight - extraOffset
+        
+        // Top-Left corner
+        // Horizontal line
+        context.move(to: CGPoint(x: xLeft - gap - length, y: yTop))
+        context.addLine(to: CGPoint(x: xLeft - gap, y: yTop))
+        // Vertical line
+        context.move(to: CGPoint(x: xLeft, y: yTop - gap - length))
+        context.addLine(to: CGPoint(x: xLeft, y: yTop - gap))
+        
+        // Top-Right corner
+        // Horizontal line
+        context.move(to: CGPoint(x: xRight + gap, y: yTop))
+        context.addLine(to: CGPoint(x: xRight + gap + length, y: yTop))
+        // Vertical line
+        context.move(to: CGPoint(x: xRight, y: yTop - gap - length))
+        context.addLine(to: CGPoint(x: xRight, y: yTop - gap))
+        
+        // Bottom-Left corner
+        // Horizontal line
+        context.move(to: CGPoint(x: xLeft - gap - length, y: yBottom))
+        context.addLine(to: CGPoint(x: xLeft - gap, y: yBottom))
+        // Vertical line
+        context.move(to: CGPoint(x: xLeft, y: yBottom + gap))
+        context.addLine(to: CGPoint(x: xLeft, y: yBottom + gap + length))
+        
+        // Bottom-Right corner
+        // Horizontal line
+        context.move(to: CGPoint(x: xRight + gap, y: yBottom))
+        context.addLine(to: CGPoint(x: xRight + gap + length, y: yBottom))
+        // Vertical line
+        context.move(to: CGPoint(x: xRight, y: yBottom + gap))
+        context.addLine(to: CGPoint(x: xRight, y: yBottom + gap + length))
+        
+        context.strokePath()
+        context.restoreGState()
     }
 }
