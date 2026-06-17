@@ -205,6 +205,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "layoutD - \(launchProject.project.metadata.title)"
         window.center()
         window.contentViewController = controller
+        
+        let toolbar = NSToolbar(identifier: "LayoutDMainToolbar")
+        toolbar.delegate = controller
+        toolbar.allowsUserCustomization = false
+        toolbar.autosavesConfiguration = false
+        toolbar.displayMode = .iconAndLabel
+        window.toolbar = toolbar
+        
         window.makeKeyAndOrderFront(nil)
         self.window = window
         self.workspaceController = controller
@@ -893,13 +901,198 @@ struct PNGExportSettingsView: View {
                     .padding(.leading, 85)
             }
 
-            HStack {
-                Text("输出倍率:")
-                    .frame(width: 80, alignment: .leading)
-                Stepper(String(format: "%.1fx", state.scale), value: $state.scale, in: 0.5...4.0, step: 0.5)
-            }
         }
         .padding(.all, 16)
         .frame(width: 320)
+    }
+}
+
+extension NSToolbarItem.Identifier {
+    static let openProject = NSToolbarItem.Identifier("openProject")
+    static let saveProject = NSToolbarItem.Identifier("saveProject")
+    static let prevPage = NSToolbarItem.Identifier("prevPage")
+    static let nextPage = NSToolbarItem.Identifier("nextPage")
+    static let zoomOut = NSToolbarItem.Identifier("zoomOut")
+    static let zoomActual = NSToolbarItem.Identifier("zoomActual")
+    static let zoomIn = NSToolbarItem.Identifier("zoomIn")
+    static let fitWidth = NSToolbarItem.Identifier("fitWidth")
+    static let lockPage = NSToolbarItem.Identifier("lockPage")
+    static let resetPage = NSToolbarItem.Identifier("resetPage")
+    static let exportPDF = NSToolbarItem.Identifier("exportPDF")
+    static let exportPackage = NSToolbarItem.Identifier("exportPackage")
+}
+
+extension WorkspaceViewController: NSToolbarDelegate {
+    @objc func toolbarOpen(_ sender: Any?) { openProject() }
+    @objc func toolbarSave(_ sender: Any?) { saveProject() }
+    @objc func toolbarPrevPage(_ sender: Any?) { previousPage() }
+    @objc func toolbarNextPage(_ sender: Any?) { nextPage() }
+    @objc func toolbarZoomOut(_ sender: Any?) { zoomOut() }
+    @objc func toolbarZoomActual(_ sender: Any?) { actualSize() }
+    @objc func toolbarZoomIn(_ sender: Any?) { zoomIn() }
+    @objc func toolbarFitWidth(_ sender: Any?) { fitWidth() }
+    @objc func toolbarExportPDF(_ sender: Any?) { exportPDF() }
+    @objc func toolbarExportPackage(_ sender: Any?) { exportProjectPackage() }
+    
+    @objc func toolbarToggleLock(_ sender: Any?) {
+        let isLocked = appState.project.safeLockedPages.contains(appState.currentPageNumber)
+        if isLocked {
+            appState.unlockPage(number: appState.currentPageNumber)
+        } else {
+            appState.lockPage(number: appState.currentPageNumber)
+        }
+    }
+    
+    @objc func toolbarResetPage(_ sender: Any?) {
+        appState.clearCustomLayoutForPage(number: appState.currentPageNumber)
+    }
+
+    public func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        return [
+            .openProject,
+            .saveProject,
+            .flexibleSpace,
+            .prevPage,
+            .nextPage,
+            .flexibleSpace,
+            .zoomOut,
+            .zoomActual,
+            .zoomIn,
+            .fitWidth,
+            .flexibleSpace,
+            .lockPage,
+            .resetPage,
+            .flexibleSpace,
+            .exportPDF,
+            .exportPackage
+        ]
+    }
+    
+    public func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        return [
+            .openProject,
+            .saveProject,
+            .space,
+            .prevPage,
+            .nextPage,
+            .space,
+            .zoomOut,
+            .zoomActual,
+            .zoomIn,
+            .fitWidth,
+            .flexibleSpace,
+            .lockPage,
+            .resetPage,
+            .flexibleSpace,
+            .exportPDF,
+            .exportPackage
+        ]
+    }
+    
+    public func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        
+        switch itemIdentifier {
+        case .openProject:
+            item.label = "打开"
+            item.paletteLabel = "打开项目"
+            item.toolTip = "打开项目、Markdown 或是章节包"
+            item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: "Open")
+            item.target = self
+            item.action = #selector(toolbarOpen(_:))
+            
+        case .saveProject:
+            item.label = "保存"
+            item.paletteLabel = "保存项目"
+            item.toolTip = "保存当前项目"
+            item.image = NSImage(systemSymbolName: "square.and.arrow.down", accessibilityDescription: "Save")
+            item.target = self
+            item.action = #selector(toolbarSave(_:))
+            
+        case .prevPage:
+            item.label = "上一页"
+            item.paletteLabel = "上一页"
+            item.toolTip = "跳转到上一页"
+            item.image = NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Previous Page")
+            item.target = self
+            item.action = #selector(toolbarPrevPage(_:))
+            
+        case .nextPage:
+            item.label = "下一页"
+            item.paletteLabel = "下一页"
+            item.toolTip = "跳转到下一页"
+            item.image = NSImage(systemSymbolName: "chevron.right", accessibilityDescription: "Next Page")
+            item.target = self
+            item.action = #selector(toolbarNextPage(_:))
+            
+        case .zoomOut:
+            item.label = "缩小"
+            item.paletteLabel = "缩小"
+            item.toolTip = "缩小画布"
+            item.image = NSImage(systemSymbolName: "minus.magnifyingglass", accessibilityDescription: "Zoom Out")
+            item.target = self
+            item.action = #selector(toolbarZoomOut(_:))
+            
+        case .zoomActual:
+            item.label = "实际大小"
+            item.paletteLabel = "实际大小"
+            item.toolTip = "恢复实际大小"
+            item.image = NSImage(systemSymbolName: "equal", accessibilityDescription: "Actual Size")
+            item.target = self
+            item.action = #selector(toolbarZoomActual(_:))
+            
+        case .zoomIn:
+            item.label = "放大"
+            item.paletteLabel = "放大"
+            item.toolTip = "放大画布"
+            item.image = NSImage(systemSymbolName: "plus.magnifyingglass", accessibilityDescription: "Zoom In")
+            item.target = self
+            item.action = #selector(toolbarZoomIn(_:))
+            
+        case .fitWidth:
+            item.label = "适应宽度"
+            item.paletteLabel = "适应宽度"
+            item.toolTip = "缩放画布以适应屏幕宽度"
+            item.image = NSImage(systemSymbolName: "arrow.left.and.right", accessibilityDescription: "Fit Width")
+            item.target = self
+            item.action = #selector(toolbarFitWidth(_:))
+            
+        case .lockPage:
+            item.label = "锁定页"
+            item.paletteLabel = "锁定页版式"
+            item.toolTip = "锁定或解锁当前页面"
+            item.image = NSImage(systemSymbolName: "lock", accessibilityDescription: "Lock Page")
+            item.target = self
+            item.action = #selector(toolbarToggleLock(_:))
+            
+        case .resetPage:
+            item.label = "重置页"
+            item.paletteLabel = "重置当前页版式"
+            item.toolTip = "清除自定义版式并恢复默认"
+            item.image = NSImage(systemSymbolName: "arrow.counterclockwise", accessibilityDescription: "Reset Layout")
+            item.target = self
+            item.action = #selector(toolbarResetPage(_:))
+            
+        case .exportPDF:
+            item.label = "导出 PDF"
+            item.paletteLabel = "导出 PDF"
+            item.toolTip = "导出排版好的 PDF 书稿"
+            item.image = NSImage(systemSymbolName: "arrow.up.doc", accessibilityDescription: "Export PDF")
+            item.target = self
+            item.action = #selector(toolbarExportPDF(_:))
+            
+        case .exportPackage:
+            item.label = "打包"
+            item.paletteLabel = "打包项目素材包"
+            item.toolTip = "打包为 ZIP 素材包"
+            item.image = NSImage(systemSymbolName: "archivebox", accessibilityDescription: "Export Package")
+            item.target = self
+            item.action = #selector(toolbarExportPackage(_:))
+            
+        default:
+            return nil
+        }
+        
+        return item
     }
 }
