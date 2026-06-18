@@ -90,9 +90,25 @@ private struct LayoutContext {
         self.currentPage = LaidOutPage(number: 1)
         let initialPageNumber = 1 + frontMatterPageCount
         let margins = project.resolvedMargins(for: initialPageNumber)
-        self.cursorX = margins.left
-        self.cursorY = margins.top
-        self.currentColumnTopY = margins.top
+        let setup = project.pageSetup
+        
+        let leftMargin = setup.facingPages
+            ? (initialPageNumber % 2 == 1 ? margins.left : margins.right)
+            : margins.left
+            
+        let rightMargin = setup.facingPages
+            ? (initialPageNumber % 2 == 1 ? margins.right : margins.left)
+            : margins.right
+            
+        if setup.layoutDirection == .vertical {
+            self.cursorX = setup.pageSize.width - rightMargin
+            self.cursorY = margins.top
+            self.currentColumnTopY = margins.top
+        } else {
+            self.cursorX = leftMargin
+            self.cursorY = margins.top
+            self.currentColumnTopY = margins.top
+        }
     }
 
     mutating func addRunningHeader(_ title: String) {
@@ -153,9 +169,17 @@ private struct LayoutContext {
             let style = project.styles.paragraphStyle(id: paragraph.styleId)
             let frameKind = frameKind(for: paragraph.kind)
             
-            let minReqHeight = style.lineHeight + style.spaceBefore + style.spaceAfter
-            if remainingColumnHeight < minReqHeight {
-                advanceToNextColumnOrPage()
+            if project.pageSetup.layoutDirection == .vertical {
+                let minReqWidth = style.lineHeight + style.spaceBefore + style.spaceAfter
+                let leftLimit = pageLeftMargin(for: currentAbsolutePageNumber)
+                if cursorX - minReqWidth < leftLimit {
+                    advanceToNextColumnOrPage()
+                }
+            } else {
+                let minReqHeight = style.lineHeight + style.spaceBefore + style.spaceAfter
+                if remainingColumnHeight < minReqHeight {
+                    advanceToNextColumnOrPage()
+                }
             }
             
             for fnId in paragraph.safeAnchoredFootnoteIds {
@@ -166,7 +190,7 @@ private struct LayoutContext {
                 }
             }
             
-            addText(paragraph.text, style: style, kind: frameKind, anchoredSideNoteIds: paragraph.safeAnchoredSideNoteIds)
+            addText(paragraph.text, style: style, kind: frameKind, anchoredSideNoteIds: paragraph.safeAnchoredSideNoteIds, sourceParagraphId: paragraph.id)
 
             for assetId in paragraph.anchoredAssetIds {
                 if let asset = project.assets.first(where: { $0.id == assetId }) {
@@ -202,8 +226,14 @@ private struct LayoutContext {
         )
     }
 
-    private mutating func addText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = []) {
+    private mutating func addText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil) {
         let text = normalizedText(text)
+        
+        if isVertical && kind != .runningHeader && kind != .footnote && kind != .sideNote {
+            addFlowingVerticalText(text, style: style, kind: kind, anchoredSideNoteIds: anchoredSideNoteIds, sourceParagraphId: sourceParagraphId)
+            return
+        }
+        
         let height = estimatedTextHeight(text: text, style: style, width: columnWidth)
         if shouldKeepHeadingWithNext(style: style, height: height) {
             advanceToNextColumnOrPage()
@@ -218,11 +248,11 @@ private struct LayoutContext {
                     pageNumber: currentPage.number
                 )
             )
-            addFlowingText(text, style: style, kind: kind, anchoredSideNoteIds: anchoredSideNoteIds)
+            addFlowingText(text, style: style, kind: kind, anchoredSideNoteIds: anchoredSideNoteIds, sourceParagraphId: sourceParagraphId)
             return
         }
 
-        placeTextFrame(text, height: height, style: style, kind: kind, spaceBefore: style.spaceBefore, anchoredSideNoteIds: anchoredSideNoteIds)
+        placeTextFrame(text, height: height, style: style, kind: kind, spaceBefore: style.spaceBefore, anchoredSideNoteIds: anchoredSideNoteIds, sourceParagraphId: sourceParagraphId)
     }
 
     private func frameKind(for paragraphKind: ParagraphKind) -> PageFrameKind {
@@ -251,7 +281,7 @@ private struct LayoutContext {
         return remainingColumnHeight < requiredHeight && remainingColumnHeight < columnTextHeight
     }
 
-    private mutating func addFlowingText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = []) {
+    private mutating func addFlowingText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil) {
         let lines = ChineseTypesetting.breakTextIntoLines(
             text,
             style: style,
@@ -325,10 +355,103 @@ private struct LayoutContext {
                 style: style,
                 kind: kind,
                 spaceBefore: spaceBefore,
-                anchoredSideNoteIds: isFirstSegment ? anchoredSideNoteIds : []
+                anchoredSideNoteIds: isFirstSegment ? anchoredSideNoteIds : [],
+                sourceParagraphId: sourceParagraphId
             )
             
             remainingLines.removeFirst(finalFittedCount)
+            isFirstSegment = false
+        }
+    }
+
+    private var isVertical: Bool {
+        project.pageSetup.layoutDirection == .vertical
+    }
+
+    private var contentHeight: Double {
+        let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
+        return project.pageSetup.pageSize.height - margins.top - margins.bottom
+    }
+
+    private mutating func addFlowingVerticalText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil) {
+        let verticalStyle = style.layoutDirection == nil ? style.with(layoutDirection: .vertical) : style
+        let lines = ChineseTypesetting.breakTextIntoLines(
+            text,
+            style: verticalStyle,
+            columnWidth: columnTextHeight,
+            hangingWidth: style.fontSize * 0.5
+        )
+        
+        var remainingLines = lines
+        var isFirstSegment = true
+        
+        while !remainingLines.isEmpty {
+            let spaceBefore = isFirstSegment ? style.spaceBefore : 0
+            
+            // In vertical mode, check if we need to advance column/page
+            let leftLimit = pageLeftMargin(for: currentAbsolutePageNumber)
+            let minReqWidth = verticalStyle.lineHeight + spaceBefore + style.spaceAfter
+            if cursorX - minReqWidth < leftLimit {
+                advanceToNextColumnOrPage()
+            }
+            
+            let maxSegmentWidth = cursorX - leftLimit - spaceBefore - style.spaceAfter
+            // How many vertical lines can fit in maxSegmentWidth?
+            var fitCount = Int(floor(maxSegmentWidth / verticalStyle.lineHeight))
+            if fitCount <= 0 {
+                advanceToNextColumnOrPage()
+                continue
+            }
+            
+            fitCount = min(fitCount, remainingLines.count)
+            
+            // Widow/orphan controls for vertical lines:
+            let totalCount = remainingLines.count
+            let remainingCount = totalCount - fitCount
+            var finalFitCount = fitCount
+            
+            if remainingCount > 0 {
+                // Orphan: if only 1 line fits, and we are not at the right of the row
+                let rowRight = project.pageSetup.pageSize.width - pageRightMargin(for: currentAbsolutePageNumber)
+                let isStartOfRow = abs(cursorX - rowRight) < 5.0
+                
+                if fitCount == 1 && !isStartOfRow {
+                    finalFitCount = 0
+                }
+                // Widow: if only 1 line is left for the next deck/page
+                else if remainingCount == 1 {
+                    if fitCount >= 3 {
+                        finalFitCount = fitCount - 1
+                    } else if fitCount == 2 && !isStartOfRow {
+                        finalFitCount = 0
+                    }
+                }
+            }
+            
+            if finalFitCount == 0 {
+                advanceToNextColumnOrPage()
+                continue
+            }
+            
+            let segmentText = remainingLines.prefix(finalFitCount).joined(separator: "\n")
+            let segmentWidth = Double(finalFitCount) * verticalStyle.lineHeight
+            
+            cursorX -= spaceBefore
+            let rectX = cursorX - segmentWidth
+            let rectY = cursorY
+            
+            let rect = Rect(x: rectX, y: rectY, width: segmentWidth, height: columnTextHeight)
+            currentPage.frames.append(PageFrame(
+                kind: kind,
+                rect: rect,
+                styleId: style.id,
+                content: .text(segmentText),
+                sourceParagraphId: sourceParagraphId
+            ))
+            
+            cursorX -= segmentWidth + style.spaceAfter
+            
+            remainingLines.removeFirst(finalFitCount)
             isFirstSegment = false
         }
     }
@@ -339,12 +462,13 @@ private struct LayoutContext {
         style: ParagraphStyle,
         kind: PageFrameKind,
         spaceBefore: Double,
-        anchoredSideNoteIds: [UUID] = []
+        anchoredSideNoteIds: [UUID] = [],
+        sourceParagraphId: UUID? = nil
     ) {
         advanceIfNeeded(height + spaceBefore + style.spaceAfter)
         cursorY += spaceBefore
         let rect = Rect(x: cursorX, y: cursorY, width: columnWidth, height: height)
-        currentPage.frames.append(PageFrame(kind: kind, rect: rect, styleId: style.id, content: .text(text)))
+        currentPage.frames.append(PageFrame(kind: kind, rect: rect, styleId: style.id, content: .text(text), sourceParagraphId: sourceParagraphId))
         
         for snId in anchoredSideNoteIds {
             if let snParagraph = findParagraph(id: snId) {
@@ -644,7 +768,11 @@ private struct LayoutContext {
         }
 
         currentColumn = 0
-        cursorX = pageLeftMargin(for: currentAbsolutePageNumber)
+        if isVertical {
+            cursorX = project.pageSetup.pageSize.width - pageRightMargin(for: currentAbsolutePageNumber)
+        } else {
+            cursorX = pageLeftMargin(for: currentAbsolutePageNumber)
+        }
     }
 
     private func imageHeight(for asset: Asset, width: Double) -> Double {
@@ -711,8 +839,17 @@ private struct LayoutContext {
         if currentColumn + 1 < columns {
             currentColumn += 1
             let actualPageNumber = currentAbsolutePageNumber
-            cursorX = pageLeftMargin(for: actualPageNumber) + Double(currentColumn) * (columnWidth + project.resolvedGutter(for: actualPageNumber))
-            cursorY = currentColumnTopY
+            let margins = project.resolvedMargins(for: actualPageNumber)
+            if isVertical {
+                let rowHeight = columnTextHeight
+                let gutter = project.resolvedGutter(for: actualPageNumber)
+                currentColumnTopY = margins.top + Double(currentColumn) * (rowHeight + gutter)
+                cursorX = project.pageSetup.pageSize.width - pageRightMargin(for: actualPageNumber)
+                cursorY = currentColumnTopY
+            } else {
+                cursorX = pageLeftMargin(for: actualPageNumber) + Double(currentColumn) * (columnWidth + project.resolvedGutter(for: actualPageNumber))
+                cursorY = currentColumnTopY
+            }
         } else {
             advanceToNextPage()
         }
@@ -726,9 +863,15 @@ private struct LayoutContext {
         currentColumn = 0
         let absPageNum = absolutePageNumber(for: newPageNumber)
         let margins = project.resolvedMargins(for: absPageNum)
-        cursorX = pageLeftMargin(for: absPageNum)
-        cursorY = margins.top
-        currentColumnTopY = margins.top
+        if isVertical {
+            cursorX = project.pageSetup.pageSize.width - pageRightMargin(for: absPageNum)
+            cursorY = margins.top
+            currentColumnTopY = margins.top
+        } else {
+            cursorX = pageLeftMargin(for: absPageNum)
+            cursorY = margins.top
+            currentColumnTopY = margins.top
+        }
         addRunningHeader(project.metadata.title)
         
         applyPlanIfPresent()
@@ -840,7 +983,8 @@ private struct LayoutContext {
                     kind: .footnote,
                     rect: fnRect,
                     styleId: "footnote",
-                    content: .text(fnParagraph.text)
+                    content: .text(fnParagraph.text),
+                    sourceParagraphId: fnParagraph.id
                 ))
                 currentY += fnHeight
             }
@@ -874,7 +1018,8 @@ private struct LayoutContext {
                     kind: .sideNote,
                     rect: rect,
                     styleId: "sideNote",
-                    content: .text(snParagraph.text)
+                    content: .text(snParagraph.text),
+                    sourceParagraphId: snParagraph.id
                 ))
             }
         }
@@ -998,18 +1143,33 @@ private struct LayoutContext {
     }
 
     private var columnWidth: Double {
-        let columns = project.resolvedColumns(for: currentAbsolutePageNumber)
-        let totalGutter = Double(max(columns - 1, 0)) * project.resolvedGutter(for: currentAbsolutePageNumber)
-        return (contentWidth - totalGutter) / Double(max(columns, 1))
+        if isVertical {
+            return contentWidth
+        } else {
+            let columns = project.resolvedColumns(for: currentAbsolutePageNumber)
+            let totalGutter = Double(max(columns - 1, 0)) * project.resolvedGutter(for: currentAbsolutePageNumber)
+            return (contentWidth - totalGutter) / Double(max(columns, 1))
+        }
     }
 
     private var columnTextHeight: Double {
-        let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
-        return resolvedBottomLimit(for: currentAbsolutePageNumber) - margins.top
+        if isVertical {
+            let columns = project.resolvedColumns(for: currentAbsolutePageNumber)
+            let totalGutter = Double(max(columns - 1, 0)) * project.resolvedGutter(for: currentAbsolutePageNumber)
+            return (contentHeight - totalGutter) / Double(max(columns, 1))
+        } else {
+            let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
+            return resolvedBottomLimit(for: currentAbsolutePageNumber) - margins.top
+        }
     }
 
     private var remainingColumnHeight: Double {
-        return resolvedBottomLimit(for: currentAbsolutePageNumber) - cursorY
+        if isVertical {
+            let leftLimit = pageLeftMargin(for: currentAbsolutePageNumber)
+            return cursorX - leftLimit
+        } else {
+            return resolvedBottomLimit(for: currentAbsolutePageNumber) - cursorY
+        }
     }
 
     /// Validates an advisory layout plan against the rules the renderer relies on.
@@ -1061,9 +1221,99 @@ private struct LayoutContext {
             if let prev = block.previousThreadedBlockId, !blockIds.contains(prev) {
                 failures.append("\(label) 的前驱线程块不在本计划内")
             }
+            
+            // 2. Check component roles
+            if block.kind == .component {
+                if !isApprovedComponentRole(block.role) {
+                    failures.append("\(label) 的组件角色 \(block.role) 未在组件样式库中定义")
+                }
+            }
+            
+            // 3. Check custom color overrides (must be valid hex or approved token ID)
+            if let bg = block.backgroundColorHex {
+                if !isValidColorValue(bg) {
+                    failures.append("\(label) 的背景色引用了未批准的 Token 或无效颜色值 \(bg)")
+                }
+            }
+            if let stroke = block.strokeColorHex {
+                if !isValidColorValue(stroke) {
+                    failures.append("\(label) 的描边色引用了未批准的 Token 或无效颜色值 \(stroke)")
+                }
+            }
+            if let txt = block.textColorHex {
+                if !isValidColorValue(txt) {
+                    failures.append("\(label) 的文字颜色引用了未批准的 Token 或无效颜色值 \(txt)")
+                }
+            }
+        }
+
+        // 4. Check fonts in paragraph styles used in project (and composite font mappings)
+        let approvedFonts: Set<String> = [
+            "Songti SC",
+            "PingFang SC",
+            "PingFang SC Semibold",
+            "PingFang SC Medium",
+            "Heiti SC",
+            "Kaiti SC",
+            "Times New Roman",
+            "Helvetica",
+            "Helvetica Neue",
+            "Georgia",
+            "Arial"
+        ]
+        
+        for style in project.styles.paragraphStyles {
+            if !approvedFonts.contains(style.fontName) {
+                failures.append("样式 \(style.displayName) 使用了非批准字体 \(style.fontName)")
+            }
+            if let cf = style.compositeFont {
+                for (cls, mapping) in cf {
+                    if !approvedFonts.contains(mapping.fontName) {
+                        failures.append("样式 \(style.displayName) 的 \(cls.rawValue) 分支使用了非批准字体 \(mapping.fontName)")
+                    }
+                }
+            }
         }
 
         return failures
+    }
+
+    private func isValidColorValue(_ val: String) -> Bool {
+        let clean = val.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.hasPrefix("#") {
+            let hexPattern = "^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$"
+            let range = NSRange(location: 0, length: clean.utf16.count)
+            if let regex = try? NSRegularExpression(pattern: hexPattern),
+               regex.firstMatch(in: clean, options: [], range: range) != nil {
+                return true
+            }
+        }
+        if project.styles.colorHex(clean) != nil {
+            return true
+        }
+        return false
+    }
+
+    private func isApprovedComponentRole(_ role: String) -> Bool {
+        let cleanRole = role.lowercased()
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "_", with: "")
+        
+        let builtInRoles: Set<String> = [
+            "callout", "table", "footnotedivider", "footnote", "sidenote", "caption", "knowledgecard", "datatable", "figurecaption", "runningheader"
+        ]
+        if builtInRoles.contains(cleanRole) {
+            return true
+        }
+        
+        let approvedIds = project.styles.safeComponentStyles.flatMap {
+            [$0.id, $0.frameKind.rawValue]
+        }.map {
+            $0.lowercased()
+                .replacingOccurrences(of: "-", with: "")
+                .replacingOccurrences(of: "_", with: "")
+        }
+        return approvedIds.contains(cleanRole)
     }
 
     mutating func applyPlanIfPresent() {
@@ -1148,17 +1398,18 @@ private struct LayoutContext {
             if case .asset(let assetId) = block.contentReference {
                 content = .asset(assetId)
             } else {
+                let normalizedTextToPlace = normalizedText(textToPlace)
                 if block.kind == .text && (block.nextThreadedBlockId != nil || block.previousThreadedBlockId != nil) {
-                    let fittedText = fittingPrefix(of: textToPlace, style: resolvedStyle, maxHeight: rect.height, width: rect.width)
+                    let fittedText = fittingPrefix(of: normalizedTextToPlace, style: resolvedStyle, maxHeight: rect.height, width: rect.width)
                     content = .text(fittedText)
                     if let nextId = block.nextThreadedBlockId {
-                        let remaining = String(textToPlace.dropFirst(fittedText.count)).trimmedForLayout
+                        let remaining = String(normalizedTextToPlace.dropFirst(fittedText.count)).trimmedForLayout
                         if !remaining.isEmpty {
                             threadedRemainingText[nextId] = remaining
                         }
                     }
                 } else {
-                    content = .text(textToPlace)
+                    content = .text(normalizedTextToPlace)
                 }
             }
             
@@ -1171,7 +1422,8 @@ private struct LayoutContext {
                 backgroundColorHex: block.backgroundColorHex,
                 strokeColorHex: block.strokeColorHex,
                 strokeWidth: block.strokeWidth,
-                textColorHex: block.textColorHex
+                textColorHex: block.textColorHex,
+                maskShape: block.maskShape
             ))
         }
         

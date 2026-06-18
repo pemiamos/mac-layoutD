@@ -68,7 +68,7 @@ public struct PNGExporter {
             if extraOffset > 0 {
                 context.translateBy(x: extraOffset, y: extraOffset)
             }
-            draw(page: page, project: project, in: context)
+            draw(page: page, project: project, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0)
             context.restoreGState()
             
             if drawCropMarks {
@@ -91,19 +91,19 @@ public struct PNGExporter {
         return outputURLs
     }
 
-    private func draw(page: LaidOutPage, project: BookProject, in context: CGContext) {
+    private func draw(page: LaidOutPage, project: BookProject, in context: CGContext, bleedPoints: CGFloat) {
         let pageSize = project.pageSetup.pageSize
         context.setFillColor(NSColor.white.cgColor)
         context.fill(CGRect(x: 0, y: 0, width: pageSize.width, height: pageSize.height))
 
         for frame in page.frames {
-            draw(frame: frame, project: project, in: context)
+            draw(frame: frame, pageNumber: page.number, project: project, in: context, bleedPoints: bleedPoints)
         }
 
         drawPageNumber(page.number, project: project, in: context)
     }
 
-    private func draw(frame: PageFrame, project: BookProject, in context: CGContext) {
+    private func draw(frame: PageFrame, pageNumber: Int, project: BookProject, in context: CGContext, bleedPoints: CGFloat) {
         let style: ParagraphStyle
         if frame.kind == .footnote {
             style = ParagraphStyle(
@@ -135,17 +135,34 @@ public struct PNGExporter {
 
         let extraWidth = (frame.kind == .text || frame.kind == .footnote || frame.kind == .sideNote || frame.kind == .runningHeader) ? CGFloat(style.fontSize * 0.5) : 0.0
 
-        let rect = CGRect(
+        var rect = CGRect(
             x: frame.rect.x,
             y: frame.rect.y,
             width: frame.rect.width + extraWidth,
             height: frame.rect.height
         )
 
+        // Handle full-bleed cover/fullPageImage fixed page export
+        if bleedPoints > 0,
+           let plan = project.appliedLayoutPlans?[pageNumber],
+           plan.strategy == .fullPageImage || plan.strategy == .cover || plan.strategy == .titlePage {
+            let pageSize = project.pageSetup.pageSize
+            if frame.rect.width >= pageSize.width - 1.0 && frame.rect.height >= pageSize.height - 1.0 {
+                rect = CGRect(
+                    x: -bleedPoints,
+                    y: -bleedPoints,
+                    width: CGFloat(pageSize.width) + 2 * bleedPoints,
+                    height: CGFloat(pageSize.height) + 2 * bleedPoints
+                )
+            }
+        }
+
         if let bgHex = frame.backgroundColorHex, let color = NSColor.from(hex: bgHex) {
             context.saveGState()
             context.setFillColor(color.cgColor)
-            context.fill(rect)
+            let path = maskPath(in: rect, shape: frame.maskShape)
+            context.addPath(path)
+            context.fillPath()
             context.restoreGState()
         }
 
@@ -180,9 +197,9 @@ public struct PNGExporter {
                 drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context, textColorHex: frame.textColorHex)
             }
         case .asset(let assetId):
-            drawAsset(assetId: assetId, isLeftHalf: nil, project: project, in: rect, context: context)
+            drawAsset(assetId: assetId, isLeftHalf: nil, project: project, in: rect, context: context, maskShape: frame.maskShape)
         case .spreadAsset(let assetId, let isLeftHalf):
-            drawAsset(assetId: assetId, isLeftHalf: isLeftHalf, project: project, in: rect, context: context)
+            drawAsset(assetId: assetId, isLeftHalf: isLeftHalf, project: project, in: rect, context: context, maskShape: frame.maskShape)
         case .empty:
             break
         }
@@ -191,7 +208,9 @@ public struct PNGExporter {
             context.saveGState()
             context.setStrokeColor(color.cgColor)
             context.setLineWidth(CGFloat(frame.strokeWidth ?? 1.5))
-            context.stroke(rect)
+            let path = maskPath(in: rect, shape: frame.maskShape)
+            context.addPath(path)
+            context.strokePath()
             context.restoreGState()
         }
     }
@@ -264,31 +283,57 @@ public struct PNGExporter {
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
         path.addRect(rect)
-        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: attributedString.length), path, nil)
+        let frameAttrs: [CFString: Any]?
+        if style.layoutDirection == .vertical {
+            frameAttrs = [kCTFrameProgressionAttributeName: CTFrameProgression.rightToLeft.rawValue as CFNumber]
+        } else {
+            frameAttrs = nil
+        }
+        let frame = CTFramesetterCreateFrame(
+            framesetter,
+            CFRange(location: 0, length: attributedString.length),
+            path,
+            frameAttrs as CFDictionary?
+        )
         CTFrameDraw(frame, context)
     }
 
-    private func drawAsset(assetId: UUID, isLeftHalf: Bool?, project: BookProject, in rect: CGRect, context: CGContext) {
+    private func drawAsset(assetId: UUID, isLeftHalf: Bool?, project: BookProject, in rect: CGRect, context: CGContext, maskShape: ImageMaskShape?) {
+        let path = maskPath(in: rect, shape: maskShape)
+        
         guard let asset = project.assets.first(where: { $0.id == assetId }),
               let sourcePath = asset.sourcePath,
               let image = NSImage(contentsOfFile: sourcePath) else {
+            context.saveGState()
             context.setFillColor(NSColor(calibratedWhite: 0.91, alpha: 1).cgColor)
-            context.fill(rect)
+            context.addPath(path)
+            context.fillPath()
+            context.restoreGState()
+            
+            context.saveGState()
             context.setStrokeColor(NSColor(calibratedWhite: 0.62, alpha: 1).cgColor)
-            context.stroke(rect)
+            context.setLineWidth(1.0)
+            context.addPath(path)
+            context.strokePath()
+            context.restoreGState()
+            
             drawText(assetId.uuidString.prefix(8).description, styleId: StyleID.caption.rawValue, project: project, in: rect.insetBy(dx: 8, dy: 8), context: context)
             return
         }
 
+        context.saveGState()
         context.setFillColor(NSColor(calibratedWhite: 0.96, alpha: 1).cgColor)
-        context.fill(rect)
+        context.addPath(path)
+        context.fillPath()
+        context.restoreGState()
 
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
         }
 
         context.saveGState()
-        context.clip(to: rect)
+        context.addPath(path)
+        context.clip()
 
         if let isLeft = isLeftHalf {
             let pageSize = project.pageSetup.pageSize
@@ -321,8 +366,13 @@ public struct PNGExporter {
         }
 
         context.restoreGState()
+        
+        context.saveGState()
         context.setStrokeColor(NSColor(calibratedWhite: 0.62, alpha: 1).cgColor)
-        context.stroke(rect)
+        context.setLineWidth(1.0)
+        context.addPath(path)
+        context.strokePath()
+        context.restoreGState()
     }
 
     private func pageLeftMargin(for pageNumber: Int, project: BookProject) -> Double {
@@ -471,6 +521,44 @@ public struct PNGExporter {
         
         context.strokePath()
         context.restoreGState()
+    }
+
+    private func maskPath(in rect: CGRect, shape: ImageMaskShape?) -> CGPath {
+        let path = CGMutablePath()
+        guard let shape, shape != .rect else {
+            path.addRect(rect)
+            return path
+        }
+        
+        switch shape {
+        case .rect:
+            path.addRect(rect)
+        case .octagon:
+            let delta = min(rect.width, rect.height) * 0.15
+            path.move(to: CGPoint(x: rect.minX + delta, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX - delta, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + delta))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - delta))
+            path.addLine(to: CGPoint(x: rect.maxX - delta, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX + delta, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - delta))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + delta))
+            path.closeSubpath()
+        case .fan:
+            let cx = rect.minX + rect.width / 2.0
+            let cy = rect.minY + rect.height * 2.5
+            let R = rect.height * 2.5
+            let r = rect.height * 1.5
+            let theta = asin(rect.width / (2.0 * R))
+            let startAngle = 1.5 * .pi - theta
+            let endAngle = 1.5 * .pi + theta
+            
+            path.addArc(center: CGPoint(x: cx, y: cy), radius: R, startAngle: startAngle, endAngle: endAngle, clockwise: false)
+            path.addLine(to: CGPoint(x: cx + r * cos(endAngle), y: cy + r * sin(endAngle)))
+            path.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: endAngle, endAngle: startAngle, clockwise: true)
+            path.closeSubpath()
+        }
+        return path
     }
 }
 

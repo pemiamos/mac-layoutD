@@ -279,6 +279,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         workspaceController?.nextPage()
     }
 
+    @objc private func undoAction(_ sender: Any?) {
+        workspaceController?.undo()
+    }
+
+    @objc private func redoAction(_ sender: Any?) {
+        workspaceController?.redo()
+    }
+
     private func buildMainMenu() {
         let mainMenu = NSMenu()
 
@@ -365,6 +373,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fileMenuItem.submenu = fileMenu
         mainMenu.addItem(fileMenuItem)
 
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(
+            NSMenuItem(
+                title: "Undo",
+                action: #selector(undoAction(_:)),
+                keyEquivalent: "z"
+            )
+        )
+        editMenu.items.last?.target = self
+        editMenu.addItem(
+            NSMenuItem(
+                title: "Redo",
+                action: #selector(redoAction(_:)),
+                keyEquivalent: "Z"
+            )
+        )
+        editMenu.items.last?.target = self
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+
         let viewMenuItem = NSMenuItem()
         let viewMenu = NSMenu(title: "View")
         let viewItems: [(String, Selector, String)] = [
@@ -423,6 +452,7 @@ final class WorkspaceViewController: NSViewController {
             guard let self else { return }
             self.canvas.project = proj
             self.canvas.document = doc
+            self.canvas.baselineDocument = self.appState.baselineDocument
             self.view.window?.title = "layoutD - \(proj.metadata.title)"
         }
         
@@ -461,11 +491,24 @@ final class WorkspaceViewController: NSViewController {
         view.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
     }
 
+    func undo() {
+        appState.undo()
+    }
+
+    func redo() {
+        appState.redo()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         buildInterface()
         canvas.project = appState.project
         canvas.document = appState.laidOutDocument
+        canvas.baselineDocument = appState.baselineDocument
+        
+        canvas.onDragStarted = { [weak self] in
+            self?.appState.beginUndoGrouping()
+        }
         
         canvas.onFrameSelected = { [weak self] frameId in
             guard let self else { return }

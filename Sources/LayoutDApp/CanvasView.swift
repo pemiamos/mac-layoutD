@@ -49,6 +49,12 @@ final class CanvasView: NSView {
     var onFrameDragged: ((UUID, Double, Double, Double, Double) -> Void)?
     var onGapDragged: ((UUID, Rect, UUID, Rect) -> Void)?
     var onPageSelected: ((Int) -> Void)?
+    var onDragStarted: (() -> Void)?
+    var baselineDocument: LaidOutDocument? {
+        didSet {
+            needsDisplay = true
+        }
+    }
 
     struct GapInfo {
         var isVerticalGap: Bool
@@ -194,6 +200,42 @@ final class CanvasView: NSView {
             "🔒".draw(at: CGPoint(x: pageRect.maxX - 28, y: pageRect.minY + 12), withAttributes: attributes)
         }
 
+        // Draw baseline diff (dashed outlines)
+        if activeScreenMode == .normal,
+           project.appliedLayoutPlans?[page.number] != nil,
+           let baselineDocument,
+           let baselinePage = baselineDocument.pages.first(where: { $0.number == page.number }) {
+            
+            NSColor(calibratedRed: 0.88, green: 0.38, blue: 0.08, alpha: 0.4).setStroke()
+            for bFrame in baselinePage.frames {
+                if bFrame.kind == .runningHeader {
+                    continue
+                }
+                
+                let rect = CGRect(
+                    x: pageRect.minX + CGFloat(bFrame.rect.x) * zoomScale,
+                    y: pageRect.minY + CGFloat(bFrame.rect.y) * zoomScale,
+                    width: CGFloat(bFrame.rect.width) * zoomScale,
+                    height: CGFloat(bFrame.rect.height) * zoomScale
+                )
+                
+                let path = NSBezierPath(rect: rect)
+                path.lineWidth = 1.0
+                let dashedPattern: [CGFloat] = [3.0, 3.0]
+                path.setLineDash(dashedPattern, count: dashedPattern.count, phase: 0.0)
+                path.stroke()
+            }
+        }
+        
+        // Draw override status label
+        if activeScreenMode == .normal && project.appliedLayoutPlans?[page.number] != nil {
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 10, weight: .bold),
+                .foregroundColor: NSColor(calibratedRed: 0.88, green: 0.38, blue: 0.08, alpha: 0.8)
+            ]
+            "已覆写 (Override)".draw(at: CGPoint(x: pageRect.minX + 12, y: pageRect.minY + 12), withAttributes: attributes)
+        }
+
         // Draw spine guide line if facing pages is enabled and it's not the cover page
         if activeScreenMode == .normal && project.pageSetup.facingPages && page.number > 1 {
             NSColor(calibratedWhite: 0.72, alpha: 1).setStroke()
@@ -287,7 +329,8 @@ final class CanvasView: NSView {
         // Draw background color override if any
         if let bgColor = resolvedColor(memoryColor: frameBackgroundColors[frame.id], persistedHex: frame.backgroundColorHex) {
             bgColor.setFill()
-            rect.fill()
+            let path = maskPath(in: rect, shape: frame.maskShape)
+            path.fill()
         }
 
         switch frame.content {
@@ -315,9 +358,9 @@ final class CanvasView: NSView {
                 drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor)
             }
         case .asset(let assetId):
-            drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect)
+            drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect, maskShape: frame.maskShape)
         case .spreadAsset(let assetId, let isLeftHalf):
-            drawAssetPlaceholder(assetId: assetId, isLeftHalf: isLeftHalf, project: project, rect: rect)
+            drawAssetPlaceholder(assetId: assetId, isLeftHalf: isLeftHalf, project: project, rect: rect, maskShape: frame.maskShape)
         case .empty:
             break
         }
@@ -325,7 +368,7 @@ final class CanvasView: NSView {
         // Draw stroke color override if any
         if let strokeColor = resolvedColor(memoryColor: frameStrokeColors[frame.id], persistedHex: frame.strokeColorHex) {
             strokeColor.setStroke()
-            let path = NSBezierPath(rect: rect)
+            let path = maskPath(in: rect, shape: frame.maskShape)
             path.lineWidth = CGFloat(frame.strokeWidth ?? 1.5)
             path.stroke()
         }
@@ -464,41 +507,59 @@ final class CanvasView: NSView {
             style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
         }
 
-        let font = NSFont(name: style.fontName, size: CGFloat(style.fontSize) * zoomScale) ?? .systemFont(ofSize: CGFloat(style.fontSize) * zoomScale)
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = max(CGFloat(style.lineHeight - style.fontSize), 0) * zoomScale
-        paragraph.firstLineHeadIndent = CGFloat(style.firstLineIndent) * zoomScale
-
-        // Color priority: explicit frame override > paragraph style's color token
-        // (resolved through the style library / design tokens) > neutral fallback.
         let tokenColor = project.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
         let textColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: textColor,
-            .paragraphStyle: paragraph
-        ]
-        let attrString = NSMutableAttributedString(string: text, attributes: attributes)
-        ChineseTypesetting.applyPunctuationCompression(to: attrString, fontSize: Double(font.pointSize))
-        attrString.draw(in: applyDefaultInset ? rect.insetBy(dx: 4, dy: 2) : rect)
+        let attrString = ChineseTypesetting.makeAttributedString(
+            text: text,
+            style: style,
+            foregroundColor: textColor.cgColor,
+            zoomScale: zoomScale
+        )
+        
+        let drawingRect = applyDefaultInset ? rect.insetBy(dx: 4, dy: 2) : rect
+        
+        guard let cgContext = NSGraphicsContext.current?.cgContext else { return }
+        cgContext.saveGState()
+        cgContext.translateBy(x: drawingRect.minX, y: drawingRect.maxY)
+        cgContext.scaleBy(x: 1.0, y: -1.0)
+        
+        let path = CGPath(rect: CGRect(x: 0, y: 0, width: drawingRect.width, height: drawingRect.height), transform: nil)
+        let framesetter = CTFramesetterCreateWithAttributedString(attrString)
+        
+        let frame: CTFrame
+        if style.layoutDirection == .vertical {
+            let frameAttributes: [CFString: Any] = [
+                kCTFrameProgressionAttributeName: CTFrameProgression.rightToLeft.rawValue as CFNumber
+            ]
+            frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, frameAttributes as CFDictionary)
+        } else {
+            frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
+        }
+        
+        cgContext.textMatrix = .identity
+        CTFrameDraw(frame, cgContext)
+        cgContext.restoreGState()
     }
 
     private func resolvedColor(memoryColor: NSColor?, persistedHex: String?) -> NSColor? {
         memoryColor ?? persistedHex.flatMap(NSColor.fromHex)
     }
 
-    private func drawAssetPlaceholder(assetId: UUID, isLeftHalf: Bool?, project: BookProject, rect: CGRect) {
+    private func drawAssetPlaceholder(assetId: UUID, isLeftHalf: Bool?, project: BookProject, rect: CGRect, maskShape: ImageMaskShape?) {
         let asset = project.assets.first { $0.id == assetId }
+        let path = maskPath(in: rect, shape: maskShape)
+        
         if let image = loadImage(asset: asset) {
-            drawImage(image, isLeftHalf: isLeftHalf, rect: rect, project: project)
+            drawImage(image, isLeftHalf: isLeftHalf, rect: rect, project: project, maskShape: maskShape)
             drawImageLabel(asset?.fileName ?? "Image", in: rect)
             return
         }
 
         NSColor(calibratedWhite: 0.91, alpha: 1).setFill()
-        rect.fill()
+        path.fill()
         NSColor(calibratedWhite: 0.62, alpha: 1).setStroke()
-        NSBezierPath(rect: rect).stroke()
+        path.lineWidth = 1.0
+        path.stroke()
 
         let label = asset?.fileName ?? "Image"
         drawImageLabel(label, in: rect)
@@ -511,9 +572,11 @@ final class CanvasView: NSView {
         return NSImage(contentsOfFile: sourcePath)
     }
 
-    private func drawImage(_ image: NSImage, isLeftHalf: Bool?, rect: CGRect, project: BookProject) {
+    private func drawImage(_ image: NSImage, isLeftHalf: Bool?, rect: CGRect, project: BookProject, maskShape: ImageMaskShape?) {
+        let path = maskPath(in: rect, shape: maskShape)
+        
         NSColor(calibratedWhite: 0.96, alpha: 1).setFill()
-        rect.fill()
+        path.fill()
 
         let imageSize = image.size
         guard imageSize.width > 0, imageSize.height > 0 else {
@@ -521,7 +584,6 @@ final class CanvasView: NSView {
         }
 
         NSGraphicsContext.current?.saveGraphicsState()
-        let path = NSBezierPath(rect: rect)
         path.addClip()
 
         if let isLeft = isLeftHalf {
@@ -555,7 +617,49 @@ final class CanvasView: NSView {
 
         NSGraphicsContext.current?.restoreGraphicsState()
         NSColor(calibratedWhite: 0.62, alpha: 1).setStroke()
-        NSBezierPath(rect: rect).stroke()
+        path.lineWidth = 1.0
+        path.stroke()
+    }
+
+    private func maskPath(in rect: CGRect, shape: ImageMaskShape?) -> NSBezierPath {
+        let path = NSBezierPath()
+        guard let shape, shape != .rect else {
+            path.appendRect(rect)
+            return path
+        }
+        
+        switch shape {
+        case .rect:
+            path.appendRect(rect)
+        case .octagon:
+            let delta = min(rect.width, rect.height) * 0.15
+            path.move(to: CGPoint(x: rect.minX + delta, y: rect.minY))
+            path.line(to: CGPoint(x: rect.maxX - delta, y: rect.minY))
+            path.line(to: CGPoint(x: rect.maxX, y: rect.minY + delta))
+            path.line(to: CGPoint(x: rect.maxX, y: rect.maxY - delta))
+            path.line(to: CGPoint(x: rect.maxX - delta, y: rect.maxY))
+            path.line(to: CGPoint(x: rect.minX + delta, y: rect.maxY))
+            path.line(to: CGPoint(x: rect.minX, y: rect.maxY - delta))
+            path.line(to: CGPoint(x: rect.minX, y: rect.minY + delta))
+            path.close()
+        case .fan:
+            let cx = rect.minX + rect.width / 2.0
+            let cy = rect.minY + rect.height * 2.5
+            let R = rect.height * 2.5
+            let r = rect.height * 1.5
+            let theta = asin(rect.width / (2.0 * R))
+            let startAngle = 1.5 * .pi - theta
+            let endAngle = 1.5 * .pi + theta
+            
+            let startDeg = startAngle * 180.0 / .pi
+            let endDeg = endAngle * 180.0 / .pi
+            
+            path.appendArc(withCenter: CGPoint(x: cx, y: cy), radius: R, startAngle: startDeg, endAngle: endDeg, clockwise: false)
+            path.line(to: CGPoint(x: cx + r * cos(endAngle), y: cy + r * sin(endAngle)))
+            path.appendArc(withCenter: CGPoint(x: cx, y: cy), radius: r, startAngle: endDeg, endAngle: startDeg, clockwise: true)
+            path.close()
+        }
+        return path
     }
 
     private func pageLeftMargin(for pageNumber: Int, project: BookProject) -> Double {
@@ -861,6 +965,7 @@ final class CanvasView: NSView {
         // 4. Gap tool dragging
         if activeTool == .gap, let gap = activeGap {
             isDraggingGap = true
+            onDragStarted?()
             dragStartLocalPoint = point
             
             if let fFrame = findFrame(id: gap.firstFrameId, in: document) {
@@ -889,6 +994,7 @@ final class CanvasView: NSView {
             let handles = resizeHandles(for: rect)
             if let index = handles.firstIndex(where: { $0.contains(point) }) {
                 isResizingFrame = true
+                onDragStarted?()
                 activeResizeHandleIndex = index
                 dragStartFrameRect = selFrameInfo.frame.rect
                 dragStartLocalPoint = point
@@ -903,6 +1009,7 @@ final class CanvasView: NSView {
                 onFrameSelected?(frame.id)
                 
                 isDraggingFrame = true
+                onDragStarted?()
                 dragStartFrameRect = frame.rect
                 dragStartLocalPoint = point
             } else {
@@ -1078,7 +1185,7 @@ final class CanvasView: NSView {
     }
 }
 
-private extension NSColor {
+extension NSColor {
     static func fromHex(_ hex: String) -> NSColor? {
         var cleanHex = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         if cleanHex.hasPrefix("#") {

@@ -106,6 +106,15 @@ public enum LayoutStrategy: String, Codable, CaseIterable, Sendable {
     case balanced
     case comparison
     case knowledgeCard
+    case fullPageImage
+    case titlePage
+    case cover
+}
+
+public enum ImageMaskShape: String, Codable, CaseIterable, Sendable {
+    case rect
+    case fan
+    case octagon
 }
 
 public struct LayoutPlanBlock: Codable, Equatable, Sendable, Identifiable {
@@ -120,6 +129,7 @@ public struct LayoutPlanBlock: Codable, Equatable, Sendable, Identifiable {
     public var textColorHex: String?
     public var nextThreadedBlockId: UUID?
     public var previousThreadedBlockId: UUID?
+    public var maskShape: ImageMaskShape?
 
     public init(
         id: UUID = UUID(),
@@ -132,7 +142,8 @@ public struct LayoutPlanBlock: Codable, Equatable, Sendable, Identifiable {
         strokeWidth: Double? = nil,
         textColorHex: String? = nil,
         nextThreadedBlockId: UUID? = nil,
-        previousThreadedBlockId: UUID? = nil
+        previousThreadedBlockId: UUID? = nil,
+        maskShape: ImageMaskShape? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -145,6 +156,7 @@ public struct LayoutPlanBlock: Codable, Equatable, Sendable, Identifiable {
         self.textColorHex = textColorHex
         self.nextThreadedBlockId = nextThreadedBlockId
         self.previousThreadedBlockId = previousThreadedBlockId
+        self.maskShape = maskShape
     }
 }
 

@@ -469,7 +469,7 @@ final class LayoutDCoreTests: XCTestCase {
 
     func testAdvisorReturnsStructuredLayoutPlans() {
         let plans = RuleBasedLayoutAdvisor().proposePlans(for: .sample, target: .page(1))
-        XCTAssertEqual(plans.count, 3)
+        XCTAssertEqual(plans.count, 6)
         XCTAssertTrue(plans.allSatisfy { !$0.blocks.isEmpty })
     }
 
@@ -502,7 +502,7 @@ final class LayoutDCoreTests: XCTestCase {
 
         let plans = PageLayoutTemplateCatalog().plans(for: project, target: .page(1))
 
-        XCTAssertEqual(plans.map(\.strategy), [.textLed, .knowledgeCard])
+        XCTAssertEqual(plans.map(\.strategy), [.textLed, .textLed, .knowledgeCard, .knowledgeCard])
         XCTAssertFalse(plans.flatMap(\.blocks).contains { block in
             if case .asset = block.contentReference { return true }
             return false
@@ -609,7 +609,7 @@ final class LayoutDCoreTests: XCTestCase {
 
         let plans = advisor.proposePlans(for: .sample, target: .page(2))
 
-        XCTAssertEqual(plans.count, 3)
+        XCTAssertEqual(plans.count, 6)
         XCTAssertTrue(plans.contains { $0.strategy == .imageLed })
     }
 
@@ -1099,23 +1099,27 @@ final class LayoutDCoreTests: XCTestCase {
             case .asset(let assetId), .spreadAsset(let assetId, _):
                 ref = .asset(assetId)
             case .text(let text):
-                var foundId: UUID?
-                for section in project.sections {
-                    for story in section.stories {
-                        for paragraph in story.paragraphs {
-                            if paragraph.text == text {
-                                foundId = paragraph.id
-                                break
+                if let pid = frame.sourceParagraphId {
+                    ref = .paragraph(pid)
+                } else {
+                    var foundId: UUID?
+                    for section in project.sections {
+                        for story in section.stories {
+                            for paragraph in story.paragraphs {
+                                if paragraph.text == text {
+                                    foundId = paragraph.id
+                                    break
+                                }
                             }
+                            if foundId != nil { break }
                         }
                         if foundId != nil { break }
                     }
-                    if foundId != nil { break }
-                }
-                if let pid = foundId {
-                    ref = .paragraph(pid)
-                } else {
-                    ref = .generated(text)
+                    if let pid = foundId {
+                        ref = .paragraph(pid)
+                    } else {
+                        ref = .generated(text)
+                    }
                 }
             case .empty:
                 ref = .generated("")
@@ -1533,6 +1537,101 @@ final class LayoutDCoreTests: XCTestCase {
             document.issues.contains { $0.severity == .warning && $0.message.contains("版式计划无效") },
             "Engine should surface a warning when rejecting an invalid plan"
         )
+    }
+
+    func testVerticalTypesettingLayoutFlow() {
+        var setup = PageSetup.scienceBookDefault
+        setup.layoutDirection = .vertical
+        setup.columns = 2
+        setup.gutter = 12.0
+        
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "竖排测试", author: "layoutD"),
+            pageSetup: setup,
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(title: "故事", paragraphs: [
+                            Paragraph(kind: .body, text: "自古逢秋悲寂寥，我言秋日胜春朝。晴空一鹤排云上，便引诗情到碧霄。", styleId: StyleID.body.rawValue)
+                        ])
+                    ]
+                )
+            ]
+        )
+        
+        let document = LayoutEngine().layout(project: project)
+        
+        XCTAssertFalse(document.pages.isEmpty)
+        
+        let contentPages = document.pages.filter { $0.number > 2 }
+        XCTAssertFalse(contentPages.isEmpty)
+        
+        for page in contentPages {
+            let bodyFrames = page.frames.filter { $0.kind == PageFrameKind.text && $0.styleId == StyleID.body.rawValue }
+            for frame in bodyFrames {
+                let rightMargin = project.resolvedMargins(for: page.number).right
+                let maxPossibleX = setup.pageSize.width - rightMargin
+                XCTAssertLessThanOrEqual(frame.rect.x + frame.rect.width, maxPossibleX)
+            }
+        }
+    }
+
+    func testFixedPageStrategiesSuppressHeadersFootersAndMargins() {
+        var project = BookProject.sample
+        let assetId = project.assets.first?.id ?? UUID()
+        let block1 = LayoutPlanBlock(
+            kind: .image,
+            role: "hero",
+            frame: Rect(x: 0.0, y: 0.0, width: 1.0, height: 1.0),
+            contentReference: .asset(assetId),
+            maskShape: .fan
+        )
+        let fullPagePlan = LayoutPlan(
+            target: .page(3),
+            strategy: .fullPageImage,
+            blocks: [block1]
+        )
+        
+        let coverPlan = LayoutPlan(
+            target: .page(4),
+            strategy: .cover,
+            blocks: []
+        )
+        
+        let titlePlan = LayoutPlan(
+            target: .page(5),
+            strategy: .titlePage,
+            blocks: []
+        )
+        
+        project.safeAppliedLayoutPlans = [
+            3: fullPagePlan,
+            4: coverPlan,
+            5: titlePlan
+        ]
+        
+        // 1. Verify margins and showHeadersFooters resolution on project level
+        let marginsPage3 = project.resolvedMargins(for: 3)
+        XCTAssertEqual(marginsPage3.top, 0.0)
+        XCTAssertEqual(marginsPage3.bottom, 0.0)
+        XCTAssertEqual(marginsPage3.left, 0.0)
+        XCTAssertEqual(marginsPage3.right, 0.0)
+        
+        XCTAssertFalse(project.resolvedShowHeadersFooters(for: 3))
+        XCTAssertFalse(project.resolvedShowHeadersFooters(for: 4))
+        XCTAssertFalse(project.resolvedShowHeadersFooters(for: 5))
+        
+        // 2. Verify propagation of maskShape to laid out document frames
+        let document = LayoutEngine().layout(project: project)
+        
+        XCTAssertTrue(document.pages.count >= 3)
+        let page3 = document.pages[2]
+        
+        // Find the image block from page 3 and check if maskShape is propagated
+        let imageFrames = page3.frames.filter { $0.kind == .image }
+        XCTAssertFalse(imageFrames.isEmpty)
+        XCTAssertEqual(imageFrames[0].maskShape, .fan)
     }
 }
 

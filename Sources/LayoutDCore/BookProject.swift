@@ -17,6 +17,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     /// such as "green"/"blue" in 《何以江南》). nil → the token set's default mode.
     /// Optional & additive: old `.layoutd` files decode with `colorMode == nil`.
     public var colorMode: String?
+    /// Historical snapshots of layout quality metrics, captured over time.
+    public var qualityMetricsHistory: [QualityHistoryEntry]?
 
     public init(
         schemaVersion: Int = BookProject.currentSchemaVersion,
@@ -29,7 +31,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         appliedLayoutPlans: [Int: LayoutPlan]? = nil,
         savedLayoutTemplates: [SavedLayoutTemplate]? = nil,
         lockedPages: Set<Int>? = nil,
-        colorMode: String? = nil
+        colorMode: String? = nil,
+        qualityMetricsHistory: [QualityHistoryEntry]? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.id = id
@@ -42,6 +45,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         self.savedLayoutTemplates = savedLayoutTemplates
         self.lockedPages = lockedPages
         self.colorMode = colorMode
+        self.qualityMetricsHistory = qualityMetricsHistory
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -56,6 +60,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         case savedLayoutTemplates
         case lockedPages
         case colorMode
+        case qualityMetricsHistory
     }
 
     public init(from decoder: Decoder) throws {
@@ -71,6 +76,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         savedLayoutTemplates = try container.decodeIfPresent([SavedLayoutTemplate].self, forKey: .savedLayoutTemplates)
         lockedPages = try container.decodeIfPresent(Set<Int>.self, forKey: .lockedPages)
         colorMode = try container.decodeIfPresent(String.self, forKey: .colorMode)
+        qualityMetricsHistory = try container.decodeIfPresent([QualityHistoryEntry].self, forKey: .qualityMetricsHistory)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -86,6 +92,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         try container.encodeIfPresent(savedLayoutTemplates, forKey: .savedLayoutTemplates)
         try container.encodeIfPresent(lockedPages, forKey: .lockedPages)
         try container.encodeIfPresent(colorMode, forKey: .colorMode)
+        try container.encodeIfPresent(qualityMetricsHistory, forKey: .qualityMetricsHistory)
     }
 
     /// Resolves a color token id to a hex value under the project's active color
@@ -108,6 +115,11 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     public var safeLockedPages: Set<Int> {
         get { lockedPages ?? [] }
         set { lockedPages = newValue }
+    }
+
+    public var safeQualityMetricsHistory: [QualityHistoryEntry] {
+        get { qualityMetricsHistory ?? [] }
+        set { qualityMetricsHistory = newValue }
     }
 
     public static let sample = BookProject(
@@ -319,9 +331,13 @@ public extension BookProject {
 
     func resolvedMargins(for pageNumber: Int) -> PageMargins {
         if let plans = appliedLayoutPlans,
-           let plan = plans[pageNumber],
-           let marginOverride = plan.marginOverride {
-            return marginOverride
+           let plan = plans[pageNumber] {
+            if let marginOverride = plan.marginOverride {
+                return marginOverride
+            }
+            if plan.strategy == .fullPageImage {
+                return PageMargins(top: 0, right: 0, bottom: 0, left: 0)
+            }
         }
         return resolvedPageSetup.margins
     }
@@ -345,10 +361,54 @@ public extension BookProject {
 
     func resolvedShowHeadersFooters(for pageNumber: Int) -> Bool {
         if let plans = appliedLayoutPlans,
-           let plan = plans[pageNumber],
-           let showOverride = plan.showHeadersFooters {
-            return showOverride
+           let plan = plans[pageNumber] {
+            if let showOverride = plan.showHeadersFooters {
+                return showOverride
+            }
+            if plan.strategy == .fullPageImage || plan.strategy == .cover || plan.strategy == .titlePage {
+                return false
+            }
+        }
+        if pageNumber == 1 {
+            return false
         }
         return true
+    }
+}
+
+public struct QualityHistoryEntry: Codable, Equatable, Sendable {
+    public var timestamp: Date
+    public var pageCount: Int
+    public var totalFrames: Int
+    public var averageFramesPerPage: Double
+    public var planAppliedPages: Int
+    public var autoLaidOutPages: Int
+    public var lowResolutionAssets: Int
+    public var missingCaptionAssets: Int
+    public var blockingErrors: Int
+    public var layoutIssues: Int
+
+    public init(
+        timestamp: Date = Date(),
+        pageCount: Int,
+        totalFrames: Int,
+        averageFramesPerPage: Double,
+        planAppliedPages: Int,
+        autoLaidOutPages: Int,
+        lowResolutionAssets: Int,
+        missingCaptionAssets: Int,
+        blockingErrors: Int,
+        layoutIssues: Int
+    ) {
+        self.timestamp = timestamp
+        self.pageCount = pageCount
+        self.totalFrames = totalFrames
+        self.averageFramesPerPage = averageFramesPerPage
+        self.planAppliedPages = planAppliedPages
+        self.autoLaidOutPages = autoLaidOutPages
+        self.lowResolutionAssets = lowResolutionAssets
+        self.missingCaptionAssets = missingCaptionAssets
+        self.blockingErrors = blockingErrors
+        self.layoutIssues = layoutIssues
     }
 }

@@ -139,7 +139,7 @@ public struct PDFExporter {
                 context.translateBy(x: extraOffset, y: extraOffset)
             }
             
-            draw(page: page, project: project, in: context)
+            draw(page: page, project: project, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0)
             
             context.restoreGState()
             
@@ -320,7 +320,7 @@ public struct PDFExporter {
         return margins.right
     }
 
-    private func draw(page: LaidOutPage, project: BookProject, in context: CGContext) {
+    private func draw(page: LaidOutPage, project: BookProject, in context: CGContext, bleedPoints: CGFloat) {
         let pageSize = project.pageSetup.pageSize
         context.setFillColor(NSColor.white.cgColor)
         context.fill(
@@ -333,13 +333,13 @@ public struct PDFExporter {
         )
 
         for frame in page.frames {
-            draw(frame: frame, project: project, in: context, pageHeight: CGFloat(pageSize.height))
+            draw(frame: frame, pageNumber: page.number, project: project, in: context, pageHeight: CGFloat(pageSize.height), bleedPoints: bleedPoints)
         }
 
         drawPageNumber(page.number, project: project, in: context)
     }
 
-    private func draw(frame: PageFrame, project: BookProject, in context: CGContext, pageHeight: CGFloat) {
+    private func draw(frame: PageFrame, pageNumber: Int, project: BookProject, in context: CGContext, pageHeight: CGFloat, bleedPoints: CGFloat) {
         let style: ParagraphStyle
         if frame.kind == .footnote {
             style = ParagraphStyle(
@@ -377,12 +377,29 @@ public struct PDFExporter {
             width: CGFloat(frame.rect.width) + extraWidth,
             height: CGFloat(frame.rect.height)
         )
-        let rect = pdfRect(fromLayoutRect: layoutRect, pageHeight: pageHeight)
+        var rect = pdfRect(fromLayoutRect: layoutRect, pageHeight: pageHeight)
+
+        // Handle full-bleed cover/fullPageImage fixed page export
+        if bleedPoints > 0,
+           let plan = project.appliedLayoutPlans?[pageNumber],
+           plan.strategy == .fullPageImage || plan.strategy == .cover || plan.strategy == .titlePage {
+            let pageSize = project.pageSetup.pageSize
+            if frame.rect.width >= pageSize.width - 1.0 && frame.rect.height >= pageSize.height - 1.0 {
+                rect = CGRect(
+                    x: -bleedPoints,
+                    y: -bleedPoints,
+                    width: CGFloat(pageSize.width) + 2 * bleedPoints,
+                    height: CGFloat(pageSize.height) + 2 * bleedPoints
+                )
+            }
+        }
 
         if let bgHex = frame.backgroundColorHex, let color = NSColor.from(hex: bgHex) {
             context.saveGState()
             context.setFillColor(color.cgColor)
-            context.fill(rect)
+            let path = maskPath(in: rect, shape: frame.maskShape)
+            context.addPath(path)
+            context.fillPath()
             context.restoreGState()
         }
 
@@ -428,7 +445,9 @@ public struct PDFExporter {
             context.saveGState()
             context.setStrokeColor(color.cgColor)
             context.setLineWidth(CGFloat(frame.strokeWidth ?? 1.5))
-            context.stroke(rect)
+            let path = maskPath(in: rect, shape: frame.maskShape)
+            context.addPath(path)
+            context.strokePath()
             context.restoreGState()
         }
     }
@@ -501,11 +520,17 @@ public struct PDFExporter {
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
         path.addRect(rect)
+        let frameAttrs: [CFString: Any]?
+        if style.layoutDirection == .vertical {
+            frameAttrs = [kCTFrameProgressionAttributeName: CTFrameProgression.rightToLeft.rawValue as CFNumber]
+        } else {
+            frameAttrs = nil
+        }
         let frame = CTFramesetterCreateFrame(
             framesetter,
             CFRange(location: 0, length: attributedString.length),
             path,
-            nil
+            frameAttrs as CFDictionary?
         )
         context.saveGState()
         context.textMatrix = .identity
@@ -531,14 +556,20 @@ public struct PDFExporter {
            let asset = project.assets.first(where: { $0.id == id }),
            let sourcePath = asset.sourcePath,
            let image = NSImage(contentsOfFile: sourcePath) {
-            drawImage(image, isLeftHalf: isLeftHalf, in: rect, project: project, context: context)
+            drawImage(image, isLeftHalf: isLeftHalf, in: rect, project: project, context: context, maskShape: frame.maskShape)
             return
         }
 
+        let path = maskPath(in: rect, shape: frame.maskShape)
+        context.saveGState()
         context.setFillColor(NSColor(calibratedWhite: 0.92, alpha: 1).cgColor)
-        context.fill(rect)
+        context.addPath(path)
+        context.fillPath()
         context.setStrokeColor(NSColor(calibratedWhite: 0.62, alpha: 1).cgColor)
-        context.stroke(rect)
+        context.setLineWidth(1.0)
+        context.addPath(path)
+        context.strokePath()
+        context.restoreGState()
 
         let label: String
         if let id = assetId, let asset = project.assets.first(where: { $0.id == id }) {
@@ -554,13 +585,16 @@ public struct PDFExporter {
         label.draw(in: rect.insetBy(dx: 8, dy: 8), withAttributes: attributes)
     }
 
-    private func drawImage(_ image: NSImage, isLeftHalf: Bool?, in rect: CGRect, project: BookProject, context: CGContext) {
+    private func drawImage(_ image: NSImage, isLeftHalf: Bool?, in rect: CGRect, project: BookProject, context: CGContext, maskShape: ImageMaskShape?) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
         }
 
+        let path = maskPath(in: rect, shape: maskShape)
+
         context.saveGState()
-        context.clip(to: rect)
+        context.addPath(path)
+        context.clip()
 
         if let isLeft = isLeftHalf {
             let pageSize = project.pageSetup.pageSize
@@ -677,6 +711,44 @@ public struct PDFExporter {
         if let data = xmp.data(using: .utf8) {
             context.addDocumentMetadata(data as CFData)
         }
+    }
+
+    private func maskPath(in rect: CGRect, shape: ImageMaskShape?) -> CGPath {
+        let path = CGMutablePath()
+        guard let shape, shape != .rect else {
+            path.addRect(rect)
+            return path
+        }
+        
+        switch shape {
+        case .rect:
+            path.addRect(rect)
+        case .octagon:
+            let delta = min(rect.width, rect.height) * 0.15
+            path.move(to: CGPoint(x: rect.minX + delta, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX - delta, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + delta))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - delta))
+            path.addLine(to: CGPoint(x: rect.maxX - delta, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX + delta, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - delta))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + delta))
+            path.closeSubpath()
+        case .fan:
+            let cx = rect.minX + rect.width / 2.0
+            let cy = rect.minY - rect.height * 1.5
+            let R = rect.height * 2.5
+            let r = rect.height * 1.5
+            let theta = asin(rect.width / (2.0 * R))
+            let startAngle = 0.5 * .pi + theta
+            let endAngle = 0.5 * .pi - theta
+            
+            path.addArc(center: CGPoint(x: cx, y: cy), radius: R, startAngle: startAngle, endAngle: endAngle, clockwise: true)
+            path.addLine(to: CGPoint(x: cx + r * cos(endAngle), y: cy + r * sin(endAngle)))
+            path.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: endAngle, endAngle: startAngle, clockwise: false)
+            path.closeSubpath()
+        }
+        return path
     }
 }
 

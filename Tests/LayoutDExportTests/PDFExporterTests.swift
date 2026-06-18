@@ -429,4 +429,61 @@ final class PDFExporterTests: XCTestCase {
         XCTAssertTrue(CGPDFDictionaryGetArray(catalog, "OutputIntents", &outputIntents))
         XCTAssertGreaterThan(CGPDFArrayGetCount(outputIntents!), 0)
     }
+
+    func testPDFExportFullBleedFixedPage() throws {
+        var project = BookProject.sample
+        
+        // 1. Apply a full page image plan on page 3
+        let plan = LayoutPlan(
+            target: .page(3),
+            strategy: .fullPageImage,
+            blocks: [
+                LayoutPlanBlock(
+                    kind: .image,
+                    role: "hero",
+                    frame: Rect(x: 0.0, y: 0.0, width: 1.0, height: 1.0),
+                    contentReference: .asset(UUID())
+                )
+            ]
+        )
+        project.safeAppliedLayoutPlans[3] = plan
+        
+        let document = LayoutEngine().layout(project: project)
+        
+        let pdfURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-pdf-bleed-test-\(UUID().uuidString)")
+            .appendingPathExtension("pdf")
+        defer {
+            try? FileManager.default.removeItem(at: pdfURL)
+        }
+        
+        // 2. Export with crop marks (meaning bleed is present)
+        try PDFExporter().export(
+            document: document,
+            project: project,
+            to: pdfURL,
+            pageRange: "3",
+            drawCropMarks: true
+        )
+        
+        let pdf = try XCTUnwrap(CGPDFDocument(pdfURL as CFURL))
+        XCTAssertEqual(pdf.numberOfPages, 1)
+        
+        // 3. Export PNG with crop marks
+        let pngDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-png-bleed-test-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: pngDir)
+        }
+        
+        let pngURLs = try PNGExporter().export(
+            document: document,
+            project: project,
+            to: pngDir,
+            pageRange: "3",
+            scale: 1.0,
+            drawCropMarks: true
+        )
+        XCTAssertEqual(pngURLs.count, 1)
+    }
 }

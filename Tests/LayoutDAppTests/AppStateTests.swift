@@ -371,4 +371,266 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: pngUrls[0].path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: pngUrls[1].path))
     }
+
+    func testUndoRedoStack() {
+        let state = AppState(project: .sample)
+        
+        XCTAssertFalse(state.canUndo)
+        XCTAssertFalse(state.canRedo)
+        
+        let oldTitle = state.project.metadata.title
+        state.updateProject { project in
+            project.metadata.title = "Undo Title Test"
+        }
+        
+        XCTAssertEqual(state.project.metadata.title, "Undo Title Test")
+        XCTAssertTrue(state.canUndo)
+        XCTAssertFalse(state.canRedo)
+        
+        state.undo()
+        XCTAssertEqual(state.project.metadata.title, oldTitle)
+        XCTAssertFalse(state.canUndo)
+        XCTAssertTrue(state.canRedo)
+        
+        state.redo()
+        XCTAssertEqual(state.project.metadata.title, "Undo Title Test")
+        XCTAssertTrue(state.canUndo)
+        XCTAssertFalse(state.canRedo)
+    }
+
+    func testLockAndUnlockPage() {
+        let state = AppState(project: .sample)
+        let pageNum = 3
+        
+        XCTAssertFalse(state.project.safeLockedPages.contains(pageNum))
+        XCTAssertNil(state.project.safeAppliedLayoutPlans[pageNum])
+        
+        state.lockPage(number: pageNum)
+        XCTAssertTrue(state.project.safeLockedPages.contains(pageNum))
+        XCTAssertNotNil(state.project.safeAppliedLayoutPlans[pageNum])
+        
+        state.unlockPage(number: pageNum)
+        XCTAssertFalse(state.project.safeLockedPages.contains(pageNum))
+        XCTAssertNotNil(state.project.safeAppliedLayoutPlans[pageNum])
+    }
+
+    func testCompositeFontModifications() {
+        let state = AppState(project: .sample)
+        
+        // 1. Verify character classification
+        XCTAssertEqual(Character("A").compositeFontClass, .latin)
+        XCTAssertEqual(Character("1").compositeFontClass, .digit)
+        XCTAssertEqual(Character("中").compositeFontClass, .chinese)
+        XCTAssertEqual(Character("，").compositeFontClass, .fullWidthPunctuation)
+        
+        // 2. Modify composite font mappings for the body style
+        let bodyId = StyleID.body.rawValue
+        
+        state.updateParagraphStyleCompositeFont(
+            id: bodyId,
+            charClass: .latin,
+            fontName: "Georgia",
+            sizeMultiplier: 1.2,
+            baselineOffset: 1.5
+        )
+        
+        let updatedStyle = state.project.styles.paragraphStyle(id: bodyId)
+        let latinMapping = updatedStyle.fontMapping(for: "A")
+        XCTAssertEqual(latinMapping.fontName, "Georgia")
+        XCTAssertEqual(latinMapping.sizeMultiplier, 1.2)
+        XCTAssertEqual(latinMapping.baselineOffset, 1.5)
+        
+        // Chinese mapping should fallback or remain default
+        let chineseMapping = updatedStyle.fontMapping(for: "中")
+        XCTAssertEqual(chineseMapping.fontName, "Songti SC")
+        
+        // 3. Verify makeAttributedString produces multiple font runs
+        let text = "Hello 世界 123"
+        let attrString = ChineseTypesetting.makeAttributedString(
+            text: text,
+            style: updatedStyle,
+            zoomScale: 1.0
+        )
+        
+        // We should have distinct fonts for different segments
+        var count = 0
+        attrString.enumerateAttribute(NSAttributedString.Key(kCTFontAttributeName as String), in: NSRange(location: 0, length: attrString.length), options: []) { value, range, stop in
+            if let font = value as? NSFont {
+                let name = font.fontName
+                if range.location == 0 { // Hello (latin)
+                    XCTAssertTrue(name.contains("Georgia") || name.contains("Times"), "Expected Georgia/Times but got \(name)")
+                } else if range.location == 6 { // 世界 (chinese)
+                    XCTAssertTrue(name.contains("Songti") || name.contains("PingFang"), "Expected Songti/PingFang but got \(name)")
+                }
+            }
+            count += 1
+        }
+        XCTAssertGreaterThan(count, 1)
+    }
+
+    func testComplianceGateAndLayoutVariants() throws {
+        // 1. Test Compliance Gate - Fonts
+        var project = BookProject.sample
+        var styles = project.styles.paragraphStyles
+        if let idx = styles.firstIndex(where: { $0.id == StyleID.body.rawValue }) {
+            styles[idx].fontName = "Comic Sans MS"
+        }
+        project.styles.paragraphStyles = styles
+        
+        // Add a plan that uses the body style (which has unapproved font)
+        let plan = LayoutPlan(
+            target: .page(3),
+            strategy: .balanced,
+            blocks: [
+                LayoutPlanBlock(
+                    kind: .text,
+                    role: "body",
+                    frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 0.8),
+                    contentReference: .generated("Sample text")
+                )
+            ]
+        )
+        project.safeAppliedLayoutPlans[3] = plan
+        
+        let docWithBadFont = LayoutEngine().layout(project: project)
+        let badFontIssues = docWithBadFont.issues.filter { $0.message.contains("版式计划无效") }
+        XCTAssertFalse(badFontIssues.isEmpty, "Should reject plan with unapproved font")
+        XCTAssertTrue(badFontIssues.first?.message.contains("非批准字体") == true)
+
+        // 2. Test Compliance Gate - Component Roles
+        var project2 = BookProject.sample
+        let badComponentPlan = LayoutPlan(
+            target: .page(3),
+            strategy: .balanced,
+            blocks: [
+                LayoutPlanBlock(
+                    kind: .component,
+                    role: "unapprovedComponentRole",
+                    frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 0.8),
+                    contentReference: .generated("Unapproved component")
+                )
+            ]
+        )
+        project2.safeAppliedLayoutPlans[3] = badComponentPlan
+        
+        let docWithBadComponent = LayoutEngine().layout(project: project2)
+        let badComponentIssues = docWithBadComponent.issues.filter { $0.message.contains("版式计划无效") }
+        XCTAssertFalse(badComponentIssues.isEmpty, "Should reject plan with unapproved component role")
+        XCTAssertTrue(badComponentIssues.first?.message.contains("组件角色 unapprovedComponentRole 未在组件样式库中定义") == true)
+
+        // 3. Test Compliance Gate - Color overrides
+        var project3 = BookProject.sample
+        let badColorPlan = LayoutPlan(
+            target: .page(3),
+            strategy: .balanced,
+            blocks: [
+                LayoutPlanBlock(
+                    kind: .text,
+                    role: "body",
+                    frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 0.8),
+                    contentReference: .generated("Sample text"),
+                    backgroundColorHex: "unapprovedColorToken"
+                )
+            ]
+        )
+        project3.safeAppliedLayoutPlans[3] = badColorPlan
+        
+        let docWithBadColor = LayoutEngine().layout(project: project3)
+        let badColorIssues = docWithBadColor.issues.filter { $0.message.contains("版式计划无效") }
+        XCTAssertFalse(badColorIssues.isEmpty, "Should reject plan with unapproved color token")
+        XCTAssertTrue(badColorIssues.first?.message.contains("背景色引用了未批准的 Token 或无效颜色值") == true)
+
+        // 4. Test Layout Variants (proposePlans Variant A and B)
+        let state = AppState(project: .sample)
+        // RuleBasedLayoutAdvisor propose plans: we should have 2 variations for each strategy
+        let proposed = state.plans
+        let textLedPlans = proposed.filter { $0.strategy == .textLed }
+        XCTAssertEqual(textLedPlans.count, 2)
+        
+        let variantA = textLedPlans[0]
+        let variantB = textLedPlans[1]
+        
+        // Variant A and B must be structurally different (different frame configs)
+        XCTAssertNotEqual(variantA.blocks.map(\.frame), variantB.blocks.map(\.frame))
+    }
+
+    func testQualityMetricsHistory() throws {
+        // 1. Initial history entry on creation
+        let state = AppState(project: .sample)
+        XCTAssertEqual(state.project.safeQualityMetricsHistory.count, 1)
+        
+        let initialEntry = state.project.safeQualityMetricsHistory[0]
+        XCTAssertGreaterThan(initialEntry.pageCount, 0)
+        
+        // 2. Trigger mutation that changes quality metrics (applied layout plan)
+        let plan = LayoutPlan(
+            target: .page(3),
+            strategy: .balanced,
+            blocks: [
+                LayoutPlanBlock(
+                    kind: .text,
+                    role: "body",
+                    frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 0.8),
+                    contentReference: .generated("Sample text")
+                )
+            ]
+        )
+        state.updateProject { project in
+            project.safeAppliedLayoutPlans[3] = plan
+        }
+        
+        XCTAssertEqual(state.project.safeQualityMetricsHistory.count, 2)
+        
+        // 3. Recalculating layout with no changes shouldn't add duplicates
+        state.recalculateLayout()
+        XCTAssertEqual(state.project.safeQualityMetricsHistory.count, 2)
+        
+        // 4. Test cap of 30 entries
+        var history = state.project.safeQualityMetricsHistory
+        for i in 1...35 {
+            let mockEntry = QualityHistoryEntry(
+                timestamp: Date().addingTimeInterval(Double(i)),
+                pageCount: 10 + i, // different pageCount to avoid duplicate prevention
+                totalFrames: 20,
+                averageFramesPerPage: 2.0,
+                planAppliedPages: 2,
+                autoLaidOutPages: 8,
+                lowResolutionAssets: 0,
+                missingCaptionAssets: 0,
+                blockingErrors: 0,
+                layoutIssues: 0
+            )
+            history.append(mockEntry)
+        }
+        state.project.qualityMetricsHistory = history
+        // Mutating the project property triggers an immediate synchronous layout recalculation,
+        // which runs the history recorder and caps the history array to 30.
+        XCTAssertEqual(state.project.safeQualityMetricsHistory.count, 30)
+        
+        // Now trigger one more recalculation with a different pageCount/metrics
+        let plan2 = LayoutPlan(
+            target: .page(4),
+            strategy: .balanced,
+            blocks: [
+                LayoutPlanBlock(
+                    kind: .text,
+                    role: "body",
+                    frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 0.8),
+                    contentReference: .generated("Sample text 2")
+                )
+            ]
+        )
+        state.updateProject { project in
+            project.safeAppliedLayoutPlans[4] = plan2
+        }
+        
+        // The recalculation should cap the history to 30
+        XCTAssertEqual(state.project.safeQualityMetricsHistory.count, 30)
+        
+        // 5. Test JSON round-trip serialization of history
+        let encoded = try JSONEncoder().encode(state.project)
+        let decoded = try JSONDecoder().decode(BookProject.self, from: encoded)
+        XCTAssertEqual(decoded.safeQualityMetricsHistory.count, 30)
+        XCTAssertEqual(decoded.safeQualityMetricsHistory.last?.pageCount, state.project.safeQualityMetricsHistory.last?.pageCount)
+    }
 }

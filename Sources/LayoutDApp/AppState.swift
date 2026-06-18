@@ -12,6 +12,7 @@ final class AppState: ObservableObject {
         }
     }
     @Published var laidOutDocument: LaidOutDocument?
+    @Published var baselineDocument: LaidOutDocument?
     @Published var report: PreflightReport?
     @Published var plans: [LayoutPlan] = []
     @Published var currentPageNumber: Int = 1 {
@@ -32,6 +33,11 @@ final class AppState: ObservableObject {
     @Published var frameStrokeColors: [UUID: Color] = [:]
     @Published var frameTextColors: [UUID: Color] = [:]
     
+    private var undoStack: [BookProject] = []
+    private var redoStack: [BookProject] = []
+    private var isPerformingUndoRedo = false
+    private var isPerformingRecalculation = false
+    
     let engine = LayoutEngine()
     let inspectorEngine = ProjectInspector()
     let advisor = RuleBasedLayoutAdvisor()
@@ -43,20 +49,107 @@ final class AppState: ObservableObject {
         recalculateLayout()
     }
 
+    func commitState() {
+        guard !isPerformingUndoRedo else { return }
+        undoStack.append(project)
+        redoStack.removeAll()
+        if undoStack.count > 50 {
+            undoStack.removeFirst()
+        }
+    }
+    
+    func beginUndoGrouping() {
+        commitState()
+    }
+    
+    var canUndo: Bool {
+        !undoStack.isEmpty
+    }
+    
+    var canRedo: Bool {
+        !redoStack.isEmpty
+    }
+    
+    func undo() {
+        guard canUndo else { return }
+        isPerformingUndoRedo = true
+        redoStack.append(project)
+        project = undoStack.removeLast()
+        isPerformingUndoRedo = false
+    }
+    
+    func redo() {
+        guard canRedo else { return }
+        isPerformingUndoRedo = true
+        undoStack.append(project)
+        project = redoStack.removeLast()
+        isPerformingUndoRedo = false
+    }
+
     func updateProject(_ update: (inout BookProject) -> Void) {
+        commitState()
         var currentProject = project
         update(&currentProject)
         self.project = currentProject
     }
     
     func recalculateLayout() {
+        guard !isPerformingRecalculation else { return }
+        isPerformingRecalculation = true
+        defer { isPerformingRecalculation = false }
+
         let doc = engine.layout(project: project)
         self.laidOutDocument = doc
+        
+        var baselineProj = project
+        baselineProj.appliedLayoutPlans = nil
+        self.baselineDocument = engine.layout(project: baselineProj)
         
         let report = inspectorEngine.preflight(project: project, document: doc)
         self.report = report
         
         updateAIPlans()
+        
+        // Record quality metrics history if different from the last snapshot
+        if let report = self.report {
+            let metrics = report.qualityMetrics
+            let newEntry = QualityHistoryEntry(
+                timestamp: Date(),
+                pageCount: metrics.pageCount,
+                totalFrames: metrics.totalFrames,
+                averageFramesPerPage: metrics.averageFramesPerPage,
+                planAppliedPages: metrics.planAppliedPages,
+                autoLaidOutPages: metrics.autoLaidOutPages,
+                lowResolutionAssets: metrics.lowResolutionAssets,
+                missingCaptionAssets: metrics.missingCaptionAssets,
+                blockingErrors: metrics.blockingErrors,
+                layoutIssues: metrics.layoutIssues
+            )
+            
+            var history = project.safeQualityMetricsHistory
+            let shouldAdd: Bool
+            if let last = history.last {
+                shouldAdd = last.pageCount != newEntry.pageCount ||
+                            last.totalFrames != newEntry.totalFrames ||
+                            last.averageFramesPerPage != newEntry.averageFramesPerPage ||
+                            last.planAppliedPages != newEntry.planAppliedPages ||
+                            last.autoLaidOutPages != newEntry.autoLaidOutPages ||
+                            last.lowResolutionAssets != newEntry.lowResolutionAssets ||
+                            last.missingCaptionAssets != newEntry.missingCaptionAssets ||
+                            last.blockingErrors != newEntry.blockingErrors ||
+                            last.layoutIssues != newEntry.layoutIssues
+            } else {
+                shouldAdd = true
+            }
+            
+            if shouldAdd {
+                history.append(newEntry)
+                if history.count > 30 {
+                    history = Array(history.suffix(30))
+                }
+                project.qualityMetricsHistory = history
+            }
+        }
         
         onLayoutCompleted?(project, doc)
     }
@@ -133,7 +226,9 @@ final class AppState: ObservableObject {
             case .asset(let assetId), .spreadAsset(let assetId, _):
                 ref = .asset(assetId)
             case .text(let text):
-                if let paragraph = findParagraphByText(text) {
+                if let paragraphId = frame.sourceParagraphId {
+                    ref = .paragraph(paragraphId)
+                } else if let paragraph = findParagraphByText(text) {
                     ref = .paragraph(paragraph.id)
                 } else {
                     ref = .generated(text)
@@ -156,6 +251,7 @@ final class AppState: ObservableObject {
     }
 
     func updateSelectedFrameCoordinate(x: Double?, y: Double?, width: Double?, height: Double?) {
+        commitState()
         guard let frameId = selectedFrameId,
               let pageNum = findPageNumber(for: frameId) else { return }
         
@@ -184,6 +280,7 @@ final class AppState: ObservableObject {
     }
 
     func updateSelectedFrameImage(assetId: UUID) {
+        commitState()
         guard let frameId = selectedFrameId,
               let pageNum = findPageNumber(for: frameId) else { return }
         
@@ -205,6 +302,7 @@ final class AppState: ObservableObject {
     }
 
     func clearCustomLayoutForPage(number: Int) {
+        commitState()
         var currentProject = project
         var plans = currentProject.safeAppliedLayoutPlans
         plans.removeValue(forKey: number)
@@ -225,6 +323,7 @@ final class AppState: ObservableObject {
     }
 
     func applyLayoutPlan(_ plan: LayoutPlan) {
+        commitState()
         guard case .page(let pageNum) = plan.target else { return }
 
         var currentProject = project
@@ -235,6 +334,7 @@ final class AppState: ObservableObject {
     }
 
     func saveCurrentPageLayoutAsTemplate(name: String) {
+        commitState()
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let templateName = trimmedName.isEmpty ? "第 \(currentPageNumber) 页版式" : trimmedName
         let plan = freezePageToPlan(pageNum: currentPageNumber)
@@ -262,6 +362,7 @@ final class AppState: ObservableObject {
     }
 
     func renameSavedLayoutTemplate(id: UUID, name: String) {
+        commitState()
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
 
@@ -276,6 +377,7 @@ final class AppState: ObservableObject {
     }
 
     func deleteSavedLayoutTemplate(id: UUID) {
+        commitState()
         var currentProject = project
         var templates = currentProject.safeSavedLayoutTemplates
         templates.removeAll { $0.id == id }
@@ -289,6 +391,7 @@ final class AppState: ObservableObject {
         columnsOverride: Int?,
         showHeadersFooters: Bool?
     ) {
+        commitState()
         var currentProject = project
         var templates = currentProject.safeSavedLayoutTemplates
         guard let index = templates.firstIndex(where: { $0.id == id }) else { return }
@@ -316,6 +419,7 @@ final class AppState: ObservableObject {
     }
 
     func lockPage(number: Int) {
+        commitState()
         var currentProject = project
         var locked = currentProject.safeLockedPages
         locked.insert(number)
@@ -331,6 +435,7 @@ final class AppState: ObservableObject {
     }
 
     func unlockPage(number: Int) {
+        commitState()
         var currentProject = project
         var locked = currentProject.safeLockedPages
         locked.remove(number)
@@ -347,6 +452,7 @@ final class AppState: ObservableObject {
         spaceBefore: Double? = nil,
         spaceAfter: Double? = nil
     ) {
+        commitState()
         var currentProject = project
         var styles = currentProject.styles.paragraphStyles
         if let idx = styles.firstIndex(where: { $0.id == id }) {
@@ -377,13 +483,144 @@ final class AppState: ObservableObject {
         }
     }
 
+    func updateParagraphStyleCompositeFont(
+        id: String,
+        charClass: CompositeFontClass,
+        fontName: String,
+        sizeMultiplier: Double,
+        baselineOffset: Double
+    ) {
+        commitState()
+        var currentProject = project
+        var styles = currentProject.styles.paragraphStyles
+        if let idx = styles.firstIndex(where: { $0.id == id }) {
+            var style = styles[idx]
+            var cf = style.compositeFont ?? [:]
+            cf[charClass] = CompositeFontMapping(
+                fontName: fontName,
+                sizeMultiplier: sizeMultiplier,
+                baselineOffset: baselineOffset
+            )
+            style.compositeFont = cf
+            styles[idx] = style
+            currentProject.styles.paragraphStyles = styles
+            self.project = currentProject
+        }
+    }
+
+    func applyImportedTokens(_ importedTokens: DesignTokens, baselineGridCompensate: Double? = nil) {
+        commitState()
+        var currentProject = project
+        
+        currentProject.styles.tokens = importedTokens
+        
+        var styles = currentProject.styles.paragraphStyles
+        for idx in styles.indices {
+            var style = styles[idx]
+            
+            let fsToken = "paragraph.\(style.id).fontSize"
+            if let val = importedTokens.scalar(fsToken) {
+                style.fontSizeToken = fsToken
+                style.fontSize = val
+            }
+            
+            let lhToken = "paragraph.\(style.id).lineHeight"
+            if let val = importedTokens.scalar(lhToken) {
+                style.lineHeightToken = lhToken
+                style.lineHeight = val
+            }
+            
+            let indentToken = "paragraph.\(style.id).firstLineIndent"
+            if let val = importedTokens.scalar(indentToken) {
+                style.firstLineIndentToken = indentToken
+                style.firstLineIndent = val
+            }
+            
+            let beforeToken = "paragraph.\(style.id).spaceBefore"
+            if let val = importedTokens.scalar(beforeToken) {
+                style.spaceBeforeToken = beforeToken
+                style.spaceBefore = val
+            }
+            
+            let afterToken = "paragraph.\(style.id).spaceAfter"
+            if let val = importedTokens.scalar(afterToken) {
+                style.spaceAfterToken = afterToken
+                style.spaceAfter = val
+            }
+            
+            styles[idx] = style
+        }
+        currentProject.styles.paragraphStyles = styles
+        
+        var setup = currentProject.pageSetup
+        var newMargins = setup.margins
+        
+        let mtToken = "page.margin.top"
+        if let val = importedTokens.scalar(mtToken) {
+            newMargins.top = val
+        }
+        let mrToken = "page.margin.right"
+        if let val = importedTokens.scalar(mrToken) {
+            newMargins.right = val
+        }
+        let mbToken = "page.margin.bottom"
+        if let val = importedTokens.scalar(mbToken) {
+            newMargins.bottom = val
+        }
+        let mlToken = "page.margin.left"
+        if let val = importedTokens.scalar(mlToken) {
+            newMargins.left = val
+        }
+        
+        setup.margins = newMargins // sets margins, triggers didSet (clearing tokens)
+        
+        // Re-apply tokens after setting margins
+        if importedTokens.scalar(mtToken) != nil {
+            setup.marginTopToken = mtToken
+        }
+        if importedTokens.scalar(mrToken) != nil {
+            setup.marginRightToken = mrToken
+        }
+        if importedTokens.scalar(mbToken) != nil {
+            setup.marginBottomToken = mbToken
+        }
+        if importedTokens.scalar(mlToken) != nil {
+            setup.marginLeftToken = mlToken
+        }
+        
+        let colsToken = "page.columns"
+        if let val = importedTokens.scalar(colsToken) {
+            setup.columns = max(1, Int(round(val)))
+            setup.columnsToken = colsToken
+        }
+        let gutToken = "page.gutter"
+        if let val = importedTokens.scalar(gutToken) {
+            setup.gutter = val
+            setup.gutterToken = gutToken
+        }
+        
+        let bgToken = "page.baselineGrid"
+        if let val = importedTokens.scalar(bgToken) {
+            setup.baselineGrid = val
+            setup.baselineGridToken = bgToken
+        } else if let comp = baselineGridCompensate {
+            setup.baselineGrid = comp
+            setup.baselineGridToken = nil
+        }
+        
+        currentProject.pageSetup = setup
+        self.project = currentProject
+    }
+
     func applyStyleTemplate(_ template: StyleTemplate) {
+        commitState()
         var currentProject = project
         currentProject.styles = template.styleLibrary
         self.project = currentProject
     }
 
     func applyAvailablePreflightFixes() {
+        commitState()
         guard let report else { return }
         let result = PreflightAutoFixer().applyAvailableFixes(
             to: project,
@@ -394,6 +631,7 @@ final class AppState: ObservableObject {
     }
 
     func applyPreflightFix(_ fix: PreflightAutoFixKind, targetingAssetId: UUID? = nil, targetingFrameId: UUID? = nil) {
+        commitState()
         let result = PreflightAutoFixer().applyFixes(
             [fix],
             to: project,
@@ -405,6 +643,7 @@ final class AppState: ObservableObject {
     }
 
     func applyPreflightFixes(in category: PreflightIssueCategory) {
+        commitState()
         guard let report else { return }
         let categoryIssues = report.issues.filter { $0.category == category }
         let result = PreflightAutoFixer().applyAvailableFixes(
@@ -416,6 +655,7 @@ final class AppState: ObservableObject {
     }
 
     func insertPage(at pageNum: Int) {
+        commitState()
         var currentProject = project
         let plans = currentProject.safeAppliedLayoutPlans
         
@@ -451,6 +691,7 @@ final class AppState: ObservableObject {
     }
     
     func deletePage(at pageNum: Int) {
+        commitState()
         var currentProject = project
         var plans = currentProject.safeAppliedLayoutPlans
         plans.removeValue(forKey: pageNum)
@@ -487,6 +728,7 @@ final class AppState: ObservableObject {
     // captured as a LayoutPlan / override and re-rendered deterministically.
 
     func deleteFrame(id: UUID) {
+        commitState()
         guard let pageNum = findPageNumber(for: id) else { return }
         var currentProject = project
         var plans = currentProject.safeAppliedLayoutPlans
@@ -505,6 +747,7 @@ final class AppState: ObservableObject {
     }
 
     func applyColorToSelectedFrame(_ color: Color) {
+        commitState()
         guard let frameId = selectedFrameId else { return }
         let hex = color.hexString
         if activeFormattingTarget == .container {
@@ -525,6 +768,7 @@ final class AppState: ObservableObject {
     }
     
     func removeColorFromSelectedFrame() {
+        commitState()
         guard let frameId = selectedFrameId else { return }
         if activeFormattingTarget == .container {
             if isFillActive {

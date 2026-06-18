@@ -161,6 +161,80 @@ public enum StyleTemplate: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum CompositeFontClass: String, Codable, CaseIterable, Sendable {
+    case chinese
+    case fullWidthPunctuation
+    case halfWidthPunctuation
+    case latin
+    case digit
+    case symbol
+}
+
+public struct CompositeFontMapping: Codable, Equatable, Sendable {
+    public var fontName: String
+    public var sizeMultiplier: Double
+    public var baselineOffset: Double
+
+    public init(fontName: String, sizeMultiplier: Double = 1.0, baselineOffset: Double = 0.0) {
+        self.fontName = fontName
+        self.sizeMultiplier = sizeMultiplier
+        self.baselineOffset = baselineOffset
+    }
+}
+
+public extension Character {
+    var compositeFontClass: CompositeFontClass {
+        guard let firstScalar = self.unicodeScalars.first else {
+            return .symbol
+        }
+        let val = firstScalar.value
+        
+        // 1. Digits
+        if self.isNumber {
+            if val >= 0x30 && val <= 0x39 {
+                return .digit
+            }
+            if val >= 0xFF10 && val <= 0xFF19 {
+                return .digit
+            }
+        }
+        
+        // 2. Latin Letters
+        if self.isLetter {
+            if (val >= 0x4E00 && val <= 0x9FFF) ||
+                (val >= 0x3400 && val <= 0x4DBF) ||
+                (val >= 0xF900 && val <= 0xFAFF) {
+                return .chinese
+            }
+            return .latin
+        }
+        
+        // 3. Chinese Ideographs (non-letter characters that are CJK)
+        if (val >= 0x4E00 && val <= 0x9FFF) ||
+            (val >= 0x3400 && val <= 0x4DBF) ||
+            (val >= 0xF900 && val <= 0xFAFF) {
+            return .chinese
+        }
+        
+        // 4. Full-width / CJK Punctuation
+        if (val >= 0x3000 && val <= 0x303F) ||
+            (val >= 0xFF00 && val <= 0xFFEF) ||
+            (val >= 0x2000 && val <= 0x206F) {
+            return .fullWidthPunctuation
+        }
+        
+        // 5. Half-width Punctuation / ASCII Symbols
+        if (val >= 0x20 && val <= 0x2F) ||
+            (val >= 0x3A && val <= 0x40) ||
+            (val >= 0x5B && val <= 0x60) ||
+            (val >= 0x7B && val <= 0x7E) {
+            return .halfWidthPunctuation
+        }
+        
+        return .symbol
+    }
+}
+
 public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var displayName: String
@@ -176,6 +250,8 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public var firstLineIndentToken: String?
     public var spaceBeforeToken: String?
     public var spaceAfterToken: String?
+    public var compositeFont: [CompositeFontClass: CompositeFontMapping]?
+    public var layoutDirection: LayoutDirection?
 
     public init(
         id: String,
@@ -191,7 +267,9 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         lineHeightToken: String? = nil,
         firstLineIndentToken: String? = nil,
         spaceBeforeToken: String? = nil,
-        spaceAfterToken: String? = nil
+        spaceAfterToken: String? = nil,
+        compositeFont: [CompositeFontClass: CompositeFontMapping]? = nil,
+        layoutDirection: LayoutDirection? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -207,6 +285,8 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         self.firstLineIndentToken = firstLineIndentToken
         self.spaceBeforeToken = spaceBeforeToken
         self.spaceAfterToken = spaceAfterToken
+        self.compositeFont = compositeFont
+        self.layoutDirection = layoutDirection
     }
 
     public static let body = ParagraphStyle(
@@ -217,7 +297,12 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         lineHeight: 16,
         firstLineIndent: 21,
         spaceBefore: 0,
-        spaceAfter: 4
+        spaceAfter: 4,
+        compositeFont: [
+            .chinese: CompositeFontMapping(fontName: "Songti SC", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .latin: CompositeFontMapping(fontName: "Georgia", sizeMultiplier: 1.05, baselineOffset: 0.0),
+            .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
+        ]
     )
 
     public static let heading1 = ParagraphStyle(
@@ -228,7 +313,12 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         lineHeight: 30,
         firstLineIndent: 0,
         spaceBefore: 18,
-        spaceAfter: 14
+        spaceAfter: 14,
+        compositeFont: [
+            .chinese: CompositeFontMapping(fontName: "PingFang SC Semibold", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .latin: CompositeFontMapping(fontName: "Helvetica Neue", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
+        ]
     )
 
     public static let heading2 = ParagraphStyle(
@@ -239,7 +329,12 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         lineHeight: 22,
         firstLineIndent: 0,
         spaceBefore: 12,
-        spaceAfter: 8
+        spaceAfter: 8,
+        compositeFont: [
+            .chinese: CompositeFontMapping(fontName: "PingFang SC Semibold", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .latin: CompositeFontMapping(fontName: "Helvetica Neue", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
+        ]
     )
 
     public static let caption = ParagraphStyle(
@@ -250,7 +345,12 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         lineHeight: 12,
         firstLineIndent: 0,
         spaceBefore: 4,
-        spaceAfter: 8
+        spaceAfter: 8,
+        compositeFont: [
+            .chinese: CompositeFontMapping(fontName: "PingFang SC", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .latin: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
+        ]
     )
 
     public static let callout = ParagraphStyle(
@@ -262,7 +362,12 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         firstLineIndent: 0,
         spaceBefore: 8,
         spaceAfter: 8,
-        colorToken: "accent"
+        colorToken: "accent",
+        compositeFont: [
+            .chinese: CompositeFontMapping(fontName: "PingFang SC Medium", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .latin: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
+        ]
     )
 
     public func with(
@@ -271,7 +376,9 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         firstLineIndent: Double? = nil,
         spaceBefore: Double? = nil,
         spaceAfter: Double? = nil,
-        colorToken: String? = nil
+        colorToken: String? = nil,
+        compositeFont: [CompositeFontClass: CompositeFontMapping]? = nil,
+        layoutDirection: LayoutDirection? = nil
     ) -> ParagraphStyle {
         ParagraphStyle(
             id: id,
@@ -287,7 +394,9 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
             lineHeightToken: lineHeight == nil ? lineHeightToken : nil,
             firstLineIndentToken: firstLineIndent == nil ? firstLineIndentToken : nil,
             spaceBeforeToken: spaceBefore == nil ? spaceBeforeToken : nil,
-            spaceAfterToken: spaceAfter == nil ? spaceAfterToken : nil
+            spaceAfterToken: spaceAfter == nil ? spaceAfterToken : nil,
+            compositeFont: compositeFont ?? self.compositeFont,
+            layoutDirection: layoutDirection ?? self.layoutDirection
         )
     }
 
@@ -312,7 +421,9 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
             lineHeightToken: lineHeight ?? lineHeightToken,
             firstLineIndentToken: firstLineIndent ?? firstLineIndentToken,
             spaceBeforeToken: spaceBefore ?? spaceBeforeToken,
-            spaceAfterToken: spaceAfter ?? spaceAfterToken
+            spaceAfterToken: spaceAfter ?? spaceAfterToken,
+            compositeFont: self.compositeFont,
+            layoutDirection: self.layoutDirection
         )
     }
 
@@ -331,7 +442,33 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
             lineHeightToken: lineHeightToken,
             firstLineIndentToken: firstLineIndentToken,
             spaceBeforeToken: spaceBeforeToken,
-            spaceAfterToken: spaceAfterToken
+            spaceAfterToken: spaceAfterToken,
+            compositeFont: self.compositeFont,
+            layoutDirection: self.layoutDirection
+        )
+    }
+
+    public func fontMapping(for character: Character) -> CompositeFontMapping {
+        let cls = character.compositeFontClass
+        let targetClass: CompositeFontClass
+        switch cls {
+        case .chinese, .fullWidthPunctuation:
+            targetClass = .chinese
+        case .latin, .halfWidthPunctuation:
+            targetClass = .latin
+        case .digit:
+            targetClass = .digit
+        case .symbol:
+            targetClass = .latin
+        }
+        
+        if let mapping = compositeFont?[targetClass] {
+            return mapping
+        }
+        return CompositeFontMapping(
+            fontName: self.fontName,
+            sizeMultiplier: 1.0,
+            baselineOffset: 0.0
         )
     }
 }

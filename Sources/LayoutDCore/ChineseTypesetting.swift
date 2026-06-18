@@ -9,12 +9,14 @@ public enum ChineseTypesetting {
     public static func makeAttributedString(
         text: String,
         style: ParagraphStyle,
-        foregroundColor: CGColor? = nil
+        foregroundColor: CGColor? = nil,
+        zoomScale: Double = 1.0
     ) -> NSAttributedString {
-        let font = CTFontCreateWithName(style.fontName as CFString, style.fontSize, nil)
-        var minimumLineHeight = CGFloat(style.lineHeight)
-        var maximumLineHeight = CGFloat(style.lineHeight)
-        var firstLineIndent = CGFloat(style.firstLineIndent)
+        let baseFontSize = style.fontSize * zoomScale
+        let baseFont = CTFontCreateWithName(style.fontName as CFString, CGFloat(baseFontSize), nil)
+        var minimumLineHeight = CGFloat(style.lineHeight) * CGFloat(zoomScale)
+        var maximumLineHeight = CGFloat(style.lineHeight) * CGFloat(zoomScale)
+        var firstLineIndent = CGFloat(style.firstLineIndent) * CGFloat(zoomScale)
         var lineBreakMode = CTLineBreakMode.byWordWrapping
 
         let paragraphStyle = withUnsafePointer(to: &minimumLineHeight) { minimumLineHeightPointer in
@@ -50,16 +52,57 @@ public enum ChineseTypesetting {
         }
 
         var attributes: [NSAttributedString.Key: Any] = [
-            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTFontAttributeName as String): baseFont,
             NSAttributedString.Key(kCTParagraphStyleAttributeName as String): paragraphStyle
         ]
 
         if let foregroundColor = foregroundColor {
             attributes[NSAttributedString.Key(kCTForegroundColorAttributeName as String)] = foregroundColor
         }
+        
+        if style.layoutDirection == .vertical {
+            attributes[NSAttributedString.Key(kCTVerticalFormsAttributeName as String)] = true
+        }
 
         let attrString = NSMutableAttributedString(string: text, attributes: attributes)
-        applyPunctuationCompression(to: attrString, fontSize: style.fontSize)
+        
+        if !text.isEmpty {
+            var runs: [(NSRange, CompositeFontMapping)] = []
+            var currentMapping: CompositeFontMapping? = nil
+            var runStart = text.startIndex
+            
+            for idx in text.indices {
+                let char = text[idx]
+                let mapping = style.fontMapping(for: char)
+                if let cur = currentMapping, cur == mapping {
+                    // Continue run
+                } else {
+                    if let cur = currentMapping {
+                        let nsRange = NSRange(runStart..<idx, in: text)
+                        runs.append((nsRange, cur))
+                    }
+                    runStart = idx
+                    currentMapping = mapping
+                }
+            }
+            if let cur = currentMapping {
+                let nsRange = NSRange(runStart..<text.endIndex, in: text)
+                runs.append((nsRange, cur))
+            }
+            
+            for (nsRange, mapping) in runs {
+                let fs = style.fontSize * mapping.sizeMultiplier * zoomScale
+                let font = CTFontCreateWithName(mapping.fontName as CFString, CGFloat(fs), nil)
+                attrString.addAttribute(NSAttributedString.Key(kCTFontAttributeName as String), value: font, range: nsRange)
+                
+                if mapping.baselineOffset != 0 {
+                    let scaledOffset = mapping.baselineOffset * zoomScale
+                    attrString.addAttribute(NSAttributedString.Key(kCTBaselineOffsetAttributeName as String), value: scaledOffset as CFNumber, range: nsRange)
+                }
+            }
+        }
+        
+        applyPunctuationCompression(to: attrString, fontSize: style.fontSize * zoomScale)
         return attrString
     }
 

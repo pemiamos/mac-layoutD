@@ -34,6 +34,8 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
     public var strokeColorHex: String?
     public var strokeWidth: Double?
     public var textColorHex: String?
+    public var sourceParagraphId: UUID?
+    public var maskShape: ImageMaskShape?
 
     public init(
         id: UUID = UUID(),
@@ -44,7 +46,9 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
         backgroundColorHex: String? = nil,
         strokeColorHex: String? = nil,
         strokeWidth: Double? = nil,
-        textColorHex: String? = nil
+        textColorHex: String? = nil,
+        sourceParagraphId: UUID? = nil,
+        maskShape: ImageMaskShape? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -55,6 +59,8 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
         self.strokeColorHex = strokeColorHex
         self.strokeWidth = strokeWidth
         self.textColorHex = textColorHex
+        self.sourceParagraphId = sourceParagraphId
+        self.maskShape = maskShape
     }
 }
 

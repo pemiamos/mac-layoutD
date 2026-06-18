@@ -21,6 +21,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
     }
     public var facingPages: Bool
     public var bleedMM: Double?
+    public var layoutDirection: LayoutDirection
     public var marginTopToken: String?
     public var marginRightToken: String?
     public var marginBottomToken: String?
@@ -37,6 +38,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         baselineGrid: Double,
         facingPages: Bool,
         bleedMM: Double? = 3.0,
+        layoutDirection: LayoutDirection = .horizontal,
         marginTopToken: String? = nil,
         marginRightToken: String? = nil,
         marginBottomToken: String? = nil,
@@ -52,6 +54,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.baselineGrid = baselineGrid
         self.facingPages = facingPages
         self.bleedMM = bleedMM
+        self.layoutDirection = layoutDirection
         self.marginTopToken = marginTopToken
         self.marginRightToken = marginRightToken
         self.marginBottomToken = marginBottomToken
@@ -62,7 +65,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case pageSize, margins, columns, gutter, baselineGrid, facingPages, bleedMM
+        case pageSize, margins, columns, gutter, baselineGrid, facingPages, bleedMM, layoutDirection
         case marginTopToken, marginRightToken, marginBottomToken, marginLeftToken
         case columnsToken, gutterToken, baselineGridToken
     }
@@ -76,6 +79,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.baselineGrid = try container.decode(Double.self, forKey: .baselineGrid)
         self.facingPages = try container.decode(Bool.self, forKey: .facingPages)
         self.bleedMM = try container.decodeIfPresent(Double.self, forKey: .bleedMM) ?? 3.0
+        self.layoutDirection = try container.decodeIfPresent(LayoutDirection.self, forKey: .layoutDirection) ?? .horizontal
         self.marginTopToken = try container.decodeIfPresent(String.self, forKey: .marginTopToken)
         self.marginRightToken = try container.decodeIfPresent(String.self, forKey: .marginRightToken)
         self.marginBottomToken = try container.decodeIfPresent(String.self, forKey: .marginBottomToken)
@@ -83,6 +87,25 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.columnsToken = try container.decodeIfPresent(String.self, forKey: .columnsToken)
         self.gutterToken = try container.decodeIfPresent(String.self, forKey: .gutterToken)
         self.baselineGridToken = try container.decodeIfPresent(String.self, forKey: .baselineGridToken)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(pageSize, forKey: .pageSize)
+        try container.encode(margins, forKey: .margins)
+        try container.encode(columns, forKey: .columns)
+        try container.encode(gutter, forKey: .gutter)
+        try container.encode(baselineGrid, forKey: .baselineGrid)
+        try container.encode(facingPages, forKey: .facingPages)
+        try container.encodeIfPresent(bleedMM, forKey: .bleedMM)
+        try container.encode(layoutDirection, forKey: .layoutDirection)
+        try container.encodeIfPresent(marginTopToken, forKey: .marginTopToken)
+        try container.encodeIfPresent(marginRightToken, forKey: .marginRightToken)
+        try container.encodeIfPresent(marginBottomToken, forKey: .marginBottomToken)
+        try container.encodeIfPresent(marginLeftToken, forKey: .marginLeftToken)
+        try container.encodeIfPresent(columnsToken, forKey: .columnsToken)
+        try container.encodeIfPresent(gutterToken, forKey: .gutterToken)
+        try container.encodeIfPresent(baselineGridToken, forKey: .baselineGridToken)
     }
 
     public static let scienceBookDefault = PageSetup(
@@ -93,6 +116,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         baselineGrid: 14,
         facingPages: true,
         bleedMM: 3.0,
+        layoutDirection: .horizontal,
         marginTopToken: "page.margin.top",
         marginRightToken: "page.margin.right",
         marginBottomToken: "page.margin.bottom",
@@ -116,6 +140,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
             baselineGrid: baselineGridToken.flatMap(tokens.scalar) ?? baselineGrid,
             facingPages: facingPages,
             bleedMM: bleedMM,
+            layoutDirection: layoutDirection,
             marginTopToken: marginTopToken,
             marginRightToken: marginRightToken,
             marginBottomToken: marginBottomToken,

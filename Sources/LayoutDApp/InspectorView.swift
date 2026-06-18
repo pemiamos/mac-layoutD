@@ -1,7 +1,9 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import LayoutDCore
 import LayoutDCheck
 import LayoutDDesignAI
+import LayoutDImport
 
 private enum IssueFilter: String, CaseIterable {
     case all
@@ -135,6 +137,7 @@ struct InspectorView: View {
     @State private var selectedIssues = true
     @State private var selectedAI = true
     @State private var selectedPageControl = true
+    @State private var selectedQualityMetrics = true
     @State private var issueFilter: IssueFilter = .all
     @State private var issueCategoryFilter: IssueCategoryFilter = .all
     @State private var layoutTemplateName = ""
@@ -142,6 +145,12 @@ struct InspectorView: View {
     @State private var selectedChapterTemplateSectionIndex = 0
     @State private var chapterTemplateStartPage = 3
     @State private var selectedPageTemplate: PageLayoutTemplate = .textLedPage
+
+    @State private var importedTokens: DesignTokens? = nil
+    @State private var importedFormat: ImportFormat = .dtcg
+    @State private var showImportSheet = false
+    @State private var importErrorMessage: String? = nil
+    @State private var showImportErrorAlert = false
 
     var body: some View {
         ScrollView {
@@ -585,6 +594,13 @@ struct InspectorView: View {
                         }
                         .pickerStyle(.menu)
 
+                        Button("导入 Figma/DTCG 样式...") {
+                            importStyleFile()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .padding(.vertical, 2)
+
                         ForEach(state.project.styles.paragraphStyles.indices, id: \.self) { index in
                             styleRow(index: index)
                         }
@@ -757,10 +773,65 @@ struct InspectorView: View {
                         .padding(.top, 6)
                     }
                 }
+
+                Divider()
+
+                // Section 7: Quality Metrics
+                DisclosureGroup("排版质量指标", isExpanded: $selectedQualityMetrics) {
+                    if let report = state.report {
+                        qualityMetricsView(report: report)
+                    } else {
+                        Text("无可用质量数据")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 8)
+                    }
+                }
             }
             .padding(.all, 14)
         }
         .background(Color(NSColor.windowBackgroundColor))
+        .sheet(isPresented: $showImportSheet) {
+            if let tokens = importedTokens {
+                StyleImportSheet(
+                    state: state,
+                    tokens: tokens,
+                    format: importedFormat,
+                    onDismiss: { showImportSheet = false }
+                )
+            }
+        }
+        .alert(isPresented: $showImportErrorAlert) {
+            Alert(
+                title: Text("导入样式错误"),
+                message: Text(importErrorMessage ?? ""),
+                dismissButton: .default(Text("好"))
+            )
+        }
+    }
+
+    private func importStyleFile() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "选择 Figma Variables 或 DTCG Design Tokens JSON 文件"
+        openPanel.allowedContentTypes = [.json]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        
+        openPanel.begin { response in
+            if response == .OK, let url = openPanel.url {
+                do {
+                    let data = try Data(contentsOf: url)
+                    let result = try StyleBaselineImporter.autoDetectAndParse(jsonData: data)
+                    self.importedTokens = result.tokens
+                    self.importedFormat = result.format
+                    self.showImportSheet = true
+                } catch {
+                    self.importErrorMessage = "解析失败: \(error.localizedDescription)"
+                    self.showImportErrorAlert = true
+                }
+            }
+        }
     }
 
     private var filteredIssueCount: Int {
@@ -886,10 +957,80 @@ struct InspectorView: View {
                 }
             }
             .font(.caption)
+
+            DisclosureGroup("复合字体设置") {
+                VStack(alignment: .leading, spacing: 6) {
+                    compositeFontEditor(styleId: style.id, charClass: .chinese, label: "中文/全角标点", style: style)
+                    compositeFontEditor(styleId: style.id, charClass: .latin, label: "英文/半角标点", style: style)
+                    compositeFontEditor(styleId: style.id, charClass: .digit, label: "数字", style: style)
+                }
+                .padding(.top, 4)
+            }
+            .font(.caption)
         }
         .padding(.all, 8)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
         .cornerRadius(6)
+    }
+
+    private func compositeFontEditor(
+        styleId: String,
+        charClass: CompositeFontClass,
+        label: String,
+        style: ParagraphStyle
+    ) -> some View {
+        let mapping = style.compositeFont?[charClass] ?? CompositeFontMapping(
+            fontName: style.fontName,
+            sizeMultiplier: 1.0,
+            baselineOffset: 0.0
+        )
+        let curatedFonts = [
+            "Songti SC",
+            "PingFang SC",
+            "Heiti SC",
+            "Kaiti SC",
+            "Times New Roman",
+            "Helvetica",
+            "Georgia",
+            "Arial"
+        ]
+        
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            
+            HStack(spacing: 4) {
+                Picker("字体", selection: Binding(
+                    get: { mapping.fontName },
+                    set: { state.updateParagraphStyleCompositeFont(id: styleId, charClass: charClass, fontName: $0, sizeMultiplier: mapping.sizeMultiplier, baselineOffset: mapping.baselineOffset) }
+                )) {
+                    ForEach(curatedFonts, id: \.self) { font in
+                        Text(font).tag(font)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                
+                Spacer()
+                
+                Text("大小:")
+                    .font(.system(size: 9))
+                Stepper(String(format: "%d%%", Int(mapping.sizeMultiplier * 100)), value: Binding(
+                    get: { mapping.sizeMultiplier },
+                    set: { state.updateParagraphStyleCompositeFont(id: styleId, charClass: charClass, fontName: mapping.fontName, sizeMultiplier: $0, baselineOffset: mapping.baselineOffset) }
+                ), in: 0.5...2.0, step: 0.05)
+                .labelsHidden()
+                
+                Text("基线:")
+                    .font(.system(size: 9))
+                Stepper(String(format: "%.1f", mapping.baselineOffset), value: Binding(
+                    get: { mapping.baselineOffset },
+                    set: { state.updateParagraphStyleCompositeFont(id: styleId, charClass: charClass, fontName: mapping.fontName, sizeMultiplier: mapping.sizeMultiplier, baselineOffset: $0) }
+                ), in: -10.0...10.0, step: 0.5)
+                .labelsHidden()
+            }
+        }
     }
 
     // Sub-view: Asset Edit Row
@@ -1040,6 +1181,178 @@ struct InspectorView: View {
         return Image(systemName: name)
             .foregroundColor(color)
             .font(.system(size: 14))
+    }
+
+    // MARK: - Quality Metrics Helpers
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM-dd HH:mm:ss"
+        return formatter
+    }()
+
+    private func metricCard(title: String, value: String, icon: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+            }
+            Text(value)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundColor(.primary)
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .padding(.all, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+        )
+    }
+
+    private func historyCard(entry: QualityHistoryEntry) -> some View {
+        let hasErrors = entry.blockingErrors > 0
+        let hasIssues = entry.layoutIssues > 0
+        let statusColor: Color = hasErrors ? .red : (hasIssues ? .orange : .green)
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(Self.dateFormatter.string(from: entry.timestamp))
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(.secondary)
+            
+            Divider()
+                .padding(.vertical, 2)
+            
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("📄 页: \(entry.pageCount)")
+                    Text("🤖 AI: \(entry.planAppliedPages)/\(entry.pageCount)")
+                    Text("🖼️ 帧: \(entry.totalFrames)")
+                }
+                .font(.system(size: 10))
+                .foregroundColor(.primary)
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    if entry.blockingErrors > 0 {
+                        Text("❌ 错: \(entry.blockingErrors)")
+                            .foregroundColor(.red)
+                    }
+                    if entry.layoutIssues > 0 {
+                        Text("⚠️ 问: \(entry.layoutIssues)")
+                            .foregroundColor(.orange)
+                    }
+                    if entry.blockingErrors == 0 && entry.layoutIssues == 0 {
+                        Text("✅ 正常")
+                            .foregroundColor(.green)
+                    }
+                    Text("低DPI: \(entry.lowResolutionAssets)")
+                        .foregroundColor(entry.lowResolutionAssets > 0 ? .orange : .secondary)
+                }
+                .font(.system(size: 10))
+            }
+        }
+        .padding(.all, 8)
+        .frame(width: 160)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+        .cornerRadius(6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(statusColor.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private func qualityMetricsView(report: PreflightReport) -> some View {
+        let metrics = report.qualityMetrics
+        
+        let columns = [
+            GridItem(.flexible(), spacing: 8),
+            GridItem(.flexible(), spacing: 8)
+        ]
+        
+        let aiAdoptionRate = metrics.pageCount > 0 ? (Double(metrics.planAppliedPages) / Double(metrics.pageCount)) * 100 : 0.0
+        let aiAdoptionText = String(format: "%.0f%%", aiAdoptionRate)
+        
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("当前质量指标")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.top, 4)
+            
+            LazyVGrid(columns: columns, spacing: 8) {
+                metricCard(
+                    title: "总页数 / 自动流排页",
+                    value: "\(metrics.pageCount) 页 / \(metrics.autoLaidOutPages) 页",
+                    icon: "doc.text.fill",
+                    color: .blue
+                )
+                
+                metricCard(
+                    title: "AI 模板采纳率",
+                    value: "\(aiAdoptionText) (\(metrics.planAppliedPages)/\(metrics.pageCount))",
+                    icon: "wand.and.stars",
+                    color: .purple
+                )
+                
+                metricCard(
+                    title: "阻断错误 / 布局问题",
+                    value: "\(metrics.blockingErrors) 个 / \(metrics.layoutIssues) 个",
+                    icon: "exclamationmark.triangle.fill",
+                    color: (metrics.blockingErrors > 0) ? .red : ((metrics.layoutIssues > 0) ? .orange : .green)
+                )
+                
+                metricCard(
+                    title: "低 DPI / 缺图注素材",
+                    value: "\(metrics.lowResolutionAssets) 个 / \(metrics.missingCaptionAssets) 个",
+                    icon: "photo.fill.on.rectangle.fill",
+                    color: (metrics.lowResolutionAssets > 0 || metrics.missingCaptionAssets > 0) ? .orange : .secondary
+                )
+                
+                metricCard(
+                    title: "总帧数 / 页均帧数",
+                    value: "\(metrics.totalFrames) / \(String(format: "%.1f", metrics.averageFramesPerPage))",
+                    icon: "square.dashed",
+                    color: .teal
+                )
+            }
+            
+            let history = state.project.safeQualityMetricsHistory
+            if !history.isEmpty {
+                Divider()
+                    .padding(.vertical, 4)
+                
+                HStack {
+                    Text("历史趋势 (最新 \(history.count) 次)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("清除历史") {
+                        state.updateProject { project in
+                            project.qualityMetricsHistory = []
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption2)
+                    .foregroundColor(.blue)
+                }
+                
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(spacing: 8) {
+                        ForEach(history.reversed(), id: \.timestamp) { entry in
+                            historyCard(entry: entry)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .padding(.vertical, 8)
     }
 }
 
