@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import LayoutDCore
 import LayoutDDesignAI
 import LayoutDEngine
@@ -80,6 +81,40 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.activeFormattingTarget, .text)
     }
 
+    func testProjectMutationRecalculatesLayoutAndPreflight() {
+        let state = AppState(project: .sample)
+        let originalTitleFrame = state.laidOutDocument?.pages
+            .first(where: { $0.number == 1 })?
+            .frames
+            .first { frame in
+                if case .text(let text) = frame.content {
+                    return text == BookProject.sample.metadata.title
+                }
+                return false
+            }
+
+        XCTAssertNotNil(originalTitleFrame)
+        XCTAssertFalse(state.report?.issues.contains { $0.message == "项目缺少出版社信息" } ?? true)
+
+        state.updateProject { project in
+            project.metadata.title = "刷新后的标题"
+            project.metadata.publisher = nil
+        }
+
+        let updatedTitleFrame = state.laidOutDocument?.pages
+            .first(where: { $0.number == 1 })?
+            .frames
+            .first { frame in
+                if case .text(let text) = frame.content {
+                    return text == "刷新后的标题"
+                }
+                return false
+            }
+
+        XCTAssertNotNil(updatedTitleFrame)
+        XCTAssertTrue(state.report?.issues.contains { $0.message == "项目缺少出版社信息" } ?? false)
+    }
+
     func testApplySwatchColorToSelectedFrame() {
         let project = BookProject.sample
         let state = AppState(project: project)
@@ -109,6 +144,52 @@ final class AppStateTests: XCTestCase {
         // Remove color
         state.removeColorFromSelectedFrame()
         XCTAssertNil(state.frameTextColors[frameId])
+    }
+
+    func testApplySwatchColorPersistsInLayoutPlan() {
+        let state = AppState(project: .sample)
+        let frame = state.laidOutDocument?.pages
+            .first(where: { $0.number == 3 })?
+            .frames
+            .first { frame in
+                if case .text(let text) = frame.content {
+                    return text.contains("重新理解图文排版")
+                }
+                return false
+            }
+        let frameId = try! XCTUnwrap(frame?.id)
+
+        state.selectedFrameId = frameId
+        state.activeFormattingTarget = .container
+        state.isFillActive = true
+        state.applyColorToSelectedFrame(Color(.sRGB, red: 0.2, green: 0.4, blue: 0.6, opacity: 1))
+
+        var block = state.project.safeAppliedLayoutPlans[3]?.blocks.first { $0.id == frameId }
+        XCTAssertEqual(block?.backgroundColorHex, "#336699")
+
+        let updatedFrame = state.laidOutDocument?.pages
+            .first(where: { $0.number == 3 })?
+            .frames
+            .first { $0.id == frameId }
+        XCTAssertEqual(updatedFrame?.backgroundColorHex, "#336699")
+
+        state.isFillActive = false
+        state.applyColorToSelectedFrame(Color(.sRGB, red: 1, green: 0, blue: 0, opacity: 1))
+
+        block = state.project.safeAppliedLayoutPlans[3]?.blocks.first { $0.id == frameId }
+        XCTAssertEqual(block?.strokeColorHex, "#FF0000")
+        XCTAssertEqual(block?.strokeWidth, 1.5)
+
+        state.activeFormattingTarget = .text
+        state.applyColorToSelectedFrame(Color(.sRGB, red: 0, green: 0.5, blue: 0, opacity: 1))
+
+        block = state.project.safeAppliedLayoutPlans[3]?.blocks.first { $0.id == frameId }
+        XCTAssertEqual(block?.textColorHex, "#008000")
+
+        state.removeColorFromSelectedFrame()
+
+        block = state.project.safeAppliedLayoutPlans[3]?.blocks.first { $0.id == frameId }
+        XCTAssertNil(block?.textColorHex)
     }
 
     func testGenerateBrochurePDF() throws {

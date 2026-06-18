@@ -80,6 +80,10 @@ public struct ResourceBundlePackager {
             guard let sourcePath = asset.sourcePath else { continue }
             let sourceURL = URL(fileURLWithPath: sourcePath)
             let destURL = assetsDirURL.appendingPathComponent(asset.fileName)
+            try fileManager.createDirectory(
+                at: destURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             
             // Delete existing file in temp asset folder just in case
             if fileManager.fileExists(atPath: destURL.path) {

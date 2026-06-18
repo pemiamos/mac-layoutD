@@ -385,45 +385,51 @@ struct InspectorView: View {
                     VStack(spacing: 8) {
                         HStack {
                             Text("书名").frame(width: 50, alignment: .leading)
-                            TextField("书名", text: $state.project.metadata.title)
+                            TextField("书名", text: Binding(
+                                get: { state.project.metadata.title },
+                                set: { value in state.updateProject { $0.metadata.title = value } }
+                            ))
                         }
                         HStack {
                             Text("副标题").frame(width: 50, alignment: .leading)
                             TextField("副标题", text: Binding(
                                 get: { state.project.metadata.subtitle ?? "" },
-                                set: { state.project.metadata.subtitle = $0.isEmpty ? nil : $0 }
+                                set: { value in state.updateProject { $0.metadata.subtitle = value.isEmpty ? nil : value } }
                             ))
                         }
                         HStack {
                             Text("作者").frame(width: 50, alignment: .leading)
-                            TextField("作者", text: $state.project.metadata.author)
+                            TextField("作者", text: Binding(
+                                get: { state.project.metadata.author },
+                                set: { value in state.updateProject { $0.metadata.author = value } }
+                            ))
                         }
                         HStack {
                             Text("出版社").frame(width: 50, alignment: .leading)
                             TextField("出版社", text: Binding(
                                 get: { state.project.metadata.publisher ?? "" },
-                                set: { state.project.metadata.publisher = $0.isEmpty ? nil : $0 }
+                                set: { value in state.updateProject { $0.metadata.publisher = value.isEmpty ? nil : value } }
                             ))
                         }
                         HStack {
                             Text("ISBN").frame(width: 50, alignment: .leading)
                             TextField("ISBN", text: Binding(
                                 get: { state.project.metadata.isbn ?? "" },
-                                set: { state.project.metadata.isbn = $0.isEmpty ? nil : $0 }
+                                set: { value in state.updateProject { $0.metadata.isbn = value.isEmpty ? nil : value } }
                             ))
                         }
                         HStack {
                             Text("丛书").frame(width: 50, alignment: .leading)
                             TextField("丛书", text: Binding(
                                 get: { state.project.metadata.series ?? "" },
-                                set: { state.project.metadata.series = $0.isEmpty ? nil : $0 }
+                                set: { value in state.updateProject { $0.metadata.series = value.isEmpty ? nil : value } }
                             ))
                         }
                         HStack {
                             Text("关键词").frame(width: 50, alignment: .leading)
                             TextField("逗号分隔", text: Binding(
                                 get: { state.project.metadata.keywords.joined(separator: ", ") },
-                                set: { state.project.metadata.keywords = parseKeywords($0) }
+                                set: { value in state.updateProject { $0.metadata.keywords = parseKeywords(value) } }
                             ))
                         }
                     }
@@ -458,7 +464,10 @@ struct InspectorView: View {
                         HStack {
                             Text("分栏数")
                             Spacer()
-                            Stepper("\(state.project.pageSetup.columns) 栏", value: $state.project.pageSetup.columns, in: 1...4)
+                            Stepper("\(state.project.pageSetup.columns) 栏", value: Binding(
+                                get: { state.project.pageSetup.columns },
+                                set: { value in state.updateProject { $0.pageSetup.columns = value } }
+                            ), in: 1...4)
                         }
                         
                         HStack {
@@ -468,7 +477,7 @@ struct InspectorView: View {
                                 String(format: "%.1f mm", pointsToMillimeters(state.project.pageSetup.gutter)),
                                 value: Binding(
                                     get: { pointsToMillimeters(state.project.pageSetup.gutter) },
-                                    set: { state.project.pageSetup.gutter = millimetersToPoints($0) }
+                                    set: { value in state.updateProject { $0.pageSetup.gutter = millimetersToPoints(value) } }
                                 ),
                                 in: 2.0...15.0,
                                 step: 0.5
@@ -478,10 +487,16 @@ struct InspectorView: View {
                         HStack {
                             Text("基线网格 (pt)")
                             Spacer()
-                            Stepper("\(Int(state.project.pageSetup.baselineGrid)) pt", value: $state.project.pageSetup.baselineGrid, in: 8...24, step: 1)
+                            Stepper("\(Int(state.project.pageSetup.baselineGrid)) pt", value: Binding(
+                                get: { state.project.pageSetup.baselineGrid },
+                                set: { value in state.updateProject { $0.pageSetup.baselineGrid = value } }
+                            ), in: 8...24, step: 1)
                         }
 
-                        Toggle("对页排版", isOn: $state.project.pageSetup.facingPages)
+                        Toggle("对页排版", isOn: Binding(
+                            get: { state.project.pageSetup.facingPages },
+                            set: { value in state.updateProject { $0.pageSetup.facingPages = value } }
+                        ))
                             .toggleStyle(.checkbox)
 
                         HStack {
@@ -491,7 +506,7 @@ struct InspectorView: View {
                                 String(format: "%.1f mm", state.project.pageSetup.bleedMM ?? 3.0),
                                 value: Binding(
                                     get: { state.project.pageSetup.bleedMM ?? 3.0 },
-                                    set: { state.project.pageSetup.bleedMM = $0 }
+                                    set: { value in state.updateProject { $0.pageSetup.bleedMM = value } }
                                 ),
                                 in: 0.0...10.0,
                                 step: 0.5
@@ -509,7 +524,7 @@ struct InspectorView: View {
                                     String(format: "%.1f", pointsToMillimeters(state.project.pageSetup.margins.top)),
                                     value: Binding(
                                         get: { pointsToMillimeters(state.project.pageSetup.margins.top) },
-                                        set: { state.project.pageSetup.margins.top = millimetersToPoints($0) }
+                                        set: { value in state.updateProject { $0.pageSetup.margins.top = millimetersToPoints(value) } }
                                     ),
                                     in: 8.0...40.0,
                                     step: 0.5
@@ -520,7 +535,7 @@ struct InspectorView: View {
                                     String(format: "%.1f", pointsToMillimeters(state.project.pageSetup.margins.bottom)),
                                     value: Binding(
                                         get: { pointsToMillimeters(state.project.pageSetup.margins.bottom) },
-                                        set: { state.project.pageSetup.margins.bottom = millimetersToPoints($0) }
+                                        set: { value in state.updateProject { $0.pageSetup.margins.bottom = millimetersToPoints(value) } }
                                     ),
                                     in: 8.0...40.0,
                                     step: 0.5
@@ -532,7 +547,7 @@ struct InspectorView: View {
                                     String(format: "%.1f", pointsToMillimeters(state.project.pageSetup.margins.left)),
                                     value: Binding(
                                         get: { pointsToMillimeters(state.project.pageSetup.margins.left) },
-                                        set: { state.project.pageSetup.margins.left = millimetersToPoints($0) }
+                                        set: { value in state.updateProject { $0.pageSetup.margins.left = millimetersToPoints(value) } }
                                     ),
                                     in: 8.0...40.0,
                                     step: 0.5
@@ -543,7 +558,7 @@ struct InspectorView: View {
                                     String(format: "%.1f", pointsToMillimeters(state.project.pageSetup.margins.right)),
                                     value: Binding(
                                         get: { pointsToMillimeters(state.project.pageSetup.margins.right) },
-                                        set: { state.project.pageSetup.margins.right = millimetersToPoints($0) }
+                                        set: { value in state.updateProject { $0.pageSetup.margins.right = millimetersToPoints(value) } }
                                     ),
                                     in: 8.0...40.0,
                                     step: 0.5
@@ -903,7 +918,12 @@ struct InspectorView: View {
 
             Picker("角色", selection: Binding(
                 get: { state.project.assets[index].role },
-                set: { state.project.assets[index].role = $0 }
+                set: { value in
+                    state.updateProject { project in
+                        guard project.assets.indices.contains(index) else { return }
+                        project.assets[index].role = value
+                    }
+                }
             )) {
                 ForEach(AssetRole.allCases, id: \.self) { role in
                     Text(assetRoleLabel(role)).tag(role)
@@ -912,12 +932,22 @@ struct InspectorView: View {
 
             TextField("图注", text: Binding(
                 get: { state.project.assets[index].caption ?? "" },
-                set: { state.project.assets[index].caption = $0.isEmpty ? nil : $0 }
+                set: { value in
+                    state.updateProject { project in
+                        guard project.assets.indices.contains(index) else { return }
+                        project.assets[index].caption = value.isEmpty ? nil : value
+                    }
+                }
             ))
 
             TextField("版权或来源", text: Binding(
                 get: { state.project.assets[index].credit ?? "" },
-                set: { state.project.assets[index].credit = $0.isEmpty ? nil : $0 }
+                set: { value in
+                    state.updateProject { project in
+                        guard project.assets.indices.contains(index) else { return }
+                        project.assets[index].credit = value.isEmpty ? nil : value
+                    }
+                }
             ))
         }
         .textFieldStyle(.roundedBorder)
@@ -1191,4 +1221,3 @@ struct TemplateParametersEditorView: View {
         .cornerRadius(4)
     }
 }
-

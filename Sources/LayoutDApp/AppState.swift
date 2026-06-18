@@ -42,6 +42,12 @@ final class AppState: ObservableObject {
         self.project = project
         recalculateLayout()
     }
+
+    func updateProject(_ update: (inout BookProject) -> Void) {
+        var currentProject = project
+        update(&currentProject)
+        self.project = currentProject
+    }
     
     func recalculateLayout() {
         let doc = engine.layout(project: project)
@@ -402,7 +408,7 @@ final class AppState: ObservableObject {
 
     func insertPage(at pageNum: Int) {
         var currentProject = project
-        var plans = currentProject.safeAppliedLayoutPlans
+        let plans = currentProject.safeAppliedLayoutPlans
         
         var newPlans: [Int: LayoutPlan] = [:]
         for (k, v) in plans {
@@ -412,10 +418,15 @@ final class AppState: ObservableObject {
                 newPlans[k] = v
             }
         }
-        newPlans[pageNum] = LayoutPlan(target: .page(pageNum), strategy: .balanced, blocks: [])
+        newPlans[pageNum] = LayoutPlan(
+            target: .page(pageNum),
+            strategy: .balanced,
+            blocks: [],
+            notes: ["手动插入空白页"]
+        )
         currentProject.safeAppliedLayoutPlans = newPlans
         
-        var locked = currentProject.safeLockedPages
+        let locked = currentProject.safeLockedPages
         var newLocked = Set<Int>()
         for k in locked {
             if k >= pageNum {
@@ -529,6 +540,7 @@ final class AppState: ObservableObject {
 
     func applyColorToSelectedFrame(_ color: Color) {
         guard let frameId = selectedFrameId else { return }
+        let hex = color.hexString
         if activeFormattingTarget == .container {
             if isFillActive {
                 frameBackgroundColors[frameId] = color
@@ -538,7 +550,12 @@ final class AppState: ObservableObject {
         } else {
             frameTextColors[frameId] = color
         }
-        recalculateLayout()
+        updateSelectedFrameColors(
+            backgroundColorHex: activeFormattingTarget == .container && isFillActive ? hex : nil,
+            strokeColorHex: activeFormattingTarget == .container && !isFillActive ? hex : nil,
+            textColorHex: activeFormattingTarget == .text ? hex : nil,
+            shouldClear: false
+        )
     }
     
     func removeColorFromSelectedFrame() {
@@ -552,7 +569,52 @@ final class AppState: ObservableObject {
         } else {
             frameTextColors.removeValue(forKey: frameId)
         }
-        recalculateLayout()
+        updateSelectedFrameColors(
+            backgroundColorHex: activeFormattingTarget == .container && isFillActive ? "" : nil,
+            strokeColorHex: activeFormattingTarget == .container && !isFillActive ? "" : nil,
+            textColorHex: activeFormattingTarget == .text ? "" : nil,
+            shouldClear: true
+        )
+    }
+
+    private func updateSelectedFrameColors(
+        backgroundColorHex: String?,
+        strokeColorHex: String?,
+        textColorHex: String?,
+        shouldClear: Bool
+    ) {
+        guard let frameId = selectedFrameId,
+              let pageNum = findPageNumber(for: frameId) else {
+            recalculateLayout()
+            return
+        }
+
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+
+        guard let index = plan.blocks.firstIndex(where: { $0.id == frameId }) else {
+            recalculateLayout()
+            return
+        }
+
+        if backgroundColorHex != nil {
+            plan.blocks[index].backgroundColorHex = shouldClear ? nil : backgroundColorHex
+        }
+        if strokeColorHex != nil {
+            plan.blocks[index].strokeColorHex = shouldClear ? nil : strokeColorHex
+            if !shouldClear, plan.blocks[index].strokeWidth == nil {
+                plan.blocks[index].strokeWidth = 1.5
+            }
+        }
+        if textColorHex != nil {
+            plan.blocks[index].textColorHex = shouldClear ? nil : textColorHex
+        }
+
+        plan.notes = ["手动修改元素颜色"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
     }
 
     func updateFrameCoordinate(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {
@@ -615,5 +677,15 @@ final class AppState: ObservableObject {
         plans[pageNum] = plan
         currentProject.safeAppliedLayoutPlans = plans
         self.project = currentProject
+    }
+}
+
+private extension Color {
+    var hexString: String {
+        let nsColor = NSColor(self).usingColorSpace(.sRGB) ?? NSColor(self)
+        let red = Int(round(nsColor.redComponent * 255))
+        let green = Int(round(nsColor.greenComponent * 255))
+        let blue = Int(round(nsColor.blueComponent * 255))
+        return String(format: "#%02X%02X%02X", red, green, blue)
     }
 }

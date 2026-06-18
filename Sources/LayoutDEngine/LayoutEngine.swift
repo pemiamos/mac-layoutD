@@ -1081,7 +1081,7 @@ private struct LayoutContext {
             ))
         }
         
-        if !plan.blocks.isEmpty {
+        if !plan.blocks.isEmpty || plan.reservesBlankPage {
             advanceToNextPage()
         }
     }
@@ -1146,6 +1146,18 @@ private struct LayoutContext {
             return pageNumber % 2 == 1 ? margins.right : margins.left
         }
         return margins.right
+    }
+}
+
+private extension LayoutPlan {
+    var reservesBlankPage: Bool {
+        guard blocks.isEmpty else { return false }
+        if notes.contains(where: { $0.contains("空白页") }) {
+            return true
+        }
+        return marginOverride == nil
+            && columnsOverride == nil
+            && showHeadersFooters == nil
     }
 }
 

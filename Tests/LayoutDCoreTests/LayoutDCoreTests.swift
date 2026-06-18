@@ -651,6 +651,38 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(customFrame.rect.height, 0.8 * pageSize.height)
     }
 
+    func testEmptyLayoutPlanReservesPage() {
+        var project = BookProject.sample
+        project.safeAppliedLayoutPlans = [
+            3: LayoutPlan(target: .page(3), strategy: .balanced, blocks: [])
+        ]
+
+        let document = LayoutEngine().layout(project: project)
+        let page3Text = document.pages
+            .first(where: { $0.number == 3 })?
+            .frames
+            .compactMap { frame -> String? in
+                if case .text(let text) = frame.content {
+                    return text
+                }
+                return nil
+            }
+            .joined(separator: "\n") ?? ""
+        let page4Text = document.pages
+            .first(where: { $0.number == 4 })?
+            .frames
+            .compactMap { frame -> String? in
+                if case .text(let text) = frame.content {
+                    return text
+                }
+                return nil
+            }
+            .joined(separator: "\n") ?? ""
+
+        XCTAssertFalse(page3Text.contains("第一章 重新理解图文排版"))
+        XCTAssertTrue(page4Text.contains("第一章 重新理解图文排版"))
+    }
+
     func testSavedLayoutTemplateRetargetsPlanAndRegeneratesBlockIDs() {
         let block = LayoutPlanBlock(
             kind: .component,

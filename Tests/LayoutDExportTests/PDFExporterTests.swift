@@ -296,6 +296,65 @@ final class PDFExporterTests: XCTestCase {
         XCTAssertEqual(manifest.assets[0].fileName, "dummy.png")
     }
 
+    func testResourceBundlePackagerCopiesNestedAssets() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-packager-nested-test-\(UUID().uuidString)")
+        let sourceDir = tempDir.appendingPathComponent("source")
+        try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        let dummyImageURL = sourceDir.appendingPathComponent("dummy.png")
+        let dummyData = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        try dummyData.write(to: dummyImageURL)
+
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "嵌套素材打包测试", author: "测试作者"),
+            sections: [
+                BookSection(title: "第一章", stories: [
+                    Story(title: "故事一", paragraphs: [
+                        Paragraph(kind: .body, text: "正文内容", styleId: StyleID.body.rawValue)
+                    ])
+                ])
+            ],
+            assets: [
+                Asset(
+                    fileName: "chapter-01/dummy.png",
+                    sourcePath: dummyImageURL.path,
+                    role: .photo,
+                    pixelWidth: 100,
+                    pixelHeight: 100,
+                    dpi: 72
+                )
+            ]
+        )
+
+        let packageZipURL = tempDir.appendingPathComponent("project.layoutd-pack")
+        try ResourceBundlePackager().package(project: project, to: packageZipURL)
+
+        let unzipDir = tempDir.appendingPathComponent("unzipped")
+        try FileManager.default.createDirectory(at: unzipDir, withIntermediateDirectories: true)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+        process.arguments = ["-q", packageZipURL.path, "-d", unzipDir.path]
+        try process.run()
+        process.waitUntilExit()
+
+        XCTAssertEqual(process.terminationStatus, 0)
+
+        let nestedAssetURL = unzipDir
+            .appendingPathComponent("assets")
+            .appendingPathComponent("chapter-01")
+            .appendingPathComponent("dummy.png")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: nestedAssetURL.path))
+
+        let projectData = try Data(contentsOf: unzipDir.appendingPathComponent("project.layoutd"))
+        let unpackedProject = try ProjectFile.decode(projectData)
+        XCTAssertEqual(unpackedProject.assets.first?.sourcePath, "assets/chapter-01/dummy.png")
+    }
+
     func testPDFXExportMetadataAndBoxes() throws {
         let project = BookProject.sample
         let document = LayoutEngine().layout(project: project)
