@@ -42,7 +42,7 @@
 - [x] 颜色**多模式 live**：`BookProject.colorMode` + `resolvedColorHex(_:)`，渲染器据此解析；切换模式全书联动（绿/蓝主题组）。向后兼容（旧 `.layoutd` 解码 `colorMode == nil`）。
 - [x] `ParagraphStyle` 字号/行距/间距改为**引用 scalar token**而非硬编码值；`StyleLibrary.paragraphStyle(id:)` 返回 token 解析后的有效样式，手动编辑会清除对应 token 绑定。
 - [x] `PageSetup` 的网格/页边距/栏/基线纳入同一 schema；默认页边距、栏数、栏距、基线网格可通过 scalar token 联动，手动编辑会清除对应 token 绑定。
-- [ ] 形式化组件定义（知识卡片/边栏/图注）为样式化模板。
+- [x] 形式化组件定义（知识卡片/表格/图注）为样式化模板；`StyleLibrary.componentStyles` 定义 fill/stroke/accent/text inset，Canvas/PDF/PNG 共同消费，旧项目缺字段时回退默认组件。
 - [x] `.layoutd` 持久化加 schema 版本号（`BookProject.schemaVersion`，旧文件缺字段时默认当前 schema）。
 - 验收：项目可序列化为 DTCG 风格 JSON ✅（`dtcgExport`）；改一个**颜色** token → 全书联动 ✅；改一个**段落 scalar** token → 字号/行距/间距联动 ✅；改一个**页面 scalar** token → 页边距/栏数/栏距/基线联动 ✅；旧 `.layoutd` 仍可打开 ✅。
 - 涉及：`LayoutDCore`（StyleLibrary/BookProject）、三处渲染器。

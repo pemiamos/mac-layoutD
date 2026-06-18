@@ -113,7 +113,9 @@ public extension DesignTokens {
             ColorTokenSet(id: "ink", hex: "#17202A"),
             ColorTokenSet(id: "paper", hex: "#F7F4EE"),
             ColorTokenSet(id: "accent", hex: "#2D7A78"),
-            ColorTokenSet(id: "warning", hex: "#B3541E")
+            ColorTokenSet(id: "warning", hex: "#B3541E"),
+            ColorTokenSet(id: "component.callout.background", hex: "#E0F5ED"),
+            ColorTokenSet(id: "component.table.background", hex: "#E0F5ED")
         ],
         scalars: [
             ScalarToken(id: "page.margin.top", value: 56, kind: .spacing),

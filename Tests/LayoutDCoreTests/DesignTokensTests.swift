@@ -163,6 +163,37 @@ final class DesignTokensTests: XCTestCase {
         XCTAssertNil(setup.baselineGridToken)
     }
 
+    func testDefaultComponentStylesResolveThroughTokens() {
+        var styles = StyleLibrary.defaultChineseScience
+        var tokens = try! XCTUnwrap(styles.tokens)
+        tokens.colors = tokens.colors.map { token in
+            guard token.id == "component.callout.background" else { return token }
+            return ColorTokenSet(id: token.id, hex: "#DCEBFF")
+        }
+        styles.tokens = tokens
+        let project = BookProject(metadata: ProjectMetadata(title: "组件 token", author: "a"), styles: styles)
+
+        let callout = try! XCTUnwrap(project.styles.componentStyle(for: .callout))
+        XCTAssertEqual(callout.resolvedFillColorHex(project: project), "#DCEBFF")
+        XCTAssertEqual(callout.resolvedStrokeColorHex(project: project), "#2D7A78")
+        XCTAssertEqual(callout.textInsetX, 8)
+        XCTAssertEqual(callout.accentWidth, 4)
+    }
+
+    func testComponentStylesFallbackWhenLegacyJSONOmitsField() throws {
+        let json = """
+        {
+          "paragraphStyles": [],
+          "colors": [{"id": "ink", "hex": "#111111"}]
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(StyleLibrary.self, from: json)
+        XCTAssertNil(decoded.componentStyles)
+        XCTAssertEqual(decoded.safeComponentStyles.count, ComponentStyle.defaultChineseScience.count)
+        XCTAssertEqual(decoded.componentStyle(for: .callout)?.fillColorHex, "#E0F5ED")
+    }
+
     func testProjectColorModeDrivesResolution() {
         var styles = StyleLibrary.defaultChineseScience
         styles.tokens = DesignTokens(

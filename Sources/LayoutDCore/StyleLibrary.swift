@@ -11,19 +11,30 @@ public enum StyleID: String, Codable, Sendable {
 public struct StyleLibrary: Codable, Equatable, Sendable {
     public var paragraphStyles: [ParagraphStyle]
     public var colors: [ColorToken]
+    public var componentStyles: [ComponentStyle]?
     /// Unified design tokens (P1). Optional & additive: when present it is the
     /// source of truth for color resolution; when nil the legacy `colors` list
     /// is used. Old `.layoutd` files decode with `tokens == nil`.
     public var tokens: DesignTokens?
 
-    public init(paragraphStyles: [ParagraphStyle], colors: [ColorToken], tokens: DesignTokens? = nil) {
+    public init(
+        paragraphStyles: [ParagraphStyle],
+        colors: [ColorToken],
+        componentStyles: [ComponentStyle]? = nil,
+        tokens: DesignTokens? = nil
+    ) {
         self.paragraphStyles = paragraphStyles
         self.colors = colors
+        self.componentStyles = componentStyles
         self.tokens = tokens
     }
 
     public func paragraphStyle(id: String) -> ParagraphStyle {
         (paragraphStyles.first { $0.id == id } ?? .body).resolved(using: effectiveTokens)
+    }
+
+    public func componentStyle(for frameKind: PageFrameKind) -> ComponentStyle? {
+        safeComponentStyles.first { $0.frameKind == frameKind }
     }
 
     /// Resolves a color token id to a hex value, preferring unified `tokens`
@@ -40,6 +51,10 @@ public struct StyleLibrary: Codable, Equatable, Sendable {
     /// when no explicit token set has been attached yet.
     public var effectiveTokens: DesignTokens {
         tokens ?? .from(legacyColors: colors)
+    }
+
+    public var safeComponentStyles: [ComponentStyle] {
+        componentStyles ?? ComponentStyle.defaultChineseScience
     }
 
     public static let defaultChineseScience = StyleLibrary(
@@ -81,6 +96,7 @@ public struct StyleLibrary: Codable, Equatable, Sendable {
             ColorToken(id: "accent", hex: "#2D7A78"),
             ColorToken(id: "warning", hex: "#B3541E")
         ],
+        componentStyles: ComponentStyle.defaultChineseScience,
         tokens: .defaultChineseScience
     )
 
@@ -317,6 +333,113 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
             spaceBeforeToken: spaceBeforeToken,
             spaceAfterToken: spaceAfterToken
         )
+    }
+}
+
+public struct ComponentStyle: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var displayName: String
+    public var frameKind: PageFrameKind
+    public var fillColorHex: String?
+    public var fillColorToken: String?
+    public var strokeColorHex: String?
+    public var strokeColorToken: String?
+    public var accentColorHex: String?
+    public var accentColorToken: String?
+    public var textColorToken: String?
+    public var strokeWidth: Double
+    public var accentWidth: Double
+    public var textInsetX: Double
+    public var textInsetY: Double
+
+    public init(
+        id: String,
+        displayName: String,
+        frameKind: PageFrameKind,
+        fillColorHex: String? = nil,
+        fillColorToken: String? = nil,
+        strokeColorHex: String? = nil,
+        strokeColorToken: String? = nil,
+        accentColorHex: String? = nil,
+        accentColorToken: String? = nil,
+        textColorToken: String? = nil,
+        strokeWidth: Double = 0,
+        accentWidth: Double = 0,
+        textInsetX: Double = 0,
+        textInsetY: Double = 0
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.frameKind = frameKind
+        self.fillColorHex = fillColorHex
+        self.fillColorToken = fillColorToken
+        self.strokeColorHex = strokeColorHex
+        self.strokeColorToken = strokeColorToken
+        self.accentColorHex = accentColorHex
+        self.accentColorToken = accentColorToken
+        self.textColorToken = textColorToken
+        self.strokeWidth = strokeWidth
+        self.accentWidth = accentWidth
+        self.textInsetX = textInsetX
+        self.textInsetY = textInsetY
+    }
+
+    public static let defaultChineseScience: [ComponentStyle] = [
+        ComponentStyle(
+            id: "knowledgeCard",
+            displayName: "知识卡片",
+            frameKind: .callout,
+            fillColorHex: "#E0F5ED",
+            fillColorToken: "component.callout.background",
+            strokeColorHex: "#2D7A78",
+            strokeColorToken: "accent",
+            accentColorHex: "#2D7A78",
+            accentColorToken: "accent",
+            textColorToken: "accent",
+            strokeWidth: 0.8,
+            accentWidth: 4,
+            textInsetX: 8,
+            textInsetY: 6
+        ),
+        ComponentStyle(
+            id: "dataTable",
+            displayName: "表格",
+            frameKind: .table,
+            fillColorHex: "#E0F5ED",
+            fillColorToken: "component.table.background",
+            strokeColorHex: "#2D7A78",
+            strokeColorToken: "accent",
+            textColorToken: "ink",
+            strokeWidth: 0.8,
+            textInsetX: 8,
+            textInsetY: 6
+        ),
+        ComponentStyle(
+            id: "figureCaption",
+            displayName: "图注",
+            frameKind: .caption,
+            textColorToken: "ink",
+            textInsetX: 0,
+            textInsetY: 0
+        )
+    ]
+}
+
+public extension ComponentStyle {
+    func resolvedFillColorHex(project: BookProject) -> String? {
+        fillColorToken.flatMap(project.resolvedColorHex) ?? fillColorHex
+    }
+
+    func resolvedStrokeColorHex(project: BookProject) -> String? {
+        strokeColorToken.flatMap(project.resolvedColorHex) ?? strokeColorHex
+    }
+
+    func resolvedAccentColorHex(project: BookProject) -> String? {
+        accentColorToken.flatMap(project.resolvedColorHex) ?? accentColorHex
+    }
+
+    func resolvedTextColorHex(project: BookProject) -> String? {
+        textColorToken.flatMap(project.resolvedColorHex)
     }
 }
 

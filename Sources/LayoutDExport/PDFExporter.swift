@@ -397,15 +397,27 @@ public struct PDFExporter {
         switch frame.content {
         case .text(let text):
             let textRect: CGRect
-            if frame.kind == .callout || frame.kind == .table {
+            if let componentStyle = project.styles.componentStyle(for: frame.kind) {
                 if frame.backgroundColorHex == nil {
-                    drawCalloutBackground(in: rect, context: context)
+                    drawComponentBackground(componentStyle, project: project, in: rect, context: context)
                 }
-                textRect = rect.insetBy(dx: 8, dy: 6)
+                textRect = rect.insetBy(
+                    dx: CGFloat(componentStyle.textInsetX),
+                    dy: CGFloat(componentStyle.textInsetY)
+                )
+                drawText(
+                    text,
+                    styleId: frame.styleId,
+                    kind: frame.kind,
+                    project: project,
+                    rect: textRect,
+                    context: context,
+                    textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project)
+                )
             } else {
                 textRect = rect
+                drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, rect: textRect, context: context, textColorHex: frame.textColorHex)
             }
-            drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, rect: textRect, context: context, textColorHex: frame.textColorHex)
         case .asset, .spreadAsset:
             drawImagePlaceholder(frame: frame, project: project, in: context, rect: rect)
         case .empty:
@@ -421,17 +433,22 @@ public struct PDFExporter {
         }
     }
 
-    private func drawCalloutBackground(in rect: CGRect, context: CGContext) {
+    private func drawComponentBackground(_ style: ComponentStyle, project: BookProject, in rect: CGRect, context: CGContext) {
         context.saveGState()
-        context.setFillColor(NSColor(calibratedRed: 0.88, green: 0.96, blue: 0.93, alpha: 1).cgColor)
-        context.fill(rect)
-        context.setStrokeColor(NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).cgColor)
-        context.setLineWidth(0.8)
-        context.stroke(rect)
-
-        let accentRect = CGRect(x: rect.minX, y: rect.minY, width: 4, height: rect.height)
-        context.setFillColor(NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).cgColor)
-        context.fill(accentRect)
+        if let fillHex = style.resolvedFillColorHex(project: project), let fill = NSColor.from(hex: fillHex) {
+            context.setFillColor(fill.cgColor)
+            context.fill(rect)
+        }
+        if let strokeHex = style.resolvedStrokeColorHex(project: project), let stroke = NSColor.from(hex: strokeHex), style.strokeWidth > 0 {
+            context.setStrokeColor(stroke.cgColor)
+            context.setLineWidth(CGFloat(style.strokeWidth))
+            context.stroke(rect)
+        }
+        if let accentHex = style.resolvedAccentColorHex(project: project), let accent = NSColor.from(hex: accentHex), style.accentWidth > 0 {
+            let accentRect = CGRect(x: rect.minX, y: rect.minY, width: CGFloat(style.accentWidth), height: rect.height)
+            context.setFillColor(accent.cgColor)
+            context.fill(accentRect)
+        }
         context.restoreGState()
     }
 

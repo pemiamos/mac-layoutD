@@ -159,15 +159,26 @@ public struct PNGExporter {
 
         switch frame.content {
         case .text(let text):
-            if frame.kind == .callout || frame.kind == .table {
+            if let componentStyle = project.styles.componentStyle(for: frame.kind) {
                 if frame.backgroundColorHex == nil {
-                    context.setFillColor(NSColor(calibratedRed: 0.88, green: 0.96, blue: 0.93, alpha: 1).cgColor)
-                    context.fill(rect)
-                    context.setStrokeColor(NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).cgColor)
-                    context.stroke(rect, width: 0.8)
+                    drawComponentBackground(componentStyle, project: project, in: rect, context: context)
                 }
+                let textRect = rect.insetBy(
+                    dx: CGFloat(componentStyle.textInsetX),
+                    dy: CGFloat(componentStyle.textInsetY)
+                )
+                drawText(
+                    text,
+                    styleId: frame.styleId,
+                    kind: frame.kind,
+                    project: project,
+                    in: textRect,
+                    context: context,
+                    textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project)
+                )
+            } else {
+                drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context, textColorHex: frame.textColorHex)
             }
-            drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context, textColorHex: frame.textColorHex)
         case .asset(let assetId):
             drawAsset(assetId: assetId, isLeftHalf: nil, project: project, in: rect, context: context)
         case .spreadAsset(let assetId, let isLeftHalf):
@@ -183,6 +194,25 @@ public struct PNGExporter {
             context.stroke(rect)
             context.restoreGState()
         }
+    }
+
+    private func drawComponentBackground(_ style: ComponentStyle, project: BookProject, in rect: CGRect, context: CGContext) {
+        context.saveGState()
+        if let fillHex = style.resolvedFillColorHex(project: project), let fill = NSColor.from(hex: fillHex) {
+            context.setFillColor(fill.cgColor)
+            context.fill(rect)
+        }
+        if let strokeHex = style.resolvedStrokeColorHex(project: project), let stroke = NSColor.from(hex: strokeHex), style.strokeWidth > 0 {
+            context.setStrokeColor(stroke.cgColor)
+            context.setLineWidth(CGFloat(style.strokeWidth))
+            context.stroke(rect)
+        }
+        if let accentHex = style.resolvedAccentColorHex(project: project), let accent = NSColor.from(hex: accentHex), style.accentWidth > 0 {
+            let accentRect = CGRect(x: rect.minX, y: rect.minY, width: CGFloat(style.accentWidth), height: rect.height)
+            context.setFillColor(accent.cgColor)
+            context.fill(accentRect)
+        }
+        context.restoreGState()
     }
 
     private func drawText(_ text: String, styleId: String?, kind: PageFrameKind = .text, project: BookProject, in rect: CGRect, context: CGContext, textColorHex: String? = nil) {

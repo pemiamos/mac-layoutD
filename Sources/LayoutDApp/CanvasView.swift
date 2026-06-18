@@ -294,7 +294,26 @@ final class CanvasView: NSView {
         case .text(let text):
             let textColor = resolvedColor(memoryColor: frameTextColors[frame.id], persistedHex: frame.textColorHex)
             let hasBg = resolvedColor(memoryColor: frameBackgroundColors[frame.id], persistedHex: frame.backgroundColorHex) != nil
-            drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor, hasBgColorOverride: hasBg)
+            if let componentStyle = project.styles.componentStyle(for: frame.kind) {
+                if !hasBg {
+                    drawComponentBackground(componentStyle, project: project, rect: rect)
+                }
+                let componentTextColor = textColor ?? componentStyle.resolvedTextColorHex(project: project).flatMap(NSColor.fromHex)
+                drawText(
+                    text,
+                    styleId: frame.styleId,
+                    project: project,
+                    rect: rect.insetBy(
+                        dx: CGFloat(componentStyle.textInsetX) * zoomScale,
+                        dy: CGFloat(componentStyle.textInsetY) * zoomScale
+                    ),
+                    kind: frame.kind,
+                    textColorOverride: componentTextColor,
+                    applyDefaultInset: false
+                )
+            } else {
+                drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor)
+            }
         case .asset(let assetId):
             drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect)
         case .spreadAsset(let assetId, let isLeftHalf):
@@ -385,14 +404,37 @@ final class CanvasView: NSView {
         }
     }
 
-    private func drawText(_ text: String, styleId: String?, project: BookProject, rect: CGRect, kind: PageFrameKind, textColorOverride: NSColor? = nil, hasBgColorOverride: Bool = false) {
-        if (kind == .callout || kind == .table) && !hasBgColorOverride {
-            NSColor(calibratedRed: 0.88, green: 0.96, blue: 0.93, alpha: 1).setFill()
+    private func drawComponentBackground(_ style: ComponentStyle, project: BookProject, rect: CGRect) {
+        if let fillHex = style.resolvedFillColorHex(project: project), let fill = NSColor.fromHex(fillHex) {
+            fill.setFill()
             rect.fill()
-            NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).setStroke()
-            NSBezierPath(rect: rect).stroke()
         }
+        if let strokeHex = style.resolvedStrokeColorHex(project: project), let stroke = NSColor.fromHex(strokeHex), style.strokeWidth > 0 {
+            stroke.setStroke()
+            let path = NSBezierPath(rect: rect)
+            path.lineWidth = CGFloat(style.strokeWidth) * zoomScale
+            path.stroke()
+        }
+        if let accentHex = style.resolvedAccentColorHex(project: project), let accent = NSColor.fromHex(accentHex), style.accentWidth > 0 {
+            accent.setFill()
+            CGRect(
+                x: rect.minX,
+                y: rect.minY,
+                width: CGFloat(style.accentWidth) * zoomScale,
+                height: rect.height
+            ).fill()
+        }
+    }
 
+    private func drawText(
+        _ text: String,
+        styleId: String?,
+        project: BookProject,
+        rect: CGRect,
+        kind: PageFrameKind,
+        textColorOverride: NSColor? = nil,
+        applyDefaultInset: Bool = true
+    ) {
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -438,7 +480,7 @@ final class CanvasView: NSView {
         ]
         let attrString = NSMutableAttributedString(string: text, attributes: attributes)
         ChineseTypesetting.applyPunctuationCompression(to: attrString, fontSize: Double(font.pointSize))
-        attrString.draw(in: rect.insetBy(dx: 4, dy: 2))
+        attrString.draw(in: applyDefaultInset ? rect.insetBy(dx: 4, dy: 2) : rect)
     }
 
     private func resolvedColor(memoryColor: NSColor?, persistedHex: String?) -> NSColor? {
