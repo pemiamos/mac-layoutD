@@ -379,6 +379,13 @@ public struct PDFExporter {
         )
         let rect = pdfRect(fromLayoutRect: layoutRect, pageHeight: pageHeight)
 
+        if let bgHex = frame.backgroundColorHex, let color = NSColor.from(hex: bgHex) {
+            context.saveGState()
+            context.setFillColor(color.cgColor)
+            context.fill(rect)
+            context.restoreGState()
+        }
+
         if frame.kind == .footnoteDivider {
             context.saveGState()
             context.setFillColor(NSColor.black.cgColor)
@@ -391,16 +398,26 @@ public struct PDFExporter {
         case .text(let text):
             let textRect: CGRect
             if frame.kind == .callout || frame.kind == .table {
-                drawCalloutBackground(in: rect, context: context)
+                if frame.backgroundColorHex == nil {
+                    drawCalloutBackground(in: rect, context: context)
+                }
                 textRect = rect.insetBy(dx: 8, dy: 6)
             } else {
                 textRect = rect
             }
-            drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, rect: textRect, context: context)
+            drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, rect: textRect, context: context, textColorHex: frame.textColorHex)
         case .asset, .spreadAsset:
             drawImagePlaceholder(frame: frame, project: project, in: context, rect: rect)
         case .empty:
             break
+        }
+
+        if let strokeHex = frame.strokeColorHex, let color = NSColor.from(hex: strokeHex) {
+            context.saveGState()
+            context.setStrokeColor(color.cgColor)
+            context.setLineWidth(CGFloat(frame.strokeWidth ?? 1.5))
+            context.stroke(rect)
+            context.restoreGState()
         }
     }
 
@@ -418,7 +435,7 @@ public struct PDFExporter {
         context.restoreGState()
     }
 
-    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind, project: BookProject, rect: CGRect, context: CGContext) {
+    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind, project: BookProject, rect: CGRect, context: CGContext, textColorHex: String? = nil) {
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -448,10 +465,17 @@ public struct PDFExporter {
             style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
         }
 
+        let textColor: CGColor
+        if let hex = textColorHex, let color = NSColor.from(hex: hex) {
+            textColor = color.cgColor
+        } else {
+            textColor = NSColor.black.cgColor
+        }
+
         let attributedString = ChineseTypesetting.makeAttributedString(
             text: text,
             style: style,
-            foregroundColor: NSColor.black.cgColor
+            foregroundColor: textColor
         )
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
@@ -632,5 +656,27 @@ public struct PDFExporter {
         if let data = xmp.data(using: .utf8) {
             context.addDocumentMetadata(data as CFData)
         }
+    }
+}
+
+private extension NSColor {
+    static func from(hex: String) -> NSColor? {
+        var cleanHex = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if cleanHex.hasPrefix("#") {
+            cleanHex.remove(at: cleanHex.startIndex)
+        }
+        
+        guard cleanHex.count == 6 else {
+            return nil
+        }
+        
+        var rgbValue: UInt64 = 0
+        Scanner(string: cleanHex).scanHexInt64(&rgbValue)
+        
+        let red = CGFloat((rgbValue & 0xFF0000) >> 16) / 255.0
+        let green = CGFloat((rgbValue & 0x00FF00) >> 8) / 255.0
+        let blue = CGFloat(rgbValue & 0x0000FF) / 255.0
+        
+        return NSColor(calibratedRed: red, green: green, blue: blue, alpha: 1.0)
     }
 }

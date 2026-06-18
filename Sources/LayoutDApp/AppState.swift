@@ -20,6 +20,17 @@ final class AppState: ObservableObject {
         }
     }
     @Published var selectedFrameId: UUID?
+    @Published var activeTool: LayoutTool = .selection
+    
+    @Published var activeFormattingTarget: FormattingTarget = .container
+    @Published var activeScreenMode: ScreenMode = .normal
+    @Published var activeFillColor: Color = Color(nsColor: NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1))
+    @Published var activeStrokeColor: Color = .black
+    @Published var isFillActive: Bool = true
+
+    @Published var frameBackgroundColors: [UUID: Color] = [:]
+    @Published var frameStrokeColors: [UUID: Color] = [:]
+    @Published var frameTextColors: [UUID: Color] = [:]
     
     let engine = LayoutEngine()
     let inspectorEngine = ProjectInspector()
@@ -387,5 +398,222 @@ final class AppState: ObservableObject {
         )
         guard !result.appliedFixes.isEmpty else { return }
         self.project = result.project
+    }
+
+    func insertPage(at pageNum: Int) {
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        
+        var newPlans: [Int: LayoutPlan] = [:]
+        for (k, v) in plans {
+            if k >= pageNum {
+                newPlans[k + 1] = v.retargeted(to: .page(k + 1))
+            } else {
+                newPlans[k] = v
+            }
+        }
+        newPlans[pageNum] = LayoutPlan(target: .page(pageNum), strategy: .balanced, blocks: [])
+        currentProject.safeAppliedLayoutPlans = newPlans
+        
+        var locked = currentProject.safeLockedPages
+        var newLocked = Set<Int>()
+        for k in locked {
+            if k >= pageNum {
+                newLocked.insert(k + 1)
+            } else {
+                newLocked.insert(k)
+            }
+        }
+        currentProject.safeLockedPages = newLocked
+        
+        self.project = currentProject
+        self.currentPageNumber = pageNum
+    }
+    
+    func deletePage(at pageNum: Int) {
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        plans.removeValue(forKey: pageNum)
+        
+        var newPlans: [Int: LayoutPlan] = [:]
+        for (k, v) in plans {
+            if k > pageNum {
+                newPlans[k - 1] = v.retargeted(to: .page(k - 1))
+            } else {
+                newPlans[k] = v
+            }
+        }
+        currentProject.safeAppliedLayoutPlans = newPlans
+        
+        var locked = currentProject.safeLockedPages
+        locked.remove(pageNum)
+        var newLocked = Set<Int>()
+        for k in locked {
+            if k > pageNum {
+                newLocked.insert(k - 1)
+            } else {
+                newLocked.insert(k)
+            }
+        }
+        currentProject.safeLockedPages = newLocked
+        
+        self.project = currentProject
+        self.currentPageNumber = max(1, pageNum - 1)
+    }
+
+    func addFrameToPage(pageNum: Int, kind: LayoutBlockKind, frameRect: Rect) {
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+        
+        let blockId = UUID()
+        let blockRef: ContentReference
+        let roleName: String
+        
+        switch kind {
+        case .text:
+            blockRef = .generated("新建文本内容")
+            roleName = "body"
+        case .image:
+            if let asset = project.assets.first {
+                blockRef = .asset(asset.id)
+            } else {
+                blockRef = .generated("")
+            }
+            roleName = "image"
+        case .caption:
+            blockRef = .generated("图注")
+            roleName = "caption"
+        case .component:
+            blockRef = .generated("组件内容")
+            roleName = "knowledge-card"
+        }
+        
+        let block = LayoutPlanBlock(
+            id: blockId,
+            kind: kind,
+            role: roleName,
+            frame: frameRect,
+            contentReference: blockRef
+        )
+        
+        plan.blocks.append(block)
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        
+        var locked = currentProject.safeLockedPages
+        locked.insert(pageNum)
+        currentProject.safeLockedPages = locked
+        
+        self.project = currentProject
+        self.selectedFrameId = blockId
+    }
+
+    func deleteFrame(id: UUID) {
+        guard let pageNum = findPageNumber(for: id) else { return }
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+        
+        plan.blocks.removeAll { $0.id == id }
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        
+        var locked = currentProject.safeLockedPages
+        locked.insert(pageNum)
+        currentProject.safeLockedPages = locked
+        
+        self.selectedFrameId = nil
+        self.project = currentProject
+    }
+
+    func applyColorToSelectedFrame(_ color: Color) {
+        guard let frameId = selectedFrameId else { return }
+        if activeFormattingTarget == .container {
+            if isFillActive {
+                frameBackgroundColors[frameId] = color
+            } else {
+                frameStrokeColors[frameId] = color
+            }
+        } else {
+            frameTextColors[frameId] = color
+        }
+        recalculateLayout()
+    }
+    
+    func removeColorFromSelectedFrame() {
+        guard let frameId = selectedFrameId else { return }
+        if activeFormattingTarget == .container {
+            if isFillActive {
+                frameBackgroundColors.removeValue(forKey: frameId)
+            } else {
+                frameStrokeColors.removeValue(forKey: frameId)
+            }
+        } else {
+            frameTextColors.removeValue(forKey: frameId)
+        }
+        recalculateLayout()
+    }
+
+    func updateFrameCoordinate(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {
+        guard let pageNum = findPageNumber(for: id) else { return }
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+        
+        if let idx = plan.blocks.firstIndex(where: { $0.id == id }) {
+            let pageSize = project.pageSetup.pageSize
+            var block = plan.blocks[idx]
+            block.updateAbsoluteFrame(
+                pageSize: pageSize,
+                x: x,
+                y: y,
+                width: width,
+                height: height
+            )
+            plan.blocks[idx] = block
+            plan.notes = ["手动修改元素坐标"]
+            plans[pageNum] = plan
+            currentProject.safeAppliedLayoutPlans = plans
+            self.project = currentProject
+        }
+    }
+
+    func updateGapFrames(firstId: UUID, firstRect: Rect, secondId: UUID, secondRect: Rect) {
+        guard let pageNum = findPageNumber(for: firstId) else { return }
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+        
+        let pageSize = project.pageSetup.pageSize
+        
+        if let idx1 = plan.blocks.firstIndex(where: { $0.id == firstId }) {
+            var block1 = plan.blocks[idx1]
+            block1.updateAbsoluteFrame(
+                pageSize: pageSize,
+                x: firstRect.x,
+                y: firstRect.y,
+                width: firstRect.width,
+                height: firstRect.height
+            )
+            plan.blocks[idx1] = block1
+        }
+        
+        if let idx2 = plan.blocks.firstIndex(where: { $0.id == secondId }) {
+            var block2 = plan.blocks[idx2]
+            block2.updateAbsoluteFrame(
+                pageSize: pageSize,
+                x: secondRect.x,
+                y: secondRect.y,
+                width: secondRect.width,
+                height: secondRect.height
+            )
+            plan.blocks[idx2] = block2
+        }
+        
+        plan.notes = ["间距工具调整元素位置"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
     }
 }

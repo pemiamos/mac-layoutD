@@ -142,6 +142,13 @@ public struct PNGExporter {
             height: frame.rect.height
         )
 
+        if let bgHex = frame.backgroundColorHex, let color = NSColor.from(hex: bgHex) {
+            context.saveGState()
+            context.setFillColor(color.cgColor)
+            context.fill(rect)
+            context.restoreGState()
+        }
+
         if frame.kind == .footnoteDivider {
             context.saveGState()
             context.setFillColor(NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).cgColor)
@@ -153,12 +160,14 @@ public struct PNGExporter {
         switch frame.content {
         case .text(let text):
             if frame.kind == .callout || frame.kind == .table {
-                context.setFillColor(NSColor(calibratedRed: 0.88, green: 0.96, blue: 0.93, alpha: 1).cgColor)
-                context.fill(rect)
-                context.setStrokeColor(NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).cgColor)
-                context.stroke(rect, width: 0.8)
+                if frame.backgroundColorHex == nil {
+                    context.setFillColor(NSColor(calibratedRed: 0.88, green: 0.96, blue: 0.93, alpha: 1).cgColor)
+                    context.fill(rect)
+                    context.setStrokeColor(NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).cgColor)
+                    context.stroke(rect, width: 0.8)
+                }
             }
-            drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context)
+            drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context, textColorHex: frame.textColorHex)
         case .asset(let assetId):
             drawAsset(assetId: assetId, isLeftHalf: nil, project: project, in: rect, context: context)
         case .spreadAsset(let assetId, let isLeftHalf):
@@ -166,9 +175,17 @@ public struct PNGExporter {
         case .empty:
             break
         }
+
+        if let strokeHex = frame.strokeColorHex, let color = NSColor.from(hex: strokeHex) {
+            context.saveGState()
+            context.setStrokeColor(color.cgColor)
+            context.setLineWidth(CGFloat(frame.strokeWidth ?? 1.5))
+            context.stroke(rect)
+            context.restoreGState()
+        }
     }
 
-    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind = .text, project: BookProject, in rect: CGRect, context: CGContext) {
+    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind = .text, project: BookProject, in rect: CGRect, context: CGContext, textColorHex: String? = nil) {
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -198,10 +215,17 @@ public struct PNGExporter {
             style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
         }
 
+        let textColor: CGColor
+        if let hex = textColorHex, let color = NSColor.from(hex: hex) {
+            textColor = color.cgColor
+        } else {
+            textColor = NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).cgColor
+        }
+
         let attributedString = ChineseTypesetting.makeAttributedString(
             text: text,
             style: style,
-            foregroundColor: NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).cgColor
+            foregroundColor: textColor
         )
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
@@ -413,5 +437,27 @@ public struct PNGExporter {
         
         context.strokePath()
         context.restoreGState()
+    }
+}
+
+private extension NSColor {
+    static func from(hex: String) -> NSColor? {
+        var cleanHex = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if cleanHex.hasPrefix("#") {
+            cleanHex.remove(at: cleanHex.startIndex)
+        }
+        
+        guard cleanHex.count == 6 else {
+            return nil
+        }
+        
+        var rgbValue: UInt64 = 0
+        Scanner(string: cleanHex).scanHexInt64(&rgbValue)
+        
+        let red = CGFloat((rgbValue & 0xFF0000) >> 16) / 255.0
+        let green = CGFloat((rgbValue & 0x00FF00) >> 8) / 255.0
+        let blue = CGFloat(rgbValue & 0x0000FF) / 255.0
+        
+        return NSColor(calibratedRed: red, green: green, blue: blue, alpha: 1.0)
     }
 }

@@ -164,8 +164,6 @@ struct ProjectLoader {
         case "layoutd", "json":
             let data = try Data(contentsOf: inputURL)
             return try ProjectFile.decode(data)
-        case "docx":
-            return try DocxBookImporter().importDocument(docxURL: inputURL, assetDirectoryURL: assetDirectoryURL)
         default:
             return try loadMarkdownProject(manuscriptURL: inputURL, assetDirectoryURL: assetDirectoryURL)
         }
@@ -179,8 +177,6 @@ struct ProjectLoader {
         switch inputURL.pathExtension.lowercased() {
         case "layoutd", "json":
             return "项目：\(inputURL.lastPathComponent)"
-        case "docx":
-            return "Word导入：\(inputURL.lastPathComponent)"
         default:
             return "导入：\(inputURL.lastPathComponent)"
         }

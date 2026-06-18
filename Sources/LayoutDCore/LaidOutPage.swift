@@ -30,19 +30,31 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
     public var rect: Rect
     public var styleId: String?
     public var content: FrameContent
+    public var backgroundColorHex: String?
+    public var strokeColorHex: String?
+    public var strokeWidth: Double?
+    public var textColorHex: String?
 
     public init(
         id: UUID = UUID(),
         kind: PageFrameKind,
         rect: Rect,
         styleId: String? = nil,
-        content: FrameContent
+        content: FrameContent,
+        backgroundColorHex: String? = nil,
+        strokeColorHex: String? = nil,
+        strokeWidth: Double? = nil,
+        textColorHex: String? = nil
     ) {
         self.id = id
         self.kind = kind
         self.rect = rect
         self.styleId = styleId
         self.content = content
+        self.backgroundColorHex = backgroundColorHex
+        self.strokeColorHex = strokeColorHex
+        self.strokeWidth = strokeWidth
+        self.textColorHex = textColorHex
     }
 }
 

@@ -482,7 +482,9 @@ private struct MarkdownParser {
             }
         }
         
-        lines.remove(atOffsets: indicesToRemove)
+        for index in indicesToRemove.sorted(by: >) {
+            lines.remove(at: index)
+        }
         return footnoteDefs
     }
 

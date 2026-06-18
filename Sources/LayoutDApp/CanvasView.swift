@@ -21,7 +21,65 @@ final class CanvasView: NSView {
         didSet { needsDisplay = true }
     }
 
+    var activeScreenMode: ScreenMode = .normal {
+        didSet { needsDisplay = true }
+    }
+
+    var activeTool: LayoutTool = .selection {
+        didSet {
+            activeGap = nil
+            needsDisplay = true
+        }
+    }
+
+    var frameBackgroundColors: [UUID: NSColor] = [:] {
+        didSet { needsDisplay = true }
+    }
+
+    var frameStrokeColors: [UUID: NSColor] = [:] {
+        didSet { needsDisplay = true }
+    }
+
+    var frameTextColors: [UUID: NSColor] = [:] {
+        didSet { needsDisplay = true }
+    }
+
     var onFrameSelected: ((UUID?) -> Void)?
+    var onCanvasClick: ((Int, CGPoint) -> Void)?
+    var onFrameDragged: ((UUID, Double, Double, Double, Double) -> Void)?
+    var onGapDragged: ((UUID, Rect, UUID, Rect) -> Void)?
+    var onPageSelected: ((Int) -> Void)?
+
+    struct GapInfo {
+        var isVerticalGap: Bool
+        var rect: CGRect
+        var firstFrameId: UUID
+        var secondFrameId: UUID
+    }
+
+    private var activeGap: GapInfo? {
+        didSet {
+            if oldValue?.rect != activeGap?.rect {
+                needsDisplay = true
+            }
+        }
+    }
+
+    private var trackingArea: NSTrackingArea?
+    private var isDraggingFrame = false
+    private var isResizingFrame = false
+    private var activeResizeHandleIndex: Int?
+    private var dragStartFrameRect: Rect?
+    private var dragStartLocalPoint: CGPoint? // absolute canvas point
+    
+    // Hand tool panning
+    private var dragStartPoint: NSPoint?
+    private var scrollStartOrigin: NSPoint?
+    
+    // Gap tool dragging
+    private var isDraggingGap = false
+    private var dragStartFirstFrameRect: Rect?
+    private var dragStartSecondFrameRect: Rect?
 
     private(set) var zoomScale: CGFloat = 1.15
     private let pageGap: CGFloat = 36
@@ -37,6 +95,17 @@ final class CanvasView: NSView {
 
     required init?(coder: NSCoder) {
         nil
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let existing = trackingArea {
+            removeTrackingArea(existing)
+        }
+        let options: NSTrackingArea.Options = [.mouseMoved, .mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect]
+        let newArea = NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil)
+        addTrackingArea(newArea)
+        trackingArea = newArea
     }
 
     func zoomIn() {
@@ -80,6 +149,16 @@ final class CanvasView: NSView {
         for page in document.pages {
             draw(page: page, project: project)
         }
+
+        if activeTool == .gap, let gap = activeGap {
+            NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.45).setFill()
+            let path = NSBezierPath(rect: gap.rect)
+            path.fill()
+            
+            NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.8).setStroke()
+            path.lineWidth = 1.0
+            path.stroke()
+        }
     }
 
     private func draw(page: LaidOutPage, project: BookProject) {
@@ -93,17 +172,19 @@ final class CanvasView: NSView {
         NSBezierPath(rect: pageRect).stroke()
 
         // Draw bleed boundary
-        let bleedMM = project.pageSetup.bleedMM ?? 3.0
-        let bleedPoints = CGFloat(bleedMM * 72.0 / 25.4)
-        let bleedOffset = bleedPoints * zoomScale
-        let bleedRect = pageRect.insetBy(dx: -bleedOffset, dy: -bleedOffset)
-        
-        let bleedPath = NSBezierPath(rect: bleedRect)
-        bleedPath.lineWidth = 1.0
-        let dashedPattern: [CGFloat] = [4.0, 4.0]
-        bleedPath.setLineDash(dashedPattern, count: dashedPattern.count, phase: 0.0)
-        NSColor.red.setStroke()
-        bleedPath.stroke()
+        if activeScreenMode == .normal {
+            let bleedMM = project.pageSetup.bleedMM ?? 3.0
+            let bleedPoints = CGFloat(bleedMM * 72.0 / 25.4)
+            let bleedOffset = bleedPoints * zoomScale
+            let bleedRect = pageRect.insetBy(dx: -bleedOffset, dy: -bleedOffset)
+            
+            let bleedPath = NSBezierPath(rect: bleedRect)
+            bleedPath.lineWidth = 1.0
+            let dashedPattern: [CGFloat] = [4.0, 4.0]
+            bleedPath.setLineDash(dashedPattern, count: dashedPattern.count, phase: 0.0)
+            NSColor.red.setStroke()
+            bleedPath.stroke()
+        }
 
         // Draw padlock icon if the page is locked
         if project.safeLockedPages.contains(page.number) {
@@ -114,7 +195,7 @@ final class CanvasView: NSView {
         }
 
         // Draw spine guide line if facing pages is enabled and it's not the cover page
-        if project.pageSetup.facingPages && page.number > 1 {
+        if activeScreenMode == .normal && project.pageSetup.facingPages && page.number > 1 {
             NSColor(calibratedWhite: 0.72, alpha: 1).setStroke()
             let path = NSBezierPath()
             path.lineWidth = 1.0
@@ -124,7 +205,9 @@ final class CanvasView: NSView {
             path.stroke()
         }
 
-        drawGuides(project: project, pageRect: pageRect, pageNumber: page.number)
+        if activeScreenMode == .normal {
+            drawGuides(project: project, pageRect: pageRect, pageNumber: page.number)
+        }
 
         for frame in page.frames {
             draw(frame: frame, project: project, pageRect: pageRect)
@@ -201,9 +284,17 @@ final class CanvasView: NSView {
             return
         }
 
+        // Draw background color override if any
+        if let bgColor = frameBackgroundColors[frame.id] {
+            bgColor.setFill()
+            rect.fill()
+        }
+
         switch frame.content {
         case .text(let text):
-            drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind)
+            let textColor = frameTextColors[frame.id]
+            let hasBg = frameBackgroundColors[frame.id] != nil
+            drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor, hasBgColorOverride: hasBg)
         case .asset(let assetId):
             drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect)
         case .spreadAsset(let assetId, let isLeftHalf):
@@ -212,27 +303,90 @@ final class CanvasView: NSView {
             break
         }
 
-        if frame.id == highlightedFrameId {
-            NSColor.red.withAlphaComponent(0.15).setFill()
-            rect.fill()
-            NSColor.red.setStroke()
+        // Draw stroke color override if any
+        if let strokeColor = frameStrokeColors[frame.id] {
+            strokeColor.setStroke()
             let path = NSBezierPath(rect: rect)
-            path.lineWidth = 2.0
+            path.lineWidth = 1.5
             path.stroke()
         }
 
-        if frame.id == selectedFrameId {
-            NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.15).setFill()
-            rect.fill()
-            NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).setStroke()
-            let path = NSBezierPath(rect: rect)
-            path.lineWidth = 2.0
-            path.stroke()
+        if activeScreenMode == .normal {
+            if frame.id == highlightedFrameId {
+                NSColor.red.withAlphaComponent(0.15).setFill()
+                rect.fill()
+                NSColor.red.setStroke()
+                let path = NSBezierPath(rect: rect)
+                path.lineWidth = 2.0
+                path.stroke()
+            }
+
+            if frame.id == selectedFrameId {
+                NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.15).setFill()
+                rect.fill()
+                NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).setStroke()
+                let path = NSBezierPath(rect: rect)
+                path.lineWidth = 2.0
+                path.stroke()
+
+                if activeTool == .selection {
+                    let handles = resizeHandles(for: rect)
+                    NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).setStroke()
+                    NSColor.white.setFill()
+                    for hRect in handles {
+                        let hPath = NSBezierPath(rect: hRect)
+                        hPath.lineWidth = 1.0
+                        hPath.fill()
+                        hPath.stroke()
+                    }
+                }
+            }
+
+            if activeTool == .directSelection && frame.id == selectedFrameId && frame.kind == .image {
+                if case .asset(let assetId) = frame.content,
+                   let asset = project.assets.first(where: { $0.id == assetId }),
+                   let image = loadImage(asset: asset) {
+                    let imageSize = image.size
+                    if imageSize.width > 0 && imageSize.height > 0 {
+                        let imageAspect = imageSize.width / imageSize.height
+                        let rectAspect = rect.width / rect.height
+                        let drawRect: CGRect
+                        if imageAspect > rectAspect {
+                            let height = rect.width / imageAspect
+                            drawRect = CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height)
+                        } else {
+                            let width = rect.height * imageAspect
+                            drawRect = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: rect.height)
+                        }
+
+                        NSColor.orange.setStroke()
+                        let outlinePath = NSBezierPath(rect: drawRect)
+                        outlinePath.lineWidth = 1.5
+                        outlinePath.stroke()
+
+                        let center = CGPoint(x: drawRect.midX, y: drawRect.midY)
+                        let outerRect = CGRect(x: center.x - 12, y: center.y - 12, width: 24, height: 24)
+                        let innerRect = CGRect(x: center.x - 8, y: center.y - 8, width: 16, height: 16)
+
+                        NSColor.orange.withAlphaComponent(0.2).setFill()
+                        NSBezierPath(ovalIn: outerRect).fill()
+
+                        NSColor.orange.setStroke()
+                        let outerPath = NSBezierPath(ovalIn: outerRect)
+                        outerPath.lineWidth = 1.5
+                        outerPath.stroke()
+
+                        let innerPath = NSBezierPath(ovalIn: innerRect)
+                        innerPath.lineWidth = 1.0
+                        innerPath.stroke()
+                    }
+                }
+            }
         }
     }
 
-    private func drawText(_ text: String, styleId: String?, project: BookProject, rect: CGRect, kind: PageFrameKind) {
-        if kind == .callout || kind == .table {
+    private func drawText(_ text: String, styleId: String?, project: BookProject, rect: CGRect, kind: PageFrameKind, textColorOverride: NSColor? = nil, hasBgColorOverride: Bool = false) {
+        if (kind == .callout || kind == .table) && !hasBgColorOverride {
             NSColor(calibratedRed: 0.88, green: 0.96, blue: 0.93, alpha: 1).setFill()
             rect.fill()
             NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1).setStroke()
@@ -273,9 +427,10 @@ final class CanvasView: NSView {
         paragraph.lineSpacing = max(CGFloat(style.lineHeight - style.fontSize), 0) * zoomScale
         paragraph.firstLineHeadIndent = CGFloat(style.firstLineIndent) * zoomScale
 
+        let textColor = textColorOverride ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1),
+            .foregroundColor: textColor,
             .paragraphStyle: paragraph
         ]
         let attrString = NSMutableAttributedString(string: text, attributes: attributes)
@@ -467,21 +622,180 @@ final class CanvasView: NSView {
         }
     }
 
+    private func findFrame(id: UUID, in document: LaidOutDocument) -> (frame: PageFrame, pageNumber: Int)? {
+        for page in document.pages {
+            if let frame = page.frames.first(where: { $0.id == id }) {
+                return (frame, page.number)
+            }
+        }
+        return nil
+    }
+
+    private func resizeHandles(for rect: CGRect) -> [CGRect] {
+        let size: CGFloat = 6.0
+        let half = size / 2.0
+        return [
+            CGRect(x: rect.minX - half, y: rect.minY - half, width: size, height: size), // Top-Left (0)
+            CGRect(x: rect.midX - half, y: rect.minY - half, width: size, height: size), // Top-Middle (1)
+            CGRect(x: rect.maxX - half, y: rect.minY - half, width: size, height: size), // Top-Right (2)
+            CGRect(x: rect.maxX - half, y: rect.midY - half, width: size, height: size), // Middle-Right (3)
+            CGRect(x: rect.maxX - half, y: rect.maxY - half, width: size, height: size), // Bottom-Right (4)
+            CGRect(x: rect.midX - half, y: rect.maxY - half, width: size, height: size), // Bottom-Middle (5)
+            CGRect(x: rect.minX - half, y: rect.maxY - half, width: size, height: size), // Bottom-Left (6)
+            CGRect(x: rect.minX - half, y: rect.midY - half, width: size, height: size)  // Middle-Left (7)
+        ]
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        
+        if activeTool == .hand {
+            NSCursor.openHand.set()
+            return
+        }
+        
+        if activeTool == .zoom {
+            NSCursor.crosshair.set()
+            return
+        }
+        
+        if activeTool == .gap {
+            detectGap(at: point)
+            if let gap = activeGap {
+                if gap.isVerticalGap {
+                    NSCursor.resizeLeftRight.set()
+                } else {
+                    NSCursor.resizeUpDown.set()
+                }
+            } else {
+                NSCursor.arrow.set()
+            }
+            return
+        }
+        
+        NSCursor.arrow.set()
+    }
+
+    private func detectGap(at point: CGPoint) {
+        guard let project, let document else {
+            activeGap = nil
+            return
+        }
+        
+        let threshold: CGFloat = 30.0 // maximum gap size to detect
+        
+        for page in document.pages {
+            guard let pRect = pageRect(number: page.number) else { continue }
+            if pRect.contains(point) {
+                let frames = page.frames
+                guard frames.count >= 2 else { continue }
+                
+                for i in 0..<frames.count {
+                    for j in 0..<frames.count {
+                        if i == j { continue }
+                        let frameA = frames[i]
+                        let frameB = frames[j]
+                        
+                        let extraWidthA = (frameA.kind == .text || frameA.kind == .footnote || frameA.kind == .sideNote) ? CGFloat(project.styles.paragraphStyle(id: frameA.styleId ?? StyleID.body.rawValue).fontSize * 0.5) : 0.0
+                        let extraWidthB = (frameB.kind == .text || frameB.kind == .footnote || frameB.kind == .sideNote) ? CGFloat(project.styles.paragraphStyle(id: frameB.styleId ?? StyleID.body.rawValue).fontSize * 0.5) : 0.0
+                        
+                        let rectA = CGRect(
+                            x: pRect.minX + CGFloat(frameA.rect.x) * zoomScale,
+                            y: pRect.minY + CGFloat(frameA.rect.y) * zoomScale,
+                            width: (CGFloat(frameA.rect.width) + extraWidthA) * zoomScale,
+                            height: CGFloat(frameA.rect.height) * zoomScale
+                        )
+                        
+                        let rectB = CGRect(
+                            x: pRect.minX + CGFloat(frameB.rect.x) * zoomScale,
+                            y: pRect.minY + CGFloat(frameB.rect.y) * zoomScale,
+                            width: (CGFloat(frameB.rect.width) + extraWidthB) * zoomScale,
+                            height: CGFloat(frameB.rect.height) * zoomScale
+                        )
+                        
+                        // Vertical Gap (A left of B)
+                        if rectA.maxX < rectB.minX {
+                            let gapDist = rectB.minX - rectA.maxX
+                            if gapDist > 0 && gapDist < threshold {
+                                let overlapYMin = max(rectA.minY, rectB.minY)
+                                let overlapYMax = min(rectA.maxY, rectB.maxY)
+                                if overlapYMin < overlapYMax {
+                                    let gapRect = CGRect(x: rectA.maxX, y: overlapYMin, width: gapDist, height: overlapYMax - overlapYMin)
+                                    if gapRect.contains(point) {
+                                        activeGap = GapInfo(isVerticalGap: true, rect: gapRect, firstFrameId: frameA.id, secondFrameId: frameB.id)
+                                        return
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Horizontal Gap (A above B)
+                        if rectA.maxY < rectB.minY {
+                            let gapDist = rectB.minY - rectA.maxY
+                            if gapDist > 0 && gapDist < threshold {
+                                let overlapXMin = max(rectA.minX, rectB.minX)
+                                let overlapXMax = min(rectA.maxX, rectB.maxX)
+                                if overlapXMin < overlapXMax {
+                                    let gapRect = CGRect(x: overlapXMin, y: rectA.maxY, width: overlapXMax - overlapXMin, height: gapDist)
+                                    if gapRect.contains(point) {
+                                        activeGap = GapInfo(isVerticalGap: false, rect: gapRect, firstFrameId: frameA.id, secondFrameId: frameB.id)
+                                        return
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        activeGap = nil
+    }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        guard project != nil, let document else { return }
+        guard let project, let document else { return }
 
+        // 1. Hand tool
+        if activeTool == .hand {
+            dragStartPoint = event.locationInWindow
+            if let scrollView = enclosingScrollView {
+                scrollStartOrigin = scrollView.contentView.bounds.origin
+            }
+            NSCursor.closedHand.set()
+            return
+        }
+
+        // 2. Zoom tool
+        if activeTool == .zoom {
+            let isOption = event.modifierFlags.contains(.option)
+            if isOption {
+                zoomOut()
+            } else {
+                zoomIn()
+            }
+            return
+        }
+
+        // Detect clicked page and frame
         var hitFrame: PageFrame? = nil
+        var clickedPageNumber: Int? = nil
+        var localPoint: CGPoint? = nil
 
         for page in document.pages {
             guard let pRect = pageRect(number: page.number) else { continue }
             if pRect.contains(point) {
+                clickedPageNumber = page.number
                 let localX = (point.x - pRect.minX) / zoomScale
                 let localY = (point.y - pRect.minY) / zoomScale
+                localPoint = CGPoint(x: localX, y: localY)
                 
                 if let found = page.frames.reversed().first(where: { frame in
-                    let fRect = CGRect(x: frame.rect.x, y: frame.rect.y, width: frame.rect.width, height: frame.rect.height)
-                    return fRect.contains(CGPoint(x: localX, y: localY)) && frame.content != .empty
+                    let extraWidth = (frame.kind == .text || frame.kind == .footnote || frame.kind == .sideNote) ? CGFloat(project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue).fontSize * 0.5) : 0.0
+                    let fRect = CGRect(x: frame.rect.x, y: frame.rect.y, width: frame.rect.width + extraWidth, height: frame.rect.height)
+                    return fRect.contains(CGPoint(x: localX, y: localY))
                 }) {
                     hitFrame = found
                     break
@@ -489,12 +803,228 @@ final class CanvasView: NSView {
             }
         }
 
-        if let frame = hitFrame {
-            selectedFrameId = frame.id
-            onFrameSelected?(frame.id)
-        } else {
-            selectedFrameId = nil
-            onFrameSelected?(nil)
+        // 3. Page tool selection
+        if activeTool == .page, let pageNum = clickedPageNumber {
+            onPageSelected?(pageNum)
+            return
+        }
+
+        // 4. Gap tool dragging
+        if activeTool == .gap, let gap = activeGap {
+            isDraggingGap = true
+            dragStartLocalPoint = point
+            
+            if let fFrame = findFrame(id: gap.firstFrameId, in: document) {
+                dragStartFirstFrameRect = fFrame.frame.rect
+            }
+            if let sFrame = findFrame(id: gap.secondFrameId, in: document) {
+                dragStartSecondFrameRect = sFrame.frame.rect
+            }
+            return
+        }
+
+        // 5. Selection resize handle hit test
+        if activeTool == .selection,
+           let selId = selectedFrameId,
+           let selFrameInfo = findFrame(id: selId, in: document),
+           let pRect = pageRect(number: selFrameInfo.pageNumber) {
+            
+            let extraWidth = (selFrameInfo.frame.kind == .text || selFrameInfo.frame.kind == .footnote || selFrameInfo.frame.kind == .sideNote) ? CGFloat(project.styles.paragraphStyle(id: selFrameInfo.frame.styleId ?? StyleID.body.rawValue).fontSize * 0.5) : 0.0
+            let rect = CGRect(
+                x: pRect.minX + CGFloat(selFrameInfo.frame.rect.x) * zoomScale,
+                y: pRect.minY + CGFloat(selFrameInfo.frame.rect.y) * zoomScale,
+                width: (CGFloat(selFrameInfo.frame.rect.width) + extraWidth) * zoomScale,
+                height: CGFloat(selFrameInfo.frame.rect.height) * zoomScale
+            )
+            
+            let handles = resizeHandles(for: rect)
+            if let index = handles.firstIndex(where: { $0.contains(point) }) {
+                isResizingFrame = true
+                activeResizeHandleIndex = index
+                dragStartFrameRect = selFrameInfo.frame.rect
+                dragStartLocalPoint = point
+                return
+            }
+        }
+
+        // 6. Selection or Direct Selection click selection and drag start
+        if activeTool == .selection || activeTool == .directSelection {
+            if let frame = hitFrame {
+                selectedFrameId = frame.id
+                onFrameSelected?(frame.id)
+                
+                isDraggingFrame = true
+                dragStartFrameRect = frame.rect
+                dragStartLocalPoint = point
+            } else {
+                selectedFrameId = nil
+                onFrameSelected?(nil)
+            }
+            return
+        }
+
+        // Click on empty canvas to create text/image frames for drawing tools
+        if let pageNum = clickedPageNumber, let localPt = localPoint {
+            onCanvasClick?(pageNum, localPt)
+        }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        
+        // 1. Hand tool panning
+        if activeTool == .hand, let startPt = dragStartPoint, let startOrigin = scrollStartOrigin, let scrollView = enclosingScrollView {
+            let dx = event.locationInWindow.x - startPt.x
+            let dy = event.locationInWindow.y - startPt.y
+            
+            var newOrigin = NSPoint(
+                x: startOrigin.x - dx,
+                y: startOrigin.y - dy
+            )
+            let maxOriginX = max(0.0, bounds.width - scrollView.contentView.bounds.width)
+            let maxOriginY = max(0.0, bounds.height - scrollView.contentView.bounds.height)
+            newOrigin.x = min(max(newOrigin.x, 0), maxOriginX)
+            newOrigin.y = min(max(newOrigin.y, 0), maxOriginY)
+            
+            scrollView.contentView.scroll(to: newOrigin)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+            return
+        }
+
+        // 2. Selection tool moving
+        if isDraggingFrame, let selId = selectedFrameId, let startRect = dragStartFrameRect, let startPt = dragStartLocalPoint {
+            let dx = Double((point.x - startPt.x) / zoomScale)
+            let dy = Double((point.y - startPt.y) / zoomScale)
+            
+            onFrameDragged?(selId, startRect.x + dx, startRect.y + dy, startRect.width, startRect.height)
+            return
+        }
+
+        // 3. Selection tool resizing
+        if isResizingFrame, let selId = selectedFrameId, let startRect = dragStartFrameRect, let startPt = dragStartLocalPoint, let handleIdx = activeResizeHandleIndex {
+            let dx = Double((point.x - startPt.x) / zoomScale)
+            let dy = Double((point.y - startPt.y) / zoomScale)
+            
+            var newX = startRect.x
+            var newY = startRect.y
+            var newW = startRect.width
+            var newH = startRect.height
+            
+            let minW = 10.0
+            let minH = 10.0
+            
+            switch handleIdx {
+            case 0: // Top-Left
+                let targetW = startRect.width - dx
+                let targetH = startRect.height - dy
+                if targetW >= minW {
+                    newX = startRect.x + dx
+                    newW = targetW
+                }
+                if targetH >= minH {
+                    newY = startRect.y + dy
+                    newH = targetH
+                }
+            case 1: // Top-Middle
+                let targetH = startRect.height - dy
+                if targetH >= minH {
+                    newY = startRect.y + dy
+                    newH = targetH
+                }
+            case 2: // Top-Right
+                let targetW = startRect.width + dx
+                let targetH = startRect.height - dy
+                if targetW >= minW {
+                    newW = targetW
+                }
+                if targetH >= minH {
+                    newY = startRect.y + dy
+                    newH = targetH
+                }
+            case 3: // Middle-Right
+                let targetW = startRect.width + dx
+                if targetW >= minW {
+                    newW = targetW
+                }
+            case 4: // Bottom-Right
+                let targetW = startRect.width + dx
+                let targetH = startRect.height + dy
+                if targetW >= minW {
+                    newW = targetW
+                }
+                if targetH >= minH {
+                    newH = targetH
+                }
+            case 5: // Bottom-Middle
+                let targetH = startRect.height + dy
+                if targetH >= minH {
+                    newH = targetH
+                }
+            case 6: // Bottom-Left
+                let targetW = startRect.width - dx
+                let targetH = startRect.height + dy
+                if targetW >= minW {
+                    newX = startRect.x + dx
+                    newW = targetW
+                }
+                if targetH >= minH {
+                    newH = targetH
+                }
+            case 7: // Middle-Left
+                let targetW = startRect.width - dx
+                if targetW >= minW {
+                    newX = startRect.x + dx
+                    newW = targetW
+                }
+            default:
+                break
+            }
+            
+            onFrameDragged?(selId, newX, newY, newW, newH)
+            return
+        }
+
+        // 4. Gap tool resizing
+        if isDraggingGap, let gap = activeGap, let startFirst = dragStartFirstFrameRect, let startSecond = dragStartSecondFrameRect, let startPt = dragStartLocalPoint {
+            let dx = Double((point.x - startPt.x) / zoomScale)
+            let dy = Double((point.y - startPt.y) / zoomScale)
+            
+            if gap.isVerticalGap {
+                let minW = 10.0
+                let targetW1 = startFirst.width + dx
+                let targetW2 = startSecond.width - dx
+                if targetW1 >= minW && targetW2 >= minW {
+                    let firstRect = Rect(x: startFirst.x, y: startFirst.y, width: targetW1, height: startFirst.height)
+                    let secondRect = Rect(x: startSecond.x + dx, y: startSecond.y, width: targetW2, height: startSecond.height)
+                    onGapDragged?(gap.firstFrameId, firstRect, gap.secondFrameId, secondRect)
+                }
+            } else {
+                let minH = 10.0
+                let targetH1 = startFirst.height + dy
+                let targetH2 = startSecond.height - dy
+                if targetH1 >= minH && targetH2 >= minH {
+                    let firstRect = Rect(x: startFirst.x, y: startFirst.y, width: startFirst.width, height: targetH1)
+                    let secondRect = Rect(x: startSecond.x, y: startSecond.y + dy, width: startSecond.width, height: targetH2)
+                    onGapDragged?(gap.firstFrameId, firstRect, gap.secondFrameId, secondRect)
+                }
+            }
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        isDraggingFrame = false
+        isResizingFrame = false
+        isDraggingGap = false
+        activeResizeHandleIndex = nil
+        dragStartFrameRect = nil
+        dragStartLocalPoint = nil
+        dragStartFirstFrameRect = nil
+        dragStartSecondFrameRect = nil
+        dragStartPoint = nil
+        scrollStartOrigin = nil
+        
+        if activeTool == .hand {
+            NSCursor.openHand.set()
         }
     }
 }

@@ -1390,6 +1390,77 @@ final class LayoutDCoreTests: XCTestCase {
         let lowDPIWarning = report.issues.first { $0.message.contains("原始分辨率") && $0.message.contains("DPI") }
         XCTAssertNotNil(lowDPIWarning)
     }
+
+    func testLayoutEngineTextThreadingFlowsBetweenChainedBlocks() {
+        let longText = "这是非常长的测试文本。为了验证文本框串接与流动逻辑，我们需要让这段文字超过第一个文本框的最大高度限制，使其一部分显示在第一个文本框中，另一部分自动流动到第二个文本框中进行显示。这是一个典型的多文本框链式排版场景。"
+        let paragraphId = UUID()
+        let paragraph = Paragraph(id: paragraphId, kind: .body, text: longText, styleId: StyleID.body.rawValue)
+        
+        let block1Id = UUID()
+        let block2Id = UUID()
+        
+        let block1 = LayoutPlanBlock(
+            id: block1Id,
+            kind: .text,
+            role: "text",
+            frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 0.05),
+            contentReference: .paragraph(paragraphId),
+            nextThreadedBlockId: block2Id
+        )
+        
+        let block2 = LayoutPlanBlock(
+            id: block2Id,
+            kind: .text,
+            role: "text",
+            frame: Rect(x: 0.1, y: 0.3, width: 0.8, height: 0.4),
+            contentReference: .paragraph(paragraphId),
+            previousThreadedBlockId: block1Id
+        )
+        
+        let plan = LayoutPlan(
+            target: .page(3),
+            strategy: .balanced,
+            blocks: [block1, block2]
+        )
+        
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "串接测试", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(title: "串接故事", paragraphs: [paragraph])
+                    ]
+                )
+            ],
+            appliedLayoutPlans: [3: plan]
+        )
+        
+        let document = LayoutEngine().layout(project: project)
+        
+        XCTAssertGreaterThanOrEqual(document.pages.count, 3)
+        let page3 = document.pages[2]
+        XCTAssertEqual(page3.number, 3)
+        
+        let textFrames = page3.frames.filter { $0.kind == .text && ($0.id == block1Id || $0.id == block2Id) }
+        XCTAssertEqual(textFrames.count, 2)
+        
+        guard let frame1 = textFrames.first(where: { $0.id == block1Id }),
+              let frame2 = textFrames.first(where: { $0.id == block2Id }) else {
+            XCTFail("Missing threaded frames")
+            return
+        }
+        
+        if case .text(let t1) = frame1.content, case .text(let t2) = frame2.content {
+            XCTAssertFalse(t1.isEmpty)
+            XCTAssertFalse(t2.isEmpty)
+            XCTAssertTrue(longText.contains(t1))
+            XCTAssertTrue(longText.contains(t2))
+            XCTAssertEqual(t1 + t2, longText.trimmedForLayout)
+        } else {
+            XCTFail("Frame content is not text")
+        }
+    }
 }
 
 private struct StaticPlanProvider: LayoutPlanProvider {

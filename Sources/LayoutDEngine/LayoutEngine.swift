@@ -42,6 +42,7 @@ private struct LayoutContext {
     
     private var currentPageFootnoteParagraphs: [Paragraph] = []
     private var currentPageSideNoteParagraphs: [(Paragraph, Double)] = []
+    private var threadedRemainingText: [UUID: String] = [:]
     
     private var footnoteStyle: ParagraphStyle {
         ParagraphStyle(
@@ -338,8 +339,8 @@ private struct LayoutContext {
         snapToBaseline()
     }
 
-    private func fittingPrefix(of text: String, style: ParagraphStyle, maxHeight: Double) -> String {
-        if estimatedTextHeight(text: text, style: style, width: columnWidth) <= maxHeight {
+    private func fittingPrefix(of text: String, style: ParagraphStyle, maxHeight: Double, width: Double) -> String {
+        if estimatedTextHeight(text: text, style: style, width: width) <= maxHeight {
             return text
         }
 
@@ -350,7 +351,7 @@ private struct LayoutContext {
         while lowerBound <= upperBound {
             let mid = (lowerBound + upperBound) / 2
             let candidate = String(text.prefix(mid)).trimmedForLayout
-            let height = estimatedTextHeight(text: candidate, style: style, width: columnWidth)
+            let height = estimatedTextHeight(text: candidate, style: style, width: width)
             if height <= maxHeight {
                 bestCount = max(mid, 1)
                 lowerBound = mid + 1
@@ -360,8 +361,8 @@ private struct LayoutContext {
         }
 
         let broken = smartBreakPrefix(of: text, maximumCount: bestCount)
-        let kinsokuPrefix = applyChineseTypesettingRules(candidatePrefix: broken, fullText: text, style: style, maxHeight: maxHeight)
-        return applyWidowOrphanControls(prefix: kinsokuPrefix, fullText: text, style: style, maxHeight: maxHeight)
+        let kinsokuPrefix = applyChineseTypesettingRules(candidatePrefix: broken, fullText: text, style: style, maxHeight: maxHeight, width: width)
+        return applyWidowOrphanControls(prefix: kinsokuPrefix, fullText: text, style: style, maxHeight: maxHeight, width: width)
     }
 
     private func smartBreakPrefix(of text: String, maximumCount: Int) -> String {
@@ -384,7 +385,8 @@ private struct LayoutContext {
         candidatePrefix: String,
         fullText: String,
         style: ParagraphStyle,
-        maxHeight: Double
+        maxHeight: Double,
+        width: Double
     ) -> String {
         var prefix = candidatePrefix
         
@@ -402,7 +404,7 @@ private struct LayoutContext {
             let remainingText = fullText.dropFirst(prefix.count)
             if let nextChar = remainingText.first, ChineseLineBreakRules.forbidsLineStart(nextChar) {
                 let pulledCandidate = prefix + String(nextChar)
-                let height = estimatedTextHeight(text: pulledCandidate, style: style, width: columnWidth)
+                let height = estimatedTextHeight(text: pulledCandidate, style: style, width: width)
                 if height <= maxHeight {
                     prefix = pulledCandidate
                 } else {
@@ -425,17 +427,18 @@ private struct LayoutContext {
         prefix: String,
         fullText: String,
         style: ParagraphStyle,
-        maxHeight: Double
+        maxHeight: Double,
+        width: Double
     ) -> String {
         let prefix = prefix.trimmedForLayout
         guard !prefix.isEmpty else { return "" }
         let remaining = String(fullText.dropFirst(prefix.count)).trimmedForLayout
         guard !remaining.isEmpty else { return prefix }
         
-        let prefixHeight = estimatedTextHeight(text: prefix, style: style, width: columnWidth)
+        let prefixHeight = estimatedTextHeight(text: prefix, style: style, width: width)
         let prefixLines = max(1, Int(round(prefixHeight / style.lineHeight)))
         
-        let remainingHeight = estimatedTextHeight(text: String(remaining), style: style, width: columnWidth)
+        let remainingHeight = estimatedTextHeight(text: String(remaining), style: style, width: width)
         let remainingLines = max(1, Int(round(remainingHeight / style.lineHeight)))
         
         // 1. Orphan control: If only 1 line fits on current page/column, push the whole paragraph
@@ -454,7 +457,7 @@ private struct LayoutContext {
             while lowerBound <= upperBound {
                 let mid = (lowerBound + upperBound) / 2
                 let candidate = String(prefix.prefix(mid)).trimmedForLayout
-                let height = estimatedTextHeight(text: candidate, style: style, width: columnWidth)
+                let height = estimatedTextHeight(text: candidate, style: style, width: width)
                 if height <= targetHeight {
                     bestCount = max(mid, 1)
                     lowerBound = mid + 1
@@ -464,7 +467,7 @@ private struct LayoutContext {
             }
             
             let broken = smartBreakPrefix(of: prefix, maximumCount: bestCount)
-            return applyChineseTypesettingRules(candidatePrefix: broken, fullText: prefix, style: style, maxHeight: targetHeight)
+            return applyChineseTypesettingRules(candidatePrefix: broken, fullText: prefix, style: style, maxHeight: targetHeight, width: width)
         }
         
         return prefix
@@ -1012,24 +1015,28 @@ private struct LayoutContext {
             case .component: kind = .callout
             }
             
-            let content: FrameContent
-            switch block.contentReference {
-            case .asset(let assetId):
-                content = .asset(assetId)
-            case .generated(let str):
-                content = .text(str)
-            case .paragraph(let paragraphId):
-                if let paragraph = findParagraph(id: paragraphId) {
-                    content = .text(paragraph.text)
-                    placedParagraphIds.insert(paragraphId)
-                } else {
-                    content = .text("")
+            let textToPlace: String
+            if block.previousThreadedBlockId != nil {
+                textToPlace = threadedRemainingText[block.id] ?? ""
+                threadedRemainingText.removeValue(forKey: block.id)
+            } else {
+                switch block.contentReference {
+                case .asset(_):
+                    textToPlace = ""
+                case .generated(let str):
+                    textToPlace = str
+                case .paragraph(let paragraphId):
+                    if let paragraph = findParagraph(id: paragraphId) {
+                        textToPlace = paragraph.text
+                        placedParagraphIds.insert(paragraphId)
+                    } else {
+                        textToPlace = ""
+                    }
+                case .storyRange(let storyId, let startId, let endId):
+                    textToPlace = collectParagraphTexts(storyId: storyId, startId: startId, endId: endId)
                 }
-            case .storyRange(let storyId, let startId, let endId):
-                let texts = collectParagraphTexts(storyId: storyId, startId: startId, endId: endId)
-                content = .text(texts)
             }
-            
+
             let styleId: String?
             if block.kind == .text {
                 styleId = StyleID.body.rawValue
@@ -1041,7 +1048,37 @@ private struct LayoutContext {
                 styleId = nil
             }
             
-            currentPage.frames.append(PageFrame(id: block.id, kind: kind, rect: rect, styleId: styleId, content: content))
+            let resolvedStyle = styleId != nil ? project.styles.paragraphStyle(id: styleId!) : ParagraphStyle.body
+
+            let content: FrameContent
+            if case .asset(let assetId) = block.contentReference {
+                content = .asset(assetId)
+            } else {
+                if block.kind == .text && (block.nextThreadedBlockId != nil || block.previousThreadedBlockId != nil) {
+                    let fittedText = fittingPrefix(of: textToPlace, style: resolvedStyle, maxHeight: rect.height, width: rect.width)
+                    content = .text(fittedText)
+                    if let nextId = block.nextThreadedBlockId {
+                        let remaining = String(textToPlace.dropFirst(fittedText.count)).trimmedForLayout
+                        if !remaining.isEmpty {
+                            threadedRemainingText[nextId] = remaining
+                        }
+                    }
+                } else {
+                    content = .text(textToPlace)
+                }
+            }
+            
+            currentPage.frames.append(PageFrame(
+                id: block.id,
+                kind: kind,
+                rect: rect,
+                styleId: styleId,
+                content: content,
+                backgroundColorHex: block.backgroundColorHex,
+                strokeColorHex: block.strokeColorHex,
+                strokeWidth: block.strokeWidth,
+                textColorHex: block.textColorHex
+            ))
         }
         
         if !plan.blocks.isEmpty {

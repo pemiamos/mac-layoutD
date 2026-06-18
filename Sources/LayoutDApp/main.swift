@@ -205,6 +205,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "layoutD - \(launchProject.project.metadata.title)"
         window.center()
         window.contentViewController = controller
+        window.acceptsMouseMovedEvents = true
         
         let toolbar = NSToolbar(identifier: "LayoutDMainToolbar")
         toolbar.delegate = controller
@@ -407,6 +408,11 @@ final class WorkspaceViewController: NSViewController {
     private var sidebarHosting: NSHostingView<SidebarView>?
     private var inspectorHosting: NSHostingView<InspectorView>?
     private var selectedFrameCancellable: AnyCancellable?
+    private var screenModeCancellable: AnyCancellable?
+    private var backgroundColorsCancellable: AnyCancellable?
+    private var strokeColorsCancellable: AnyCancellable?
+    private var textColorsCancellable: AnyCancellable?
+    private var activeToolCancellable: AnyCancellable?
 
     init(project: BookProject, sourceDescription: String) {
         self.sourceDescription = sourceDescription
@@ -422,6 +428,26 @@ final class WorkspaceViewController: NSViewController {
         
         self.selectedFrameCancellable = appState.$selectedFrameId.sink { [weak self] frameId in
             self?.canvas.selectedFrameId = frameId
+        }
+        
+        self.screenModeCancellable = appState.$activeScreenMode.sink { [weak self] mode in
+            self?.canvas.activeScreenMode = mode
+        }
+        
+        self.backgroundColorsCancellable = appState.$frameBackgroundColors.sink { [weak self] colors in
+            self?.canvas.frameBackgroundColors = colors.mapValues { NSColor($0) }
+        }
+        
+        self.strokeColorsCancellable = appState.$frameStrokeColors.sink { [weak self] colors in
+            self?.canvas.frameStrokeColors = colors.mapValues { NSColor($0) }
+        }
+        
+        self.textColorsCancellable = appState.$frameTextColors.sink { [weak self] colors in
+            self?.canvas.frameTextColors = colors.mapValues { NSColor($0) }
+        }
+        
+        self.activeToolCancellable = appState.$activeTool.sink { [weak self] tool in
+            self?.canvas.activeTool = tool
         }
     }
 
@@ -442,7 +468,85 @@ final class WorkspaceViewController: NSViewController {
         canvas.document = appState.laidOutDocument
         
         canvas.onFrameSelected = { [weak self] frameId in
-            self?.appState.selectedFrameId = frameId
+            guard let self else { return }
+            if self.appState.activeTool == .selection || self.appState.activeTool == .directSelection {
+                self.appState.selectedFrameId = frameId
+            }
+        }
+        
+        canvas.onFrameDragged = { [weak self] frameId, x, y, w, h in
+            guard let self else { return }
+            self.appState.updateFrameCoordinate(id: frameId, x: x, y: y, width: w, height: h)
+        }
+        
+        canvas.onGapDragged = { [weak self] firstId, firstRect, secondId, secondRect in
+            guard let self else { return }
+            self.appState.updateGapFrames(firstId: firstId, firstRect: firstRect, secondId: secondId, secondRect: secondRect)
+        }
+        
+        canvas.onPageSelected = { [weak self] pageNum in
+            guard let self else { return }
+            self.appState.currentPageNumber = pageNum
+        }
+        
+        canvas.onCanvasClick = { [weak self] pageNum, localPoint in
+            guard let self else { return }
+            let tool = self.appState.activeTool
+            let pageSize = self.appState.project.pageSetup.pageSize
+            
+            let normX = Double(localPoint.x / pageSize.width)
+            let normY = Double(localPoint.y / pageSize.height)
+            
+            switch tool {
+            case .selection, .directSelection:
+                break
+            case .page:
+                break
+            case .gap:
+                break
+            case .type:
+                let normW = 150.0 / pageSize.width
+                let normH = 60.0 / pageSize.height
+                let frameRect = Rect(x: normX, y: normY, width: normW, height: normH)
+                self.appState.addFrameToPage(pageNum: pageNum, kind: .text, frameRect: frameRect)
+                
+            case .rectangularFrame:
+                let normW = 150.0 / pageSize.width
+                let normH = 100.0 / pageSize.height
+                let frameRect = Rect(x: normX, y: normY, width: normW, height: normH)
+                self.appState.addFrameToPage(pageNum: pageNum, kind: .image, frameRect: frameRect)
+                
+            case .rectangle:
+                let normW = 150.0 / pageSize.width
+                let normH = 100.0 / pageSize.height
+                let frameRect = Rect(x: normX, y: normY, width: normW, height: normH)
+                self.appState.addFrameToPage(pageNum: pageNum, kind: .component, frameRect: frameRect)
+                
+            case .line:
+                let normW = 120.0 / pageSize.width
+                let normH = 4.0 / pageSize.height
+                let frameRect = Rect(x: normX, y: normY, width: normW, height: normH)
+                self.appState.addFrameToPage(pageNum: pageNum, kind: .component, frameRect: frameRect)
+                
+            case .scissors:
+                if let document = self.appState.laidOutDocument,
+                   let page = document.pages.first(where: { $0.number == pageNum }) {
+                    if let found = page.frames.reversed().first(where: { frame in
+                        let fRect = CGRect(x: frame.rect.x, y: frame.rect.y, width: frame.rect.width, height: frame.rect.height)
+                        return fRect.contains(localPoint)
+                    }) {
+                        self.appState.deleteFrame(id: found.id)
+                    }
+                }
+                
+            case .zoom:
+                self.zoomIn()
+                
+            case .hand:
+                break
+            default:
+                break
+            }
         }
     }
 
@@ -482,24 +586,36 @@ final class WorkspaceViewController: NSViewController {
         sidebarScroll.documentView = sidebarHost
         sidebarScroll.hasVerticalScroller = true
 
+        let toolbarView = ToolbarView(state: appState)
+        let toolbarHost = NSHostingView(rootView: toolbarView)
+        toolbarHost.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(toolbarHost)
+
         let canvasScroll = NSScrollView()
         canvasScroll.documentView = canvas
         canvasScroll.hasVerticalScroller = true
         canvasScroll.hasHorizontalScroller = true
+        canvasScroll.translatesAutoresizingMaskIntoConstraints = false
 
         let inspectorScroll = NSScrollView()
         inspectorScroll.documentView = inspectorHost
         inspectorScroll.hasVerticalScroller = true
 
-        splitView.addArrangedSubview(sidebarScroll)
         splitView.addArrangedSubview(canvasScroll)
+        splitView.addArrangedSubview(sidebarScroll)
         splitView.addArrangedSubview(inspectorScroll)
 
         NSLayoutConstraint.activate([
-            splitView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            toolbarHost.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            toolbarHost.topAnchor.constraint(equalTo: view.topAnchor),
+            toolbarHost.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            toolbarHost.widthAnchor.constraint(equalToConstant: 42),
+            
+            splitView.leadingAnchor.constraint(equalTo: toolbarHost.trailingAnchor),
             splitView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             splitView.topAnchor.constraint(equalTo: view.topAnchor),
             splitView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            
             sidebarScroll.widthAnchor.constraint(equalToConstant: 250),
             inspectorScroll.widthAnchor.constraint(equalToConstant: 310)
         ])
@@ -516,8 +632,7 @@ final class WorkspaceViewController: NSViewController {
             UTType.json,
             UTType(filenameExtension: "md"),
             UTType(filenameExtension: "markdown"),
-            UTType(filenameExtension: "txt"),
-            UTType(filenameExtension: "docx")
+            UTType(filenameExtension: "txt")
         ].compactMap { $0 }
 
         guard let window = view.window else {
