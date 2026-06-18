@@ -118,6 +118,42 @@ final class ProjectLoaderTests: XCTestCase {
         XCTAssertEqual(project.safeSavedLayoutTemplates[0].name, "测试包模板")
     }
 
+    func testLayoutDProjectResolvesRelativeAssetSourcePaths() throws {
+        let packageURL = try makeTemporaryPackage()
+        defer { try? FileManager.default.removeItem(at: packageURL) }
+
+        let assetsURL = packageURL.appendingPathComponent("assets")
+        try FileManager.default.createDirectory(at: assetsURL, withIntermediateDirectories: true)
+        let imageURL = assetsURL.appendingPathComponent("dummy.png")
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: imageURL)
+
+        let projectURL = packageURL.appendingPathComponent("project.layoutd")
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "相对素材项目", author: "layoutD"),
+            sections: [
+                BookSection(title: "第一章", stories: [
+                    Story(title: "故事", paragraphs: [
+                        Paragraph(kind: .body, text: "正文。", styleId: StyleID.body.rawValue)
+                    ])
+                ])
+            ],
+            assets: [
+                Asset(
+                    fileName: "dummy.png",
+                    sourcePath: "assets/dummy.png",
+                    role: .photo,
+                    pixelWidth: 100,
+                    pixelHeight: 100
+                )
+            ]
+        )
+        try ProjectFile.encode(project).write(to: projectURL)
+
+        let loaded = try ProjectLoader().loadProject(inputURL: projectURL)
+
+        XCTAssertEqual(loaded.assets.first?.sourcePath, imageURL.standardizedFileURL.path)
+    }
+
     private func makeTemporaryPackage() throws -> URL {
         let packageURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("layoutd-project-loader-\(UUID().uuidString)")

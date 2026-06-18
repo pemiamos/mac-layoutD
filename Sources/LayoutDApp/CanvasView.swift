@@ -285,15 +285,15 @@ final class CanvasView: NSView {
         }
 
         // Draw background color override if any
-        if let bgColor = frameBackgroundColors[frame.id] {
+        if let bgColor = resolvedColor(memoryColor: frameBackgroundColors[frame.id], persistedHex: frame.backgroundColorHex) {
             bgColor.setFill()
             rect.fill()
         }
 
         switch frame.content {
         case .text(let text):
-            let textColor = frameTextColors[frame.id]
-            let hasBg = frameBackgroundColors[frame.id] != nil
+            let textColor = resolvedColor(memoryColor: frameTextColors[frame.id], persistedHex: frame.textColorHex)
+            let hasBg = resolvedColor(memoryColor: frameBackgroundColors[frame.id], persistedHex: frame.backgroundColorHex) != nil
             drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor, hasBgColorOverride: hasBg)
         case .asset(let assetId):
             drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect)
@@ -304,10 +304,10 @@ final class CanvasView: NSView {
         }
 
         // Draw stroke color override if any
-        if let strokeColor = frameStrokeColors[frame.id] {
+        if let strokeColor = resolvedColor(memoryColor: frameStrokeColors[frame.id], persistedHex: frame.strokeColorHex) {
             strokeColor.setStroke()
             let path = NSBezierPath(rect: rect)
-            path.lineWidth = 1.5
+            path.lineWidth = CGFloat(frame.strokeWidth ?? 1.5)
             path.stroke()
         }
 
@@ -436,6 +436,10 @@ final class CanvasView: NSView {
         let attrString = NSMutableAttributedString(string: text, attributes: attributes)
         ChineseTypesetting.applyPunctuationCompression(to: attrString, fontSize: Double(font.pointSize))
         attrString.draw(in: rect.insetBy(dx: 4, dy: 2))
+    }
+
+    private func resolvedColor(memoryColor: NSColor?, persistedHex: String?) -> NSColor? {
+        memoryColor ?? persistedHex.flatMap(NSColor.fromHex)
     }
 
     private func drawAssetPlaceholder(assetId: UUID, isLeftHalf: Bool?, project: BookProject, rect: CGRect) {
@@ -1026,5 +1030,29 @@ final class CanvasView: NSView {
         if activeTool == .hand {
             NSCursor.openHand.set()
         }
+    }
+}
+
+private extension NSColor {
+    static func fromHex(_ hex: String) -> NSColor? {
+        var cleanHex = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if cleanHex.hasPrefix("#") {
+            cleanHex.remove(at: cleanHex.startIndex)
+        }
+
+        guard cleanHex.count == 6 else {
+            return nil
+        }
+
+        var rgbValue: UInt64 = 0
+        guard Scanner(string: cleanHex).scanHexInt64(&rgbValue) else {
+            return nil
+        }
+
+        let red = CGFloat((rgbValue & 0xFF0000) >> 16) / 255.0
+        let green = CGFloat((rgbValue & 0x00FF00) >> 8) / 255.0
+        let blue = CGFloat(rgbValue & 0x0000FF) / 255.0
+
+        return NSColor(calibratedRed: red, green: green, blue: blue, alpha: 1.0)
     }
 }

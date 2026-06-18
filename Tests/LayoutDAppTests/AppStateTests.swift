@@ -192,6 +192,38 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(block?.textColorHex)
     }
 
+    func testPersistedFrameColorsSurviveProjectRoundTrip() throws {
+        let state = AppState(project: .sample)
+        let frame = state.laidOutDocument?.pages
+            .first(where: { $0.number == 3 })?
+            .frames
+            .first { frame in
+                if case .text(let text) = frame.content {
+                    return text.contains("重新理解图文排版")
+                }
+                return false
+            }
+        let frameId = try XCTUnwrap(frame?.id)
+
+        state.selectedFrameId = frameId
+        state.activeFormattingTarget = .container
+        state.isFillActive = true
+        state.applyColorToSelectedFrame(Color(.sRGB, red: 0.2, green: 0.4, blue: 0.6, opacity: 1))
+        state.activeFormattingTarget = .text
+        state.applyColorToSelectedFrame(Color(.sRGB, red: 1, green: 0, blue: 0, opacity: 1))
+
+        let encoded = try ProjectFile.encode(state.project)
+        let decoded = try ProjectFile.decode(encoded)
+        let document = LayoutEngine().layout(project: decoded)
+        let reloadedFrame = document.pages
+            .first(where: { $0.number == 3 })?
+            .frames
+            .first { $0.id == frameId }
+
+        XCTAssertEqual(reloadedFrame?.backgroundColorHex, "#336699")
+        XCTAssertEqual(reloadedFrame?.textColorHex, "#FF0000")
+    }
+
     func testGenerateBrochurePDF() throws {
         let pageSetup = PageSetup(
             pageSize: PageSize(width: 792, height: 612, label: "US Letter Landscape"),

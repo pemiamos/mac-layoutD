@@ -163,7 +163,8 @@ struct ProjectLoader {
         switch inputURL.pathExtension.lowercased() {
         case "layoutd", "json":
             let data = try Data(contentsOf: inputURL)
-            return try ProjectFile.decode(data)
+            let project = try ProjectFile.decode(data)
+            return resolvingRelativeAssetPaths(in: project, relativeTo: inputURL.deletingLastPathComponent())
         default:
             return try loadMarkdownProject(manuscriptURL: inputURL, assetDirectoryURL: assetDirectoryURL)
         }
@@ -327,6 +328,22 @@ struct ProjectLoader {
             return []
         }
         return try scanner.scan(directory: localImagesURL)
+    }
+
+    private func resolvingRelativeAssetPaths(in project: BookProject, relativeTo baseURL: URL) -> BookProject {
+        var project = project
+        for index in project.assets.indices {
+            guard let sourcePath = project.assets[index].sourcePath,
+                  !sourcePath.isEmpty,
+                  !sourcePath.hasPrefix("/") else {
+                continue
+            }
+            project.assets[index].sourcePath = baseURL
+                .appendingPathComponent(sourcePath)
+                .standardizedFileURL
+                .path
+        }
+        return project
     }
 
     private func isDirectory(_ url: URL) -> Bool {
