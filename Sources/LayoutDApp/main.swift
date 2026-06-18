@@ -579,6 +579,9 @@ final class WorkspaceViewController: NSViewController {
             self?.canvas.scrollToPage(number: pageNum)
         }
         let sidebarHost = NSHostingView(rootView: sidebarView)
+        sidebarHost.translatesAutoresizingMaskIntoConstraints = false
+        sidebarHost.wantsLayer = true
+        sidebarHost.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         self.sidebarHosting = sidebarHost
 
         let inspectorView = InspectorView(
@@ -598,11 +601,10 @@ final class WorkspaceViewController: NSViewController {
             }
         )
         let inspectorHost = NSHostingView(rootView: inspectorView)
+        inspectorHost.translatesAutoresizingMaskIntoConstraints = false
+        inspectorHost.wantsLayer = true
+        inspectorHost.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         self.inspectorHosting = inspectorHost
-
-        let sidebarScroll = NSScrollView()
-        sidebarScroll.documentView = sidebarHost
-        sidebarScroll.hasVerticalScroller = true
 
         let toolbarView = ToolbarView(state: appState)
         let toolbarHost = NSHostingView(rootView: toolbarView)
@@ -615,27 +617,31 @@ final class WorkspaceViewController: NSViewController {
         canvasScroll.hasHorizontalScroller = true
         canvasScroll.translatesAutoresizingMaskIntoConstraints = false
 
-        let inspectorScroll = NSScrollView()
-        inspectorScroll.documentView = inspectorHost
-        inspectorScroll.hasVerticalScroller = true
-
+        // Sidebar and inspector manage their own scrolling via SwiftUI ScrollView,
+        // so they are hosted directly in the split view (no enclosing NSScrollView).
+        // Wrapping them previously left the inner ScrollView with no defined height,
+        // collapsing the panels to empty dark space.
         splitView.addArrangedSubview(canvasScroll)
-        splitView.addArrangedSubview(sidebarScroll)
-        splitView.addArrangedSubview(inspectorScroll)
+        splitView.addArrangedSubview(sidebarHost)
+        splitView.addArrangedSubview(inspectorHost)
+
+        splitView.setHoldingPriority(.defaultLow, forSubviewAt: 0)
+        splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 1)
+        splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 2)
 
         NSLayoutConstraint.activate([
             toolbarHost.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             toolbarHost.topAnchor.constraint(equalTo: view.topAnchor),
             toolbarHost.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             toolbarHost.widthAnchor.constraint(equalToConstant: 42),
-            
+
             splitView.leadingAnchor.constraint(equalTo: toolbarHost.trailingAnchor),
             splitView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             splitView.topAnchor.constraint(equalTo: view.topAnchor),
             splitView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
-            sidebarScroll.widthAnchor.constraint(equalToConstant: 250),
-            inspectorScroll.widthAnchor.constraint(equalToConstant: 310)
+
+            sidebarHost.widthAnchor.constraint(equalToConstant: 250),
+            inspectorHost.widthAnchor.constraint(equalToConstant: 310)
         ])
     }
 

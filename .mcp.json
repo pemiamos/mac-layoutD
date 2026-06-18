@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "relay": {
+      "type": "stdio",
+      "command": "/Users/amos/tools/relay-mcp/.venv/bin/python",
+      "args": [
+        "/Users/amos/tools/relay-mcp/server.py"
+      ],
+      "env": {
+        "RELAY_PROJECT_ROOT": "/Users/amos/Documents/GitHub/mac-layoutD"
+      }
+    }
+  }
+}

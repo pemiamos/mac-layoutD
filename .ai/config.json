@@ -1,0 +1,11 @@
+{
+  "checks": {
+    "build": "swift build",
+    "test": "swift test"
+  },
+  "branch_convention": {
+    "claude": "feature/claude-*",
+    "codex": "feature/codex-*",
+    "antigravity": "feature/ag-*"
+  }
+}
