@@ -72,7 +72,8 @@ final class DesignTokensTests: XCTestCase {
 
     func testStyleLibraryPrefersTokensThenFallsBackToLegacyColors() {
         // No tokens: resolves via legacy colors
-        let legacy = StyleLibrary.defaultChineseScience
+        var legacy = StyleLibrary.defaultChineseScience
+        legacy.tokens = nil
         XCTAssertEqual(legacy.colorHex("accent"), "#2D7A78")
         XCTAssertNil(legacy.tokens)
 
@@ -85,9 +86,81 @@ final class DesignTokensTests: XCTestCase {
     }
 
     func testEffectiveTokensSynthesizedFromLegacyColors() {
-        let lib = StyleLibrary.defaultChineseScience
+        var lib = StyleLibrary.defaultChineseScience
+        lib.tokens = nil
         let eff = lib.effectiveTokens
         XCTAssertEqual(eff.colorHex("paper"), "#F7F4EE")
+    }
+
+    func testParagraphStyleScalarTokensDriveResolvedMetrics() {
+        var styles = StyleLibrary.defaultChineseScience
+        var tokens = try! XCTUnwrap(styles.tokens)
+        let scalars = tokens.scalars.map { token in
+            guard token.id == "paragraph.body.fontSize" else { return token }
+            return ScalarToken(id: token.id, value: 12.25, kind: token.kind)
+        }
+        tokens.scalars = scalars
+        styles.tokens = tokens
+
+        let body = styles.paragraphStyle(id: StyleID.body.rawValue)
+        XCTAssertEqual(body.fontSize, 12.25)
+        XCTAssertEqual(body.fontSizeToken, "paragraph.body.fontSize")
+    }
+
+    func testParagraphStyleFallsBackWhenScalarTokenIsMissing() {
+        var styles = StyleLibrary.defaultChineseScience
+        styles.tokens?.scalars.removeAll { $0.id == "paragraph.body.lineHeight" }
+
+        let body = styles.paragraphStyle(id: StyleID.body.rawValue)
+        XCTAssertEqual(body.lineHeight, ParagraphStyle.body.lineHeight)
+    }
+
+    func testPageSetupScalarTokensDriveResolvedMetrics() {
+        var styles = StyleLibrary.defaultChineseScience
+        var tokens = try! XCTUnwrap(styles.tokens)
+        tokens.scalars = tokens.scalars.map { token in
+            switch token.id {
+            case "page.margin.left":
+                return ScalarToken(id: token.id, value: 72, kind: token.kind)
+            case "page.columns":
+                return ScalarToken(id: token.id, value: 3, kind: token.kind)
+            case "page.gutter":
+                return ScalarToken(id: token.id, value: 24, kind: token.kind)
+            case "page.baselineGrid":
+                return ScalarToken(id: token.id, value: 16, kind: token.kind)
+            default:
+                return token
+            }
+        }
+        styles.tokens = tokens
+
+        let project = BookProject(metadata: ProjectMetadata(title: "页面 token", author: "a"), styles: styles)
+
+        XCTAssertEqual(project.resolvedMargins(for: 3).left, 72)
+        XCTAssertEqual(project.resolvedColumns(for: 3), 3)
+        XCTAssertEqual(project.resolvedGutter(for: 3), 24)
+        XCTAssertEqual(project.resolvedBaselineGrid, 16)
+    }
+
+    func testManualPageSetupEditClearsScalarTokenBinding() {
+        var setup = PageSetup.scienceBookDefault
+        XCTAssertEqual(setup.marginTopToken, "page.margin.top")
+        XCTAssertEqual(setup.columnsToken, "page.columns")
+        XCTAssertEqual(setup.gutterToken, "page.gutter")
+        XCTAssertEqual(setup.baselineGridToken, "page.baselineGrid")
+
+        setup.margins.top = 70
+        setup.columns = 1
+        setup.gutter = 12
+        setup.baselineGrid = 11
+
+        XCTAssertNil(setup.marginTopToken)
+        XCTAssertNil(setup.marginRightToken)
+        XCTAssertNil(setup.marginBottomToken)
+        XCTAssertNil(setup.marginLeftToken)
+        XCTAssertNil(setup.columnsToken)
+        XCTAssertNil(setup.gutterToken)
+        XCTAssertNil(setup.baselineGridToken)
     }
 
     func testProjectColorModeDrivesResolution() {
@@ -112,6 +185,36 @@ final class DesignTokensTests: XCTestCase {
         let data = try JSONEncoder().encode(project)
         let decoded = try JSONDecoder().decode(BookProject.self, from: data)
         XCTAssertNil(decoded.colorMode)
+    }
+
+    func testProjectSchemaVersionEncodesAndLegacyDecodeDefaults() throws {
+        let project = BookProject(metadata: ProjectMetadata(title: "t", author: "a"))
+        let data = try ProjectFile.encode(project)
+        let json = String(data: data, encoding: .utf8) ?? ""
+        XCTAssertTrue(json.contains("\"schemaVersion\""))
+
+        let legacyJSON = """
+        {
+          "metadata": {"title": "旧项目", "author": "a"},
+          "pageSetup": {
+            "pageSize": {"width": 524.41, "height": 737.01, "label": "185mm x 260mm"},
+            "margins": {"top": 56, "right": 48, "bottom": 62, "left": 54},
+            "columns": 2,
+            "gutter": 18,
+            "baselineGrid": 14,
+            "facingPages": true
+          },
+          "styles": {
+            "paragraphStyles": [],
+            "colors": [{"id": "ink", "hex": "#111111"}]
+          },
+          "sections": [],
+          "assets": []
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try ProjectFile.decode(legacyJSON)
+        XCTAssertEqual(decoded.schemaVersion, BookProject.currentSchemaVersion)
     }
 
     func testLegacyStyleLibraryJSONWithoutTokensDecodes() throws {

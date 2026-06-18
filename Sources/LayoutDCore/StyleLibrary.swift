@@ -23,7 +23,7 @@ public struct StyleLibrary: Codable, Equatable, Sendable {
     }
 
     public func paragraphStyle(id: String) -> ParagraphStyle {
-        paragraphStyles.first { $0.id == id } ?? .body
+        (paragraphStyles.first { $0.id == id } ?? .body).resolved(using: effectiveTokens)
     }
 
     /// Resolves a color token id to a hex value, preferring unified `tokens`
@@ -44,18 +44,44 @@ public struct StyleLibrary: Codable, Equatable, Sendable {
 
     public static let defaultChineseScience = StyleLibrary(
         paragraphStyles: [
-            .heading1,
-            .heading2,
-            .body,
-            .caption,
-            .callout
+            .heading1.withScalarTokens(
+                fontSize: "paragraph.heading1.fontSize",
+                lineHeight: "paragraph.heading1.lineHeight",
+                spaceBefore: "paragraph.heading1.spaceBefore",
+                spaceAfter: "paragraph.heading1.spaceAfter"
+            ),
+            .heading2.withScalarTokens(
+                fontSize: "paragraph.heading2.fontSize",
+                lineHeight: "paragraph.heading2.lineHeight",
+                spaceBefore: "paragraph.heading2.spaceBefore",
+                spaceAfter: "paragraph.heading2.spaceAfter"
+            ),
+            .body.withScalarTokens(
+                fontSize: "paragraph.body.fontSize",
+                lineHeight: "paragraph.body.lineHeight",
+                firstLineIndent: "paragraph.body.firstLineIndent",
+                spaceAfter: "paragraph.body.spaceAfter"
+            ),
+            .caption.withScalarTokens(
+                fontSize: "paragraph.caption.fontSize",
+                lineHeight: "paragraph.caption.lineHeight",
+                spaceBefore: "paragraph.caption.spaceBefore",
+                spaceAfter: "paragraph.caption.spaceAfter"
+            ),
+            .callout.withScalarTokens(
+                fontSize: "paragraph.callout.fontSize",
+                lineHeight: "paragraph.callout.lineHeight",
+                spaceBefore: "paragraph.callout.spaceBefore",
+                spaceAfter: "paragraph.callout.spaceAfter"
+            )
         ],
         colors: [
             ColorToken(id: "ink", hex: "#17202A"),
             ColorToken(id: "paper", hex: "#F7F4EE"),
             ColorToken(id: "accent", hex: "#2D7A78"),
             ColorToken(id: "warning", hex: "#B3541E")
-        ]
+        ],
+        tokens: .defaultChineseScience
     )
 
     public static let compactStudyGuide = StyleLibrary(
@@ -129,6 +155,11 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public var spaceBefore: Double
     public var spaceAfter: Double
     public var colorToken: String
+    public var fontSizeToken: String?
+    public var lineHeightToken: String?
+    public var firstLineIndentToken: String?
+    public var spaceBeforeToken: String?
+    public var spaceAfterToken: String?
 
     public init(
         id: String,
@@ -139,7 +170,12 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         firstLineIndent: Double,
         spaceBefore: Double,
         spaceAfter: Double,
-        colorToken: String = "ink"
+        colorToken: String = "ink",
+        fontSizeToken: String? = nil,
+        lineHeightToken: String? = nil,
+        firstLineIndentToken: String? = nil,
+        spaceBeforeToken: String? = nil,
+        spaceAfterToken: String? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -150,6 +186,11 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         self.spaceBefore = spaceBefore
         self.spaceAfter = spaceAfter
         self.colorToken = colorToken
+        self.fontSizeToken = fontSizeToken
+        self.lineHeightToken = lineHeightToken
+        self.firstLineIndentToken = firstLineIndentToken
+        self.spaceBeforeToken = spaceBeforeToken
+        self.spaceAfterToken = spaceAfterToken
     }
 
     public static let body = ParagraphStyle(
@@ -225,7 +266,56 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
             firstLineIndent: firstLineIndent ?? self.firstLineIndent,
             spaceBefore: spaceBefore ?? self.spaceBefore,
             spaceAfter: spaceAfter ?? self.spaceAfter,
-            colorToken: colorToken ?? self.colorToken
+            colorToken: colorToken ?? self.colorToken,
+            fontSizeToken: fontSize == nil ? fontSizeToken : nil,
+            lineHeightToken: lineHeight == nil ? lineHeightToken : nil,
+            firstLineIndentToken: firstLineIndent == nil ? firstLineIndentToken : nil,
+            spaceBeforeToken: spaceBefore == nil ? spaceBeforeToken : nil,
+            spaceAfterToken: spaceAfter == nil ? spaceAfterToken : nil
+        )
+    }
+
+    public func withScalarTokens(
+        fontSize: String? = nil,
+        lineHeight: String? = nil,
+        firstLineIndent: String? = nil,
+        spaceBefore: String? = nil,
+        spaceAfter: String? = nil
+    ) -> ParagraphStyle {
+        ParagraphStyle(
+            id: id,
+            displayName: displayName,
+            fontName: fontName,
+            fontSize: self.fontSize,
+            lineHeight: self.lineHeight,
+            firstLineIndent: self.firstLineIndent,
+            spaceBefore: self.spaceBefore,
+            spaceAfter: self.spaceAfter,
+            colorToken: colorToken,
+            fontSizeToken: fontSize ?? fontSizeToken,
+            lineHeightToken: lineHeight ?? lineHeightToken,
+            firstLineIndentToken: firstLineIndent ?? firstLineIndentToken,
+            spaceBeforeToken: spaceBefore ?? spaceBeforeToken,
+            spaceAfterToken: spaceAfter ?? spaceAfterToken
+        )
+    }
+
+    public func resolved(using tokens: DesignTokens) -> ParagraphStyle {
+        ParagraphStyle(
+            id: id,
+            displayName: displayName,
+            fontName: fontName,
+            fontSize: fontSizeToken.flatMap(tokens.scalar) ?? fontSize,
+            lineHeight: lineHeightToken.flatMap(tokens.scalar) ?? lineHeight,
+            firstLineIndent: firstLineIndentToken.flatMap(tokens.scalar) ?? firstLineIndent,
+            spaceBefore: spaceBeforeToken.flatMap(tokens.scalar) ?? spaceBefore,
+            spaceAfter: spaceAfterToken.flatMap(tokens.scalar) ?? spaceAfter,
+            colorToken: colorToken,
+            fontSizeToken: fontSizeToken,
+            lineHeightToken: lineHeightToken,
+            firstLineIndentToken: firstLineIndentToken,
+            spaceBeforeToken: spaceBeforeToken,
+            spaceAfterToken: spaceAfterToken
         )
     }
 }

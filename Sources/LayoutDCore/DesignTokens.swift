@@ -108,6 +108,49 @@ public struct DTCGToken: Codable, Equatable, Sendable {
 }
 
 public extension DesignTokens {
+    static let defaultChineseScience = DesignTokens(
+        colors: [
+            ColorTokenSet(id: "ink", hex: "#17202A"),
+            ColorTokenSet(id: "paper", hex: "#F7F4EE"),
+            ColorTokenSet(id: "accent", hex: "#2D7A78"),
+            ColorTokenSet(id: "warning", hex: "#B3541E")
+        ],
+        scalars: [
+            ScalarToken(id: "page.margin.top", value: 56, kind: .spacing),
+            ScalarToken(id: "page.margin.right", value: 48, kind: .spacing),
+            ScalarToken(id: "page.margin.bottom", value: 62, kind: .spacing),
+            ScalarToken(id: "page.margin.left", value: 54, kind: .spacing),
+            ScalarToken(id: "page.columns", value: 2, kind: .dimension),
+            ScalarToken(id: "page.gutter", value: 18, kind: .spacing),
+            ScalarToken(id: "page.baselineGrid", value: 14, kind: .spacing),
+
+            ScalarToken(id: "paragraph.heading1.fontSize", value: 22, kind: .fontSize),
+            ScalarToken(id: "paragraph.heading1.lineHeight", value: 30, kind: .lineHeight),
+            ScalarToken(id: "paragraph.heading1.spaceBefore", value: 18, kind: .spacing),
+            ScalarToken(id: "paragraph.heading1.spaceAfter", value: 14, kind: .spacing),
+
+            ScalarToken(id: "paragraph.heading2.fontSize", value: 15, kind: .fontSize),
+            ScalarToken(id: "paragraph.heading2.lineHeight", value: 22, kind: .lineHeight),
+            ScalarToken(id: "paragraph.heading2.spaceBefore", value: 12, kind: .spacing),
+            ScalarToken(id: "paragraph.heading2.spaceAfter", value: 8, kind: .spacing),
+
+            ScalarToken(id: "paragraph.body.fontSize", value: 10.5, kind: .fontSize),
+            ScalarToken(id: "paragraph.body.lineHeight", value: 16, kind: .lineHeight),
+            ScalarToken(id: "paragraph.body.firstLineIndent", value: 21, kind: .spacing),
+            ScalarToken(id: "paragraph.body.spaceAfter", value: 4, kind: .spacing),
+
+            ScalarToken(id: "paragraph.caption.fontSize", value: 8.5, kind: .fontSize),
+            ScalarToken(id: "paragraph.caption.lineHeight", value: 12, kind: .lineHeight),
+            ScalarToken(id: "paragraph.caption.spaceBefore", value: 4, kind: .spacing),
+            ScalarToken(id: "paragraph.caption.spaceAfter", value: 8, kind: .spacing),
+
+            ScalarToken(id: "paragraph.callout.fontSize", value: 11, kind: .fontSize),
+            ScalarToken(id: "paragraph.callout.lineHeight", value: 17, kind: .lineHeight),
+            ScalarToken(id: "paragraph.callout.spaceBefore", value: 8, kind: .spacing),
+            ScalarToken(id: "paragraph.callout.spaceAfter", value: 8, kind: .spacing)
+        ]
+    )
+
     /// Flat DTCG-aligned export keyed by namespaced token name. Colors emit one
     /// entry for the default mode (`color/<id>`) plus per-mode entries
     /// (`color/<id>/<mode>`) when more than one mode is defined. Scalars emit

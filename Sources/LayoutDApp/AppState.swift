@@ -353,18 +353,23 @@ final class AppState: ObservableObject {
             var style = styles[idx]
             if let fSize = fontSize {
                 style.fontSize = fSize
+                style.fontSizeToken = nil
             }
             if let lHeight = lineHeight {
                 style.lineHeight = lHeight
+                style.lineHeightToken = nil
             }
             if let indent = firstLineIndent {
                 style.firstLineIndent = indent
+                style.firstLineIndentToken = nil
             }
             if let before = spaceBefore {
                 style.spaceBefore = before
+                style.spaceBeforeToken = nil
             }
             if let after = spaceAfter {
                 style.spaceAfter = after
+                style.spaceAfterToken = nil
             }
             styles[idx] = style
             currentProject.styles.paragraphStyles = styles

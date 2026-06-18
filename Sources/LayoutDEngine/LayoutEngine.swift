@@ -711,7 +711,7 @@ private struct LayoutContext {
         if currentColumn + 1 < columns {
             currentColumn += 1
             let actualPageNumber = currentAbsolutePageNumber
-            cursorX = pageLeftMargin(for: actualPageNumber) + Double(currentColumn) * (columnWidth + project.pageSetup.gutter)
+            cursorX = pageLeftMargin(for: actualPageNumber) + Double(currentColumn) * (columnWidth + project.resolvedGutter(for: actualPageNumber))
             cursorY = currentColumnTopY
         } else {
             advanceToNextPage()
@@ -735,7 +735,7 @@ private struct LayoutContext {
     }
 
     private mutating func snapToBaseline() {
-        let grid = project.pageSetup.baselineGrid
+        let grid = project.resolvedBaselineGrid
         cursorY = ceil(cursorY / grid) * grid
     }
 
@@ -998,9 +998,8 @@ private struct LayoutContext {
     }
 
     private var columnWidth: Double {
-        let setup = project.pageSetup
         let columns = project.resolvedColumns(for: currentAbsolutePageNumber)
-        let totalGutter = Double(max(columns - 1, 0)) * setup.gutter
+        let totalGutter = Double(max(columns - 1, 0)) * project.resolvedGutter(for: currentAbsolutePageNumber)
         return (contentWidth - totalGutter) / Double(max(columns, 1))
     }
 

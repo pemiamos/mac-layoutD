@@ -115,6 +115,37 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(state.report?.issues.contains { $0.message == "项目缺少出版社信息" } ?? false)
     }
 
+    func testManualParagraphStyleEditClearsScalarTokenBinding() {
+        let state = AppState(project: .sample)
+        XCTAssertEqual(
+            state.project.styles.paragraphStyles.first { $0.id == StyleID.body.rawValue }?.fontSizeToken,
+            "paragraph.body.fontSize"
+        )
+
+        state.updateParagraphStyle(id: StyleID.body.rawValue, fontSize: 13)
+
+        let storedBody = state.project.styles.paragraphStyles.first { $0.id == StyleID.body.rawValue }
+        XCTAssertEqual(storedBody?.fontSize, 13)
+        XCTAssertNil(storedBody?.fontSizeToken)
+        XCTAssertEqual(state.project.styles.paragraphStyle(id: StyleID.body.rawValue).fontSize, 13)
+    }
+
+    func testManualPageSetupEditClearsScalarTokenBinding() {
+        let state = AppState(project: .sample)
+        XCTAssertEqual(state.project.pageSetup.gutterToken, "page.gutter")
+        XCTAssertEqual(state.project.pageSetup.baselineGridToken, "page.baselineGrid")
+
+        state.updateProject { project in
+            project.pageSetup.gutter = 21
+            project.pageSetup.baselineGrid = 15
+        }
+
+        XCTAssertNil(state.project.pageSetup.gutterToken)
+        XCTAssertNil(state.project.pageSetup.baselineGridToken)
+        XCTAssertEqual(state.project.resolvedGutter(for: 3), 21)
+        XCTAssertEqual(state.project.resolvedBaselineGrid, 15)
+    }
+
     func testApplySwatchColorToSelectedFrame() {
         let project = BookProject.sample
         let state = AppState(project: project)

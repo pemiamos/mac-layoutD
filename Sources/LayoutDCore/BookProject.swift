@@ -1,6 +1,9 @@
 import Foundation
 
 public struct BookProject: Codable, Equatable, Sendable, Identifiable {
+    public static let currentSchemaVersion = 1
+
+    public var schemaVersion: Int
     public var id: UUID
     public var metadata: ProjectMetadata
     public var pageSetup: PageSetup
@@ -16,6 +19,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     public var colorMode: String?
 
     public init(
+        schemaVersion: Int = BookProject.currentSchemaVersion,
         id: UUID = UUID(),
         metadata: ProjectMetadata,
         pageSetup: PageSetup = .scienceBookDefault,
@@ -27,6 +31,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         lockedPages: Set<Int>? = nil,
         colorMode: String? = nil
     ) {
+        self.schemaVersion = schemaVersion
         self.id = id
         self.metadata = metadata
         self.pageSetup = pageSetup
@@ -37,6 +42,50 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         self.savedLayoutTemplates = savedLayoutTemplates
         self.lockedPages = lockedPages
         self.colorMode = colorMode
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case id
+        case metadata
+        case pageSetup
+        case styles
+        case sections
+        case assets
+        case appliedLayoutPlans
+        case savedLayoutTemplates
+        case lockedPages
+        case colorMode
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? BookProject.currentSchemaVersion
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        metadata = try container.decode(ProjectMetadata.self, forKey: .metadata)
+        pageSetup = try container.decodeIfPresent(PageSetup.self, forKey: .pageSetup) ?? .scienceBookDefault
+        styles = try container.decodeIfPresent(StyleLibrary.self, forKey: .styles) ?? .defaultChineseScience
+        sections = try container.decodeIfPresent([BookSection].self, forKey: .sections) ?? []
+        assets = try container.decodeIfPresent([Asset].self, forKey: .assets) ?? []
+        appliedLayoutPlans = try container.decodeIfPresent([Int: LayoutPlan].self, forKey: .appliedLayoutPlans)
+        savedLayoutTemplates = try container.decodeIfPresent([SavedLayoutTemplate].self, forKey: .savedLayoutTemplates)
+        lockedPages = try container.decodeIfPresent(Set<Int>.self, forKey: .lockedPages)
+        colorMode = try container.decodeIfPresent(String.self, forKey: .colorMode)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(id, forKey: .id)
+        try container.encode(metadata, forKey: .metadata)
+        try container.encode(pageSetup, forKey: .pageSetup)
+        try container.encode(styles, forKey: .styles)
+        try container.encode(sections, forKey: .sections)
+        try container.encode(assets, forKey: .assets)
+        try container.encodeIfPresent(appliedLayoutPlans, forKey: .appliedLayoutPlans)
+        try container.encodeIfPresent(savedLayoutTemplates, forKey: .savedLayoutTemplates)
+        try container.encodeIfPresent(lockedPages, forKey: .lockedPages)
+        try container.encodeIfPresent(colorMode, forKey: .colorMode)
     }
 
     /// Resolves a color token id to a hex value under the project's active color
@@ -264,13 +313,17 @@ public enum ParagraphKind: Codable, Equatable, Sendable {
 }
 
 public extension BookProject {
+    var resolvedPageSetup: PageSetup {
+        pageSetup.resolved(using: styles.effectiveTokens)
+    }
+
     func resolvedMargins(for pageNumber: Int) -> PageMargins {
         if let plans = appliedLayoutPlans,
            let plan = plans[pageNumber],
            let marginOverride = plan.marginOverride {
             return marginOverride
         }
-        return pageSetup.margins
+        return resolvedPageSetup.margins
     }
 
     func resolvedColumns(for pageNumber: Int) -> Int {
@@ -279,7 +332,15 @@ public extension BookProject {
            let columnsOverride = plan.columnsOverride {
             return columnsOverride
         }
-        return pageSetup.columns
+        return resolvedPageSetup.columns
+    }
+
+    func resolvedGutter(for pageNumber: Int) -> Double {
+        resolvedPageSetup.gutter
+    }
+
+    var resolvedBaselineGrid: Double {
+        resolvedPageSetup.baselineGrid
     }
 
     func resolvedShowHeadersFooters(for pageNumber: Int) -> Bool {
@@ -291,4 +352,3 @@ public extension BookProject {
         return true
     }
 }
-

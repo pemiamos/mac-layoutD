@@ -63,6 +63,8 @@ AI 不直接生成最终页面文件。AI 只生成 `LayoutPlan`：页面目标�
 - `sections`：章节和正文流。
 - `assets`：图片素材库。
 
+`.layoutd` 项目带 `schemaVersion`，旧文件缺字段时按当前 schema 兼容解码。`StyleLibrary` 内的 `DesignTokens` 是样式基线入口：颜色 token 支持多模式解析，段落字号、行距、缩进与段前/段后距可通过 scalar token 引用；`StyleLibrary.paragraphStyle(id:)` 返回已解析的有效样式。`PageSetup` 的页边距、栏数、栏距与基线网格也可绑定 scalar token，并通过 `BookProject.resolvedPageSetup` / `resolvedMargins` / `resolvedColumns` / `resolvedGutter` / `resolvedBaselineGrid` 进入排版和预检，确保预览、导出和质量检查共享同一数值来源。
+
 ### Story / Paragraph
 
 正文不是页面上的散落文本框，而是可流动的文本流。段落具有 `kind` 和 `styleId`，后续可以支持图片锚定、脚注、旁注和图文关联。
@@ -95,6 +97,7 @@ AI 和模板系统的共同输出格式。它描述“建议如何排”，不�
 
 - **导入**：front matter 元数据与页面设置；ATX/Setext 标题、正文、引用、知识卡片、表格、有序/无序列表、行内/引用式图片；图片元数据与 `manifest.csv`；章节包目录与多文件章节流；行内 Markdown 标记清理（保留术语/公式字面量）。
 - **排版**：封面/目录/正文分页与目录页码重排；双栏中文版面；hero/comparison/wide 整版图与栏位阻隔；超长文本跨栏拆分；标题 keep-with-next；中西文混排补白；图注自动编号；脚注与旁注；页眉与页码。
+- **样式基线**：`DesignTokens` 支持颜色多模式、scalar token、DTCG 风格导出；默认中文科普样式的段落度量与 PageSetup 度量已可通过 scalar token 联动，并保持 legacy `colors` / 旧 `.layoutd` 兼容。
 - **AI / 模板**：规则型 `LayoutPlan` 候选 + 可插拔 `LayoutPlanProvider`（provider→规则回退）；页面级与章节级版式模板；项目内命名模板的保存、retarget、导入/导出。
 - **预检**：元数据/结构/引用/素材/分页/版面/排印/目录多类问题；frame 级定位与 `suggestedFix`；保守自动修复（`autoFixKind`）；`exportReady` 与按 PRD 成功指标对齐的 `qualityMetrics`（页数、AI 计划采纳页数、自动初排页数、低 DPI / 缺图注命中、版面问题数）。
 - **导出**：审校 PDF（页码范围、裁切线、校对网格）、页面 PNG（范围与倍率）、结构化 `.layoutd`、预检 JSON；CLI `--validate` 作为质量门，`--apply-preflight-fixes` 可在导出前应用保守修复。

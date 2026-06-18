@@ -2,12 +2,32 @@ import Foundation
 
 public struct PageSetup: Codable, Equatable, Sendable {
     public var pageSize: PageSize
-    public var margins: PageMargins
-    public var columns: Int
-    public var gutter: Double
-    public var baselineGrid: Double
+    public var margins: PageMargins {
+        didSet {
+            marginTopToken = nil
+            marginRightToken = nil
+            marginBottomToken = nil
+            marginLeftToken = nil
+        }
+    }
+    public var columns: Int {
+        didSet { columnsToken = nil }
+    }
+    public var gutter: Double {
+        didSet { gutterToken = nil }
+    }
+    public var baselineGrid: Double {
+        didSet { baselineGridToken = nil }
+    }
     public var facingPages: Bool
     public var bleedMM: Double?
+    public var marginTopToken: String?
+    public var marginRightToken: String?
+    public var marginBottomToken: String?
+    public var marginLeftToken: String?
+    public var columnsToken: String?
+    public var gutterToken: String?
+    public var baselineGridToken: String?
 
     public init(
         pageSize: PageSize,
@@ -16,7 +36,14 @@ public struct PageSetup: Codable, Equatable, Sendable {
         gutter: Double,
         baselineGrid: Double,
         facingPages: Bool,
-        bleedMM: Double? = 3.0
+        bleedMM: Double? = 3.0,
+        marginTopToken: String? = nil,
+        marginRightToken: String? = nil,
+        marginBottomToken: String? = nil,
+        marginLeftToken: String? = nil,
+        columnsToken: String? = nil,
+        gutterToken: String? = nil,
+        baselineGridToken: String? = nil
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -25,10 +52,19 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.baselineGrid = baselineGrid
         self.facingPages = facingPages
         self.bleedMM = bleedMM
+        self.marginTopToken = marginTopToken
+        self.marginRightToken = marginRightToken
+        self.marginBottomToken = marginBottomToken
+        self.marginLeftToken = marginLeftToken
+        self.columnsToken = columnsToken
+        self.gutterToken = gutterToken
+        self.baselineGridToken = baselineGridToken
     }
 
     enum CodingKeys: String, CodingKey {
         case pageSize, margins, columns, gutter, baselineGrid, facingPages, bleedMM
+        case marginTopToken, marginRightToken, marginBottomToken, marginLeftToken
+        case columnsToken, gutterToken, baselineGridToken
     }
 
     public init(from decoder: Decoder) throws {
@@ -40,6 +76,13 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.baselineGrid = try container.decode(Double.self, forKey: .baselineGrid)
         self.facingPages = try container.decode(Bool.self, forKey: .facingPages)
         self.bleedMM = try container.decodeIfPresent(Double.self, forKey: .bleedMM) ?? 3.0
+        self.marginTopToken = try container.decodeIfPresent(String.self, forKey: .marginTopToken)
+        self.marginRightToken = try container.decodeIfPresent(String.self, forKey: .marginRightToken)
+        self.marginBottomToken = try container.decodeIfPresent(String.self, forKey: .marginBottomToken)
+        self.marginLeftToken = try container.decodeIfPresent(String.self, forKey: .marginLeftToken)
+        self.columnsToken = try container.decodeIfPresent(String.self, forKey: .columnsToken)
+        self.gutterToken = try container.decodeIfPresent(String.self, forKey: .gutterToken)
+        self.baselineGridToken = try container.decodeIfPresent(String.self, forKey: .baselineGridToken)
     }
 
     public static let scienceBookDefault = PageSetup(
@@ -49,8 +92,39 @@ public struct PageSetup: Codable, Equatable, Sendable {
         gutter: 18,
         baselineGrid: 14,
         facingPages: true,
-        bleedMM: 3.0
+        bleedMM: 3.0,
+        marginTopToken: "page.margin.top",
+        marginRightToken: "page.margin.right",
+        marginBottomToken: "page.margin.bottom",
+        marginLeftToken: "page.margin.left",
+        columnsToken: "page.columns",
+        gutterToken: "page.gutter",
+        baselineGridToken: "page.baselineGrid"
     )
+
+    public func resolved(using tokens: DesignTokens) -> PageSetup {
+        PageSetup(
+            pageSize: pageSize,
+            margins: PageMargins(
+                top: marginTopToken.flatMap(tokens.scalar) ?? margins.top,
+                right: marginRightToken.flatMap(tokens.scalar) ?? margins.right,
+                bottom: marginBottomToken.flatMap(tokens.scalar) ?? margins.bottom,
+                left: marginLeftToken.flatMap(tokens.scalar) ?? margins.left
+            ),
+            columns: max(1, Int(round(columnsToken.flatMap(tokens.scalar) ?? Double(columns)))),
+            gutter: gutterToken.flatMap(tokens.scalar) ?? gutter,
+            baselineGrid: baselineGridToken.flatMap(tokens.scalar) ?? baselineGrid,
+            facingPages: facingPages,
+            bleedMM: bleedMM,
+            marginTopToken: marginTopToken,
+            marginRightToken: marginRightToken,
+            marginBottomToken: marginBottomToken,
+            marginLeftToken: marginLeftToken,
+            columnsToken: columnsToken,
+            gutterToken: gutterToken,
+            baselineGridToken: baselineGridToken
+        )
+    }
 }
 
 public struct PageSize: Codable, Equatable, Sendable {

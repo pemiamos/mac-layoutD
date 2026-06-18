@@ -234,7 +234,7 @@ public struct AssetPreflightSummary: Codable, Equatable, Sendable {
             return !FileManager.default.fileExists(atPath: sourcePath)
         }.count
         lowResolution = assets.filter { asset in
-            guard let effectiveDPI = asset.effectiveDPI(pageSetup: project.pageSetup) else {
+            guard let effectiveDPI = asset.effectiveDPI(pageSetup: project.resolvedPageSetup) else {
                 return false
             }
             return effectiveDPI < 220
