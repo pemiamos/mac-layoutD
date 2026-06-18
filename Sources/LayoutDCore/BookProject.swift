@@ -10,6 +10,10 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     public var appliedLayoutPlans: [Int: LayoutPlan]?
     public var savedLayoutTemplates: [SavedLayoutTemplate]?
     public var lockedPages: Set<Int>?
+    /// Active color mode for design-token resolution (e.g. a chapter theme group
+    /// such as "green"/"blue" in 《何以江南》). nil → the token set's default mode.
+    /// Optional & additive: old `.layoutd` files decode with `colorMode == nil`.
+    public var colorMode: String?
 
     public init(
         id: UUID = UUID(),
@@ -20,7 +24,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         assets: [Asset] = [],
         appliedLayoutPlans: [Int: LayoutPlan]? = nil,
         savedLayoutTemplates: [SavedLayoutTemplate]? = nil,
-        lockedPages: Set<Int>? = nil
+        lockedPages: Set<Int>? = nil,
+        colorMode: String? = nil
     ) {
         self.id = id
         self.metadata = metadata
@@ -31,6 +36,14 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         self.appliedLayoutPlans = appliedLayoutPlans
         self.savedLayoutTemplates = savedLayoutTemplates
         self.lockedPages = lockedPages
+        self.colorMode = colorMode
+    }
+
+    /// Resolves a color token id to a hex value under the project's active color
+    /// mode, via the style library (design tokens preferred, legacy colors as
+    /// fallback). Renderers should use this so color modes apply consistently.
+    public func resolvedColorHex(_ id: String) -> String? {
+        styles.colorHex(id, mode: colorMode)
     }
 
     public var safeAppliedLayoutPlans: [Int: LayoutPlan] {

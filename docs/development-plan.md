@@ -36,13 +36,16 @@
 > 目标：立起样式模型与微调承重墙；解锁后续一切。
 
 ### A1. P1 样式基线 schema
-- [ ] 在 `LayoutDCore` 定义统一 token 模型（color / spacing / typography），形如 DTCG（`$value`/`$type`/别名），支持**多模式**（章节主题色组：绿/蓝）。
-- [ ] 重构 `StyleLibrary`：`ParagraphStyle` 等改为**引用 token**而非硬编码值。
+- [x] 在 `LayoutDCore` 定义统一 token 模型（`DesignTokens`：color 多模式 + scalar）+ 解析器 + DTCG 导出（`dtcgExport`）。支持**多模式**（章节主题色组：绿/蓝）。
+- [x] `StyleLibrary` 加可选 `tokens` 字段 + `colorHex(_:mode:)` 解析器（优先 tokens，回退 legacy `colors`）+ `effectiveTokens`；向后兼容（旧 `.layoutd` 无 `tokens` 键解码为 nil）。
+- [x] 重构消费端（颜色）：PDF/PNG/Canvas 三处渲染器经 `colorHex(_:mode:)` 解析段落色（颜色优先级：frame override > 样式色 token > 回退）。token 现已真正驱动文字颜色。
+- [x] 颜色**多模式 live**：`BookProject.colorMode` + `resolvedColorHex(_:)`，渲染器据此解析；切换模式全书联动（绿/蓝主题组）。向后兼容（旧 `.layoutd` 解码 `colorMode == nil`）。
+- [ ] `ParagraphStyle` 字号/行距/间距改为**引用 scalar token**而非硬编码值。
 - [ ] `PageSetup` 的网格/页边距/栏/基线纳入同一 schema。
 - [ ] 形式化组件定义（知识卡片/边栏/图注）为样式化模板。
-- [ ] `.layoutd` 持久化加 schema 版本号；保留旧档解码兼容。
-- 验收：项目可序列化为 DTCG 风格 JSON；改一个 token → 全书联动重排；旧 `.layoutd` 仍可打开。
-- 涉及：`LayoutDCore`（StyleLibrary/PageSetup/ProjectFile）。
+- [ ] `.layoutd` 持久化加 schema 版本号。
+- 验收：项目可序列化为 DTCG 风格 JSON ✅（`dtcgExport`）；改一个**颜色** token → 全书联动 ✅；scalar 联动待 token 引用改造；旧 `.layoutd` 仍可打开 ✅。
+- 涉及：`LayoutDCore`（StyleLibrary/BookProject）、三处渲染器。
 
 ### A2. P4 微调基石闭环（最高优先级）
 - [ ] 统一"编辑捕获"为 override 模型（归并现有 `freezePageToPlan` + frame override）。

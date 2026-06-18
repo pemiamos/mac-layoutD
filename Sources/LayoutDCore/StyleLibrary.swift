@@ -11,14 +11,35 @@ public enum StyleID: String, Codable, Sendable {
 public struct StyleLibrary: Codable, Equatable, Sendable {
     public var paragraphStyles: [ParagraphStyle]
     public var colors: [ColorToken]
+    /// Unified design tokens (P1). Optional & additive: when present it is the
+    /// source of truth for color resolution; when nil the legacy `colors` list
+    /// is used. Old `.layoutd` files decode with `tokens == nil`.
+    public var tokens: DesignTokens?
 
-    public init(paragraphStyles: [ParagraphStyle], colors: [ColorToken]) {
+    public init(paragraphStyles: [ParagraphStyle], colors: [ColorToken], tokens: DesignTokens? = nil) {
         self.paragraphStyles = paragraphStyles
         self.colors = colors
+        self.tokens = tokens
     }
 
     public func paragraphStyle(id: String) -> ParagraphStyle {
         paragraphStyles.first { $0.id == id } ?? .body
+    }
+
+    /// Resolves a color token id to a hex value, preferring unified `tokens`
+    /// (under the given mode) and falling back to the legacy `colors` list.
+    /// Returns nil if the id is unknown in both.
+    public func colorHex(_ id: String, mode: String? = nil) -> String? {
+        if let tokens, let hex = tokens.colorHex(id, mode: mode) {
+            return hex
+        }
+        return colors.first { $0.id == id }?.hex
+    }
+
+    /// The design tokens for this library, synthesizing from legacy `colors`
+    /// when no explicit token set has been attached yet.
+    public var effectiveTokens: DesignTokens {
+        tokens ?? .from(legacyColors: colors)
     }
 
     public static let defaultChineseScience = StyleLibrary(

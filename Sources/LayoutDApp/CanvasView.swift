@@ -427,7 +427,10 @@ final class CanvasView: NSView {
         paragraph.lineSpacing = max(CGFloat(style.lineHeight - style.fontSize), 0) * zoomScale
         paragraph.firstLineHeadIndent = CGFloat(style.firstLineIndent) * zoomScale
 
-        let textColor = textColorOverride ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
+        // Color priority: explicit frame override > paragraph style's color token
+        // (resolved through the style library / design tokens) > neutral fallback.
+        let tokenColor = project.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
+        let textColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: textColor,

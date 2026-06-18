@@ -465,8 +465,12 @@ public struct PDFExporter {
             style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
         }
 
+        // Color priority: explicit frame override > paragraph style's color token
+        // (resolved through the style library / design tokens) > black fallback.
         let textColor: CGColor
         if let hex = textColorHex, let color = NSColor.from(hex: hex) {
+            textColor = color.cgColor
+        } else if let tokenHex = project.resolvedColorHex(style.colorToken), let color = NSColor.from(hex: tokenHex) {
             textColor = color.cgColor
         } else {
             textColor = NSColor.black.cgColor
