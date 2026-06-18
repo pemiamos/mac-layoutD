@@ -492,11 +492,7 @@ final class WorkspaceViewController: NSViewController {
         canvas.onCanvasClick = { [weak self] pageNum, localPoint in
             guard let self else { return }
             let tool = self.appState.activeTool
-            let pageSize = self.appState.project.pageSetup.pageSize
-            
-            let normX = Double(localPoint.x / pageSize.width)
-            let normY = Double(localPoint.y / pageSize.height)
-            
+
             switch tool {
             case .selection, .directSelection:
                 break
@@ -505,46 +501,25 @@ final class WorkspaceViewController: NSViewController {
             case .gap:
                 break
             case .type:
-                let normW = 150.0 / pageSize.width
-                let normH = 60.0 / pageSize.height
-                let frameRect = Rect(x: normX, y: normY, width: normW, height: normH)
-                self.appState.addFrameToPage(pageNum: pageNum, kind: .text, frameRect: frameRect)
-                
-            case .rectangularFrame:
-                let normW = 150.0 / pageSize.width
-                let normH = 100.0 / pageSize.height
-                let frameRect = Rect(x: normX, y: normY, width: normW, height: normH)
-                self.appState.addFrameToPage(pageNum: pageNum, kind: .image, frameRect: frameRect)
-                
-            case .rectangle:
-                let normW = 150.0 / pageSize.width
-                let normH = 100.0 / pageSize.height
-                let frameRect = Rect(x: normX, y: normY, width: normW, height: normH)
-                self.appState.addFrameToPage(pageNum: pageNum, kind: .component, frameRect: frameRect)
-                
-            case .line:
-                let normW = 120.0 / pageSize.width
-                let normH = 4.0 / pageSize.height
-                let frameRect = Rect(x: normX, y: normY, width: normW, height: normH)
-                self.appState.addFrameToPage(pageNum: pageNum, kind: .component, frameRect: frameRect)
-                
-            case .scissors:
+                // Pick the text frame under the cursor for editing. The type tool
+                // no longer authors free text boxes; it selects existing
+                // structured text/caption frames.
                 if let document = self.appState.laidOutDocument,
                    let page = document.pages.first(where: { $0.number == pageNum }) {
-                    if let found = page.frames.reversed().first(where: { frame in
+                    let hit = page.frames.reversed().first { frame in
+                        guard frame.kind == .text || frame.kind == .caption else { return false }
                         let fRect = CGRect(x: frame.rect.x, y: frame.rect.y, width: frame.rect.width, height: frame.rect.height)
                         return fRect.contains(localPoint)
-                    }) {
-                        self.appState.deleteFrame(id: found.id)
+                    }
+                    if let hit {
+                        self.appState.selectedFrameId = hit.id
                     }
                 }
-                
+
             case .zoom:
                 self.zoomIn()
-                
+
             case .hand:
-                break
-            default:
                 break
             }
         }

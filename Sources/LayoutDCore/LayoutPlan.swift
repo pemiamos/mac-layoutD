@@ -162,22 +162,20 @@ public enum ContentReference: Codable, Equatable, Sendable {
     case generated(String)
 }
 
+/// Layout fine-tuning tools. layoutD intentionally does NOT provide free-form
+/// vector authoring (pen/pencil/shape/gradient drawing): every manual action
+/// operates on the structured model so it can be captured as a LayoutPlan /
+/// frame override and re-rendered deterministically. `type` selects an existing
+/// text frame for editing rather than drawing a new free text box.
 public enum LayoutTool: String, CaseIterable, Sendable {
     case selection
     case directSelection
     case page
     case gap
     case type
-    case line
-    case pen
-    case pencil
-    case rectangularFrame
-    case rectangle
-    case scissors
-    case gradient
     case hand
     case zoom
-    
+
     public var displayName: String {
         switch self {
         case .selection: return "选择工具"
@@ -185,18 +183,11 @@ public enum LayoutTool: String, CaseIterable, Sendable {
         case .page: return "页面工具"
         case .gap: return "间隔工具"
         case .type: return "文字工具"
-        case .line: return "直线工具"
-        case .pen: return "钢笔工具"
-        case .pencil: return "铅笔工具"
-        case .rectangularFrame: return "矩形框架工具"
-        case .rectangle: return "矩形工具"
-        case .scissors: return "剪刀工具"
-        case .gradient: return "渐变工具"
         case .hand: return "手形工具"
         case .zoom: return "缩放工具"
         }
     }
-    
+
     public var iconName: String {
         switch self {
         case .selection: return "arrow.up.left.pointer.fill"
@@ -204,13 +195,6 @@ public enum LayoutTool: String, CaseIterable, Sendable {
         case .page: return "doc.plaintext"
         case .gap: return "arrow.left.and.right.pattern.ratio"
         case .type: return "textformat"
-        case .line: return "line.diagonal"
-        case .pen: return "pencil.tip"
-        case .pencil: return "pencil"
-        case .rectangularFrame: return "square.dashed"
-        case .rectangle: return "square"
-        case .scissors: return "scissors"
-        case .gradient: return "slider.horizontal.3"
         case .hand: return "hand.raised.fill"
         case .zoom: return "magnifyingglass"
         }

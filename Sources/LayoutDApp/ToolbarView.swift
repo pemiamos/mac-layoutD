@@ -24,28 +24,14 @@ struct ToolbarView: View {
             Divider()
                 .padding(.horizontal, 4)
             
-            // Group 3: Text & Drawing tools
+            // Group 3: Text editing (pick a text frame to edit; no free authoring)
             VStack(spacing: 4) {
                 toolButton(.type)
-                toolButton(.line)
-                toolButton(.pen)
-                toolButton(.pencil)
             }
-            
+
             Divider()
                 .padding(.horizontal, 4)
-            
-            // Group 4: Frame & Shape tools
-            VStack(spacing: 4) {
-                toolButton(.rectangularFrame)
-                toolButton(.rectangle)
-                toolButton(.scissors)
-                toolButton(.gradient)
-            }
-            
-            Divider()
-                .padding(.horizontal, 4)
-            
+
             // Group 5: Navigation tools
             VStack(spacing: 4) {
                 toolButton(.hand)

@@ -476,53 +476,10 @@ final class AppState: ObservableObject {
         self.currentPageNumber = max(1, pageNum - 1)
     }
 
-    func addFrameToPage(pageNum: Int, kind: LayoutBlockKind, frameRect: Rect) {
-        var currentProject = project
-        var plans = currentProject.safeAppliedLayoutPlans
-        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
-        
-        let blockId = UUID()
-        let blockRef: ContentReference
-        let roleName: String
-        
-        switch kind {
-        case .text:
-            blockRef = .generated("新建文本内容")
-            roleName = "body"
-        case .image:
-            if let asset = project.assets.first {
-                blockRef = .asset(asset.id)
-            } else {
-                blockRef = .generated("")
-            }
-            roleName = "image"
-        case .caption:
-            blockRef = .generated("图注")
-            roleName = "caption"
-        case .component:
-            blockRef = .generated("组件内容")
-            roleName = "knowledge-card"
-        }
-        
-        let block = LayoutPlanBlock(
-            id: blockId,
-            kind: kind,
-            role: roleName,
-            frame: frameRect,
-            contentReference: blockRef
-        )
-        
-        plan.blocks.append(block)
-        plans[pageNum] = plan
-        currentProject.safeAppliedLayoutPlans = plans
-        
-        var locked = currentProject.safeLockedPages
-        locked.insert(pageNum)
-        currentProject.safeLockedPages = locked
-        
-        self.project = currentProject
-        self.selectedFrameId = blockId
-    }
+    // NOTE: free-frame authoring (addFrameToPage) was removed deliberately.
+    // layoutD does not let users draw arbitrary frames; manual layout work is
+    // limited to fine-tuning existing structured frames so every edit can be
+    // captured as a LayoutPlan / override and re-rendered deterministically.
 
     func deleteFrame(id: UUID) {
         guard let pageNum = findPageNumber(for: id) else { return }
