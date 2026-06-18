@@ -240,72 +240,16 @@ The deterministic engine currently generates:
 - Reusable chapter-level layout templates that produce page-keyed plan sets for science chapters, image-rich chapters, and study-guide chapters, with App and CLI application into `appliedLayoutPlans`.
 - Saved layout templates in project data, with retargeting support for reusing a saved `LayoutPlan` on another page, spread, or section; the inspector can save the current page as a template, apply saved templates to the current page, rename templates, and delete stale templates. App and CLI template libraries can export/import saved templates across projects.
 - Layout/project issues for incomplete book metadata, invalid ISBN-13, unreferenced library images, repeated image use, missing captions, effective print DPI, missing source images, duplicate filenames, missing asset references, empty structure, broken page sequences, table-of-contents page drift, extreme paragraph overflow, Chinese line-break punctuation violations including common Chinese quotes/brackets, text overflow inside frames, frame overlap, out-of-bounds frames, empty text frames, and missing image frames.
-- JSON preflight reports with issue counts, category counts, asset summary, layout frame summary including table frames, page count, explicit `exportReady`, frame-level `issueLocations`, and `suggestedFix` guidance for common issues, plus inspector severity/category filtering for focused issue review.
+- JSON preflight reports with issue counts, category counts, asset summary, layout frame summary including table frames, page count, explicit `exportReady`, frame-level `issueLocations`, `suggestedFix` guidance for common issues, and a `qualityMetrics` block (page count, AI/template plan-applied pages, auto laid-out pages, low-DPI and missing-caption asset counts, layout issue count) aligned with the PRD success indicators, plus inspector severity/category filtering for focused issue review.
 - Conservative preflight auto-fixes for missing publisher/keywords, invalid ISBN removal, missing asset captions/credits, and stale source paths, exposed from the inspector and CLI for issues that advertise an `autoFixKind`.
 - Inspector editing for book metadata, image metadata, styles, project-level style templates, and page setup with millimeter-based spacing controls and facing-page toggle.
 
-Current verification:
+## Verification
 
-```text
-swift test: pass, 97 tests
-Markdown -> PDF export: pass
-Markdown -> .layoutd -> PDF export: pass
-Multi-file chapter package -> .layoutd export: pass
-Multi-file chapter package validate: pass
-Chapter package asset reference matching: pass
-Markdown -> PNG preview export: pass
-Markdown -> preflight JSON export: pass
-CLI validate success/failure exits: pass
-Wide image PDF page render: pass
-Image manifest import: pass
-Nested chapter asset manifest import: pass
-Layout defect validation: pass
-Text overflow validation: pass
-Chinese line-break preflight: pass
-Chinese/Western text spacing: pass
-AI provider advisor fallback and semantic context: pass
-Project-level style templates: pass
-Page-level layout templates: pass
-Chapter-level layout templates: pass
-CLI chapter template application: pass
-Saved layout template reuse: pass
-Layout template library import/export: pass
-Chapter package loader tests: pass
-Duplicate nested asset basename import: pass
-Exact nested asset path matching: pass
-Nested chapter package asset CLI matching: pass
-Preflight auto-fix entry: pass
-CLI preflight auto-fix: pass
-Preflight issue categories: pass
-Markdown knowledge-card import: pass
-Heading keep-with-next layout: pass
-Markdown draft-marker cleanup: pass
-Multi-line HTML comment cleanup: pass
-Multi-line HTML comment CLI export: pass
-Callout PDF export: pass
-Front matter margin/gutter import: pass
-Page sequence preflight: pass
-Table-of-contents consistency preflight: pass
-Layout frame summary: pass
-Book metadata import and ISBN preflight: pass
-Legacy .layoutd metadata decode: pass
-Markdown table import and table frame layout: pass
-Repeated image reference import and preflight: pass
-Nested Markdown heading import: pass
-Nested Markdown heading CLI export: pass
-Ordered Markdown list import: pass
-Ordered Markdown list CLI export: pass
-Inline Markdown cleanup import: pass
-Inline Markdown cleanup CLI export: pass
-Inline Markdown literal symbol preservation: pass
-Markdown anchored image import: pass
-Markdown anchored image CLI export: pass
-Anchored image layout placement: pass
-Single-quoted Markdown image metadata: pass
-Angle-bracket Markdown image path import: pass
-Inline image source metadata import: pass
-Credited image preflight: pass
-Setext Markdown heading import: pass
-Reference-style Markdown image import: pass
-Shortcut reference-style Markdown image import: pass
-```
+`swift build` and `swift test` both pass on a full Xcode toolchain. The suite
+currently holds 124 test functions covering import, pagination, Chinese
+line-break and spacing rules, the AI provider fallback, page/chapter/saved
+layout templates and library import/export, preflight categories and auto-fixes,
+layout-plan validation fallback, and PDF/PNG/project/preflight export. The exact
+count is whatever `swift test` reports — it is intentionally not pinned here so
+the README does not drift as tests are added.

@@ -1072,10 +1072,10 @@ final class LayoutDCoreTests: XCTestCase {
         var blocks: [LayoutPlanBlock] = []
         
         for frame in targetPage.frames {
-            if frame.kind == .text && frame.rect.y == 24 && frame.rect.height == 16 {
+            if frame.kind == .runningHeader {
                 continue
             }
-            
+
             let normX = frame.rect.x / pageSize.width
             let normY = frame.rect.y / pageSize.height
             let normW = frame.rect.width / pageSize.width
@@ -1091,8 +1091,9 @@ final class LayoutDCoreTests: XCTestCase {
             case .footnote: kind = .text
             case .footnoteDivider: kind = .component
             case .sideNote: kind = .text
+            case .runningHeader: kind = .text
             }
-            
+
             let ref: ContentReference
             switch frame.content {
             case .asset(let assetId), .spreadAsset(let assetId, _):
@@ -1492,6 +1493,46 @@ final class LayoutDCoreTests: XCTestCase {
         } else {
             XCTFail("Frame content is not text")
         }
+    }
+
+    func testInvalidAppliedPlanIsRejectedAndFallsBack() {
+        // A block whose normalized frame spills outside the page must not be
+        // rendered; the engine rejects the plan and records a warning instead.
+        let badBlockId = UUID()
+        let badBlock = LayoutPlanBlock(
+            id: badBlockId,
+            kind: .text,
+            role: "text",
+            frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 2.0),
+            contentReference: .generated("越界内容")
+        )
+        let plan = LayoutPlan(target: .page(3), strategy: .balanced, blocks: [badBlock])
+
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "校验测试", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(title: "故事", paragraphs: [
+                            Paragraph(kind: .body, text: "正文内容。", styleId: StyleID.body.rawValue)
+                        ])
+                    ]
+                )
+            ],
+            appliedLayoutPlans: [3: plan]
+        )
+
+        let document = LayoutEngine().layout(project: project)
+
+        XCTAssertFalse(
+            document.pages.flatMap(\.frames).contains { $0.id == badBlockId },
+            "Out-of-bounds plan block should not be rendered"
+        )
+        XCTAssertTrue(
+            document.issues.contains { $0.severity == .warning && $0.message.contains("版式计划无效") },
+            "Engine should surface a warning when rejecting an invalid plan"
+        )
     }
 }
 

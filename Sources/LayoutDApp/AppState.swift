@@ -103,15 +103,18 @@ final class AppState: ObservableObject {
         var blocks: [LayoutPlanBlock] = []
         
         for frame in targetPage.frames {
-            if frame.kind == .text && frame.rect.y == 24 && frame.rect.height == 16 {
+            // The running header is regenerated per page by the engine, so it must
+            // not be frozen into a saved plan. It is identified by its semantic
+            // kind rather than its on-page geometry.
+            if frame.kind == .runningHeader {
                 continue
             }
-            
+
             let normX = frame.rect.x / pageSize.width
             let normY = frame.rect.y / pageSize.height
             let normW = frame.rect.width / pageSize.width
             let normH = frame.rect.height / pageSize.height
-            
+
             let kind: LayoutBlockKind
             switch frame.kind {
             case .text: kind = .text
@@ -122,6 +125,7 @@ final class AppState: ObservableObject {
             case .footnote: kind = .text
             case .footnoteDivider: kind = .component
             case .sideNote: kind = .text
+            case .runningHeader: kind = .text
             }
             
             let ref: ContentReference

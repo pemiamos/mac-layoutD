@@ -426,7 +426,7 @@ struct SidebarView: View {
             color = .purple
         case .caption:
             color = .secondary.opacity(0.55)
-        case .text, .footnote, .sideNote:
+        case .text, .footnote, .sideNote, .runningHeader:
             color = .primary.opacity(0.35)
         case .footnoteDivider:
             color = .secondary.opacity(0.4)
@@ -496,7 +496,7 @@ struct SidebarView: View {
     
     private func layerIcon(for kind: PageFrameKind) -> String {
         switch kind {
-        case .text, .footnote, .sideNote: return "text.alignleft"
+        case .text, .footnote, .sideNote, .runningHeader: return "text.alignleft"
         case .caption: return "text.alignleft"
         case .image: return "photo"
         case .callout: return "rectangle.inset.filled"
@@ -529,6 +529,11 @@ struct SidebarView: View {
             return "脚注分界线"
         case .sideNote:
             return "旁注信息"
+        case .runningHeader:
+            if case .text(let txt) = frame.content {
+                return "页眉: \(txt.prefix(12))"
+            }
+            return "页眉"
         }
     }
     

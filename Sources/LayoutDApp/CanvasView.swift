@@ -269,7 +269,7 @@ final class CanvasView: NSView {
             style = project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue)
         }
 
-        let extraWidth = (frame.kind == .text || frame.kind == .footnote || frame.kind == .sideNote) ? CGFloat(style.fontSize * 0.5) : 0.0
+        let extraWidth = (frame.kind == .text || frame.kind == .footnote || frame.kind == .sideNote || frame.kind == .runningHeader) ? CGFloat(style.fontSize * 0.5) : 0.0
 
         let rect = CGRect(
             x: pageRect.minX + CGFloat(frame.rect.x) * zoomScale,

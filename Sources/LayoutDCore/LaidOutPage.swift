@@ -67,6 +67,10 @@ public enum PageFrameKind: String, Codable, Sendable {
     case footnote
     case footnoteDivider
     case sideNote
+    /// Running header placed above the content area. Rendered like text, but
+    /// carries its semantic role so tooling (e.g. freezing a page into a plan)
+    /// can identify it without inspecting its geometry.
+    case runningHeader
 }
 
 public enum FrameContent: Codable, Equatable, Sendable {

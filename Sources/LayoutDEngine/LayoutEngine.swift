@@ -2,6 +2,19 @@ import CoreText
 import Foundation
 import LayoutDCore
 
+/// Single source of truth for how many front-matter pages (cover, contents)
+/// precede the content pages. The content engine numbers pages from 1 and adds
+/// this offset to reach the absolute page number used by page setup, plans and
+/// preflight. NOTE: this still assumes a fixed front-matter size; multi-page
+/// contents or extra front matter would require deriving this from the assembled
+/// front matter instead of a constant (see docs/architecture.md known limitations).
+private let frontMatterPageCount = 2
+
+/// Geometry of the running header, shared by header generation so the value is
+/// defined in exactly one place rather than scattered as literals.
+private let runningHeaderTopY = 24.0
+private let runningHeaderHeight = 16.0
+
 public protocol LayoutEngineProtocol: Sendable {
     func layout(project: BookProject) -> LaidOutDocument
 }
@@ -75,7 +88,7 @@ private struct LayoutContext {
     init(project: BookProject) {
         self.project = project
         self.currentPage = LaidOutPage(number: 1)
-        let initialPageNumber = 3
+        let initialPageNumber = 1 + frontMatterPageCount
         let margins = project.resolvedMargins(for: initialPageNumber)
         self.cursorX = margins.left
         self.cursorY = margins.top
@@ -83,13 +96,18 @@ private struct LayoutContext {
     }
 
     mutating func addRunningHeader(_ title: String) {
-        let actualPageNumber = currentPage.number + 2
+        let actualPageNumber = currentAbsolutePageNumber
         guard project.resolvedShowHeadersFooters(for: actualPageNumber) else {
             return
         }
-        let rect = Rect(x: pageLeftMargin(for: actualPageNumber), y: 24, width: contentWidth, height: 16)
+        let rect = Rect(
+            x: pageLeftMargin(for: actualPageNumber),
+            y: runningHeaderTopY,
+            width: contentWidth,
+            height: runningHeaderHeight
+        )
         currentPage.frames.append(
-            PageFrame(kind: .text, rect: rect, styleId: StyleID.caption.rawValue, content: .text(title))
+            PageFrame(kind: .runningHeader, rect: rect, styleId: StyleID.caption.rawValue, content: .text(title))
         )
     }
 
@@ -168,7 +186,6 @@ private struct LayoutContext {
 
     mutating func finishWithFrontMatter() -> LaidOutDocument {
         let contentDocument = finish()
-        let frontMatterPageCount = 2
         let contentPages = contentDocument.pages.map { renumberedPage($0, offset: frontMatterPageCount) }
         let shiftedIssues = contentDocument.issues.map { shiftedIssue($0, offset: frontMatterPageCount) }
         let shiftedContents = tableOfContents.map {
@@ -540,17 +557,17 @@ private struct LayoutContext {
         let desiredHeight = imageHeight(for: asset, width: totalWidth)
         let requiredHeight = desiredHeight + 42
         
-        if (currentPage.number + 2) % 2 == 1 {
+        if currentAbsolutePageNumber % 2 == 1 {
             advanceToNextPage()
         }
-        
-        let bottomLimit = resolvedBottomLimit(for: currentPage.number + 2)
+
+        let bottomLimit = resolvedBottomLimit(for: currentAbsolutePageNumber)
         if cursorY + requiredHeight > bottomLimit {
             advanceToNextPage()
             advanceToNextPage()
         }
-        
-        let leftX = pageLeftMargin(for: currentPage.number + 2)
+
+        let leftX = pageLeftMargin(for: currentAbsolutePageNumber)
         let leftWidth = pageWidth - leftX
         let leftRect = Rect(x: leftX, y: cursorY, width: leftWidth, height: desiredHeight)
         currentPage.frames.append(PageFrame(
@@ -563,7 +580,7 @@ private struct LayoutContext {
         
         advanceToNextPage()
         
-        let rightWidth = pageWidth - pageRightMargin(for: currentPage.number + 2)
+        let rightWidth = pageWidth - pageRightMargin(for: currentAbsolutePageNumber)
         let rightRect = Rect(x: 0, y: spreadY, width: rightWidth, height: desiredHeight)
         currentPage.frames.append(PageFrame(
             kind: .image,
@@ -693,7 +710,7 @@ private struct LayoutContext {
         let columns = project.resolvedColumns(for: currentAbsolutePageNumber)
         if currentColumn + 1 < columns {
             currentColumn += 1
-            let actualPageNumber = currentPage.number + 2
+            let actualPageNumber = currentAbsolutePageNumber
             cursorX = pageLeftMargin(for: actualPageNumber) + Double(currentColumn) * (columnWidth + project.pageSetup.gutter)
             cursorY = currentColumnTopY
         } else {
@@ -707,7 +724,7 @@ private struct LayoutContext {
         let newPageNumber = pages.count + 1
         currentPage = LaidOutPage(number: newPageNumber)
         currentColumn = 0
-        let absPageNum = newPageNumber + 2
+        let absPageNum = absolutePageNumber(for: newPageNumber)
         let margins = project.resolvedMargins(for: absPageNum)
         cursorX = pageLeftMargin(for: absPageNum)
         cursorY = margins.top
@@ -793,13 +810,13 @@ private struct LayoutContext {
 
     private mutating func layoutFootnotesAndSideNotesOnCurrentPage() {
         if !currentPageFootnoteParagraphs.isEmpty {
-            let margins = project.resolvedMargins(for: currentPage.number + 2)
+            let margins = project.resolvedMargins(for: currentAbsolutePageNumber)
             let baseBottomLimit = project.pageSetup.pageSize.height - margins.bottom
             let totalFnHeight = currentPageFootnoteHeight
-            
+
             let dividerY = baseBottomLimit - totalFnHeight - 24 + 6
             let dividerRect = Rect(
-                x: pageLeftMargin(for: currentPage.number + 2),
+                x: pageLeftMargin(for: currentAbsolutePageNumber),
                 y: dividerY,
                 width: 60,
                 height: 1
@@ -814,7 +831,7 @@ private struct LayoutContext {
             for fnParagraph in currentPageFootnoteParagraphs {
                 let fnHeight = estimatedFootnoteHeight(fnParagraph)
                 let fnRect = Rect(
-                    x: pageLeftMargin(for: currentPage.number + 2),
+                    x: pageLeftMargin(for: currentAbsolutePageNumber),
                     y: currentY,
                     width: contentWidth,
                     height: fnHeight
@@ -830,7 +847,7 @@ private struct LayoutContext {
         }
         
         if !currentPageSideNoteParagraphs.isEmpty {
-            let absPageNum = currentPage.number + 2
+            let absPageNum = currentAbsolutePageNumber
             let margins = project.resolvedMargins(for: absPageNum)
             let pageSize = project.pageSetup.pageSize
             let facingPages = project.pageSetup.facingPages
@@ -965,7 +982,13 @@ private struct LayoutContext {
     }
 
     private var currentAbsolutePageNumber: Int {
-        currentPage.number + 2
+        absolutePageNumber(for: currentPage.number)
+    }
+
+    /// Converts a content-relative page number (1-based, content pages only) into
+    /// the absolute book page number that page setup, plans, and preflight use.
+    private func absolutePageNumber(for contentPageNumber: Int) -> Int {
+        contentPageNumber + frontMatterPageCount
     }
 
     private var contentWidth: Double {
@@ -990,15 +1013,87 @@ private struct LayoutContext {
         return resolvedBottomLimit(for: currentAbsolutePageNumber) - cursorY
     }
 
+    /// Validates an advisory layout plan against the rules the renderer relies on.
+    /// Returns human-readable failure reasons; an empty array means the plan is
+    /// safe to render. Kept pure so it is independently testable.
+    func planValidationFailures(_ plan: LayoutPlan) -> [String] {
+        var failures: [String] = []
+        let epsilon = 0.001
+        let blockIds = Set(plan.blocks.map(\.id))
+
+        for (index, block) in plan.blocks.enumerated() {
+            let frame = block.frame
+            let label = "块 \(index + 1)"
+
+            if frame.width <= 0 || frame.height <= 0 {
+                failures.append("\(label) 尺寸非正")
+            }
+            if frame.x < -epsilon || frame.y < -epsilon
+                || frame.x + frame.width > 1 + epsilon
+                || frame.y + frame.height > 1 + epsilon {
+                failures.append("\(label) 超出页面归一化范围")
+            }
+
+            switch block.contentReference {
+            case .paragraph(let id):
+                if findParagraph(id: id) == nil {
+                    failures.append("\(label) 引用了不存在的段落")
+                }
+            case .asset(let id):
+                if !project.assets.contains(where: { $0.id == id }) {
+                    failures.append("\(label) 引用了不存在的素材")
+                }
+            case .storyRange(let storyId, let startId, let endId):
+                if let story = findStory(id: storyId) {
+                    let ids = Set(story.paragraphs.map(\.id))
+                    if !ids.contains(startId) || !ids.contains(endId) {
+                        failures.append("\(label) 的文本范围端点不在该 story 内")
+                    }
+                } else {
+                    failures.append("\(label) 引用了不存在的 story")
+                }
+            case .generated:
+                break
+            }
+
+            if let next = block.nextThreadedBlockId, !blockIds.contains(next) {
+                failures.append("\(label) 的后继线程块不在本计划内")
+            }
+            if let prev = block.previousThreadedBlockId, !blockIds.contains(prev) {
+                failures.append("\(label) 的前驱线程块不在本计划内")
+            }
+        }
+
+        return failures
+    }
+
     mutating func applyPlanIfPresent() {
-        let actualPageNumber = currentPage.number + 2
+        let actualPageNumber = currentAbsolutePageNumber
         guard let plans = project.appliedLayoutPlans,
               let plan = plans[actualPageNumber] else {
             return
         }
 
+        // AI/template plans are advisory: the engine validates them before
+        // rendering. An invalid plan is rejected (falling back to deterministic
+        // flow on this page) and surfaced as a preflight issue, rather than
+        // producing broken frames. This is the "engine decides" guarantee.
+        let failures = planValidationFailures(plan)
+        guard failures.isEmpty else {
+            issues.append(
+                LayoutIssue(
+                    severity: .warning,
+                    message: "第 \(actualPageNumber) 页的版式计划无效，已回退到自动排版：\(failures.joined(separator: "；"))",
+                    category: .layout,
+                    suggestedFix: "检查该页 LayoutPlan 的块坐标、尺寸和内容引用是否有效。",
+                    pageNumber: currentPage.number
+                )
+            )
+            return
+        }
+
         let pageSize = project.pageSetup.pageSize
-        
+
         for block in plan.blocks {
             let rect = Rect(
                 x: block.frame.x * pageSize.width,

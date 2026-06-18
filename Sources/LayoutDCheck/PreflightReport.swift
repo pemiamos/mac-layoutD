@@ -12,6 +12,7 @@ public struct PreflightReport: Codable, Equatable, Sendable {
     public var layoutSummary: LayoutPreflightSummary?
     public var issueLocations: [IssueLocation]
     public var pageCount: Int?
+    public var qualityMetrics: QualityMetrics
 
     public init(
         project: BookProject,
@@ -22,13 +23,25 @@ public struct PreflightReport: Codable, Equatable, Sendable {
         self.projectTitle = project.metadata.title
         self.generatedAt = generatedAt
         self.issues = issues
-        self.severityCounts = Dictionary(grouping: issues, by: { $0.severity.rawValue }).mapValues(\.count)
-        self.categoryCounts = Dictionary(grouping: issues.compactMap(\.category), by: { $0.rawValue }).mapValues(\.count)
+        let severityCounts = Dictionary(grouping: issues, by: { $0.severity.rawValue }).mapValues(\.count)
+        self.severityCounts = severityCounts
+        let categoryCounts = Dictionary(grouping: issues.compactMap(\.category), by: { $0.rawValue }).mapValues(\.count)
+        self.categoryCounts = categoryCounts
         self.exportReady = severityCounts[IssueSeverity.error.rawValue, default: 0] == 0
-        self.assetSummary = AssetPreflightSummary(project: project)
-        self.layoutSummary = document.map(LayoutPreflightSummary.init(document:))
+        let assetSummary = AssetPreflightSummary(project: project)
+        self.assetSummary = assetSummary
+        let layoutSummary = document.map(LayoutPreflightSummary.init(document:))
+        self.layoutSummary = layoutSummary
         self.issueLocations = document.map { IssueLocation.locations(for: issues, document: $0) } ?? []
         self.pageCount = document?.pages.count
+        self.qualityMetrics = QualityMetrics(
+            project: project,
+            document: document,
+            assetSummary: assetSummary,
+            layoutSummary: layoutSummary,
+            severityCounts: severityCounts,
+            categoryCounts: categoryCounts
+        )
     }
 
     public var isExportReady: Bool {
@@ -63,7 +76,55 @@ public struct PreflightReport: Codable, Equatable, Sendable {
             lines.append("Issue categories: \(categoryCounts.count)")
         }
 
+        lines.append("Plan-applied pages: \(qualityMetrics.planAppliedPages)")
+        lines.append("Auto laid-out pages: \(qualityMetrics.autoLaidOutPages)")
+        lines.append("Low-DPI assets: \(qualityMetrics.lowResolutionAssets)")
+        lines.append("Missing-caption assets: \(qualityMetrics.missingCaptionAssets)")
+        lines.append("Layout issues: \(qualityMetrics.layoutIssues)")
+
         return lines
+    }
+}
+
+/// Measurable signals aligned with the PRD success indicators (low-DPI and
+/// missing-caption detection, share of pages produced without manual layout,
+/// AI/template plan adoption, export stability). These are derived from the same
+/// project + document the report already inspects, so the indicators can be
+/// tracked over time instead of staying aspirational.
+public struct QualityMetrics: Codable, Equatable, Sendable {
+    public var pageCount: Int
+    public var totalFrames: Int
+    public var averageFramesPerPage: Double
+    /// Pages whose layout came from an applied AI/template `LayoutPlan` — a proxy
+    /// for AI candidate adoption.
+    public var planAppliedPages: Int
+    /// Pages produced purely by the deterministic flow (no applied plan) — a proxy
+    /// for the share of pages that needed no manual layout.
+    public var autoLaidOutPages: Int
+    public var lowResolutionAssets: Int
+    public var missingCaptionAssets: Int
+    public var blockingErrors: Int
+    public var layoutIssues: Int
+
+    public init(
+        project: BookProject,
+        document: LaidOutDocument?,
+        assetSummary: AssetPreflightSummary,
+        layoutSummary: LayoutPreflightSummary?,
+        severityCounts: [String: Int],
+        categoryCounts: [String: Int]
+    ) {
+        let pages = document?.pages.count ?? 0
+        pageCount = pages
+        totalFrames = layoutSummary?.totalFrames ?? 0
+        averageFramesPerPage = pages > 0 ? Double(totalFrames) / Double(pages) : 0
+        let appliedPlanPageCount = project.appliedLayoutPlans?.count ?? 0
+        planAppliedPages = min(appliedPlanPageCount, pages)
+        autoLaidOutPages = max(pages - planAppliedPages, 0)
+        lowResolutionAssets = assetSummary.lowResolution
+        missingCaptionAssets = assetSummary.missingCaptions
+        blockingErrors = severityCounts[IssueSeverity.error.rawValue, default: 0]
+        layoutIssues = categoryCounts[PreflightIssueCategory.layout.rawValue, default: 0]
     }
 }
 
