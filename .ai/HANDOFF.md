@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-19 16:26 | claude | 补 2 条架构决策 + 验证印前路线 A 端到端生效。PDF/X 文案经查已诚实,无需改。
+- **分支**：main
+- **概述**：补 2 条架构决策 + 验证印前路线 A 端到端生效。PDF/X 文案经查已诚实,无需改。
+- **改动文件**：d0b240f(docs:补录两条决策——①推翻"git 全走 GitHub Desktop"、②固化印前路线 A 并钉死"做路线 B 须先撤销")。代码未改。
+- **检查**：无头预检验证(swift run layoutD -- Samples/demo.md --pdf-version pdfx1a --pdf-crop-marks --preflight-report --validate):validate 通过,preflight JSON 的 categoryCounts.prepress=2(RGB 管线诚实披露 + PDF/X 标签诚实披露各 1 条 warning),exportReady=true。证明印前规则在真实导出管线端到端触发,非仅单测。GUI 截图验收因 Claude 桌面端未授 Screen Recording 权限未做,以无头预检替代(更硬)。
+- **下一步**：印前路线 A 已闭环+决策固化+端到端验证。可选小优化(非阻塞):1) PrepressInspector 的 PDF/X 诚实消息里 pdfxLabel 直接用了 UI 全串"RGB + SWOP intent",导致"...并非 RGB + SWOP intent 合规文件"读着略绕,可改传简短标准名(如"PDF/X-1a");2) LayoutDCheck 因字体检查 import AppKit,牺牲了可移植性,如需跨平台再抽离。若用户要 GUI 视觉验收,需在 Claude 桌面端授予 Screen Recording 权限后重试。
+
 ## 2026-06-19 16:10 | claude | 复核印前路线 A 在制品并提交;全局放开 AI git 权限。swift build + swift test 全绿(169/0)。
 - **分支**：main
 - **概述**：复核印前路线 A 在制品并提交;全局放开 AI git 权限。swift build + swift test 全绿(169/0)。
