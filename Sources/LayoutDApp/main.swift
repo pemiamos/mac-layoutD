@@ -21,7 +21,7 @@ Options:
   --pdf-pages RANGE          Limit PDF export to pages such as "1,3" or "2-5".
   --pdf-crop-marks          Add crop and bleed guide marks to PDF export.
   --pdf-grid-guides         Add margin, column, and baseline guides to PDF export.
-  --pdf-version VERSION     Select PDF/X print version: none, pdfx1a, or pdfx3.
+  --pdf-version VERSION     Select RGB output intent tag: none, pdfx1a/SWOP, or pdfx3/FOGRA39.
   --export-png DIRECTORY    Export page preview PNG files.
   --png-pages RANGE         Limit PNG export to pages such as "1,3" or "2-5".
   --png-scale VALUE         Set PNG output scale, default 2.0.
@@ -63,7 +63,15 @@ if launchProject.exportPDFURL != nil
 
         var project = launchProject.project
         var document = LayoutEngine().layout(project: project)
-        var report = ProjectInspector().preflight(project: project, document: document)
+        var report = ProjectInspector().preflight(
+            project: project,
+            document: document,
+            exportOptions: PrepressExportOptions(
+                pdfxRequested: launchProject.pdfxVersion != .none,
+                pdfxLabel: launchProject.pdfxVersion.rawValue,
+                drawCropMarks: launchProject.exportPDFDrawCropMarks
+            )
+        )
 
         if let chapterLayoutTemplate = launchProject.chapterLayoutTemplate {
             let appliedCount = project.applyChapterLayoutTemplate(
@@ -72,7 +80,15 @@ if launchProject.exportPDFURL != nil
                 startPage: launchProject.chapterLayoutTemplateStartPage
             )
             document = LayoutEngine().layout(project: project)
-            report = ProjectInspector().preflight(project: project, document: document)
+            report = ProjectInspector().preflight(
+                project: project,
+                document: document,
+                exportOptions: PrepressExportOptions(
+                    pdfxRequested: launchProject.pdfxVersion != .none,
+                    pdfxLabel: launchProject.pdfxVersion.rawValue,
+                    drawCropMarks: launchProject.exportPDFDrawCropMarks
+                )
+            )
             print("Applied chapter template: \(chapterLayoutTemplate.rawValue), \(appliedCount) page plan(s)")
         }
 
@@ -84,7 +100,15 @@ if launchProject.exportPDFURL != nil
             if !result.appliedFixes.isEmpty {
                 project = result.project
                 document = LayoutEngine().layout(project: project)
-                report = ProjectInspector().preflight(project: project, document: document)
+                report = ProjectInspector().preflight(
+                    project: project,
+                    document: document,
+                    exportOptions: PrepressExportOptions(
+                        pdfxRequested: launchProject.pdfxVersion != .none,
+                        pdfxLabel: launchProject.pdfxVersion.rawValue,
+                        drawCropMarks: launchProject.exportPDFDrawCropMarks
+                    )
+                )
             }
             print("Applied preflight fixes: \(result.appliedFixes.count)")
         }
@@ -756,6 +780,15 @@ final class WorkspaceViewController: NSViewController {
                 return
             }
 
+            // Remember the chosen prepress-relevant settings so the live preflight
+            // panel and any exported preflight report reflect them.
+            self.appState.pdfExportOptions = PrepressExportOptions(
+                pdfxRequested: settingsState.pdfxVersion != .none,
+                pdfxLabel: settingsState.pdfxVersion == .none ? nil : settingsState.pdfxVersion.rawValue,
+                drawCropMarks: settingsState.drawCropMarks
+            )
+            self.appState.recalculateLayout()
+
             do {
                 try PDFExporter().export(
                     document: document,
@@ -816,7 +849,11 @@ final class WorkspaceViewController: NSViewController {
 
     func exportPreflightReport() {
         let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
-        let report = appState.inspectorEngine.preflight(project: appState.project, document: document)
+        let report = appState.inspectorEngine.preflight(
+            project: appState.project,
+            document: document,
+            exportOptions: appState.pdfExportOptions
+        )
         let savePanel = NSSavePanel()
         savePanel.title = "Export Preflight Report"
         savePanel.nameFieldStringValue = safeFileName(appState.project.metadata.title) + "-preflight.json"
@@ -991,16 +1028,20 @@ struct PDFExportSettingsView: View {
             }
             
             HStack {
-                Text("印刷标准:")
+                Text("输出意图:")
                     .frame(width: 80, alignment: .leading)
                 Picker("", selection: $state.pdfxVersion) {
                     Text("无 (标准 PDF)").tag(PDFXVersion.none)
-                    Text("PDF/X-1a (CMYK 印刷)").tag(PDFXVersion.pdfx1a)
-                    Text("PDF/X-3 (色彩管理)").tag(PDFXVersion.pdfx3)
+                    Text("RGB + SWOP intent (非 PDF/X)").tag(PDFXVersion.pdfx1a)
+                    Text("RGB + FOGRA39 intent (非 PDF/X)").tag(PDFXVersion.pdfx3)
                 }
                 .pickerStyle(.menu)
                 .frame(width: 200)
             }
+            Text("LayoutD 导出高质量 RGB/PDF；CMYK 分色与 PDF/X 合规校验交由印厂或 Acrobat/PitStop。")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.leading, 85)
             
             Toggle("添加印刷裁切线及出血标记", isOn: $state.drawCropMarks)
                 .toggleStyle(.checkbox)

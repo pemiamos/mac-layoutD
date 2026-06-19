@@ -355,7 +355,7 @@ final class PDFExporterTests: XCTestCase {
         XCTAssertEqual(unpackedProject.assets.first?.sourcePath, "assets/chapter-01/dummy.png")
     }
 
-    func testPDFXExportMetadataAndBoxes() throws {
+    func testOutputIntentExportDoesNotClaimPDFXCompliance() throws {
         let project = BookProject.sample
         let document = LayoutEngine().layout(project: project)
         let url = FileManager.default.temporaryDirectory
@@ -366,7 +366,8 @@ final class PDFExporterTests: XCTestCase {
             try? FileManager.default.removeItem(at: url)
         }
 
-        // Export as PDF/X-1a
+        // Export with a legacy SWOP output-intent tag. This is still an RGB PDF,
+        // so it must not claim PDF/X conformance.
         try PDFExporter().export(
             document: document,
             project: project,
@@ -403,19 +404,17 @@ final class PDFExporterTests: XCTestCase {
         XCTAssertEqual(Double(cropBox.width), expectedMediaWidth, accuracy: 0.1)
         XCTAssertEqual(Double(cropBox.height), expectedMediaHeight, accuracy: 0.1)
 
-        // Verify XMP metadata stream inside catalog for PDF/X compliance tags
         let catalog = try XCTUnwrap(pdf.catalog)
         var metadataStream: CGPDFStreamRef? = nil
-        XCTAssertTrue(CGPDFDictionaryGetStream(catalog, "Metadata", &metadataStream))
-        if let stream = metadataStream {
+        if CGPDFDictionaryGetStream(catalog, "Metadata", &metadataStream), let stream = metadataStream {
             var format: CGPDFDataFormat = .raw
             if let dataRef = CGPDFStreamCopyData(stream, &format) {
                 let xmlData = dataRef as Data
                 if let xmlString = String(data: xmlData, encoding: .utf8) {
-                    XCTAssertTrue(xmlString.contains("GTS_PDFXVersion"))
-                    XCTAssertTrue(xmlString.contains("PDF/X-1:2001"))
-                    XCTAssertTrue(xmlString.contains("GTS_PDFXConformance"))
-                    XCTAssertTrue(xmlString.contains("PDF/X-1a:2001"))
+                    XCTAssertFalse(xmlString.contains("GTS_PDFXVersion"))
+                    XCTAssertFalse(xmlString.contains("PDF/X-1:2001"))
+                    XCTAssertFalse(xmlString.contains("GTS_PDFXConformance"))
+                    XCTAssertFalse(xmlString.contains("PDF/X-1a:2001"))
                 } else {
                     XCTFail("XMP metadata stream could not be converted to String")
                 }
@@ -424,7 +423,8 @@ final class PDFExporterTests: XCTestCase {
             }
         }
 
-        // Verify OutputIntents in Document Catalog
+        // Verify OutputIntents in Document Catalog; this is an honest handoff hint,
+        // not a conformance claim.
         var outputIntents: CGPDFArrayRef?
         XCTAssertTrue(CGPDFDictionaryGetArray(catalog, "OutputIntents", &outputIntents))
         XCTAssertGreaterThan(CGPDFArrayGetCount(outputIntents!), 0)

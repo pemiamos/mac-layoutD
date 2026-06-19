@@ -17,8 +17,8 @@ public enum PDFExportError: Error, LocalizedError {
 
 public enum PDFXVersion: String, Codable, CaseIterable, Sendable {
     case none = "None"
-    case pdfx1a = "PDF/X-1a"
-    case pdfx3 = "PDF/X-3"
+    case pdfx1a = "RGB + SWOP intent"
+    case pdfx3 = "RGB + FOGRA39 intent"
 }
 
 public struct PDFExporter {
@@ -67,14 +67,9 @@ public struct PDFExporter {
             if pdfxVersion == .pdfx1a {
                 outputIntent[kCGPDFXOutputConditionIdentifier] = "CGATS TR 001" as CFString
                 outputIntent[kCGPDFXOutputCondition] = "CGATS TR 001 (SWOP)" as CFString
-                
-                auxiliaryInfo["GTS_PDFXVersion" as CFString] = "PDF/X-1:2001" as CFString
-                auxiliaryInfo["GTS_PDFXConformance" as CFString] = "PDF/X-1a:2001" as CFString
             } else if pdfxVersion == .pdfx3 {
                 outputIntent[kCGPDFXOutputConditionIdentifier] = "FOGRA39" as CFString
                 outputIntent[kCGPDFXOutputCondition] = "Coated FOGRA39" as CFString
-                
-                auxiliaryInfo["GTS_PDFXVersion" as CFString] = "PDF/X-3:2002" as CFString
             }
             
             // Try to load local system CMYK profile
@@ -93,10 +88,6 @@ public struct PDFExporter {
         guard let consumer = CGDataConsumer(data: data),
               let context = CGContext(consumer: consumer, mediaBox: &mediaBox, auxiliaryInfo as CFDictionary) else {
             throw PDFExportError.couldNotCreateContext
-        }
-
-        if pdfxVersion != .none {
-            addXMPMetadata(to: context, title: project.metadata.title, author: project.metadata.author, pdfxVersion: pdfxVersion)
         }
 
         let sortedPages = document.pages.sorted(by: { $0.number < $1.number })
@@ -660,57 +651,6 @@ public struct PDFExporter {
             width: rect.width,
             height: rect.height
         )
-    }
-
-    private func addXMPMetadata(to context: CGContext, title: String, author: String, pdfxVersion: PDFXVersion) {
-        guard pdfxVersion != .none else { return }
-        
-        let versionString: String
-        let conformanceString: String?
-        if pdfxVersion == .pdfx1a {
-            versionString = "PDF/X-1:2001"
-            conformanceString = "PDF/X-1a:2001"
-        } else {
-            versionString = "PDF/X-3:2002"
-            conformanceString = nil
-        }
-        
-        var xmp = """
-        <?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
-        <x:xmpmeta xmlns:x="adobe:ns:meta/">
-         <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-          <rdf:Description rdf:about=""
-            xmlns:pdf="http://ns.adobe.com/pdf/1.3/"
-            xmlns:xmp="http://ns.adobe.com/xap/1.0/"
-            xmlns:dc="http://purl.org/dc/elements/1.1/"
-            xmlns:pdfx="http://ns.adobe.com/pdfx/1.3/">
-           <dc:title>
-            <rdf:Alt>
-             <rdf:li xml:lang="x-default">\(title)</rdf:li>
-            </rdf:Alt>
-           </dc:title>
-           <dc:creator>
-            <rdf:Seq>
-             <rdf:li>\(author)</rdf:li>
-            </rdf:Seq>
-           </dc:creator>
-           <pdfx:GTS_PDFXVersion>\(versionString)</pdfx:GTS_PDFXVersion>
-        """
-        
-        if let conformanceString {
-            xmp += "   <pdfx:GTS_PDFXConformance>\(conformanceString)</pdfx:GTS_PDFXConformance>\n"
-        }
-        
-        xmp += """
-          </rdf:Description>
-         </rdf:RDF>
-        </x:xmpmeta>
-        <?xpacket end="w"?>
-        """
-        
-        if let data = xmp.data(using: .utf8) {
-            context.addDocumentMetadata(data as CFData)
-        }
     }
 
     private func maskPath(in rect: CGRect, shape: ImageMaskShape?) -> CGPath {

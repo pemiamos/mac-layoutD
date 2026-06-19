@@ -135,6 +135,7 @@ public enum PreflightIssueCategory: String, Codable, CaseIterable, Sendable {
     case layout
     case typography
     case tableOfContents
+    case prepress
 }
 
 public enum PreflightAutoFixKind: String, Codable, CaseIterable, Sendable {

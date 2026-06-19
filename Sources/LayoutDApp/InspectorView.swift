@@ -48,6 +48,7 @@ private enum IssueCategoryFilter: String, CaseIterable {
     case layout
     case typography
     case tableOfContents
+    case prepress
     case uncategorized
 
     var preflightCategory: PreflightIssueCategory? {
@@ -70,6 +71,8 @@ private enum IssueCategoryFilter: String, CaseIterable {
             return .typography
         case .tableOfContents:
             return .tableOfContents
+        case .prepress:
+            return .prepress
         }
     }
 
@@ -93,6 +96,8 @@ private enum IssueCategoryFilter: String, CaseIterable {
             return "排印"
         case .tableOfContents:
             return "目录"
+        case .prepress:
+            return "印前"
         case .uncategorized:
             return "未分类"
         }
@@ -118,6 +123,8 @@ private enum IssueCategoryFilter: String, CaseIterable {
             return category == .typography
         case .tableOfContents:
             return category == .tableOfContents
+        case .prepress:
+            return category == .prepress
         case .uncategorized:
             return category == nil
         }
@@ -875,6 +882,8 @@ struct InspectorView: View {
             return "排印"
         case .tableOfContents:
             return "目录"
+        case .prepress:
+            return "印前"
         }
     }
 

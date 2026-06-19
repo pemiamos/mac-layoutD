@@ -32,6 +32,11 @@ final class AppState: ObservableObject {
     @Published var frameBackgroundColors: [UUID: Color] = [:]
     @Published var frameStrokeColors: [UUID: Color] = [:]
     @Published var frameTextColors: [UUID: Color] = [:]
+
+    /// Last-used PDF export configuration, so the live preflight (and the exported
+    /// preflight report) reflect the prepress consequences of the user's chosen
+    /// PDF/X / crop-mark settings instead of always assuming defaults.
+    @Published var pdfExportOptions = PrepressExportOptions()
     
     private var undoStack: [BookProject] = []
     private var redoStack: [BookProject] = []
@@ -105,7 +110,7 @@ final class AppState: ObservableObject {
         baselineProj.appliedLayoutPlans = nil
         self.baselineDocument = engine.layout(project: baselineProj)
         
-        let report = inspectorEngine.preflight(project: project, document: doc)
+        let report = inspectorEngine.preflight(project: project, document: doc, exportOptions: pdfExportOptions)
         self.report = report
         
         updateAIPlans()

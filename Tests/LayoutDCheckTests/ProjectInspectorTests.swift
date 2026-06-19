@@ -380,9 +380,10 @@ final class ProjectInspectorTests: XCTestCase {
         XCTAssertEqual(report.layoutSummary?.totalFrames, 0)
         XCTAssertEqual(report.categoryCounts[PreflightIssueCategory.metadata.rawValue], 3)
         XCTAssertEqual(report.categoryCounts[PreflightIssueCategory.assets.rawValue], 5)
+        XCTAssertEqual(report.categoryCounts[PreflightIssueCategory.prepress.rawValue], 1)
         XCTAssertTrue(report.summaryLines.contains("Pages: 1"))
         XCTAssertTrue(report.summaryLines.contains("Frames: 0"))
-        XCTAssertTrue(report.summaryLines.contains("Issue categories: 2"))
+        XCTAssertTrue(report.summaryLines.contains("Issue categories: 3"))
     }
 
     func testPreflightReportSummarizesLayoutFrames() {

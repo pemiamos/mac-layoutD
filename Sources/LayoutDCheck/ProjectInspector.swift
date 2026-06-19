@@ -71,11 +71,20 @@ public struct ProjectInspector {
         return issues
     }
 
-    public func preflight(project: BookProject, document: LaidOutDocument? = nil) -> PreflightReport {
+    public func preflight(
+        project: BookProject,
+        document: LaidOutDocument? = nil,
+        exportOptions: PrepressExportOptions = .init()
+    ) -> PreflightReport {
         let documentIssues = document.map {
             $0.issues + LayoutDocumentValidator().validate(document: $0, project: project)
         } ?? []
-        let issues = deduplicatedIssues(inspect(project: project) + documentIssues)
+        let prepressIssues = PrepressInspector().inspect(
+            project: project,
+            document: document,
+            options: exportOptions
+        )
+        let issues = deduplicatedIssues(inspect(project: project) + documentIssues + prepressIssues)
         return PreflightReport(project: project, issues: issues, document: document)
     }
 
