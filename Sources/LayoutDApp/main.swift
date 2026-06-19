@@ -68,7 +68,7 @@ if launchProject.exportPDFURL != nil
             document: document,
             exportOptions: PrepressExportOptions(
                 pdfxRequested: launchProject.pdfxVersion != .none,
-                pdfxLabel: launchProject.pdfxVersion.rawValue,
+                pdfxLabel: launchProject.pdfxVersion.pdfxStandardName,
                 drawCropMarks: launchProject.exportPDFDrawCropMarks
             )
         )
@@ -85,7 +85,7 @@ if launchProject.exportPDFURL != nil
                 document: document,
                 exportOptions: PrepressExportOptions(
                     pdfxRequested: launchProject.pdfxVersion != .none,
-                    pdfxLabel: launchProject.pdfxVersion.rawValue,
+                    pdfxLabel: launchProject.pdfxVersion.pdfxStandardName,
                     drawCropMarks: launchProject.exportPDFDrawCropMarks
                 )
             )
@@ -105,7 +105,7 @@ if launchProject.exportPDFURL != nil
                     document: document,
                     exportOptions: PrepressExportOptions(
                         pdfxRequested: launchProject.pdfxVersion != .none,
-                        pdfxLabel: launchProject.pdfxVersion.rawValue,
+                        pdfxLabel: launchProject.pdfxVersion.pdfxStandardName,
                         drawCropMarks: launchProject.exportPDFDrawCropMarks
                     )
                 )
@@ -784,7 +784,7 @@ final class WorkspaceViewController: NSViewController {
             // panel and any exported preflight report reflect them.
             self.appState.pdfExportOptions = PrepressExportOptions(
                 pdfxRequested: settingsState.pdfxVersion != .none,
-                pdfxLabel: settingsState.pdfxVersion == .none ? nil : settingsState.pdfxVersion.rawValue,
+                pdfxLabel: settingsState.pdfxVersion.pdfxStandardName,
                 drawCropMarks: settingsState.drawCropMarks
             )
             self.appState.recalculateLayout()

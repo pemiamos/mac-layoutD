@@ -31,12 +31,12 @@ final class PrepressInspectorTests: XCTestCase {
         let project = makeProject(bleedMM: 3.0)
         let issues = PrepressInspector().inspect(
             project: project,
-            options: PrepressExportOptions(pdfxRequested: true, pdfxLabel: "RGB + SWOP intent")
+            options: PrepressExportOptions(pdfxRequested: true, pdfxLabel: "PDF/X-1a")
         )
         XCTAssertTrue(issues.contains {
             $0.category == .prepress
                 && $0.severity == .warning
-                && $0.message.contains("RGB + SWOP intent")
+                && $0.message.contains("PDF/X-1a")
                 && $0.message.contains("并非")
         })
     }
@@ -261,9 +261,9 @@ final class PrepressInspectorTests: XCTestCase {
         let report = ProjectInspector().preflight(
             project: project,
             document: nil,
-            exportOptions: PrepressExportOptions(pdfxRequested: true, pdfxLabel: "RGB + FOGRA39 intent")
+            exportOptions: PrepressExportOptions(pdfxRequested: true, pdfxLabel: "PDF/X-3")
         )
-        XCTAssertTrue(report.issues.contains { $0.category == .prepress && $0.message.contains("RGB + FOGRA39 intent") })
+        XCTAssertTrue(report.issues.contains { $0.category == .prepress && $0.message.contains("PDF/X-3") })
         XCTAssertTrue(report.issues.contains { $0.category == .prepress && $0.message.contains("低于常规印刷出血") })
     }
 }

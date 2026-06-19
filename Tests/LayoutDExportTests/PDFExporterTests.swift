@@ -486,4 +486,12 @@ final class PDFExporterTests: XCTestCase {
         )
         XCTAssertEqual(pngURLs.count, 1)
     }
+
+    func testPDFXVersionStandardNameMapsToShortLabel() {
+        // rawValue stays the UI/persistence label; pdfxStandardName is the short
+        // standard name used for honest preflight disclosure messages.
+        XCTAssertNil(PDFXVersion.none.pdfxStandardName)
+        XCTAssertEqual(PDFXVersion.pdfx1a.pdfxStandardName, "PDF/X-1a")
+        XCTAssertEqual(PDFXVersion.pdfx3.pdfxStandardName, "PDF/X-3")
+    }
 }

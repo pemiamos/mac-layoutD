@@ -19,6 +19,17 @@ public enum PDFXVersion: String, Codable, CaseIterable, Sendable {
     case none = "None"
     case pdfx1a = "RGB + SWOP intent"
     case pdfx3 = "RGB + FOGRA39 intent"
+
+    /// Short PDF/X standard name this output intent *resembles* but is not compliant
+    /// with — used for honest preflight disclosure messages. `rawValue` stays the
+    /// human-facing UI label (and is persisted / CLI-parsed), so it must not carry this.
+    public var pdfxStandardName: String? {
+        switch self {
+        case .none: return nil
+        case .pdfx1a: return "PDF/X-1a"
+        case .pdfx3: return "PDF/X-3"
+        }
+    }
 }
 
 public struct PDFExporter {
