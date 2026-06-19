@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-19 17:37 | codex | 新增独立 Ghostscript helper，把 LayoutD RGB PDF 转为 CMYK PDF/X-1a，不改 LayoutDExport/Swif
+- **分支**：feature-codex-gs-cmyk-pdfx
+- **概述**：新增独立 Ghostscript helper，把 LayoutD RGB PDF 转为 CMYK PDF/X-1a，不改 LayoutDExport/Swift 管线。脚本 scripts/to-cmyk-pdfx.sh 默认使用 /Library/Application Support/Adobe/Color/Profiles/JapanColor2011Coated.icc，找不到则回退 Euroscale/FOGRA/SWOP/Generic CMYK；生成自定义 PDF/X-1a pdfmark，嵌 OutputIntent，强制 CMYK 转换。实测普通 ICC 转换会把 RGB 黑字转富黑，采用 Ghostscript 10.03 的 -dBlackText=true 让正文黑字以 C=M=Y=0、K=100 方式输出；脚本注释已写明该策略与 Ghostscript AGPL 本地使用边界。已提交并推送：4fc6a09 feat: add Ghostscript CMYK PDF/X helper，分支 feature-codex-gs-cmyk-pdfx。
+- **改动文件**：scripts/to-cmyk-pdfx.sh
+- **检查**：bash -n scripts/to-cmyk-pdfx.sh: pass; scripts/to-cmyk-pdfx.sh --help: pass; swift run layoutD -- Samples/demo.md Samples/images --pdf-version pdfx1a --pdf-crop-marks --export-pdf /tmp/layoutd-rgb.pdf: pass; scripts/to-cmyk-pdfx.sh /tmp/layoutd-rgb.pdf /tmp/layoutd-cmyk-pdfx.pdf: pass, PDF/X-1a markers pass, OutputIntent pass, No DeviceRGB pass, TrimBox/BleedBox pass, font safety pass (Ghostscript outlined text/no remaining font resources), inkcov CMYK OK, K-only probe pure-K pixels=2339 with observed max CMY=0,0,0 and K range 221-255; run_checks build: pass; run_checks test: pass (170 tests, 0 failures)
+- **下一步**：可选：用印厂指定 ICC 通过 --icc PATH 再跑一次；若某本书第 1 页没有正文黑字，用 --probe-page/--probe-box 指到正文区域。若未来要随 app 分发 Ghostscript，先 record_decision 处理 AGPL/商业授权或替代工具。
+
 ## 2026-06-19 17:22 | claude | [派给 Codex] 写一个 Ghostscript 包装器:把 LayoutD 导出的 RGB PDF 转成印厂级 CMYK PDF/X-1a,且中文正文强制
 - **分支**：main
 - **概述**：[派给 Codex] 写一个 Ghostscript 包装器:把 LayoutD 导出的 RGB PDF 转成印厂级 CMYK PDF/X-1a,且中文正文强制 K-only(纯黑 K100/CMY0)。这是外部工具编排,非在 LayoutD 内自建 CMYK 管线。
