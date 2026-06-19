@@ -3,6 +3,32 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-19 17:22 | claude | [派给 Codex] 写一个 Ghostscript 包装器:把 LayoutD 导出的 RGB PDF 转成印厂级 CMYK PDF/X-1a,且中文正文强制
+- **分支**：main
+- **概述**：[派给 Codex] 写一个 Ghostscript 包装器:把 LayoutD 导出的 RGB PDF 转成印厂级 CMYK PDF/X-1a,且中文正文强制 K-only(纯黑 K100/CMY0)。这是外部工具编排,非在 LayoutD 内自建 CMYK 管线。
+- **改动文件**：尚未动手。建议新建独立 helper(如 scripts/to-cmyk-pdfx.sh 或 Tools/ 下小脚本),不要改 LayoutDExport 渲染逻辑、不要 import 到核心库。
+- **检查**：未跑。本任务验收靠脚本自带的校验(见下一步)。
+- **下一步**：【Codex 任务书】
+目标:一个命令行 helper,输入=LayoutD 导出的 RGB PDF + 目标 CMYK ICC(默认用系统自带 JapanColor2011Coated 或 EuroscaleCoated,路径在 /System/Library/ColorSync/Profiles/),输出=CMYK PDF/X-1a 文件。机器已装 gs 10.03(/opt/local/bin/gs)。
+
+硬性要求(验收标准):
+1) 产出是 PDF/X-1a 合规(嵌输出意图、无 RGB 对象、字体内嵌)。可用 gs 自身或 pdfinfo/校验脚本确认。
+2) ⭐最关键:中文正文黑字必须 K-only(C=M=Y=0, K=100),不能是富黑。朴素 ICC 转换会把 RGB(0,0,0)→富黑,必须避免。
+3) 图像转 CMYK;TrimBox/BleedBox 保留。
+4) 脚本自带验证步:转换后用 gs 的 inkcov/tiffsep 设备(或解析内容流)抽查正文区域,断言 CMY≈0、K 高;把结果打印出来。失败要明确报错。
+
+技术线索(不确定的留给你测,别硬套我给的 flag):
+- PDF/X 生成:gs 的 PDFX_def.ps 前导 + -dPDFX。
+- 转色:-sColorConversionStrategy=CMYK / -sProcessColorModel=DeviceCMYK / -sOutputICCProfile=目标.icc。
+- K-only 黑保留:这是难点。gs 直接转色默认会出富黑;可能需要 DeviceLink 配置文件(RGB→CMYK 且中性色映射到纯 K),或 gs 的黑保留参数,或后处理。请你实测哪条真能让正文落到 K100/CMY0,并在脚本注释里写清用了哪招。
+- 验证用 gs -sDEVICE=inkcov 看每页 CMYK 覆盖率,或 -sDEVICE=tiffsep 出分色片抽查。
+
+边界/铁律:
+- 不在 LayoutDExport 里写 CMYK 渲染;这是 LayoutD 之外的独立 helper(路线 A 的外部工具编排,见 DECISIONS 路线 A 决策,不触发路线 B)。
+- gs 是 AGPL:此 helper 仅作本地/个人交付用。若将来要随 app 分发,先 record_decision 处理授权(Artifex 商业授权 or 开源 or 换 pdfToolbox)。脚本头注释里标注这条。
+- 建议分支 feature/codex-gs-cmyk-pdfx。改完按新政策自跑验证、commit、push,并 write_handoff 注明 commit。
+- 测试素材:swift run layoutD -- Samples/demo.md Samples/images --pdf-version pdfx1a --pdf-crop-marks --export-pdf /tmp/rgb.pdf 先导出一个 RGB PDF 当输入。
+
 ## 2026-06-19 16:26 | claude | 补 2 条架构决策 + 验证印前路线 A 端到端生效。PDF/X 文案经查已诚实,无需改。
 - **分支**：main
 - **概述**：补 2 条架构决策 + 验证印前路线 A 端到端生效。PDF/X 文案经查已诚实,无需改。
