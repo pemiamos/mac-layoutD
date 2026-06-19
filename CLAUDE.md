@@ -9,4 +9,6 @@
 - **检查走白名单**：用 `run_checks("build")` / `run_checks("test")`，不要自己拼 shell 跑构建。
 - 详细分工与铁律见 `.ai/AGENTS.md`，可用 `get_agents_guide()` 读取。
 
-> git 写操作规范见全局 `~/.claude/CLAUDE.md`（一律走 GitHub Desktop，AI 不执行任何 git 写）。
+> git 规范见全局 `~/.claude/CLAUDE.md`：AI 可自主完成 git 全套（建分支/commit/push/merge），
+> 在 `run_checks` 通过后自动提交、不打断；唯一例外是改写远端历史等难撤回操作需先说明。
+> 提交后在 `write_handoff` 里注明 commit。
