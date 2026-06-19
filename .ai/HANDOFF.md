@@ -13,25 +13,22 @@
 ## 2026-06-19 10:02 | claude | 补充：让 .prepress 在 Inspector 预检面板成为一等筛选项。验收时发现 InspectorView 的 IssueCategoryFilter
 - **分支**：main
 - **概述**：补充：让 .prepress 在 Inspector 预检面板成为一等筛选项。验收时发现 InspectorView 的 IssueCategoryFilter 枚举缺 .prepress 分支——印前警告在"全部分类"下能显示(matches 对 .all 返回 true)，但没有独立"印前"筛选项。已补：枚举加 case prepress + preflightCategory/title("印前")/matches 三处分支。现 Inspector 预检区可单独筛"印前"类。验收方式：swift run layoutD 启动内置示例→右侧 Inspector 预检区默认即有 RGB 管线诚实披露警告(因导出默认 RGB)；触发导出 PDF 选 PDF/X-1a/3 确认后，新增 PDF/X 非合规披露警告，证明 GUI 导出设置已流进预检。
-- **改动文件**：Sources/LayoutDApp/InspectorView.swift（IssueCategoryFilter 增 .prepress：枚举/preflightCategory/title/matches）</changed_files>
-<parameter name="checks">build: pass（swift build）。未重跑 test（仅 UI 枚举补分支，无逻辑测试影响；上一轮 swift test 已全绿）
-- **检查**：(未跑)
+- **改动文件**：Sources/LayoutDApp/InspectorView.swift（IssueCategoryFilter 增 .prepress：枚举/preflightCategory/title/matches）
+- **检查**：build: pass（swift build）。未重跑 test（仅 UI 枚举补分支，无逻辑测试影响；上一轮 swift test 已全绿）
 - **下一步**：建议用户手动跑一次 swift run layoutD 做视觉验收（终端启动会弹 AppKit 窗口，内置示例自动加载）。若要更省心：可把导出对话框 PDF/X 选项文案改为"嵌入 CMYK 输出意图（非合规）"。路线 A（预检+诚实交接）至此：库检查 + CLI/GUI 接线 + 诚实 PDF/X + Inspector 印前筛选 全部闭环。git 写一律走 GitHub Desktop。
 
 ## 2026-06-19 09:59 | claude | 印前路线 A 第二刀：①把 PDF 导出设置接进 GUI 预检路径；②PDFExporter 去掉会误导的 PDF/X 合规声明。① GUI 之前 recalc
 - **分支**：main
 - **概述**：印前路线 A 第二刀：①把 PDF 导出设置接进 GUI 预检路径；②PDFExporter 去掉会误导的 PDF/X 合规声明。① GUI 之前 recalculateLayout()(喂实时 Inspector 面板)与 exportPreflightReport() 都用默认 options，PDF/X 诚实披露与"要裁切线但 bleed=0"在 GUI 里点不亮。现 AppState 新增 @Published pdfExportOptions(PrepressExportOptions)，recalculateLayout 与 exportPreflightReport 透传之；exportPDF 在用户确认时按 settingsState 的 pdfxVersion/drawCropMarks 写入 pdfExportOptions 并 recalculateLayout()，实时面板即时反映印前后果。(CLI/headless 路径此前已接好，未动。) ② PDFExporter 现仅嵌入诚实的 OutputIntent(CMYK 印刷目标 ICC 提示)，不再写 GTS_PDFXVersion/GTS_PDFXConformance，addXMPMetadata 整函数及调用已移除——RGB+透明文件不冒充 PDF/X 合规。由 Tests/LayoutDExportTests 的 testOutputIntentExportDoesNotClaimPDFXCompliance 锁定(断言 XMP 无 GTS_PDFXVersion/Conformance 且 OutputIntents 数组存在)。注：PDFExporter.swift 与该测试在本轮工作树中已是诚实实现，我已核对其与既定方案一致、测试通过；本轮我亲改的是 GUI 预检接线(AppState/main.swift)。
-- **改动文件**：Sources/LayoutDApp/AppState.swift（新增 pdfExportOptions，recalculateLayout 透传 exportOptions）, Sources/LayoutDApp/main.swift（exportPreflightReport 透传 pdfExportOptions；exportPDF 确认时记录设置并刷新预检）, Sources/LayoutDExport/PDFExporter.swift（已为诚实实现：移除 GTS_PDFXVersion/Conformance 与 XMP pdfx 包，保留 OutputIntent）, Tests/LayoutDExportTests/PDFExporterTests.swift（testOutputIntentExportDoesNotClaimPDFXCompliance 锁定诚实行为）</changed_files>
-<parameter name="checks">build: pass（swift build）, test: pass（swift test 全绿，含 PrepressInspectorTests 与 PDFExporterTests）
-- **检查**：(未跑)
+- **改动文件**：Sources/LayoutDApp/AppState.swift（新增 pdfExportOptions，recalculateLayout 透传 exportOptions）, Sources/LayoutDApp/main.swift（exportPreflightReport 透传 pdfExportOptions；exportPDF 确认时记录设置并刷新预检）, Sources/LayoutDExport/PDFExporter.swift（已为诚实实现：移除 GTS_PDFXVersion/Conformance 与 XMP pdfx 包，保留 OutputIntent）, Tests/LayoutDExportTests/PDFExporterTests.swift（testOutputIntentExportDoesNotClaimPDFXCompliance 锁定诚实行为）
+- **检查**：build: pass（swift build）, test: pass（swift test 全绿，含 PrepressInspectorTests 与 PDFExporterTests）
 - **下一步**：路线 A 预检+诚实交接主体已闭环（库检查 + CLI 接线 + GUI 接线 + 诚实 PDF/X）。后续可选：1) InspectorView 里给 .prepress 这一分类做合适的展示/分组与文案，确认实时面板能看到这些印前警告（建议手动跑一次 App 验收：选 PDF/X 导出→看 Inspector 是否冒出诚实披露）。2) PDF/X UI 文案：导出对话框里 PDF/X-1a/3 选项标签可改为"嵌入 CMYK 输出意图（非合规）"以免用户误解。3) 若要真 PDF/X 合规＝路线 B（自建 CMYK 色彩管线，需先 record_decision 撤销路线图"裁掉 PDF/X"）。git 写一律走 GitHub Desktop，AI 未执行任何 git。
 
 ## 2026-06-19 09:51 | claude | 印前路线 A（预检+诚实交接，贴路线图）第一刀落地：新增文档/导出配置级印前预检 PrepressInspector。结论先行——项目并非"没有印前引擎"，而是
 - **分支**：main
 - **概述**：印前路线 A（预检+诚实交接，贴路线图）第一刀落地：新增文档/导出配置级印前预检 PrepressInspector。结论先行——项目并非"没有印前引擎"，而是已有几何盒(MediaBox/Trim/Bleed/Crop)+裁切线+图像级预检(RGB/CMYK、DPI)，缺的是色彩管线；按路线图"裁掉 PDF/X、印前按需"，本刀只做预检与诚实披露，不碰 CMYK、不改导出渲染行为。PrepressInspector 覆盖：①RGB 输出管线诚实披露(不冒充 CMYK)；②PDF/X 标签诚实披露(非合规)；③出血/裁切一致性(要裁切线但 bleed=0 告警 / 0<bleed<3 提示)；④满版页按 BleedBox 判定覆盖、露白告警；⑤置入图按实际导出框宽计算 effectiveDPI<300 告警；⑥字体系统可用性 + OS/2 fsType 嵌入授权位检查；⑦发丝线(<0.25pt)告警。新增 PreflightIssueCategory.prepress，接入 ProjectInspector.preflight(exportOptions 默认参数，旧调用不破)。App 标准预检调用现自动带 prepress 检查(默认 RGB→色彩诚实披露等即生效)。
-- **改动文件**：Sources/LayoutDCore/LaidOutPage.swift（PreflightIssueCategory 增 case prepress）, Sources/LayoutDCheck/PrepressInspector.swift（新增）, Sources/LayoutDCheck/ProjectInspector.swift（preflight 加 exportOptions 参数并汇入 prepress issues）, Tests/LayoutDCheckTests/PrepressInspectorTests.swift（新增，16 用例）</changed_files>
-<parameter name="checks">build: pass（swift build）, test: pass（swift test，全绿，PrepressInspectorTests 16/16 通过）
-- **检查**：(未跑)
+- **改动文件**：Sources/LayoutDCore/LaidOutPage.swift（PreflightIssueCategory 增 case prepress）, Sources/LayoutDCheck/PrepressInspector.swift（新增）, Sources/LayoutDCheck/ProjectInspector.swift（preflight 加 exportOptions 参数并汇入 prepress issues）, Tests/LayoutDCheckTests/PrepressInspectorTests.swift（新增，16 用例）
+- **检查**：build: pass（swift build）, test: pass（swift test，全绿，PrepressInspectorTests 16/16 通过）
 - **下一步**：下一刀(均贴路线图 A，无需碰 CMYK)：1) 把 pdfxVersion/drawCropMarks 从 PDF 导出对话框(PDFExportSettingsState)透传进 preflight，使 PDF/X 诚实披露与"要裁切线但无出血"在用户真正选择时触发——目前标准预检走默认 options，这两条 pdfx/cropmark 专属规则尚未在 UI 路径点亮。2) 产品决策：是否在 PDFExporter 里改掉会误导的 GTS_PDFXConformance/version 元数据(部分印厂热文件夹按此 key 路由，属语义改动，建议先和用户确认再动)。3) InspectorView 确认 prepress 这一新分类在预检面板正常分组展示。注意：git 写一律走 GitHub Desktop，AI 未执行任何 git。
 
 ## 2026-06-19 02:59 | claude | relay MCP 接入完成,三客户端端到端验证通过。本项目是 Swift Package(非 Next.js),已把工作台 checks 设为 swift。这
