@@ -27,14 +27,15 @@
    Codex/Antigravity **不再 `merge` 到 dev/main，也不必 push**（共享 `.git`，Claude 本地就能看到你的分支）。
    **唯一例外**：改写远端历史或难撤回的操作（`push --force`、删远端分支、对已推送内容 `rebase`/`reset --hard`）先说明再做。
    注意：relay MCP 本身仍是 git 只读（`git_status` / `git_diff_summary` 只读），提交用各客户端自己的终端做，不经过 relay。
-3. **开工先读，收工必写。** 进来第一件事 `read_latest_handoff()`；
+3. **连续作业，不停下问确认。** 用户已预先授权整条 `.ai/QUEUE.md`。被唤起后连做本道「本批连续序列」里的多个任务、连续约 1 小时，做完一个自审（`scripts/review-idml.sh` PASS）就直接接下一个，**不要每做完一个就停下等用户点 Proceed / 回话**。Antigravity 的 IDE 若弹"计划审批"，本队列即审批，直接开干。一轮收尾写**一条**汇总 handoff。
+4. **开工先读，收工必写。** 进来第一件事 `read_latest_handoff()`；
    离开前最后一件事 `write_handoff()`，并在 summary/checks 里写明已提交的 commit。
    不写交接 = 没干完。
-4. **分支隔离。** 在自己按约定新建的 feature 分支上工作，不在别人的分支上乱提交。
+5. **分支隔离。** 在自己按约定新建的 feature 分支上工作，不在别人的分支上乱提交。
    命名约定：`feature/codex-*`（Codex）/ `feature/ag-*`（Antigravity）。停靠分支 `codex-lane`/`ag-lane` 是各自副本的"家"，每个新任务从最新 dev 起新分支。
-5. **不碰禁改文件。** 见 PROJECT_CONTEXT.md 的"绝对不要碰"清单。
+6. **不碰禁改文件。** 见 PROJECT_CONTEXT.md 的"绝对不要碰"清单。
    要动架构级的东西，先 `record_decision()` 说明理由。
-6. **检查走白名单。** 用 `run_checks()`，不要自己拼 shell 命令跑测试。
+7. **检查走白名单。** 用 `run_checks()`，不要自己拼 shell 命令跑测试。
 
 ## 分工
 

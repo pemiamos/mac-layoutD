@@ -12,17 +12,27 @@
 **Claude → 主仓库 `mac-layoutD`（集成区，`dev`/`main`）**。
 开工先确认 shell 在自己的副本里。详见 `.ai/AGENTS.md` 顶部「工作副本隔离」。
 
+## 🔁 连续作业模式（用户 2026-06-21 明确要求，最高优先）
+
+**用户已预先授权整条队列，连续干，不要停下来问确认。**
+- 一次被唤起后，**连做多个任务、连续作业约 1 小时**，做完一个**自己审核**（`scripts/review-idml.sh` PASS）就**直接接下一个**，不要每做完一个就停下等用户点"Proceed"/回话确认。
+- **Antigravity 注意**：你的 IDE 若弹"计划审批/Proceed"，**本队列就是审批**——视同已批准，直接开干，别等用户点。不要写一份 plan 然后停下问，要边做边交付。
+- 自审标准：每个任务 `run_checks()` + `scripts/review-idml.sh` 必须 PASS 才提交；FAIL 就**自己修**，修不动再在 handoff 里记下精确 repro 并跳到下一个能做的任务，**不要因此整体停摆**。
+- 一轮结束（约 1 小时 / 做完本批序列 / 撞到真阻塞）时，写**一条汇总 handoff**列出这轮所有 commit，不必每个任务一条。
+- **绝不碰 dev/main**：你们只在自己的 feature 分支提交，合 dev/main 是 Claude 的事。也**不要声称自己合并了 main**（之前出现过误报）。
+
 ## 流程铁律（每一棒都照做）
 
 **Codex / Antigravity（执行）每领一个任务：**
 1. 确认在**自己的副本目录**里（Codex=`…-codex` / AG=`…-ag`）。`read_latest_handoff()` + 读本文件，领**自己道**里最上面未打勾任务。
 2. 把该行 `- [ ]` 改成 `- [~] 认领: <你的名字> @ <分支名>`（挂牌，避免撞车），随手改一起带上。
 3. 在停靠分支上 `git fetch && git merge origin/dev` 同步最新 dev，再起 `feature/codex-<task>` 或 `feature/ag-<task>` 分支。
+   **每个新任务都从最新 dev 起新分支**，别在旧分支上叠（旧分支可能含已被取代的提交）。
 4. 实现 + 写**端到端验收**（不能只靠单测——本项目踩过「单测全绿但功能坏」的坑）。
 5. **必须** `bash scripts/review-idml.sh` 本地 PASS 后才提交（这就是 Claude 审核要跑的同一套）。
-6. commit（feat/fix 规范）到**自己的 feature 分支**+ 把该行改成 `- [x]`（注明 commit hash）+ `write_handoff` 同样注明 commit。
+6. commit（feat/fix 规范）到**自己的 feature 分支**+ 把该行改成 `- [x]`（注明 commit hash）。
    **不合 dev、不必 push**——共享 `.git`，Claude 本地直接看得到你的分支。
-7. 能连续跑就接着领下一个；不能就停，等下次被唤起。
+7. **直接接下一个任务**（见「连续作业模式」），不要停下问确认；一轮收尾写一条汇总 `write_handoff`。
 
 **Claude（集成）批量做：**
 1. 在主仓库里，攒几个 `feature/codex-*` / `feature/ag-*` 分支一起审，不逐个来回（共享 `.git`，无需等对方 push）。
@@ -48,6 +58,10 @@
 
 > 负责文件：`Sources/LayoutDImport/*`、`Sources/LayoutDCore/BookProject.swift`、
 > `Sources/LayoutDExport/IDMLExporter.swift`、`ZIPArchiveWriter.swift`
+>
+> **🔁 本批连续序列（按顺序连做，做完一个自审 PASS 就接下一个，不停下问）：E3-3 → E3-7 → E3-4 → E3-6**。
+> 约 1 小时或做到这批做完/撞阻塞为止，收尾写一条汇总 handoff。注意斜体导出已用 `Skew="12"`、
+> 粗体用 `FauxBold="true"`（别用 `FauxItalic` 或 `FontStyle` 字符串，已验证那两个对 CJK 不可见/出粉色替代字形）。
 
 - [x] **E3-1 行内格式补全到所有 block** — Codex @ `feature/codex-inline-blocks`, commit `8201059`
   - 目标：当前只普通正文段落持久化 inlineRuns；扩到标题/列表/引用/callout。先抽一个统一的 `Paragraph` 构造 helper，再让所有 Markdown block 分支走它。
@@ -105,6 +119,11 @@
 
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDExport/PDFExporter.swift`、
 > `PNGExporter.swift`、`Sources/LayoutDApp/*`
+>
+> **🔁 本批连续序列（按顺序连做，做完一个自审 PASS 就接下一个，不停下问）：E3-2 → 校对批注层**。
+> 约 1 小时或做到这批做完/撞阻塞为止，收尾写一条汇总 handoff。
+> ⚠️ **从最新 dev 起新分支 `feature/ag-e3-2`**，**别再用旧分支 `feature/ag-inline-preview`**——
+> 它上面那条 `e05a66d`（FauxItalic）已被 dev 的 `Skew` 修复取代，叠在旧分支上会把斜体修复冲掉。
 
 - [ ] **E3-2 行内格式预览渲染**
   - 目标：PDF/PNG/Canvas 三处预览按 `inlineRuns` 切粗/斜（当前预览整段同字重，仅 IDML 已保真）。`LayoutEngine.swift` 的 `addText` 若需精确测量，把 run 透传进 measurement（已按字符类切复合字体，扩成叠加 emphasis）。
