@@ -125,7 +125,16 @@ public enum ChineseTypesetting {
                         }
                         
                         if run.emphasis.contains(.italic) {
-                            var skewMatrix = CGAffineTransform(a: 1.0, b: 0.0, c: CGFloat(tan(12.0 * Double.pi / 180.0)), d: 1.0, tx: 0.0, ty: 0.0)
+                            var skewMatrix: CGAffineTransform
+                            if style.layoutDirection == .vertical {
+                                // Vertical italic: vertical lines stay vertical, horizontal lines tilt.
+                                // Shear along the y-axis: y' = y + x * tan(12°)
+                                skewMatrix = CGAffineTransform(a: 1.0, b: CGFloat(tan(12.0 * Double.pi / 180.0)), c: 0.0, d: 1.0, tx: 0.0, ty: 0.0)
+                            } else {
+                                // Horizontal italic: horizontal lines stay horizontal, vertical lines tilt.
+                                // Shear along the x-axis: x' = x + y * tan(12°)
+                                skewMatrix = CGAffineTransform(a: 1.0, b: 0.0, c: CGFloat(tan(12.0 * Double.pi / 180.0)), d: 1.0, tx: 0.0, ty: 0.0)
+                            }
                             font = CTFontCreateCopyWithAttributes(font, fontSize, &skewMatrix, nil)
                         }
                         
