@@ -68,10 +68,18 @@
   - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`、`Sources/LayoutDCore/BookProject.swift`(如需)。
   - 验收：`printf '## **粗**标题\n\n- 列表*斜*项\n> 引用**强调**\n'` 导出 IDML 后，标题/列表/引用里的强调都出对应 FontStyle；`scripts/review-idml.sh` PASS。
 
-- [x] **E3-3 傍点（Kenten 着重号）** — Codex @ `feature/codex-e3-3-kenten`, commit `27b5578`
-  - 目标：`InlineEmphasis.kenten`（已改名，原 typo `kentem` 已修）落地——定一种 Markdown 语法（如 `==着重==` 或约定）→ 解析成 kenten run → IDML 用 `KentenKind`/着重号属性输出。
+- [~] **E3-3 傍点（Kenten 着重号）— Claude 审核退回，需修嵌套 bug**（接着在 `feature/codex-e3-3-kenten` 上修）
+  - 目标：`InlineEmphasis.kenten` 落地——`==着重==` → kenten run → IDML `KentenKind` 属性。
   - 文件：`MarkdownBookImporter.swift`（语法解析）、`IDMLExporter.swift`（IDML 属性输出）。
-  - 验收：着重段导出 IDML，解包后对应 CharacterStyleRange 含着重号属性；端到端探针断言 + 用户在 InDesign 人工确认显示傍点。
+  - ✅ **已对的部分**：纯 `==着重==`（不嵌套）在标题/列表/引用/callout/正文里都正确出 `KentenKind="KentenSesameDot"`；ASCII `a==b` 不误判；`scripts/review-idml.sh` PASS（183 测试）。
+  - ❌ **退回原因（Claude 复审实测，commit `27b5578`）**：傍点与 `*`/`**` **嵌套**时解析器状态错乱。repro：
+    `printf '一 ==**A**== 二 **==B==** 三 ==*C*== 四 *==D==* 五。\n' | 导出 IDML`，解包查 Story：
+    - `==**A**==`（傍点套粗）：❌ 漏出字面 `*`，A 变成 `Skew`(斜体) 不是 `FauxBold`，且**斜体污染到后面的"二""三"**（plain 文字被加了 Skew）。
+    - `**==B==**`（粗套傍点）：⚠️ B 多带了不该有的 `Skew`。
+    - `==*C*==`（傍点套斜）：❌ 导出成 `C*`，字面星号粘在内容里。
+    - `*==D==*`（斜套傍点）：✅ 正确（`Skew`+`Kenten`）。
+    根因方向：`isValidInlineDelimiter` 的 CJK flanking 判定在 `==` 被消费后，对紧跟的 `**`/`*` 开/闭判定失误，导致 `**` 降级成单 `*` 斜体、配对错位、状态泄漏到段落后续。
+  - **修复验收**：上面 4 种嵌套写法导出后，A=粗+傍点、B=粗+傍点、C=斜+傍点、D=斜+傍点，**均无字面 `*` 残留、无 emphasis 渗染到相邻 plain 文字**；补这 4 个端到端断言；`scripts/review-idml.sh` 仍 PASS。修好后用户再在 InDesign 肉眼确认傍点显示。
 
 - [ ] **E3-7 脚注 → IDML**
   - 目标：`anchoredFootnoteIds` 映射到 IDML 脚注（Footnote 元素），而非当前的纯文字处理。
