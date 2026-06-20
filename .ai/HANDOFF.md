@@ -3,6 +3,28 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 00:25 | codex | 完成行内字符级格式阶段 1，已提交 b26e1ca
+- **分支**：feature/codex-inline-runs
+- **概述**：新增可选 `Paragraph.inlineRuns`，以基于 Swift Character 的 location/length 保留粗体、斜体、粗斜嵌套与未来着重号/颜色 token 扩展，同时继续以拍平后的 `Paragraph.text` 作为旧渲染和旧文件兼容真值。Markdown 正文导入现在解析 `**/__`、`*/_` 并保留 runs，代码跨度不着重、转义符保持字面量。IDMLExporter 通过 `PageFrame.sourceParagraphId` 找回源段落，把 runs 切成多个 CharacterStyleRange，以 FontStyle=Bold/Italic/Bold Italic 输出；映射会忽略排版引擎新增的中西文空格并正确跨换行/分页片段对齐。
+- **改动文件**：commit b26e1ca `feat(idml): preserve inline emphasis runs`：Sources/LayoutDCore/BookProject.swift、Sources/LayoutDImport/MarkdownBookImporter.swift、Sources/LayoutDExport/IDMLExporter.swift、Tests/LayoutDCoreTests/LayoutDCoreTests.swift、Tests/LayoutDImportTests/MarkdownBookImporterTests.swift、Tests/LayoutDExportTests/IDMLExporterTests.swift。本条另更新 .ai/HANDOFF.md。
+- **检查**：`swift build` pass；`swift test` pass（179 XCTest，0 failures）；新增 3 个定向测试覆盖旧 JSON 缺 inlineRuns 的兼容解码、Markdown 粗/斜/粗斜嵌套解析、IDML 跨行 CharacterStyleRange 及自动中西文空格对齐。实现/测试 commit：b26e1ca。
+- **下一步**：【人工验收】用 InDesign 中文版打开含粗/斜 Markdown 的导出 IDML，确认实际字体族存在 Bold/Italic/Bold Italic 字形且局部样式视觉正确。阶段 2：PDF/PNG/Canvas 预览按 inlineRuns 切字体；补着重号 Kenten 映射。当前导入只为普通正文段落持久化 runs，若要标题、列表、引用、callout 同样保真，应抽取统一的 `Paragraph` 构造 helper 后扩展所有 Markdown block 分支。
+
+## 2026-06-21 00:19 | claude | 收口本棒:已把 feature/codex-idml-e2-batch(commit b7ba1fd = E2-2 组件填色描边 + E2-3 简中禁则集 + 
+- **分支**：main
+- **概述**：收口本棒:已把 feature/codex-idml-e2-batch(commit b7ba1fd = E2-2 组件填色描边 + E2-3 简中禁则集 + E2-6 原生 ZIP32 + E2-7 GUI 导出入口)审查通过并合并 main(merge 0961960)、push origin/main、删本地特性分支。另:发现 stash@{0} 含两条从 handoff 日志漏掉的真实交接(14:05 codex E2-1、13:54 claude E2 规划),已补回 HANDOFF.md 正确时间位(commit 95f8330)后再 drop,stash 现已空。验证:swift build/test 176 XCTest 全过;demo.idml 端到端导出 mimetype store-first + Links 相对链接 + 全 XML well-formed。下面给下一棒(Codex)派定盲点①「行内字符级格式」任务书。
+- **改动文件**：main 现含:0961960(merge E2 批次)、95f8330(补交接)、b7ba1fd(E2-2/3/6/7)。已 push origin/main。本棒新提交仅 95f8330(.ai/HANDOFF.md)。
+- **检查**：build: pass。test: pass(176 XCTest,0 failures)。端到端:swift run layoutD -- Samples/demo.md Samples/images --export-idml → mimetype 首条 Stored(0%) + Links/cell-diagram.png 旁置 + designmap/Spreads/Stories/Resources 全 well-formed + 21 Story 含 Content。merge/push/删分支/drop stash 均成功,工作区干净,仅余 main。
+- **下一步**：【给 Codex — 盲点① 行内字符级格式(粗/斜/着重),分两阶段】根因:不在导出层,在模型+导入层——Paragraph.text 是纯 String(Sources/LayoutDCore/BookProject.swift:279),无行内 run;Markdown 导入在 MarkdownBookImporter.swift:777 用 strippingPairedInlineDelimiter("**",…) 把 **/* 标记剥掉、信息丢失;引擎 addText(LayoutEngine.swift:229) 和 IDML 导出(IDMLExporter.swift:615 每行一个 [No character style] CharacterStyleRange)都只见纯字符串。
+
+设计铁律(最小爆炸半径,别动 text 字段):保留 Paragraph.text 为「拍平后的纯字符串」当回退真值(测量/旧渲染/旧 .layoutd 全不破),只【新增可选】 Paragraph.inlineRuns: [InlineRun]? —— InlineRun = { range(基于 text 的字符区间或 length 序列), emphasis: Set<{bold,italic,...}>, 可选 colorTokenRef }。Codable 旧文件缺键解码为 nil(照 schemaVersion 向后兼容惯例)。
+
+阶段1(主交付优先,本棒做):①LayoutDCore 加 InlineRun + Paragraph.inlineRuns?(含 schemaVersion 兼容测试);②MarkdownBookImporter 改为解析 **bold**/*italic* 成 runs 并仍产出拍平 text(不再仅 strip);③IDMLExporter 文本框导出按 run 切多个 CharacterStyleRange:bold/italic 用 InDesign 局部覆盖 FontStyle("Bold"/"Italic"/"Bold Italic")或映射 CharacterStyle(着重号用 KentenKind/UnderlineOn,可后置);run 边界落在每行 line break 时要正确切分。验收:demo.md 里带 **强调** 的段落导出 IDML 后,InDesign 中该词为粗体(用户/Antigravity 视觉验);swift test 全过 + 新增 run 导出断言。涉及 BookProject/MarkdownBookImporter/IDMLExporter + Tests。走 feature/codex-* 分支、run_checks 通过后提交、写 handoff 注明 commit。
+
+阶段2(可后置,另起一棒):PDF/PNG/Canvas 三处预览渲染按 run 切字体粗斜(当前预览仍整段同字重,不阻塞主交付 IDML);着重号(傍点)完整映射。引擎 addText 若要预览精确需把 run 透传进 measurement(已按字符类切复合字体,扩成按 run 叠加 emphasis)。
+
+【其余在排队】E2-4 对开跨页、E2-5 固定页→MasterSpread/非矩形蒙版(见 development-plan E2 表)。盲点②表格原生 Table、③页眉页脚自动页码/TOC/脚注、④token→CMYK swatch、⑤Mojikumi/基线网格——建议 Claude 把这批补成 development-plan 新「E3 内容保真」分组(尚未落文档)。基础设施:无 CI、IDML 测试缺 RNG schema 校验与 golden 基线、relay run_checks(test) 末行仍误显 0 tests(实际 176 过)。
+
 ## 2026-06-21 00:00 | claude | 审查通过 E2-6(原生 zip 写入) + E2-7(GUI 导出 IDML 入口),已落地为 commit b7ba1fd「feat(idml): comp
 - **分支**：feature/codex-idml-e2-batch
 - **概述**：审查通过 E2-6(原生 zip 写入) + E2-7(GUI 导出 IDML 入口),已落地为 commit b7ba1fd「feat(idml): complete E2 export enhancements」。代码审查:①新增纯 Swift ZIPArchiveWriter(ZIP32 store-first,自带 CRC32、UInt16/UInt32 边界与路径穿越校验、原子写),IDMLExporter.writePackage 改用之,彻底去掉 IDML 路径上的 /usr/bin/zip 外部进程依赖;②确认 .idml 包内只含 XML(纯文本),置入图走 copyPackagedLinks 复制到旁边 Links/(E2-1),故 writer 只处理 String content 非 bug;③残留的 /usr/bin/zip 在 ResourceBundlePackager.swift,是另一个资源包导出器、不在 IDML 路径,E2-6 范围正确;④E2-7 在 LayoutDApp File 菜单加「Export IDML...」(⌘D)+ 导出选项面板(IDMLExportSettingsState/View)+ require-export-ready 预检闸门。
