@@ -637,6 +637,56 @@ final class WorkspaceViewController: NSViewController {
 
             case .hand:
                 break
+
+            case .annotation:
+                // 1. Check if clicking close to an existing annotation to delete it
+                let threshold: Double = 15.0
+                if let hitAnnotation = self.appState.project.safeAnnotations.first(where: { ann in
+                    ann.pageNumber == pageNum &&
+                    sqrt(pow(ann.x - Double(localPoint.x), 2) + pow(ann.y - Double(localPoint.y), 2)) < threshold
+                }) {
+                    let alert = NSAlert()
+                    alert.messageText = "删除批注"
+                    alert.informativeText = "确定要删除这条批注吗？\n\"\(hitAnnotation.text)\""
+                    alert.addButton(withTitle: "删除")
+                    alert.addButton(withTitle: "取消")
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        self.appState.updateProject { project in
+                            var currentAnnotations = project.safeAnnotations
+                            currentAnnotations.removeAll(where: { $0.id == hitAnnotation.id })
+                            project.safeAnnotations = currentAnnotations
+                        }
+                    }
+                    return
+                }
+
+                // 2. Add new annotation
+                let alert = NSAlert()
+                alert.messageText = "添加批注"
+                alert.informativeText = "请输入要在此处添加的校对批注内容："
+                alert.addButton(withTitle: "添加")
+                alert.addButton(withTitle: "取消")
+                
+                let inputTextField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+                inputTextField.placeholderString = "批注内容"
+                alert.accessoryView = inputTextField
+                
+                if alert.runModal() == .alertFirstButtonReturn {
+                    let text = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !text.isEmpty {
+                        self.appState.updateProject { project in
+                            var currentAnnotations = project.safeAnnotations
+                            let newAnnotation = BookAnnotation(
+                                pageNumber: pageNum,
+                                x: Double(localPoint.x),
+                                y: Double(localPoint.y),
+                                text: text
+                            )
+                            currentAnnotations.append(newAnnotation)
+                            project.safeAnnotations = currentAnnotations
+                        }
+                    }
+                }
             }
         }
     }

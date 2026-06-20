@@ -19,6 +19,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     public var colorMode: String?
     /// Historical snapshots of layout quality metrics, captured over time.
     public var qualityMetricsHistory: [QualityHistoryEntry]?
+    public var annotations: [BookAnnotation]?
 
     public init(
         schemaVersion: Int = BookProject.currentSchemaVersion,
@@ -32,7 +33,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         savedLayoutTemplates: [SavedLayoutTemplate]? = nil,
         lockedPages: Set<Int>? = nil,
         colorMode: String? = nil,
-        qualityMetricsHistory: [QualityHistoryEntry]? = nil
+        qualityMetricsHistory: [QualityHistoryEntry]? = nil,
+        annotations: [BookAnnotation]? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.id = id
@@ -46,6 +48,12 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         self.lockedPages = lockedPages
         self.colorMode = colorMode
         self.qualityMetricsHistory = qualityMetricsHistory
+        self.annotations = annotations
+    }
+
+    public var safeAnnotations: [BookAnnotation] {
+        get { annotations ?? [] }
+        set { annotations = newValue }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -61,6 +69,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         case lockedPages
         case colorMode
         case qualityMetricsHistory
+        case annotations
     }
 
     public init(from decoder: Decoder) throws {
@@ -77,6 +86,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         lockedPages = try container.decodeIfPresent(Set<Int>.self, forKey: .lockedPages)
         colorMode = try container.decodeIfPresent(String.self, forKey: .colorMode)
         qualityMetricsHistory = try container.decodeIfPresent([QualityHistoryEntry].self, forKey: .qualityMetricsHistory)
+        annotations = try container.decodeIfPresent([BookAnnotation].self, forKey: .annotations)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -93,6 +103,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         try container.encodeIfPresent(lockedPages, forKey: .lockedPages)
         try container.encodeIfPresent(colorMode, forKey: .colorMode)
         try container.encodeIfPresent(qualityMetricsHistory, forKey: .qualityMetricsHistory)
+        try container.encodeIfPresent(annotations, forKey: .annotations)
     }
 
     /// Resolves a color token id to a hex value under the project's active color
@@ -504,5 +515,21 @@ public struct QualityHistoryEntry: Codable, Equatable, Sendable {
         self.missingCaptionAssets = missingCaptionAssets
         self.blockingErrors = blockingErrors
         self.layoutIssues = layoutIssues
+    }
+}
+
+public struct BookAnnotation: Codable, Equatable, Sendable, Identifiable {
+    public var id: UUID
+    public var pageNumber: Int
+    public var x: Double       // layout coordinate X
+    public var y: Double       // layout coordinate Y
+    public var text: String
+
+    public init(id: UUID = UUID(), pageNumber: Int, x: Double, y: Double, text: String) {
+        self.id = id
+        self.pageNumber = pageNumber
+        self.x = x
+        self.y = y
+        self.text = text
     }
 }

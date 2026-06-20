@@ -45,6 +45,32 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(matrix.c, CGFloat(tan(12.0 * Double.pi / 180.0)), accuracy: 0.001)
     }
 
+    func testAnnotationsPersistenceAndMapping() throws {
+        var project = BookProject(metadata: ProjectMetadata(title: "Test Project", author: "Antigravity"))
+        XCTAssertEqual(project.safeAnnotations.count, 0)
+        
+        let ann = BookAnnotation(pageNumber: 2, x: 100.0, y: 150.0, text: "这里需要修改样式")
+        project.safeAnnotations = [ann]
+        XCTAssertEqual(project.safeAnnotations.count, 1)
+        XCTAssertEqual(project.safeAnnotations[0].text, "这里需要修改样式")
+        
+        // Test JSON round-trip compatibility
+        let data = try ProjectFile.encode(project)
+        let decoded = try ProjectFile.decode(data)
+        XCTAssertEqual(decoded.safeAnnotations.count, 1)
+        XCTAssertEqual(decoded.safeAnnotations[0].pageNumber, 2)
+        XCTAssertEqual(decoded.safeAnnotations[0].x, 100.0)
+        XCTAssertEqual(decoded.safeAnnotations[0].y, 150.0)
+        XCTAssertEqual(decoded.safeAnnotations[0].text, "这里需要修改样式")
+        
+        // Test legacy JSON decoding without annotations field
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "annotations")
+        let legacyData = try JSONSerialization.data(withJSONObject: json)
+        let legacyDecoded = try ProjectFile.decode(legacyData)
+        XCTAssertEqual(legacyDecoded.safeAnnotations.count, 0)
+    }
+
     func testParagraphInlineRunsRoundTripAndLegacyDecode() throws {
         let paragraph = Paragraph(
             kind: .body,

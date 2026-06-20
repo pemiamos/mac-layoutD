@@ -187,6 +187,7 @@ public enum LayoutTool: String, CaseIterable, Sendable {
     case type
     case hand
     case zoom
+    case annotation
 
     public var displayName: String {
         switch self {
@@ -197,6 +198,7 @@ public enum LayoutTool: String, CaseIterable, Sendable {
         case .type: return "文字工具"
         case .hand: return "手形工具"
         case .zoom: return "缩放工具"
+        case .annotation: return "批注工具"
         }
     }
 
@@ -209,6 +211,7 @@ public enum LayoutTool: String, CaseIterable, Sendable {
         case .type: return "textformat"
         case .hand: return "hand.raised.fill"
         case .zoom: return "magnifyingglass"
+        case .annotation: return "bubble.left.fill"
         }
     }
 }
