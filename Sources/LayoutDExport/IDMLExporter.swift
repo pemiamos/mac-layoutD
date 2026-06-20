@@ -706,17 +706,14 @@ public struct IDMLExporter {
             start = index
         }
         return ranges.map { content, emphasis in
-            let fontStyle: String
-            if emphasis.contains(.bold) && emphasis.contains(.italic) {
-                fontStyle = " FontStyle=\"Bold Italic\""
-            } else if emphasis.contains(.bold) {
-                fontStyle = " FontStyle=\"Bold\""
-            } else if emphasis.contains(.italic) {
-                fontStyle = " FontStyle=\"Italic\""
-            } else {
-                fontStyle = ""
-            }
-            return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(fontStyle)><Content>\(esc(content))</Content></CharacterStyleRange>"
+            // 用 FauxBold/FauxItalic（算法模拟）而非 FontStyle="Bold" 字符串：
+            // FontStyle 要求 Fonts.xml 里真有同名字重的字体资源，否则 InDesign 找不到
+            // 对应字重，会用替代字形顶上（视觉上是粉色高亮，等于没生效）。Faux* 不依赖
+            // 字体是否真有 Bold/Italic 变体（中文宋体常没有），稳定出效果。
+            var attrs = ""
+            if emphasis.contains(.bold) { attrs += " FauxBold=\"true\"" }
+            if emphasis.contains(.italic) { attrs += " FauxItalic=\"true\"" }
+            return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(attrs)><Content>\(esc(content))</Content></CharacterStyleRange>"
         }.joined(separator: "\n")
     }
 

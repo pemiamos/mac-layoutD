@@ -37,9 +37,9 @@ final class IDMLExporterTests: XCTestCase {
         try IDMLExporter().export(document: document, project: project, to: output)
 
         let story = try entry(output, "Stories/Story_uStory0_0.xml")
-        XCTAssertTrue(story.contains("FontStyle=\"Bold\"><Content>ATP</Content>"), "自动插入的中西文空格不应破坏 run 对齐")
-        XCTAssertTrue(story.contains("FontStyle=\"Italic\"><Content>斜体</Content>"))
-        XCTAssertTrue(story.contains("FontStyle=\"Bold Italic\"><Content>粗斜</Content>"))
+        XCTAssertTrue(story.contains("FauxBold=\"true\"><Content>ATP</Content>"), "自动插入的中西文空格不应破坏 run 对齐")
+        XCTAssertTrue(story.contains("FauxItalic=\"true\"><Content>斜体</Content>"))
+        XCTAssertTrue(story.contains("FauxBold=\"true\" FauxItalic=\"true\"><Content>粗斜</Content>"))
         XCTAssertEqual(matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count, 2)
     }
 
