@@ -10,6 +10,13 @@
 - **检查**：无代码改动（仅排队列）；commit cf9b3f1 已推 origin/dev。
 - **下一步**：Antigravity：在 ag-lane 上 git merge origin/dev 同步本批队列，按 E3-2b → E3-4p →（E3-3p 视依赖）顺序连做，每项从最新 dev 起 feature/ag-<task> 分支、自审 review-idml.sh PASS 再提交，一轮收尾写汇总 handoff。Claude：待 AG 交回竖排/表格分支后批量复审 + 出 PNG 交用户视觉验。Codex：E3-3 傍点嵌套 bug 仍待修，修好 E3-3 后 AG 的 E3-3p 才能起。
 
+## 2026-06-21 05:48 | codex | 修复 E3-3 Kenten 嵌套解析退回项，代码提交 dfd6ac8（fix(import): preserve nested kenten emphasis）
+- **分支**：feature/codex-e3-3-kenten
+- **概述**：已修复 Claude 复审退回的 `==...==` 与 `*`/`**` 嵌套状态错配。把 `=` 识别为内联分隔符边界，因此 `==**A**==`、`**==B==**` 解析为粗体+傍点，`==*C*==`、`*==D==*` 解析为斜体+傍点；无字面星号残留，也不会向相邻普通文本泄漏样式。同步最新 dev 的交接文本冲突已提交为 `8489919 merge(dev): sync E3-3 review feedback`；代码修复提交为 `dfd6ac8 fix(import): preserve nested kenten emphasis`。
+- **改动文件**：`Sources/LayoutDImport/MarkdownBookImporter.swift`（`=` 作为 delimiter boundary）；`Tests/LayoutDImportTests/MarkdownBookImporterTests.swift`（四种嵌套导入回归）；`Tests/LayoutDExportTests/IDMLExporterTests.swift`（四种组合的 CharacterStyleRange 属性与无泄漏断言）；`.ai/QUEUE.md`、`.ai/HANDOFF.md`（状态与交接）。
+- **检查**：新增导入定向测试 PASS；新增 IDML 导出定向测试 PASS；真实 `/private/tmp/layoutd-kenten-nested.md` → `/private/tmp/layoutd-kenten-nested.idml` 解包确认 A/B 为 `FauxBold+Kenten`、C/D 为 `Skew+Kenten`，普通片段未带样式；`bash scripts/review-idml.sh` PASS（`swift build` PASS，`swift test` 185 tests / 0 failures，IDML 探针 6/6）。
+- **下一步**：交 Claude 复审 `dfd6ac8` 并按需合入 dev；合入前后用户仍需在 InDesign 肉眼确认 Kenten 傍点的具体外观。若复审通过，Codex 下一项为 E3-7「脚注 → IDML」。
+
 ## 2026-06-21 05:41 | claude | 复审并合并 Antigravity 本批两道（feature/ag-e3-2，commit 44e2873 + 374c28e）——【已合 dev】。① E3-
 - **分支**：dev
 - **概述**：复审并合并 Antigravity 本批两道（feature/ag-e3-2，commit 44e2873 + 374c28e）——【已合 dev】。① E3-2 行内格式预览渲染：inlineRuns 一路透传进 LayoutEngine 的测量/断行/避头尾/孤寡行/分栏续接及 Canvas/PDF/PNG 三处绘制；斜体用 12° skew 矩阵（与 IDML Skew=12 同算法，预览↔导出对齐），粗体用 boldTrait；InlineRun.mapRuns 处理子串/续接 run 偏移；测试真断言到渲染层（boldTrait 命中、skew c=tan12°）。② 校对批注层：BookAnnotation 可选字段 + safeAnnotations + 旧档 decode 向后兼容，持久化进项目 JSON，未碰 IDMLExporter，确认不入 IDML 正文。review-idml.sh 在该分支 PASS（184 tests，比 dev 多 2）。已导 /tmp/emphasis_check.md 的预览 PNG：page-003 肉眼可见中文「粗体强调」与英文「bold word」字重明显加重，粗体视觉验收通过；斜体段被 demo 模板小文本框截断未露出，靠单测+同算法锁定。PNG 已放用户桌面待其放大确认斜体。

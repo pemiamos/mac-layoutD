@@ -806,7 +806,7 @@ private struct MarkdownParser {
         var runs: [InlineRun]
     }
 
-    /// Flattens the supported Markdown delimiters while retaining bold/italic spans.
+    /// Flattens the supported Markdown delimiters while retaining bold/italic/kenten spans.
     /// Code spans remain unstyled and escaped delimiters remain literal.
     private func parseInlineMarkdown(_ text: String) -> ParsedInlineMarkdown {
         let source = replacingMarkdownLinks(in: text)
@@ -851,6 +851,17 @@ private struct MarkdownParser {
             }
 
             if !codeSpan {
+                if remaining.hasPrefix("==") {
+                    let next = source.index(index, offsetBy: 2)
+                    let kind: InlineDelimiterKind = active.contains(.kenten) ? .closing : .opening
+                    if isValidDelimiter("==", at: index, kind: kind),
+                       (active.contains(.kenten) || hasClosingDelimiter("==", after: next)) {
+                        if active.contains(.kenten) { active.remove(.kenten) } else { active.insert(.kenten) }
+                        index = next
+                        continue
+                    }
+                }
+
                 let boldDelimiter = remaining.hasPrefix("**") ? "**" : (remaining.hasPrefix("__") ? "__" : nil)
                 if let delimiter = boldDelimiter {
                     let next = source.index(index, offsetBy: delimiter.count)
@@ -1006,7 +1017,7 @@ private struct MarkdownParser {
         }
 
         let punctuation = CharacterSet.punctuationCharacters.union(
-            CharacterSet(charactersIn: "，。、；：！？（）【】《》「」『』“”‘’、")
+            CharacterSet(charactersIn: "=，。、；：！？（）【】《》「」『』“”‘’、")
         )
         return character.unicodeScalars.allSatisfy { punctuation.contains($0) }
     }
