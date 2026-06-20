@@ -27,6 +27,7 @@ Options:
   --png-scale VALUE         Set PNG output scale, default 2.0.
   --export-project PATH     Export a structured .layoutd project file.
   --export-package PATH     Export a packaged ZIP resource bundle (.layoutd-pack).
+  --export-idml PATH        Export an IDML package for InDesign 人工精调 + 印前 (阶段 E1 最小可用).
   --export-templates PATH   Export saved layout templates as a reusable JSON library.
   --import-templates PATH   Import a layout template library before export or validation.
   --apply-chapter-template NAME
@@ -38,8 +39,38 @@ Options:
   --preflight-report PATH   Export preflight JSON.
   --validate                Run preflight as a CLI quality gate.
   --apply-preflight-fixes   Apply conservative auto-fixes before export or validation.
+  --idml-spike PATH         Write a minimal IDML probe (spread + 中文/竖排文本框 + 置入图 + CMYK Swatch) to open in InDesign. Optional second arg: image path.
   --help, -h                Show this help.
 """
+
+// 阶段 E0：IDML 灌版路线最小验证。独立早退分支，不经 ProjectLoader——它写死一份
+// 最小 IDML，用于在 InDesign 中文版里证伪 CJK（尤其竖排）能否干净落地。
+if let idmlFlagIndex = CommandLine.arguments.firstIndex(of: "--idml-spike") {
+    let args = CommandLine.arguments
+    guard idmlFlagIndex + 1 < args.count else {
+        fputs("--idml-spike 需要一个输出路径。\n", stderr)
+        exit(EXIT_FAILURE)
+    }
+    let outputURL = URL(fileURLWithPath: args[idmlFlagIndex + 1])
+    // 可选第二参（不以 - 开头）作为置入图路径；缺省回退到 Samples/images/cell-diagram.png。
+    var imagePath: String? = nil
+    let maybeImageIndex = idmlFlagIndex + 2
+    if maybeImageIndex < args.count, !args[maybeImageIndex].hasPrefix("-") {
+        imagePath = args[maybeImageIndex]
+    } else if FileManager.default.fileExists(atPath: "Samples/images/cell-diagram.png") {
+        imagePath = "Samples/images/cell-diagram.png"
+    }
+    do {
+        try IDMLSpikeExporter().export(to: outputURL, imagePath: imagePath)
+        print("Wrote IDML spike: \(outputURL.path)")
+        if let imagePath { print("Linked image: \(imagePath)") }
+        print("下一步：在 InDesign 中文版打开它，确认能干净打开、样式/图链/颜色/竖排都在。")
+        exit(EXIT_SUCCESS)
+    } catch {
+        fputs("IDML spike failed: \(error.localizedDescription)\n", stderr)
+        exit(EXIT_FAILURE)
+    }
+}
 
 let launchProject = ProjectLoader().loadFromCommandLine()
 
@@ -52,6 +83,7 @@ if launchProject.exportPDFURL != nil
     || launchProject.exportPNGDirectoryURL != nil
     || launchProject.exportProjectURL != nil
     || launchProject.exportPackageURL != nil
+    || launchProject.exportIDMLURL != nil
     || launchProject.exportTemplateLibraryURL != nil
     || launchProject.preflightReportURL != nil
     || launchProject.validateOnly {
@@ -153,6 +185,11 @@ if launchProject.exportPDFURL != nil
                 pdfxVersion: launchProject.pdfxVersion
             )
             print("Exported PDF: \(exportPDFURL.path)")
+        }
+
+        if let exportIDMLURL = launchProject.exportIDMLURL {
+            try IDMLExporter().export(document: document, project: project, to: exportIDMLURL)
+            print("Exported IDML: \(exportIDMLURL.path)")
         }
 
         if let exportPNGDirectoryURL = launchProject.exportPNGDirectoryURL {

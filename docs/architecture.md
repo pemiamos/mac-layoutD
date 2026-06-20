@@ -33,8 +33,15 @@ LayoutDCheck
   project structure, image metadata, and asset issue inspection
 
 LayoutDExport
-  PDF export boundary; renders LaidOutDocument into PDF output
+  PDF / PNG / 预检 JSON 导出边界;并承载 IDML 导出（灌版 → InDesign 交棒）
 ```
+
+> **主交付路线（2026-06-19 决策）**：layoutD 的核心定位收敛为「灌版引擎」——把
+> 「Figma 视觉规范 + 内容」自动灌成一份高质量初排，导出 **IDML** 交给 InDesign 做
+> 人工精调与印前输出。IDML 从「结构参照」升级为一等导出格式；这是 **单向流**
+> （layoutD→IDML→InDesign，改动不回流，交棒后 InDesign 为真理源）。layoutD 仍保留
+> 基本结构化编辑工具（见 LayoutPlan/override 两层模型），但不再扩建重型自有编辑器；
+> CMYK/PDF/X 继续不自建（强化「印前路线 A」）。详见 `.ai/DECISIONS.md`。
 
 ## 数据流
 
@@ -137,6 +144,14 @@ sudo xcodebuild -license accept
 7. **两层模型**：为"固定美术页 / 置入装饰资产 / 非矩形蒙版"建一等承载，使满版图、扉页、扇面/印章等成品美术不进重排但可置入。（已实现）
 
 **阶段 D（收尾 / 增强，部分已完成）**
-8. `qualityMetrics` 接入可视化与历史追踪（已实现）；封面/满版图作固定页导出（已实现）；IDML 结构参照；批注层；DOCX 导入；更完整印前。
+8. `qualityMetrics` 接入可视化与历史追踪（已实现）；封面/满版图作固定页导出（已实现）；批注层；DOCX 导入。
+
+**阶段 E（主交付路线：IDML 灌版交棒，进行中）**
+9. **IDML 导出**（从阶段 D 的「结构参照」升级为一等导出格式）。最小验证 spike
+   先行（`--idml-spike`：跨页 + 中文段落样式文本框 + 竖排文本框 + 置入图 + CMYK
+   Swatch），在 InDesign 中文版打开证伪；**唯一高风险是 CJK 保真度（竖排、复合字体、
+   避头尾、框架网格）能否干净落进 InDesign**。v1 验证基础包有效性 + 竖排，v2 再压测
+   复合字体，验证通过后再做正式的 `BookProject → IDML` 全量映射。CMYK/PDF/X 由
+   InDesign 完成（不自建）。
 
 > 排版与中文（复合字体/竖排/禁则约物）必须是 layoutD 自有引擎——外部设计工具均不提供（见 [design-tool-comparison.md](design-tool-comparison.md)）。

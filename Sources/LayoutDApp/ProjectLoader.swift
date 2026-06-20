@@ -25,6 +25,7 @@ struct LoadedProject {
     var showHelp: Bool
     var loadError: String?
     var exportPackageURL: URL?
+    var exportIDMLURL: URL?
     var pdfxVersion: PDFXVersion
 }
 
@@ -66,6 +67,7 @@ struct ProjectLoader {
                 showHelp: options.showHelp,
                 loadError: loadError,
                 exportPackageURL: options.exportPackagePath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportIDMLURL: options.exportIDMLPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 pdfxVersion: options.pdfxVersion
             )
         }
@@ -101,6 +103,7 @@ struct ProjectLoader {
                 showHelp: options.showHelp,
                 loadError: nil,
                 exportPackageURL: options.exportPackagePath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportIDMLURL: options.exportIDMLPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 pdfxVersion: options.pdfxVersion
             )
         } catch {
@@ -150,6 +153,7 @@ struct ProjectLoader {
                 showHelp: options.showHelp,
                 loadError: error.localizedDescription,
                 exportPackageURL: options.exportPackagePath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportIDMLURL: options.exportIDMLPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 pdfxVersion: options.pdfxVersion
             )
         }
@@ -374,6 +378,7 @@ private struct CommandLineOptions {
     var manuscriptPath: String?
     var assetDirectoryPath: String?
     var exportPackagePath: String?
+    var exportIDMLPath: String?
     var pdfxVersion: PDFXVersion = .none
 
     init(arguments: [String]) {
@@ -497,6 +502,12 @@ private struct CommandLineOptions {
 
             if argument == "--export-package", index + 1 < arguments.count {
                 exportPackagePath = arguments[index + 1]
+                index += 2
+                continue
+            }
+
+            if argument == "--export-idml", index + 1 < arguments.count {
+                exportIDMLPath = arguments[index + 1]
                 index += 2
                 continue
             }

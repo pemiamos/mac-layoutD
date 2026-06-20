@@ -1,8 +1,14 @@
 # 印前交付流程：LayoutD RGB PDF → Acrobat → 印厂级 CMYK PDF/X
 
-> 适用范围：用 LayoutD 排版中文科普图书，需要交付印厂正式印刷时。
+> **路线更新（2026-06-19，见 `.ai/DECISIONS.md`）**：主交付路线已转为
+> **LayoutD 导出 IDML → InDesign 人工精调 + 印前输出**。届时 CMYK 分色 / PDF/X
+> 合规直接在 InDesign 里完成，本文「RGB PDF → Acrobat」流程作为 **不经 InDesign 的
+> 直出备选路径** 保留（例如只需快速出一版印厂稿、或暂未接入 IDML 时）。两条路线都
+> 不在 LayoutD 内自建 CMYK 色彩管线（印前路线 A 不变）。
+>
+> 适用范围：用 LayoutD 排版中文科普图书，需要交付印厂正式印刷时（不走 InDesign 的备选路径）。
 > 设计前提（路线 A）：LayoutD 渲染管线为 **RGB**，不内建 CMYK 分色；CMYK 转色与
-> PDF/X 合规由 **Acrobat Pro** 在交付前一步完成。详见 `.ai/DECISIONS.md`。
+> PDF/X 合规由 **Acrobat Pro** 在交付前一步完成。
 
 ## 分工一句话
 

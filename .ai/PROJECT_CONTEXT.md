@@ -8,6 +8,11 @@ layoutD —— 一套 macOS 优先的、AI 辅助的中文科普图书排版系�
 而非"页面文档"为单位；确定性排版引擎负责文本/图片/图注/科普组件的成帧；AI 只产出经过校验的
 结构化 `LayoutPlan` 候选（受控变体），不直接产出最终成品。
 
+**主交付路线（2026-06-19 决策，见 DECISIONS.md）**：layoutD 定位收敛为"灌版引擎"——
+把"Figma 视觉规范 + 内容"自动灌成高质量初排，**导出 IDML 交 InDesign 做人工精调 + 印前
+输出**（单向流，交棒后 InDesign 为真理源）。layoutD 保留基本结构化编辑工具，但不扩建重型
+自有编辑器；CMYK/PDF/X 不自建，交 InDesign（强化"印前路线 A"）。
+
 ## 技术栈
 - 语言：Swift（swift-tools-version 5.9）
 - 形态：Swift Package（可执行 `layoutD` + 多个库 target）
@@ -42,5 +47,7 @@ docs/                   设计与路线图文档
 
 ## 已知约束 / 当前痛点
 - AI 输出必须是受控变体（结构化 LayoutPlan + override），不做自由绘制工具
-- 需要：复合字体 + 竖排支持；编辑走 LayoutPlan/override 的两层模型
-- 排版质量指标 / 历史追踪 / 全出血固定页导出 已在最近提交中落地，后续围绕出版工作流推进
+- 编辑走 LayoutPlan/override 的两层模型；复合字体 + 竖排已实现
+- 排版质量指标 / 历史追踪 / 全出血固定页导出 已落地
+- **主交付改为导出 IDML 交 InDesign 精调 + 印前**；最大未知是 CJK 保真度（竖排/复合
+  字体/避头尾/框架网格）能否干净落进 InDesign——以 `--idml-spike` 最小验证先证伪
