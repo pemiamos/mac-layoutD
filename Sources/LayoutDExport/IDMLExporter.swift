@@ -9,7 +9,7 @@ import LayoutDCore
 /// 最小可用版(MVP)的取舍——已覆盖：每页一个 Spread、文本框→Story(段落样式 + 竖排)、
 /// 图片框→Rectangle+Image+Link、颜色 token→RGB 色板、复合字体→Fonts.xml 内 CompositeFont。
 /// 暂未覆盖(后续增量，见 development-plan 阶段 E1)：固定美术页→MasterSpread、对开跨页、
-/// 非矩形蒙版、避头尾禁则集、组件背景/描边、图片打包与相对重链、字体样式名拆分。
+/// 非矩形蒙版、避头尾禁则集、组件背景/描边、字体样式名拆分。
 ///
 /// 颜色按 layoutD 的 RGB 管线导出为 RGB 色板；CMYK 分色 / PDF/X 交 InDesign(印前路线 A)。
 public struct IDMLExporter {
@@ -34,6 +34,7 @@ public struct IDMLExporter {
         let pageW = project.pageSetup.pageSize.width
         let pageH = project.pageSetup.pageSize.height
         let pages = document.pages.sorted { $0.number < $1.number }
+        let packagedLinks = packagedLinks(for: pages, assets: project.assets)
 
         var ctx = BuildContext(project: project)
 
@@ -81,6 +82,7 @@ public struct IDMLExporter {
                     guard let asset = project.assets.first(where: { $0.id == id }) else { continue }
                     items.append(imageItem(self: "uRect\(pi)_\(fi)", imageSelf: "uImg\(pi)_\(fi)",
                                            linkSelf: "uLink\(pi)_\(fi)", asset: asset,
+                                           packagedFileName: packagedLinks[asset.id]?.fileName,
                                            rect: frame.rect, pageW: pageW, pageH: pageH))
                 case .empty:
                     continue
@@ -111,6 +113,69 @@ public struct IDMLExporter {
         files.merge(storyFiles) { _, b in b }
 
         try writePackage(files: files, to: url)
+        try copyPackagedLinks(packagedLinks.values, beside: url)
+    }
+
+    private struct PackagedLink {
+        let sourceURL: URL
+        let fileName: String
+    }
+
+    /// 只打包实际置入页面且源文件存在的素材。同一素材重复置入时复用链接；不同素材
+    /// basename 冲突时保留扩展名并追加序号（figure.png、figure-2.png）。
+    private func packagedLinks(for pages: [LaidOutPage], assets: [Asset]) -> [UUID: PackagedLink] {
+        let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
+        var result: [UUID: PackagedLink] = [:]
+        var usedNames: Set<String> = []
+
+        for page in pages {
+            for frame in page.frames {
+                let assetId: UUID
+                switch frame.content {
+                case .asset(let id), .spreadAsset(let id, _): assetId = id
+                case .text, .empty: continue
+                }
+                guard result[assetId] == nil,
+                      let asset = assetsById[assetId],
+                      let sourcePath = asset.sourcePath,
+                      !sourcePath.isEmpty else { continue }
+
+                let sourceURL = URL(fileURLWithPath: sourcePath, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+                    .standardizedFileURL
+                guard FileManager.default.fileExists(atPath: sourceURL.path) else { continue }
+
+                let requestedName = URL(fileURLWithPath: asset.fileName).lastPathComponent
+                let baseName = requestedName.isEmpty ? sourceURL.lastPathComponent : requestedName
+                let uniqueName = uniqueLinkName(baseName, usedNames: &usedNames)
+                result[assetId] = PackagedLink(sourceURL: sourceURL, fileName: uniqueName)
+            }
+        }
+        return result
+    }
+
+    private func uniqueLinkName(_ fileName: String, usedNames: inout Set<String>) -> String {
+        if usedNames.insert(fileName).inserted { return fileName }
+        let url = URL(fileURLWithPath: fileName)
+        let ext = url.pathExtension
+        let stem = url.deletingPathExtension().lastPathComponent
+        var sequence = 2
+        while true {
+            let candidate = ext.isEmpty ? "\(stem)-\(sequence)" : "\(stem)-\(sequence).\(ext)"
+            if usedNames.insert(candidate).inserted { return candidate }
+            sequence += 1
+        }
+    }
+
+    private func copyPackagedLinks(_ links: Dictionary<UUID, PackagedLink>.Values, beside outputURL: URL) throws {
+        guard !links.isEmpty else { return }
+        let fm = FileManager.default
+        let linksDirectory = outputURL.deletingLastPathComponent().appendingPathComponent("Links", isDirectory: true)
+        try fm.createDirectory(at: linksDirectory, withIntermediateDirectories: true)
+        for link in links {
+            let destination = linksDirectory.appendingPathComponent(link.fileName)
+            if fm.fileExists(atPath: destination.path) { try fm.removeItem(at: destination) }
+            try fm.copyItem(at: link.sourceURL, to: destination)
+        }
     }
 
     // MARK: - 构建上下文（资源注册表）
@@ -274,17 +339,13 @@ public struct IDMLExporter {
         """
     }
 
-    private func imageItem(self id: String, imageSelf: String, linkSelf: String, asset: Asset, rect: Rect, pageW: Double, pageH: Double) -> String {
+    private func imageItem(self id: String, imageSelf: String, linkSelf: String, asset: Asset, packagedFileName: String?, rect: Rect, pageW: Double, pageH: Double) -> String {
         let natW = Double(max(asset.pixelWidth, 1))
         let natH = Double(max(asset.pixelHeight, 1))
         let sx = rect.width / natW, sy = rect.height / natH
         let effX = Int((72.0 / max(sx, 0.0001)).rounded()), effY = Int((72.0 / max(sy, 0.0001)).rounded())
         let left = rect.x - pageW / 2, top = rect.y - pageH / 2
-        let uri: String = {
-            guard let p = asset.sourcePath, !p.isEmpty else { return "file:missing-\(esc(asset.fileName))" }
-            let abs = (p as NSString).isAbsolutePath ? p : FileManager.default.currentDirectoryPath + "/" + p
-            return "file:" + abs
-        }()
+        let uri = packagedFileName.map { "file:Links/\($0)" } ?? "file:missing-\(asset.fileName)"
         return """
         \t\t<Rectangle Self="\(id)" ContentType="GraphicType" StoryTitle="$ID/" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH))
