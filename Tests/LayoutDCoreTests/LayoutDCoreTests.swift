@@ -99,6 +99,35 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(decoded.assets.count, 1)
     }
 
+    func testTableParsingAndAllocation() throws {
+        let tableText = """
+        结构    类比    主要作用
+        细胞膜    城墙和门禁    控制物质进出
+        线粒体    发电站    提供能量
+        """
+        
+        let tableData = TableLayoutHelper.parseTableText(tableText)
+        XCTAssertEqual(tableData.columnCount, 3)
+        XCTAssertEqual(tableData.rows.count, 3)
+        XCTAssertEqual(tableData.rows[0], ["结构", "类比", "主要作用"])
+        XCTAssertEqual(tableData.rows[1], ["细胞膜", "城墙和门禁", "控制物质进出"])
+        
+        // Test column width allocation
+        let style = ParagraphStyle.body
+        let colWidths = TableLayoutHelper.allocateColumnWidths(
+            tableData: tableData,
+            totalWidth: 300.0,
+            fontName: style.fontName,
+            fontSize: style.fontSize
+        )
+        XCTAssertEqual(colWidths.count, 3)
+        let sumWidths = colWidths.reduce(0, +)
+        XCTAssertEqual(sumWidths, 300.0, accuracy: 0.001)
+        
+        // Assert first column width is less than third column width because of text lengths
+        XCTAssertLessThan(colWidths[0], colWidths[2])
+    }
+
     func testProjectMetadataDecodesLegacyFilesWithoutNewBookFields() throws {
         let legacyProject = BookProject(metadata: ProjectMetadata(title: "旧项目", author: "layoutD"))
         let encoded = try ProjectFile.encode(legacyProject)

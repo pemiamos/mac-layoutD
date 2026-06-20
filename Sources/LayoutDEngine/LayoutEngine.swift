@@ -227,7 +227,7 @@ private struct LayoutContext {
     }
 
     private mutating func addText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil) {
-        let text = normalizedText(text)
+        let text = normalizedText(text, isTable: kind == .table)
         
         var paragraphRuns: [InlineRun]? = nil
         if let sourceParagraphId = sourceParagraphId,
@@ -241,7 +241,30 @@ private struct LayoutContext {
             return
         }
         
-        let height = estimatedTextHeight(text: text, style: style, width: columnWidth, inlineRuns: paragraphRuns)
+        let height: Double
+        if kind == .table {
+            let componentStyle = project.styles.componentStyle(for: .table)
+            let textInsetX = componentStyle?.textInsetX ?? 8.0
+            let textInsetY = componentStyle?.textInsetY ?? 6.0
+            let tableData = TableLayoutHelper.parseTableText(text)
+            let colWidths = TableLayoutHelper.allocateColumnWidths(
+                tableData: tableData,
+                totalWidth: columnWidth,
+                fontName: style.fontName,
+                fontSize: style.fontSize
+            )
+            let heights = TableLayoutHelper.calculateRowHeights(
+                tableData: tableData,
+                colWidths: colWidths,
+                style: style,
+                textInsetX: textInsetX,
+                textInsetY: textInsetY
+            )
+            height = heights.reduce(0.0, +)
+        } else {
+            height = estimatedTextHeight(text: text, style: style, width: columnWidth, inlineRuns: paragraphRuns)
+        }
+        
         if shouldKeepHeadingWithNext(style: style, height: height) {
             advanceToNextColumnOrPage()
         }
@@ -898,7 +921,10 @@ private struct LayoutContext {
         cursorY = ceil(cursorY / grid) * grid
     }
 
-    private func normalizedText(_ text: String) -> String {
+    private func normalizedText(_ text: String, isTable: Bool = false) -> String {
+        if isTable {
+            return text.trimmedForLayout
+        }
         let collapsed = text
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmedForLayout
