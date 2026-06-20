@@ -59,6 +59,43 @@ final class MarkdownBookImporterTests: XCTestCase {
         XCTAssertNil(paragraph.inlineRuns)
     }
 
+    func testPreservesInlineRunsAcrossTextBlockKinds() throws {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 行内格式
+
+            ## **粗**标题
+
+            - 列表*斜*项
+
+            > 引用**强调**
+
+            > [!NOTE] **知识卡**
+            > 继续*强调*
+            """
+        )
+        let paragraphs = project.sections[0].stories[0].paragraphs
+
+        let heading = try XCTUnwrap(paragraphs.first { $0.kind == .heading(level: 2) })
+        XCTAssertEqual(heading.text, "粗标题")
+        XCTAssertEqual(heading.inlineRuns, [InlineRun(location: 0, length: 1, emphasis: [.bold])])
+
+        let listItem = try XCTUnwrap(paragraphs.first { $0.kind == .listItem })
+        XCTAssertEqual(listItem.text, "列表斜项")
+        XCTAssertEqual(listItem.inlineRuns, [InlineRun(location: 2, length: 1, emphasis: [.italic])])
+
+        let quote = try XCTUnwrap(paragraphs.first { $0.kind == .quote })
+        XCTAssertEqual(quote.text, "引用强调")
+        XCTAssertEqual(quote.inlineRuns, [InlineRun(location: 2, length: 2, emphasis: [.bold])])
+
+        let callout = try XCTUnwrap(paragraphs.first { $0.kind == .callout })
+        XCTAssertEqual(callout.text, "知识点：知识卡 继续强调")
+        XCTAssertEqual(callout.inlineRuns, [
+            InlineRun(location: 4, length: 3, emphasis: [.bold]),
+            InlineRun(location: 10, length: 2, emphasis: [.italic])
+        ])
+    }
+
     func testImportsHeadingsBodyAndFigures() {
         let knownAsset = Asset(
             fileName: "images/cell-diagram.png",
