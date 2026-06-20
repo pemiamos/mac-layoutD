@@ -113,6 +113,26 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertFalse(stories.contains("<Content>¹</Content>"), "脚注锚点应由原生 Footnote 取代，而非保留 Unicode 上标")
         XCTAssertEqual(matches(in: stories, pattern: "(<Content>这是脚注内容。</Content>)").count, 1,
                        "脚注正文只能位于 Footnote 内，不得作为页脚 frame 再导出一次")
+
+        // E3-7v 回归：脚注正文必须挂在带中文复合字体（CF_*）的段落样式上，否则
+        // InDesign 退回拉丁默认字体、中文显示为豆腐。绝不能再是 [No paragraph style]。
+        let footnoteStyleRefs = matches(
+            in: stories,
+            pattern: "<Footnote>\\s*<ParagraphStyleRange AppliedParagraphStyle=\"(ParagraphStyle/[^\"]+)\">"
+        )
+        XCTAssertEqual(footnoteStyleRefs.count, 1, "应能取到脚注 ParagraphStyleRange 的样式引用")
+        let footnoteStyleRef = footnoteStyleRefs.first ?? ""
+        XCTAssertFalse(footnoteStyleRef.contains("[No paragraph style]"),
+                       "脚注段落样式不得是空样式（无字体→中文豆腐）")
+        // 被引用的样式必须在 Styles.xml 里带 CF_ 复合字体 AppliedFont。
+        let stylesXML = try entry(output, "Resources/Styles.xml")
+        let refId = footnoteStyleRef.replacingOccurrences(of: "ParagraphStyle/", with: "")
+        XCTAssertEqual(
+            matches(in: stylesXML,
+                    pattern: "<ParagraphStyle Self=\"ParagraphStyle/\(refId)\"[\\s\\S]*?<AppliedFont type=\"string\">(CF_[^<]+)</AppliedFont>").count,
+            1,
+            "脚注引用的段落样式必须带 CF_ 复合字体，确保中文有字形"
+        )
     }
 
     func testExportsValidIDMLFromSampleProject() throws {

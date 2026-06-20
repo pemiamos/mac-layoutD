@@ -116,9 +116,23 @@ public struct IDMLExporter {
                     } else {
                         frameFootnotes = []
                     }
+                    // 脚注正文需要一个带中文复合字体（CF_*）的段落样式，否则 InDesign 退回
+                    // 拉丁默认字体、中文显示为豆腐。优先用 caption（小字号、无首行缩进，最像
+                    // 脚注），退而求其次用 body；都没有才用空样式。绝不再写死 [No paragraph style]。
+                    let emittedStyleIds = Set(ctx.paragraphStyles.map { $0.id })
+                    let footnoteStyleRef: String
+                    if frameFootnotes.isEmpty {
+                        footnoteStyleRef = "ParagraphStyle/$ID/[No paragraph style]"
+                    } else if emittedStyleIds.contains(StyleID.caption.rawValue) {
+                        footnoteStyleRef = "ParagraphStyle/\(StyleID.caption.rawValue)"
+                    } else if emittedStyleIds.contains(StyleID.body.rawValue) {
+                        footnoteStyleRef = "ParagraphStyle/\(StyleID.body.rawValue)"
+                    } else {
+                        footnoteStyleRef = "ParagraphStyle/$ID/[No paragraph style]"
+                    }
                     let storyContent = storyXML(self: storySelf, styleRef: styleRef,
                                                 vertical: vertical, text: text, inlineRuns: frameInlineRuns,
-                                                footnotes: frameFootnotes)
+                                                footnotes: frameFootnotes, footnoteStyleRef: footnoteStyleRef)
                     storyFiles["Stories/Story_\(storySelf).xml"] = storyContent
                     storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                     storyListIds.append(storySelf)
@@ -670,7 +684,8 @@ public struct IDMLExporter {
         vertical: Bool,
         text: String,
         inlineRuns: [InlineRun]? = nil,
-        footnotes: [Paragraph] = []
+        footnotes: [Paragraph] = [],
+        footnoteStyleRef: String = "ParagraphStyle/$ID/[No paragraph style]"
     ) -> String {
         let orientation = vertical ? "Vertical" : "Horizontal"
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
@@ -686,7 +701,7 @@ public struct IDMLExporter {
         let body = effectiveParagraphs.map { line, start in
             """
             \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
-            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes))
+            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes, footnoteStyleRef: footnoteStyleRef))
             \t\t</ParagraphStyleRange>
             """
         }.joined(separator: "\n")
@@ -705,7 +720,8 @@ public struct IDMLExporter {
         for text: String,
         globalStart: Int,
         inlineRuns: [InlineRun],
-        footnotes: [Paragraph] = []
+        footnotes: [Paragraph] = [],
+        footnoteStyleRef: String = "ParagraphStyle/$ID/[No paragraph style]"
     ) -> String {
         guard !footnotes.isEmpty else {
             return styledCharacterRanges(for: text, globalStart: globalStart, inlineRuns: inlineRuns)
@@ -729,7 +745,7 @@ public struct IDMLExporter {
                     inlineRuns: inlineRuns
                 )
             }
-            output += footnoteXML(footnote)
+            output += footnoteXML(footnote, styleRef: footnoteStyleRef)
             cursor = markerStart + marker.count
         }
         if cursor < characters.count {
@@ -778,7 +794,7 @@ public struct IDMLExporter {
         }.joined(separator: "\n")
     }
 
-    private func footnoteXML(_ paragraph: Paragraph) -> String {
+    private func footnoteXML(_ paragraph: Paragraph, styleRef: String) -> String {
         let body = styledCharacterRanges(
             for: paragraph.text,
             globalStart: 0,
@@ -786,7 +802,7 @@ public struct IDMLExporter {
         )
         return """
         \t\t\t<Footnote>
-        \t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/$ID/[No paragraph style]">
+        \t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
         \(body)
         \t\t\t\t</ParagraphStyleRange>
         \t\t\t</Footnote>
