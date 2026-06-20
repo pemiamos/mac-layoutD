@@ -10,12 +10,13 @@ final class IDMLExporterTests: XCTestCase {
     func testExportsInlineRunsAsCharacterStyleRangesAcrossLines() throws {
         let paragraph = Paragraph(
             kind: .body,
-            text: "细胞ATP粗体\n斜体粗斜",
+            text: "细胞ATP着重\n斜体粗斜",
             styleId: StyleID.body.rawValue,
             inlineRuns: [
                 InlineRun(location: 2, length: 3, emphasis: [.bold]),
+                InlineRun(location: 5, length: 2, emphasis: [.kenten]),
                 InlineRun(location: 8, length: 2, emphasis: [.italic]),
-                InlineRun(location: 10, length: 2, emphasis: [.bold, .italic])
+                InlineRun(location: 10, length: 2, emphasis: [.bold, .italic, .kenten])
             ]
         )
         let project = BookProject(
@@ -26,7 +27,7 @@ final class IDMLExporterTests: XCTestCase {
             kind: .text,
             rect: Rect(x: 20, y: 20, width: 200, height: 100),
             styleId: StyleID.body.rawValue,
-            content: .text("细胞 ATP 粗体\n斜体粗斜"),
+            content: .text("细胞 ATP 着重\n斜体粗斜"),
             sourceParagraphId: paragraph.id
         )
         let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
@@ -38,8 +39,9 @@ final class IDMLExporterTests: XCTestCase {
 
         let story = try entry(output, "Stories/Story_uStory0_0.xml")
         XCTAssertTrue(story.contains("FauxBold=\"true\"><Content>ATP</Content>"), "自动插入的中西文空格不应破坏 run 对齐")
+        XCTAssertTrue(story.contains("KentenKind=\"KentenSesameDot\" KentenAlignment=\"AlignKentenCenter\" KentenPosition=\"AboveRight\"><Content>着重</Content>"))
         XCTAssertTrue(story.contains("Skew=\"12\"><Content>斜体</Content>"))
-        XCTAssertTrue(story.contains("FauxBold=\"true\" Skew=\"12\"><Content>粗斜</Content>"))
+        XCTAssertTrue(story.contains("FauxBold=\"true\" Skew=\"12\" KentenKind=\"KentenSesameDot\" KentenAlignment=\"AlignKentenCenter\" KentenPosition=\"AboveRight\"><Content>粗斜</Content>"))
         XCTAssertEqual(matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count, 2)
     }
 

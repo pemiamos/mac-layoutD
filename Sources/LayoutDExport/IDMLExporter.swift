@@ -715,6 +715,11 @@ public struct IDMLExporter {
             var attrs = ""
             if emphasis.contains(.bold) { attrs += " FauxBold=\"true\"" }
             if emphasis.contains(.italic) { attrs += " Skew=\"12\"" }
+            if emphasis.contains(.kenten) {
+                attrs += " KentenKind=\"KentenSesameDot\""
+                attrs += " KentenAlignment=\"AlignKentenCenter\""
+                attrs += " KentenPosition=\"AboveRight\""
+            }
             return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(attrs)><Content>\(esc(content))</Content></CharacterStyleRange>"
         }.joined(separator: "\n")
     }

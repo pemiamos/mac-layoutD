@@ -8,17 +8,18 @@ final class MarkdownBookImporterTests: XCTestCase {
             markdown: """
             # 行内格式
 
-            普通 **粗体**、*斜体* 与 ***粗斜体***，`代码`不着重。
+            普通 **粗体**、*斜体*、==着重== 与 ***粗斜体***，`代码`不着重。
             """
         )
         let paragraph = try XCTUnwrap(
             project.sections[0].stories[0].paragraphs.first { $0.kind == .body }
         )
-        XCTAssertEqual(paragraph.text, "普通 粗体、斜体 与 粗斜体，代码不着重。")
+        XCTAssertEqual(paragraph.text, "普通 粗体、斜体、着重 与 粗斜体，代码不着重。")
         XCTAssertEqual(paragraph.inlineRuns, [
             InlineRun(location: 3, length: 2, emphasis: [.bold]),
             InlineRun(location: 6, length: 2, emphasis: [.italic]),
-            InlineRun(location: 11, length: 3, emphasis: [.bold, .italic])
+            InlineRun(location: 9, length: 2, emphasis: [.kenten]),
+            InlineRun(location: 14, length: 3, emphasis: [.bold, .italic])
         ])
     }
 
@@ -64,36 +65,62 @@ final class MarkdownBookImporterTests: XCTestCase {
             markdown: """
             # 行内格式
 
-            ## **粗**标题
+            ## **粗**==标题==
 
-            - 列表*斜*项
+            - 列表*斜*==项==
 
-            > 引用**强调**
+            > 引用**强==调==**
 
             > [!NOTE] **知识卡**
-            > 继续*强调*
+            > 继续*强==调==*
             """
         )
         let paragraphs = project.sections[0].stories[0].paragraphs
 
         let heading = try XCTUnwrap(paragraphs.first { $0.kind == .heading(level: 2) })
         XCTAssertEqual(heading.text, "粗标题")
-        XCTAssertEqual(heading.inlineRuns, [InlineRun(location: 0, length: 1, emphasis: [.bold])])
+        XCTAssertEqual(heading.inlineRuns, [
+            InlineRun(location: 0, length: 1, emphasis: [.bold]),
+            InlineRun(location: 1, length: 2, emphasis: [.kenten])
+        ])
 
         let listItem = try XCTUnwrap(paragraphs.first { $0.kind == .listItem })
         XCTAssertEqual(listItem.text, "列表斜项")
-        XCTAssertEqual(listItem.inlineRuns, [InlineRun(location: 2, length: 1, emphasis: [.italic])])
+        XCTAssertEqual(listItem.inlineRuns, [
+            InlineRun(location: 2, length: 1, emphasis: [.italic]),
+            InlineRun(location: 3, length: 1, emphasis: [.kenten])
+        ])
 
         let quote = try XCTUnwrap(paragraphs.first { $0.kind == .quote })
         XCTAssertEqual(quote.text, "引用强调")
-        XCTAssertEqual(quote.inlineRuns, [InlineRun(location: 2, length: 2, emphasis: [.bold])])
+        XCTAssertEqual(quote.inlineRuns, [
+            InlineRun(location: 2, length: 1, emphasis: [.bold]),
+            InlineRun(location: 3, length: 1, emphasis: [.bold, .kenten])
+        ])
 
         let callout = try XCTUnwrap(paragraphs.first { $0.kind == .callout })
         XCTAssertEqual(callout.text, "知识点：知识卡 继续强调")
         XCTAssertEqual(callout.inlineRuns, [
             InlineRun(location: 4, length: 3, emphasis: [.bold]),
-            InlineRun(location: 10, length: 2, emphasis: [.italic])
+            InlineRun(location: 10, length: 1, emphasis: [.italic]),
+            InlineRun(location: 11, length: 1, emphasis: [.italic, .kenten])
         ])
+    }
+
+    func testDoesNotTreatASCIIDoubleEqualsAsKenten() throws {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # ASCII 等号
+
+            a==b 与 speed==fast 保持原样。
+            """
+        )
+        let paragraph = try XCTUnwrap(
+            project.sections[0].stories[0].paragraphs.first { $0.kind == .body }
+        )
+
+        XCTAssertEqual(paragraph.text, "a==b 与 speed==fast 保持原样。")
+        XCTAssertNil(paragraph.inlineRuns)
     }
 
     func testImportsHeadingsBodyAndFigures() {
