@@ -133,12 +133,12 @@
 > ⚠️ **从最新 dev 起新分支 `feature/ag-e3-2`**，**别再用旧分支 `feature/ag-inline-preview`**——
 > 它上面那条 `e05a66d`（FauxItalic）已被 dev 的 `Skew` 修复取代，叠在旧分支上会把斜体修复冲掉。
 
-- [ ] **E3-2 行内格式预览渲染**
+- [x] **E3-2 行内格式预览渲染** — Antigravity @ `feature/ag-e3-2`, commit `44e2873`
   - 目标：PDF/PNG/Canvas 三处预览按 `inlineRuns` 切粗/斜（当前预览整段同字重，仅 IDML 已保真）。`LayoutEngine.swift` 的 `addText` 若需精确测量，把 run 透传进 measurement（已按字符类切复合字体，扩成叠加 emphasis）。
   - 文件：`LayoutEngine.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`CanvasView.swift`。
   - 验收：含粗/斜的页 PNG/Canvas 里目标词字重不同（用户视觉验）；单测断言渲染层确实收到 run 并分段绘制。
 
-- [ ] **校对批注层**（阶段 D 遗留，不参与重排的 overlay）
+- [x] **校对批注层** — Antigravity @ `feature/ag-e3-2`, commit `374c28e`
   - 目标：新增批注/校对标记层，叠加在 Canvas 上但不影响实际排版（类似 PDF 注释，不是 frame）。
   - 文件：`AppState.swift`（新状态）、`CanvasView.swift`（叠加渲染）、可能新文件 `AnnotationLayer.swift`。
   - 验收：能在画布上加批注标记、保存随项目持久化、不参与自动重排/不被导出带进 IDML 正文。

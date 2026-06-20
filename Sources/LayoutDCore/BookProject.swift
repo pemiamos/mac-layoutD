@@ -19,6 +19,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     public var colorMode: String?
     /// Historical snapshots of layout quality metrics, captured over time.
     public var qualityMetricsHistory: [QualityHistoryEntry]?
+    public var annotations: [BookAnnotation]?
 
     public init(
         schemaVersion: Int = BookProject.currentSchemaVersion,
@@ -32,7 +33,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         savedLayoutTemplates: [SavedLayoutTemplate]? = nil,
         lockedPages: Set<Int>? = nil,
         colorMode: String? = nil,
-        qualityMetricsHistory: [QualityHistoryEntry]? = nil
+        qualityMetricsHistory: [QualityHistoryEntry]? = nil,
+        annotations: [BookAnnotation]? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.id = id
@@ -46,6 +48,12 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         self.lockedPages = lockedPages
         self.colorMode = colorMode
         self.qualityMetricsHistory = qualityMetricsHistory
+        self.annotations = annotations
+    }
+
+    public var safeAnnotations: [BookAnnotation] {
+        get { annotations ?? [] }
+        set { annotations = newValue }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -61,6 +69,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         case lockedPages
         case colorMode
         case qualityMetricsHistory
+        case annotations
     }
 
     public init(from decoder: Decoder) throws {
@@ -77,6 +86,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         lockedPages = try container.decodeIfPresent(Set<Int>.self, forKey: .lockedPages)
         colorMode = try container.decodeIfPresent(String.self, forKey: .colorMode)
         qualityMetricsHistory = try container.decodeIfPresent([QualityHistoryEntry].self, forKey: .qualityMetricsHistory)
+        annotations = try container.decodeIfPresent([BookAnnotation].self, forKey: .annotations)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -93,6 +103,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         try container.encodeIfPresent(lockedPages, forKey: .lockedPages)
         try container.encodeIfPresent(colorMode, forKey: .colorMode)
         try container.encodeIfPresent(qualityMetricsHistory, forKey: .qualityMetricsHistory)
+        try container.encodeIfPresent(annotations, forKey: .annotations)
     }
 
     /// Resolves a color token id to a hex value under the project's active color
@@ -339,6 +350,70 @@ public struct InlineRun: Codable, Equatable, Sendable {
         self.emphasis = emphasis
         self.colorTokenRef = colorTokenRef
     }
+
+    /// Maps runs from a larger string range into a substring range.
+    public static func mapRuns(_ runs: [InlineRun], toSubstringFrom startIndex: Int, length: Int) -> [InlineRun] {
+        var mapped: [InlineRun] = []
+        let subEnd = startIndex + length
+        for run in runs {
+            let runEnd = run.location + run.length
+            let intersectStart = max(run.location, startIndex)
+            let intersectEnd = min(runEnd, subEnd)
+            let intersectLength = intersectEnd - intersectStart
+            if intersectLength > 0 {
+                mapped.append(InlineRun(
+                    location: intersectStart - startIndex,
+                    length: intersectLength,
+                    emphasis: run.emphasis,
+                    colorTokenRef: run.colorTokenRef
+                ))
+            }
+        }
+        return mapped
+    }
+
+    /// Maps runs from one string to another by aligning their visible (non-whitespace) characters.
+    public static func mapRuns(
+        _ paragraphRuns: [InlineRun],
+        from sourceText: String,
+        to targetText: String
+    ) -> [InlineRun]? {
+        let sourceCharacters = Array(sourceText)
+        let targetCharacters = Array(targetText)
+        let sourceVisible = sourceCharacters.enumerated().filter { !$0.element.isWhitespace }
+        let targetVisible = targetCharacters.enumerated().filter { !$0.element.isWhitespace }
+        guard !targetVisible.isEmpty, targetVisible.count <= sourceVisible.count else { return nil }
+
+        let matchingStart = (0...(sourceVisible.count - targetVisible.count)).first { candidate in
+            zip(sourceVisible[candidate...], targetVisible).allSatisfy { pair in
+                pair.0.element == pair.1.element
+            }
+        }
+        guard let matchingStart else { return nil }
+
+        var emphasisByTargetCharacter = Array(repeating: Set<InlineEmphasis>(), count: targetCharacters.count)
+        for (visibleOffset, targetCharacter) in targetVisible.enumerated() {
+            let sourceOffset = sourceVisible[matchingStart + visibleOffset].offset
+            for run in paragraphRuns where run.location <= sourceOffset && sourceOffset < run.location + run.length {
+                emphasisByTargetCharacter[targetCharacter.offset].formUnion(run.emphasis)
+            }
+        }
+
+        var runs: [InlineRun] = []
+        var start: Int?
+        var active = Set<InlineEmphasis>()
+        for offset in 0...emphasisByTargetCharacter.count {
+            let emphasis = offset < emphasisByTargetCharacter.count ? emphasisByTargetCharacter[offset] : []
+            if emphasis != active {
+                if let start, !active.isEmpty {
+                    runs.append(InlineRun(location: start, length: offset - start, emphasis: active))
+                }
+                start = emphasis.isEmpty ? nil : offset
+                active = emphasis
+            }
+        }
+        return runs.isEmpty ? nil : runs
+    }
 }
 
 public enum ParagraphKind: Codable, Equatable, Sendable {
@@ -440,5 +515,21 @@ public struct QualityHistoryEntry: Codable, Equatable, Sendable {
         self.missingCaptionAssets = missingCaptionAssets
         self.blockingErrors = blockingErrors
         self.layoutIssues = layoutIssues
+    }
+}
+
+public struct BookAnnotation: Codable, Equatable, Sendable, Identifiable {
+    public var id: UUID
+    public var pageNumber: Int
+    public var x: Double       // layout coordinate X
+    public var y: Double       // layout coordinate Y
+    public var text: String
+
+    public init(id: UUID = UUID(), pageNumber: Int, x: Double, y: Double, text: String) {
+        self.id = id
+        self.pageNumber = pageNumber
+        self.x = x
+        self.y = y
+        self.text = text
     }
 }

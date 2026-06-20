@@ -6,6 +6,71 @@ import LayoutDImport
 import XCTest
 
 final class LayoutDCoreTests: XCTestCase {
+    func testInlineRunsAttributedStringAndMapping() throws {
+        let text = "Hello World"
+        let runs = [
+            InlineRun(location: 0, length: 5, emphasis: [.bold]),
+            InlineRun(location: 6, length: 5, emphasis: [.italic])
+        ]
+        
+        // 1. Test mapRuns to substring
+        let mappedSubstring = InlineRun.mapRuns(runs, toSubstringFrom: 6, length: 5)
+        XCTAssertEqual(mappedSubstring.count, 1)
+        XCTAssertEqual(mappedSubstring[0].location, 0)
+        XCTAssertEqual(mappedSubstring[0].length, 5)
+        XCTAssertEqual(mappedSubstring[0].emphasis, [.italic])
+        
+        // 2. Test mapRuns by alignment
+        let mappedAligned = InlineRun.mapRuns(runs, from: "Hello World", to: "Hello  World")
+        XCTAssertNotNil(mappedAligned)
+        XCTAssertEqual(mappedAligned?.count, 2)
+        
+        // 3. Test makeAttributedString
+        let style = ParagraphStyle.body
+        let attrString = ChineseTypesetting.makeAttributedString(
+            text: text,
+            style: style,
+            inlineRuns: runs
+        )
+        
+        // Retrieve font at index 0 (should be bold)
+        var range = NSRange()
+        let font0 = attrString.attribute(NSAttributedString.Key(kCTFontAttributeName as String), at: 0, effectiveRange: &range) as! CTFont
+        let traits0 = CTFontGetSymbolicTraits(font0)
+        XCTAssertTrue(traits0.contains(.boldTrait))
+        
+        // Retrieve font at index 6 (should have matrix/skew for italic)
+        let font6 = attrString.attribute(NSAttributedString.Key(kCTFontAttributeName as String), at: 6, effectiveRange: &range) as! CTFont
+        let matrix = CTFontGetMatrix(font6)
+        XCTAssertEqual(matrix.c, CGFloat(tan(12.0 * Double.pi / 180.0)), accuracy: 0.001)
+    }
+
+    func testAnnotationsPersistenceAndMapping() throws {
+        var project = BookProject(metadata: ProjectMetadata(title: "Test Project", author: "Antigravity"))
+        XCTAssertEqual(project.safeAnnotations.count, 0)
+        
+        let ann = BookAnnotation(pageNumber: 2, x: 100.0, y: 150.0, text: "这里需要修改样式")
+        project.safeAnnotations = [ann]
+        XCTAssertEqual(project.safeAnnotations.count, 1)
+        XCTAssertEqual(project.safeAnnotations[0].text, "这里需要修改样式")
+        
+        // Test JSON round-trip compatibility
+        let data = try ProjectFile.encode(project)
+        let decoded = try ProjectFile.decode(data)
+        XCTAssertEqual(decoded.safeAnnotations.count, 1)
+        XCTAssertEqual(decoded.safeAnnotations[0].pageNumber, 2)
+        XCTAssertEqual(decoded.safeAnnotations[0].x, 100.0)
+        XCTAssertEqual(decoded.safeAnnotations[0].y, 150.0)
+        XCTAssertEqual(decoded.safeAnnotations[0].text, "这里需要修改样式")
+        
+        // Test legacy JSON decoding without annotations field
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "annotations")
+        let legacyData = try JSONSerialization.data(withJSONObject: json)
+        let legacyDecoded = try ProjectFile.decode(legacyData)
+        XCTAssertEqual(legacyDecoded.safeAnnotations.count, 0)
+    }
+
     func testParagraphInlineRunsRoundTripAndLegacyDecode() throws {
         let paragraph = Paragraph(
             kind: .body,

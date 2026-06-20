@@ -229,12 +229,19 @@ private struct LayoutContext {
     private mutating func addText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil) {
         let text = normalizedText(text)
         
+        var paragraphRuns: [InlineRun]? = nil
+        if let sourceParagraphId = sourceParagraphId,
+           let paragraph = findParagraph(id: sourceParagraphId),
+           let runs = paragraph.inlineRuns {
+            paragraphRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
+        }
+        
         if isVertical && kind != .runningHeader && kind != .footnote && kind != .sideNote {
-            addFlowingVerticalText(text, style: style, kind: kind, anchoredSideNoteIds: anchoredSideNoteIds, sourceParagraphId: sourceParagraphId)
+            addFlowingVerticalText(text, style: style, kind: kind, anchoredSideNoteIds: anchoredSideNoteIds, sourceParagraphId: sourceParagraphId, inlineRuns: paragraphRuns)
             return
         }
         
-        let height = estimatedTextHeight(text: text, style: style, width: columnWidth)
+        let height = estimatedTextHeight(text: text, style: style, width: columnWidth, inlineRuns: paragraphRuns)
         if shouldKeepHeadingWithNext(style: style, height: height) {
             advanceToNextColumnOrPage()
         }
@@ -248,7 +255,7 @@ private struct LayoutContext {
                     pageNumber: currentPage.number
                 )
             )
-            addFlowingText(text, style: style, kind: kind, anchoredSideNoteIds: anchoredSideNoteIds, sourceParagraphId: sourceParagraphId)
+            addFlowingText(text, style: style, kind: kind, anchoredSideNoteIds: anchoredSideNoteIds, sourceParagraphId: sourceParagraphId, inlineRuns: paragraphRuns)
             return
         }
 
@@ -281,12 +288,13 @@ private struct LayoutContext {
         return remainingColumnHeight < requiredHeight && remainingColumnHeight < columnTextHeight
     }
 
-    private mutating func addFlowingText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil) {
+    private mutating func addFlowingText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil, inlineRuns: [InlineRun]? = nil) {
         let lines = ChineseTypesetting.breakTextIntoLines(
             text,
             style: style,
             columnWidth: columnWidth,
-            hangingWidth: style.fontSize * 0.5
+            hangingWidth: style.fontSize * 0.5,
+            inlineRuns: inlineRuns
         )
         
         var remainingLines = lines
@@ -373,13 +381,14 @@ private struct LayoutContext {
         return project.pageSetup.pageSize.height - margins.top - margins.bottom
     }
 
-    private mutating func addFlowingVerticalText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil) {
+    private mutating func addFlowingVerticalText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil, inlineRuns: [InlineRun]? = nil) {
         let verticalStyle = style.layoutDirection == nil ? style.with(layoutDirection: .vertical) : style
         let lines = ChineseTypesetting.breakTextIntoLines(
             text,
             style: verticalStyle,
             columnWidth: columnTextHeight,
-            hangingWidth: style.fontSize * 0.5
+            hangingWidth: style.fontSize * 0.5,
+            inlineRuns: inlineRuns
         )
         
         var remainingLines = lines
@@ -480,8 +489,8 @@ private struct LayoutContext {
         snapToBaseline()
     }
 
-    private func fittingPrefix(of text: String, style: ParagraphStyle, maxHeight: Double, width: Double) -> String {
-        if estimatedTextHeight(text: text, style: style, width: width) <= maxHeight {
+    private func fittingPrefix(of text: String, style: ParagraphStyle, maxHeight: Double, width: Double, inlineRuns: [InlineRun]? = nil) -> String {
+        if estimatedTextHeight(text: text, style: style, width: width, inlineRuns: inlineRuns) <= maxHeight {
             return text
         }
 
@@ -492,7 +501,8 @@ private struct LayoutContext {
         while lowerBound <= upperBound {
             let mid = (lowerBound + upperBound) / 2
             let candidate = String(text.prefix(mid)).trimmedForLayout
-            let height = estimatedTextHeight(text: candidate, style: style, width: width)
+            let mappedRuns = InlineRun.mapRuns(inlineRuns ?? [], toSubstringFrom: 0, length: mid)
+            let height = estimatedTextHeight(text: candidate, style: style, width: width, inlineRuns: mappedRuns)
             if height <= maxHeight {
                 bestCount = max(mid, 1)
                 lowerBound = mid + 1
@@ -502,8 +512,8 @@ private struct LayoutContext {
         }
 
         let broken = smartBreakPrefix(of: text, maximumCount: bestCount)
-        let kinsokuPrefix = applyChineseTypesettingRules(candidatePrefix: broken, fullText: text, style: style, maxHeight: maxHeight, width: width)
-        return applyWidowOrphanControls(prefix: kinsokuPrefix, fullText: text, style: style, maxHeight: maxHeight, width: width)
+        let kinsokuPrefix = applyChineseTypesettingRules(candidatePrefix: broken, fullText: text, style: style, maxHeight: maxHeight, width: width, inlineRuns: inlineRuns)
+        return applyWidowOrphanControls(prefix: kinsokuPrefix, fullText: text, style: style, maxHeight: maxHeight, width: width, inlineRuns: inlineRuns)
     }
 
     private func smartBreakPrefix(of text: String, maximumCount: Int) -> String {
@@ -527,7 +537,8 @@ private struct LayoutContext {
         fullText: String,
         style: ParagraphStyle,
         maxHeight: Double,
-        width: Double
+        width: Double,
+        inlineRuns: [InlineRun]? = nil
     ) -> String {
         var prefix = candidatePrefix
         
@@ -545,7 +556,8 @@ private struct LayoutContext {
             let remainingText = fullText.dropFirst(prefix.count)
             if let nextChar = remainingText.first, ChineseLineBreakRules.forbidsLineStart(nextChar) {
                 let pulledCandidate = prefix + String(nextChar)
-                let height = estimatedTextHeight(text: pulledCandidate, style: style, width: width)
+                let mappedRuns = InlineRun.mapRuns(inlineRuns ?? [], toSubstringFrom: 0, length: pulledCandidate.count)
+                let height = estimatedTextHeight(text: pulledCandidate, style: style, width: width, inlineRuns: mappedRuns)
                 if height <= maxHeight {
                     prefix = pulledCandidate
                 } else {
@@ -569,17 +581,20 @@ private struct LayoutContext {
         fullText: String,
         style: ParagraphStyle,
         maxHeight: Double,
-        width: Double
+        width: Double,
+        inlineRuns: [InlineRun]? = nil
     ) -> String {
         let prefix = prefix.trimmedForLayout
         guard !prefix.isEmpty else { return "" }
         let remaining = String(fullText.dropFirst(prefix.count)).trimmedForLayout
         guard !remaining.isEmpty else { return prefix }
         
-        let prefixHeight = estimatedTextHeight(text: prefix, style: style, width: width)
+        let prefixRuns = InlineRun.mapRuns(inlineRuns ?? [], toSubstringFrom: 0, length: prefix.count)
+        let prefixHeight = estimatedTextHeight(text: prefix, style: style, width: width, inlineRuns: prefixRuns)
         let prefixLines = max(1, Int(round(prefixHeight / style.lineHeight)))
         
-        let remainingHeight = estimatedTextHeight(text: String(remaining), style: style, width: width)
+        let remainingRuns = InlineRun.mapRuns(inlineRuns ?? [], toSubstringFrom: prefix.count, length: remaining.count)
+        let remainingHeight = estimatedTextHeight(text: String(remaining), style: style, width: width, inlineRuns: remainingRuns)
         let remainingLines = max(1, Int(round(remainingHeight / style.lineHeight)))
         
         // 1. Orphan control: If only 1 line fits on current page/column, push the whole paragraph
@@ -598,7 +613,8 @@ private struct LayoutContext {
             while lowerBound <= upperBound {
                 let mid = (lowerBound + upperBound) / 2
                 let candidate = String(prefix.prefix(mid)).trimmedForLayout
-                let height = estimatedTextHeight(text: candidate, style: style, width: width)
+                let mappedRuns = InlineRun.mapRuns(prefixRuns, toSubstringFrom: 0, length: candidate.count)
+                let height = estimatedTextHeight(text: candidate, style: style, width: width, inlineRuns: mappedRuns)
                 if height <= targetHeight {
                     bestCount = max(mid, 1)
                     lowerBound = mid + 1
@@ -911,8 +927,8 @@ private struct LayoutContext {
             || (left.isWesternAlphanumeric && right.isCJKIdeograph)
     }
 
-    private func estimatedTextHeight(text: String, style: ParagraphStyle, width: Double) -> Double {
-        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style)
+    private func estimatedTextHeight(text: String, style: ParagraphStyle, width: Double, inlineRuns: [InlineRun]? = nil) -> Double {
+        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, inlineRuns: inlineRuns)
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let constraint = CGSize(width: width, height: .greatestFiniteMagnitude)
         let size = CTFramesetterSuggestFrameSizeWithConstraints(
@@ -929,7 +945,7 @@ private struct LayoutContext {
         let text = paragraph.text
         let style = footnoteStyle
         let width = contentWidth
-        return estimatedTextHeight(text: text, style: style, width: width)
+        return estimatedTextHeight(text: text, style: style, width: width, inlineRuns: paragraph.inlineRuns)
     }
 
     private var currentPageFootnoteHeight: Double {
@@ -1012,7 +1028,7 @@ private struct LayoutContext {
             }
             
             for (snParagraph, refY) in currentPageSideNoteParagraphs {
-                let snHeight = estimatedTextHeight(text: snParagraph.text, style: sideNoteStyle, width: sideNoteWidth)
+                let snHeight = estimatedTextHeight(text: snParagraph.text, style: sideNoteStyle, width: sideNoteWidth, inlineRuns: snParagraph.inlineRuns)
                 let rect = Rect(x: x, y: refY, width: sideNoteWidth, height: snHeight)
                 currentPage.frames.append(PageFrame(
                     kind: .sideNote,
@@ -1393,14 +1409,24 @@ private struct LayoutContext {
             }
             
             let resolvedStyle = styleId != nil ? project.styles.paragraphStyle(id: styleId!) : ParagraphStyle.body
+            let normalizedTextToPlace = normalizedText(textToPlace)
+
+            var sourceParagraphId: UUID? = nil
+            var blockRuns: [InlineRun]? = nil
+            if case .paragraph(let paragraphId) = block.contentReference {
+                sourceParagraphId = paragraphId
+                if let paragraph = findParagraph(id: paragraphId),
+                   let runs = paragraph.inlineRuns {
+                    blockRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: normalizedTextToPlace)
+                }
+            }
 
             let content: FrameContent
             if case .asset(let assetId) = block.contentReference {
                 content = .asset(assetId)
             } else {
-                let normalizedTextToPlace = normalizedText(textToPlace)
                 if block.kind == .text && (block.nextThreadedBlockId != nil || block.previousThreadedBlockId != nil) {
-                    let fittedText = fittingPrefix(of: normalizedTextToPlace, style: resolvedStyle, maxHeight: rect.height, width: rect.width)
+                    let fittedText = fittingPrefix(of: normalizedTextToPlace, style: resolvedStyle, maxHeight: rect.height, width: rect.width, inlineRuns: blockRuns)
                     content = .text(fittedText)
                     if let nextId = block.nextThreadedBlockId {
                         let remaining = String(normalizedTextToPlace.dropFirst(fittedText.count)).trimmedForLayout
@@ -1423,6 +1449,7 @@ private struct LayoutContext {
                 strokeColorHex: block.strokeColorHex,
                 strokeWidth: block.strokeWidth,
                 textColorHex: block.textColorHex,
+                sourceParagraphId: sourceParagraphId,
                 maskShape: block.maskShape
             ))
         }

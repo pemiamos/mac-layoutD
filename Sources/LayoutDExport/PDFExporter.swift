@@ -431,11 +431,12 @@ public struct PDFExporter {
                     project: project,
                     rect: textRect,
                     context: context,
-                    textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project)
+                    textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project),
+                    sourceParagraphId: frame.sourceParagraphId
                 )
             } else {
                 textRect = rect
-                drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, rect: textRect, context: context, textColorHex: frame.textColorHex)
+                drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, rect: textRect, context: context, textColorHex: frame.textColorHex, sourceParagraphId: frame.sourceParagraphId)
             }
         case .asset, .spreadAsset:
             drawImagePlaceholder(frame: frame, project: project, in: context, rect: rect)
@@ -473,7 +474,7 @@ public struct PDFExporter {
         context.restoreGState()
     }
 
-    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind, project: BookProject, rect: CGRect, context: CGContext, textColorHex: String? = nil) {
+    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind, project: BookProject, rect: CGRect, context: CGContext, textColorHex: String? = nil, sourceParagraphId: UUID? = nil) {
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -514,10 +515,18 @@ public struct PDFExporter {
             textColor = NSColor.black.cgColor
         }
 
+        var mappedRuns: [InlineRun]? = nil
+        if let sourceParagraphId = sourceParagraphId,
+           let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+           let runs = paragraph.inlineRuns {
+            mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
+        }
+
         let attributedString = ChineseTypesetting.makeAttributedString(
             text: text,
             style: style,
-            foregroundColor: textColor
+            foregroundColor: textColor,
+            inlineRuns: mappedRuns
         )
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
