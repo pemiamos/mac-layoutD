@@ -92,12 +92,22 @@
   - ✅ **2026-06-21 Claude 已实现（dev `8ce89a8`）**：给每个 `<ParagraphStyleRange>` 写 `AppliedComposer="$ID/HL Composer Optyca"`（World-Ready 段落排版器），补端到端断言（每段都带该 composer）；187 测试 + review-idml.sh PASS。⚠️ composer 确切字符串取自 IDML 公开资料、**非真·InDesign 存盘比对**，已导两个变体给用户对比验收：`~/Desktop/傍点验收A-WorldReady排版器.idml`(`$ID/HL Composer Optyca`) 与 `~/Desktop/傍点验收B-日文排版器.idml`(`$ID/HL Composer J`)。待用户回报哪个出点：A 出点→保持；B 出点→把常量 `appliedComposer` 改成 `$ID/HL Composer J` 同步断言；都不出→另查 KentenFontSize 等。
   - ⚠️ **与 E3-7 冲突预警**：本项已改 `IDMLExporter.swift`（dev `8ce89a8`），Codex 正在同文件做 E3-7——Codex 提交前务必 `git merge origin/dev` 同步本 commit，解决段落输出处的冲突。
 
-- [~] **E3-7 脚注 → IDML**　← Codex 进行中（注意先 merge origin/dev 拿 E3-3v 的 IDMLExporter 改动）
+- [~] **E3-7 脚注 → IDML**　← 机制已成（commit `8be4467` @ `feature/codex-e3-7-footnotes`），但见下方 **E3-7v 视觉退回**：脚注正文中文豆腐。**暂不合 dev**。
   - 目标：`anchoredFootnoteIds` 映射到 IDML 脚注（Footnote 元素），而非当前的纯文字处理。
   - 文件：`IDMLExporter.swift`（仅导出侧；导入侧已就绪，别动）。
   - 起手提示（Claude 已勘）：**导入侧已经做好了**——`MarkdownBookImporter` 解析 `[^id]` 标记、收集定义、`postProcessFootnotesAndSideNotes()` 分配编号、把锚段的 `anchoredFootnoteIds`(`BookProject.swift:293`) 填好，并把脚注内容作为 `kind: .footnote(number:)` 段落（`styleId:"footnote"`）追加到 story 末尾。目前 IDMLExporter 把这些当普通段落画成裸文字。本项要做的是：在导出锚段时，对其每个 `anchoredFootnoteIds`，在对应锚点位置写出 InDesign `<Footnote>` 元素（内含 `<ParagraphStyleRange>/<CharacterStyleRange>/<Content>` 的脚注正文），并**不再**把那条 `.footnote(number:)` 段落作为正文裸段输出（避免脚注内容在正文里重复出现一次）。InDesign IDML 脚注的 XML 形态可对照官方 IDML 规范的 `Footnote` 元素（自动编号靠文档级 `<FootnoteOption>`，单个脚注不用自己写号）。
   - 验收：`printf '正文一句话[^a]。\n\n[^a]: 这是脚注内容。\n'` 导出后，①InDesign 打开识别为真脚注（正文出上标编号、页脚出脚注正文、自动编号），不是裸文字；②正文里**不**再出现重复的脚注正文裸段；③`scripts/review-idml.sh` 仍 PASS，并补一条端到端断言（story XML 里出现 `<Footnote` 元素、且脚注正文不再作为独立正文段重复）。
   - ⚠️ 端到端验收必须解包 IDML grep `<Footnote`，别只靠单测——本项目踩过「单测绿但功能坏」的坑。
+
+- [~] **E3-7v 脚注正文在 InDesign 渲染（视觉退回）** — Codex 现役，优先于 E3-4。Claude 已勘根因
+  - **现象**（用户 0621 InDesign 肉眼验收 `~/Desktop/layoutD脚注验收-0621.idml`）：原生脚注机制成立——正文锚点自动编号 1/2、页底有分隔线+脚注区、无重复。**但脚注正文里的中文全是缺字方框（豆腐 ☒☒☒），只有 `ATP` 等拉丁字符正常**。
+  - **repro**：`printf '细胞是生命的基本单位[^a]。\n\n[^a]: 细胞由细胞膜、细胞质和细胞核构成。\n'` → 导出 → 解包 → 脚注区中文不显示。
+  - **根因（两段断链，Claude 已勘）**：
+    1. 脚注段没有专属段落样式：`StyleID` 枚举只有 `body/heading1/heading2/caption/callout`，**无 `footnote`**；导入器却把脚注段建成 `styleId:"footnote"`（`MarkdownBookImporter.swift:411`）。导出器仅遍历 `project.styles.paragraphStyles` 生成样式 → Styles.xml 里**没有 `ParagraphStyle/footnote`**，也就没有 `CF_footnote` 复合字体。
+    2. `footnoteXML`（`IDMLExporter.swift:789`）把脚注的 `AppliedParagraphStyle` 硬编码成 `ParagraphStyle/$ID/[No paragraph style]`（无 AppliedFont）。正文段引用的是带 `CF_body` 复合字体的 `ParagraphStyle/body`，所以正文中文正常、脚注中文退回拉丁默认字体变豆腐。
+  - **修复方向**（仅导出侧）：让脚注的 `<ParagraphStyleRange>` 引用一个带中文复合字体（`CF_*`）的段落样式。最稳：引用已存在的 `ParagraphStyle/body`；更规范：注册一个脚注专属小字号段落样式（可基于 caption）并引用之。务必确认被引用的样式真的在 Styles.xml 里生成（带 `CF_` AppliedFont），别再指向 `[No paragraph style]`。
+  - **验收**：①补端到端断言——解包后脚注 `<Footnote>` 内的 `<ParagraphStyleRange AppliedParagraphStyle=...>` 必须指向带 `CF_` 字体的样式、**不得**是 `$ID/[No paragraph style]`；②`scripts/review-idml.sh` 仍 PASS；③Claude 复审后重导样例投桌面，用户在 InDesign 肉眼确认脚注中文正常显示（无豆腐）。
+  - ⚠️ 与 dev 的 E3-3v(composer 改 `storyXML` ParagraphStyleRange 行) 同文件，提交前 `git merge origin/dev` 同步并 reconcile。
 
 - [ ] **E3-4 原生表格 Table**
   - 目标：table 组件从「当文字导」升级为 IDML 原生 `<Table>/<Cell>`（行列/边框/底色），可在 InDesign 调列宽。
