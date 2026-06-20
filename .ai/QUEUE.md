@@ -68,7 +68,7 @@
   - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`、`Sources/LayoutDCore/BookProject.swift`(如需)。
   - 验收：`printf '## **粗**标题\n\n- 列表*斜*项\n> 引用**强调**\n'` 导出 IDML 后，标题/列表/引用里的强调都出对应 FontStyle；`scripts/review-idml.sh` PASS。
 
-- [~] **E3-3 傍点（Kenten 着重号）— Claude 审核退回，需修嵌套 bug**（接着在 `feature/codex-e3-3-kenten` 上修）
+- [x] **E3-3 傍点（Kenten 着重号）** — Codex @ `feature/codex-e3-3-kenten`, 修复 commit `dfd6ac8`
   - 目标：`InlineEmphasis.kenten` 落地——`==着重==` → kenten run → IDML `KentenKind` 属性。
   - 文件：`MarkdownBookImporter.swift`（语法解析）、`IDMLExporter.swift`（IDML 属性输出）。
   - ✅ **已对的部分**：纯 `==着重==`（不嵌套）在标题/列表/引用/callout/正文里都正确出 `KentenKind="KentenSesameDot"`；ASCII `a==b` 不误判；`scripts/review-idml.sh` PASS（183 测试）。

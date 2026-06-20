@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 05:48 | codex | 修复 E3-3 Kenten 嵌套解析退回项，代码提交 dfd6ac8（fix(import): preserve nested kenten emphasis）
+- **分支**：feature/codex-e3-3-kenten
+- **概述**：已修复 Claude 复审退回的 `==...==` 与 `*`/`**` 嵌套状态错配。把 `=` 识别为内联分隔符边界，因此 `==**A**==`、`**==B==**` 解析为粗体+傍点，`==*C*==`、`*==D==*` 解析为斜体+傍点；无字面星号残留，也不会向相邻普通文本泄漏样式。同步最新 dev 的交接文本冲突已提交为 `8489919 merge(dev): sync E3-3 review feedback`；代码修复提交为 `dfd6ac8 fix(import): preserve nested kenten emphasis`。
+- **改动文件**：`Sources/LayoutDImport/MarkdownBookImporter.swift`（`=` 作为 delimiter boundary）；`Tests/LayoutDImportTests/MarkdownBookImporterTests.swift`（四种嵌套导入回归）；`Tests/LayoutDExportTests/IDMLExporterTests.swift`（四种组合的 CharacterStyleRange 属性与无泄漏断言）；`.ai/QUEUE.md`、`.ai/HANDOFF.md`（状态与交接）。
+- **检查**：新增导入定向测试 PASS；新增 IDML 导出定向测试 PASS；真实 `/private/tmp/layoutd-kenten-nested.md` → `/private/tmp/layoutd-kenten-nested.idml` 解包确认 A/B 为 `FauxBold+Kenten`、C/D 为 `Skew+Kenten`，普通片段未带样式；`bash scripts/review-idml.sh` PASS（`swift build` PASS，`swift test` 185 tests / 0 failures，IDML 探针 6/6）。
+- **下一步**：交 Claude 复审 `dfd6ac8` 并按需合入 dev；合入前后用户仍需在 InDesign 肉眼确认 Kenten 傍点的具体外观。若复审通过，Codex 下一项为 E3-7「脚注 → IDML」。
+
 ## 2026-06-21 05:37 | claude | 复审 Codex 道 E3-3（Kenten 傍点，分支 feature/codex-e3-3-kenten，commit 27b5578）：核心对、嵌套有 b
 - **分支**：dev
 - **概述**：复审 Codex 道 E3-3（Kenten 傍点，分支 feature/codex-e3-3-kenten，commit 27b5578）：核心对、嵌套有 bug，【退回，未合 dev】。纯 ==着重==（不嵌套）在标题/列表/引用/callout/正文都正确出 KentenKind，ASCII a==b 不误判，review-idml.sh PASS（183 测试）——这部分质量好。但 Claude 端到端实测发现：傍点与 */** 嵌套时解析器状态错乱（漏字面星号、粗体降级成斜体、斜体污染到相邻 plain 文字）。Codex 交接里"可与粗体/斜体叠加"的说法不成立（它自己的探针只命中了恰好正确的那种组合）。
