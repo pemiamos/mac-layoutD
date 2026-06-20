@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 05:19 | claude | 行内强调这一整批经用户 InDesign 视觉验收通过，已合并 dev→main 并推送。用户实际打开导出样例确认：粗体加粗、斜体倾斜都可见，标题/列表/引用/
+- **分支**：dev
+- **概述**：行内强调这一整批经用户 InDesign 视觉验收通过，已合并 dev→main 并推送。用户实际打开导出样例确认：粗体加粗、斜体倾斜都可见，标题/列表/引用/知识点框的行内强调全部生效。这是 main 上第一次「真·人工视觉验收」的合并（此前 6faa1b0 的 visual verified 标签不准确，已被这次取代）。同时按用户要求给两道排了连续作业序列。
+- **改动文件**：合并提交 dfd7696（main）。本批累计内容：IDMLExporter.swift（粗体 FauxBold + 斜体 Skew="12"）、MarkdownBookImporter.swift（E3-1 统一 makeParagraph，标题/列表/引用/callout 保留 inlineRuns）、对应单测、scripts/review-idml.sh 探针、.ai/AGENTS.md+QUEUE.md+DECISIONS.md（worktree 隔离 + 连续作业流程）。
+- **检查**：用户 InDesign 视觉验收 PASS（粗体可见、斜体可见）。合并前 dev 工作区干净；scripts/review-idml.sh 在 0a334ba 上 PASS（182 测试 + 6 探针全过）。main: dfd7696，dev: 12b972b，origin 均已同步。
+- **下一步**：Codex/Antigravity 现在按 .ai/QUEUE.md「本批连续序列」连续作业、不停下问确认：Codex 道 E3-3→E3-7→E3-4→E3-6；AG 道 E3-2→校对批注层（从最新 dev 起新分支 feature/ag-e3-2，弃用旧 feature/ag-inline-preview）。Claude 下一轮批量审核两道攒出的 feature 分支，合 dev，再交用户视觉验收。可择机清理已合并/过时的本地分支：feature/codex-inline-blocks、feature/codex-inline-runs、feature/ag-inline-preview。
+
 ## 2026-06-21 02:10 | claude | 按用户决定，给三个 AI 搭好了 git worktree 物理隔离。Claude=主仓库 mac-layoutD（集成 dev/main），Codex=mac
 - **分支**：dev
 - **概述**：按用户决定，给三个 AI 搭好了 git worktree 物理隔离。Claude=主仓库 mac-layoutD（集成 dev/main），Codex=mac-layoutD-codex（停靠 codex-lane），Antigravity=mac-layoutD-ag（停靠 ag-lane），三副本共享同一 .git。四处 relay 配置的 RELAY_PROJECT_ROOT 已分别改指各自副本（改前都有 .bak-worktree 备份）。AGENTS.md/QUEUE.md 已更新隔离规则与新分工，DECISIONS.md 记了决策。两个停靠分支已快进到最新 dev，副本里已能读到隔离说明。新分工：Codex/Antigravity 只在自己副本+feature 分支提交，不合 dev/main、不必 push；dev/main 合并与交接日志冲突解决统一归 Claude。
