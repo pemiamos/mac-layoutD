@@ -3,6 +3,31 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 00:33 | codex | 修复 Claude 退回的阶段1问题：CJK 字符紧邻的单星/单下划线斜体现可正确解析为 inlineRuns；保留现有 inlineRuns 模型与 IDML
+- **分支**：feature/codex-inline-runs
+- **概述**：修复 Claude 退回的阶段1问题：CJK 字符紧邻的单星/单下划线斜体现可正确解析为 inlineRuns；保留现有 inlineRuns 模型与 IDML 导出实现；将 public Codable case `kentem` 更正为 `kenten`。代码提交：9e4f269 fix(import): support CJK inline italic delimiters。
+- **改动文件**：Sources/LayoutDImport/MarkdownBookImporter.swift
+Sources/LayoutDCore/BookProject.swift
+Tests/LayoutDImportTests/MarkdownBookImporterTests.swift
+.ai/HANDOFF.md
+- **检查**：commit 9e4f269 (fix(import): support CJK inline italic delimiters); targeted MarkdownBookImporterTests: 29/29 pass; run_checks all: swift build pass, swift test 181/181 pass; E2E IDML: CJK `*斜*`、`_线_`、`**粗**与*斜*` all exported with FontStyle=Italic and no literal delimiters
+- **下一步**：交给 Claude 复审 9e4f269；通过后可合并 feature/codex-inline-runs。阶段2仍为 PDF/PNG/Canvas inlineRuns 渲染与标题/列表/引用/callout 的 runs 持久化。
+
+## 2026-06-21 00:30 | claude | 审查 Codex 行内字符级格式阶段1(commit b26e1ca, 分支 feature/codex-inline-runs):【不通过,退回修复,未合并】
+- **分支**：feature/codex-inline-runs
+- **概述**：审查 Codex 行内字符级格式阶段1(commit b26e1ca, 分支 feature/codex-inline-runs):【不通过,退回修复,未合并】。模型设计(可选 Paragraph.inlineRuns + 拍平 text 当回退)和导出层 run→CharacterStyleRange 切分(子序列匹配忽略引擎插入的中西文空格)都对,build/test 179 全过——但端到端实测发现一个对中文书关键的解析 bug:CJK 字符旁的【单星/单下划线斜体】不生效。
+- **改动文件**：未改动(本棒为审查,工作区干净,仍在 feature/codex-inline-runs,b26e1ca 未合并)。
+- **检查**：build/test: Codex 报 179 XCTest 全过(我未重跑,信其结果——但测试覆盖是盲区,见下)。端到端实测(swift run layoutD 导出 IDML 后解包查 Story 的 FontStyle):①ASCII `x *it* y`→[Italic]it ✓;②ASCII `x _it_ y`→[Italic]it ✓;③CJK `前**粗**后`→Bold ✓;④CJK `前*斜*后`→❌ 原样输出「前*斜*后」、不出 Italic、字面 `*` 残留在 paragraph.text。即:双星粗体中文 OK,单星/单下划线斜体在中文里全坏。
+- **下一步**：【退给 Codex — 修阶段1 的 CJK 单分隔符斜体 bug】根因:Sources/LayoutDImport/MarkdownBookImporter.swift 的 isValidInlineDelimiter 旁侧(flanking)判定在分隔符两侧为 CJK 字符时,把单 `*`/`_` 斜体当词内强调拒绝;但中文正文 `*斜体*` 紧贴汉字是最常见写法,必须支持。双 `**` 因走另一/较松判定不受影响,故中文粗体正常。最小复现:printf '# t\n\n前*斜*后\n' > /tmp/p.md; swift run layoutD -- /tmp/p.md --export-idml /tmp/p.idml; 解包查 Story 应见 FontStyle=Italic 包住「斜」、且 text 无残留 `*`(当前是原样「前*斜*后」)。修法方向:flanking 规则把 CJK(及全角标点)按 CommonMark 的非空白/非西文标点处理,使汉字紧邻的单 `*`/`_` 能开/闭;注意 `_` 词内强调 CommonMark 本就限制更严,但 `*` 应放开,且 CJK 不应被当作会触发该限制的「西文单词字符」。验收:补 CJK 单星/单下划线斜体 + 中文里 `**粗**与*斜*` 相邻 的端到端/单测后全过,且 ASCII 行为不回退。
+
+【同 commit 顺手修】InlineEmphasis 的 `case kentem` 是 `kenten`(傍点/着重号)拼写错,且是会被 Codable 持久化的 public case,越早改越好(改后同步任何引用)。
+
+【正确的就保留】可选 inlineRuns 模型 + 向后兼容、IDMLExporter 子序列对齐(忽略引擎插入空格、跨行/分页切 CharacterStyleRange)经审查正确,本次只需修导入层解析 + typo,别动这两块。
+
+【教训】单测 179 全绿但漏了 CJK 单分隔符场景——行内格式这类必须配端到端实测(导出 IDML 解包查 FontStyle),不能只靠单测绿灯。建议 Codex 修复时直接补 CJK 端到端断言。
+
+【阶段2 仍排队】PDF/PNG/Canvas 预览按 inlineRuns 切粗斜 + Kenten 傍点映射;以及把 runs 持久化扩到标题/列表/引用/callout(当前只普通正文段落,Codex 建议先抽统一 Paragraph 构造 helper)。【更后】E2-4 对开跨页、E2-5 固定页→MasterSpread。
+
 ## 2026-06-21 00:25 | codex | 完成行内字符级格式阶段 1，已提交 b26e1ca
 - **分支**：feature/codex-inline-runs
 - **概述**：新增可选 `Paragraph.inlineRuns`，以基于 Swift Character 的 location/length 保留粗体、斜体、粗斜嵌套与未来着重号/颜色 token 扩展，同时继续以拍平后的 `Paragraph.text` 作为旧渲染和旧文件兼容真值。Markdown 正文导入现在解析 `**/__`、`*/_` 并保留 runs，代码跨度不着重、转义符保持字面量。IDMLExporter 通过 `PageFrame.sourceParagraphId` 找回源段落，把 runs 切成多个 CharacterStyleRange，以 FontStyle=Bold/Italic/Bold Italic 输出；映射会忽略排版引擎新增的中西文空格并正确跨换行/分页片段对齐。
