@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 02:10 | claude | 按用户决定，给三个 AI 搭好了 git worktree 物理隔离。Claude=主仓库 mac-layoutD（集成 dev/main），Codex=mac
+- **分支**：dev
+- **概述**：按用户决定，给三个 AI 搭好了 git worktree 物理隔离。Claude=主仓库 mac-layoutD（集成 dev/main），Codex=mac-layoutD-codex（停靠 codex-lane），Antigravity=mac-layoutD-ag（停靠 ag-lane），三副本共享同一 .git。四处 relay 配置的 RELAY_PROJECT_ROOT 已分别改指各自副本（改前都有 .bak-worktree 备份）。AGENTS.md/QUEUE.md 已更新隔离规则与新分工，DECISIONS.md 记了决策。两个停靠分支已快进到最新 dev，副本里已能读到隔离说明。新分工：Codex/Antigravity 只在自己副本+feature 分支提交，不合 dev/main、不必 push；dev/main 合并与交接日志冲突解决统一归 Claude。
+- **改动文件**：.ai/AGENTS.md, .ai/QUEUE.md, .ai/DECISIONS.md（commit 3ec9585，已 push dev）；外部配置（不在仓库）：~/.codex/config.toml、~/.gemini/config/mcp_config.json、~/.gemini/antigravity-ide/mcp_config.json、~/.gemini/antigravity/mcp_config.json 的 RELAY_PROJECT_ROOT 改指各自 worktree
+- **检查**：worktree 建立确认：git worktree list 三条（dev/codex-lane/ag-lane）。两副本 sanity check 通过：.ai/HANDOFF.md 可读、git 干净在各自分支、swift 可用、AGENTS.md 含隔离说明。四处 relay 配置 RELAY_PROJECT_ROOT 已逐一 grep 确认指向正确副本。dev 当前 HEAD 3ec9585。
+- **下一步**：⚠️ Codex 和 Antigravity 必须重启应用，新的 RELAY_PROJECT_ROOT 才会生效（MCP server 启动时读环境变量）——这步要用户做。重启后两道开工就会落在各自副本里。Codex 下一项任务仍是 E3-3 Kenten（傍点）。另：FauxBold 修复后的综合验收样例在用户桌面 layoutD行内强调综合样例-0621b.idml，等用户 InDesign 视觉验收，验收 OK 后 Claude 可把 dev 合 main。旧分支 feature/codex-inline-blocks（已合 dev）、feature/ag-inline-preview（仅含已 cherry-pick 的 commit）可择机清理。
+
 ## 2026-06-21 01:57 | claude | 完成上一条交接里排的「下一步②」：重新生成覆盖标题/列表/引用/admonition callout 强调的综合验收样例（基于 FauxBold/FauxIta
 - **分支**：dev
 - **概述**：完成上一条交接里排的「下一步②」：重新生成覆盖标题/列表/引用/admonition callout 强调的综合验收样例（基于 FauxBold/FauxItalic 修复 + 已合并的 E3-1），解包确认 14 处 CharacterStyleRange 全部正确带 FauxBold/FauxItalic、无残留 */_ 分隔符。已复制到用户桌面并删除了此前那份有 bug 的旧样例，避免用户打开错文件。本轮工作到此收尾。
