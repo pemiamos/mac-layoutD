@@ -126,13 +126,27 @@
 - [x] 字体匹配：CoreText 取真实 FontType（系统 CJK 是 OpenTypeCID 非 CFF）+ PostScript 名 → InDesign 无缺失字体。
 - [x] 非对开干净分页：`PagesPerDocument="1"`（恒为 1，非实际页数）+ `FacingPages="false"` + spread 纵向偏移 → 无空白页、主页单页。
 - [x] 容器级自动验证（IDMLExporterTests）+ demo.md 端到端导出、全 XML well-formed、InDesign 4 页内容全正确。
-后续增量：
-- [ ] 对开跨页（facing spread）；固定美术页 → MasterSpread；非矩形蒙版。
-- [ ] 避头尾 → 禁则集；组件背景/描边（知识卡片等）；字体「家族+样式名」拆分（PingFang SC Semibold 等）。
-- [ ] 图片打包（IDML + Links 文件夹）与相对路径重链。
-- [ ] 首页幻影（起始页码=2 的 Section）；spike 的 /usr/bin/zip 换原生 zip 写入。
+已随 MVP 一并解决：字体「家族+样式名」拆分（splitFont + FontType 检测）；首页幻影（改单页非对开后自然消失）。
+
+### E2. IDML 增强（接力分工，详见 `.ai/AGENTS.md`）
+
+> 单向流，不做 IDML 回导；交棒后 InDesign 为真理源。每项验收口径：导出 → InDesign 中文版打开正确（视觉验收由用户/Antigravity 做，Claude 无 Screen Recording 权限）。
+
+| # | 任务 | 主负责 | 说明 / 优先级 |
+|---|---|---|---|
+| E2-1 | **图片打包 + 相对重链** | Codex | 把置入图复制进 `Links/` 文件夹、`LinkResourceURI` 改相对路径，使 `.idml` 可移植。**优先级最高**（当前用绝对 `file:` 路径，换机即断链）|
+| E2-2 | **组件背景 / 描边** | Codex | 知识卡片等组件的底色/描边/accent 映射成 InDesign 框架填色描边（当前只导文字）|
+| E2-3 | **避头尾 → 禁则集** | Codex | 中文禁则映射到 InDesign 禁则集（KinsokuTable）|
+| E2-4 | **对开跨页（facing spread）** | Codex | 可选 facing 模式：按 `pageSetup.facingPages` 生成 2 页 spread + 起始页码 Section；较大改动，放后 |
+| E2-5 | **固定美术页 → MasterSpread / 非矩形蒙版** | Codex | 满版图/扉页固定页映射、扇面/八角蒙版（图框 PathGeometry）|
+| E2-6 | **`/usr/bin/zip` → 原生 zip 写入** | Codex | 去掉外部进程依赖，保证 mimetype store-first |
+| E2-7 | **GUI 加 IDML 导出入口** | Codex | `LayoutDApp` 菜单/工具栏增加「导出 IDML…」+ 选项面板 |
+| — | **审查 + 拆解指令 + 每项验收闭环** | Claude | 为每项写明确指令进 handoff；Codex 落地后审查 |
+| — | **InDesign 打开效果 / GUI 交互视觉验证** | Antigravity / 用户 | 替代 Claude 做不了的视觉验收 |
+
+> 说明：`swift test` 末尾「0 tests in 0 suites」是 **Swift Testing 运行器**（找 `@Test`）的输出，本项目全用 XCTest，实测 **172 个 XCTest 全部执行通过**（`swift test` 完整输出含 "Executed 172 tests, 0 failures"）。relay `run_checks("test")` 仅回显最后一行才造成「0 tests」错觉——**非测试发现 bug，是 run_checks 输出截取问题**，可在 relay 侧改为回显 XCTest 汇总行。
+
 - 验收：一份真实 demo 项目导出的 IDML 在 InDesign 打开后版面与 layoutD 预览一致到「可微调」程度。
-- 注意：单向流，不做 IDML 回导；交棒后 InDesign 为真理源。
 
 ---
 
