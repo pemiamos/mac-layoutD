@@ -4,21 +4,30 @@
 > Claude 维护本队列与每项的「目标/文件/验收」；攒一批分支后 Claude 批量审核，不再一个一个提交、一个一个审。
 > 两道按文件边界分工，正常不会改到同一文件；真出现冲突按下方「认领协议」处理。
 
+## 工作副本隔离（2026-06-21 起）
+
+三个 AI 各有物理隔离的工作副本（git worktree，共享同一个 `.git`）：
+**Codex → `/Users/amos/Documents/GitHub/mac-layoutD-codex`（停靠 `codex-lane`）**；
+**Antigravity → `/Users/amos/Documents/GitHub/mac-layoutD-ag`（停靠 `ag-lane`）**；
+**Claude → 主仓库 `mac-layoutD`（集成区，`dev`/`main`）**。
+开工先确认 shell 在自己的副本里。详见 `.ai/AGENTS.md` 顶部「工作副本隔离」。
+
 ## 流程铁律（每一棒都照做）
 
 **Codex / Antigravity（执行）每领一个任务：**
-1. `read_latest_handoff()` + 读本文件，领**自己道**里最上面未打勾任务。
-2. 把该行 `- [ ]` 改成 `- [~] 认领: <你的名字> @ <分支名>`（挂牌，避免撞车），单独提交或随手改一起带上。
-3. 起 `feature/codex-<task>` 或 `feature/ag-<task>` 分支。
+1. 确认在**自己的副本目录**里（Codex=`…-codex` / AG=`…-ag`）。`read_latest_handoff()` + 读本文件，领**自己道**里最上面未打勾任务。
+2. 把该行 `- [ ]` 改成 `- [~] 认领: <你的名字> @ <分支名>`（挂牌，避免撞车），随手改一起带上。
+3. 在停靠分支上 `git fetch && git merge origin/dev` 同步最新 dev，再起 `feature/codex-<task>` 或 `feature/ag-<task>` 分支。
 4. 实现 + 写**端到端验收**（不能只靠单测——本项目踩过「单测全绿但功能坏」的坑）。
 5. **必须** `bash scripts/review-idml.sh` 本地 PASS 后才提交（这就是 Claude 审核要跑的同一套）。
-6. commit（feat/fix 规范）+ 把该行改成 `- [x]`（注明 commit hash）+ `write_handoff` 同样注明 commit。
+6. commit（feat/fix 规范）到**自己的 feature 分支**+ 把该行改成 `- [x]`（注明 commit hash）+ `write_handoff` 同样注明 commit。
+   **不合 dev、不必 push**——共享 `.git`，Claude 本地直接看得到你的分支。
 7. 能连续跑就接着领下一个；不能就停，等下次被唤起。
 
-**Claude（审核）批量做：**
-1. 攒几个 `feature/codex-*` / `feature/ag-*` 分支一起审，不逐个来回。
+**Claude（集成）批量做：**
+1. 在主仓库里，攒几个 `feature/codex-*` / `feature/ag-*` 分支一起审，不逐个来回（共享 `.git`，无需等对方 push）。
 2. 每个分支跑 `scripts/review-idml.sh`：全绿才算过；有 FAIL 把精确 repro 退回交接。
-3. 过的合进 `dev` 集成分支（不直接进 main）。
+3. 过的合进 `dev` 集成分支（不直接进 main）；`.ai/HANDOFF.md` 等交接日志的合并冲突由 Claude 集中解决。
 4. `dev` 攒一批后交用户在 InDesign/GUI 做**视觉验收**（无头验证不了渲染对错，这关必须人看）。
 5. 验收 OK → Claude 合 `dev` → `main` 并 push；验收有问题 → 直接在 Claude 这边改。
 
