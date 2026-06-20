@@ -44,6 +44,41 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertTrue(fonts.contains("CompositeFont Self=\"CompositeFont/CF_body\""))
     }
 
+    func testPackagesReferencedImageAndUsesRelativeLinkURI() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-links-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let source = root.appendingPathComponent("source-image.png")
+        let contents = Data("packaged-image".utf8)
+        try contents.write(to: source)
+
+        var project = BookProject.sample
+        XCTAssertFalse(project.assets.isEmpty)
+        project.assets[0].fileName = "cell-diagram.png"
+        project.assets[0].sourcePath = source.path
+        let imageFrame = PageFrame(
+            kind: .image,
+            rect: Rect(x: 20, y: 20, width: 200, height: 120),
+            content: .asset(project.assets[0].id)
+        )
+        let document = LaidOutDocument(
+            projectId: project.id,
+            pages: [LaidOutPage(number: 1, frames: [imageFrame])]
+        )
+        let output = root.appendingPathComponent("book.idml")
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let packagedImage = root.appendingPathComponent("Links/cell-diagram.png")
+        XCTAssertEqual(try Data(contentsOf: packagedImage), contents)
+        let spreads = try zipEntries(output).filter { $0.hasPrefix("Spreads/Spread_") }
+        let spreadXML = try spreads.map { try entry(output, $0) }.joined(separator: "\n")
+        XCTAssertTrue(spreadXML.contains("LinkResourceURI=\"file:Links/cell-diagram.png\""))
+        XCTAssertFalse(spreadXML.contains(source.path))
+    }
+
     // MARK: - helpers
 
     private func zipEntries(_ url: URL) throws -> [String] {
