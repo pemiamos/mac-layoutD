@@ -123,6 +123,27 @@ final class MarkdownBookImporterTests: XCTestCase {
         XCTAssertNil(paragraph.inlineRuns)
     }
 
+    func testPreservesKentenWhenNestedWithBoldAndItalic() throws {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 嵌套傍点
+
+            一 ==**A**== 二 **==B==** 三 ==*C*== 四 *==D==* 五。
+            """
+        )
+        let paragraph = try XCTUnwrap(
+            project.sections[0].stories[0].paragraphs.first { $0.kind == .body }
+        )
+
+        XCTAssertEqual(paragraph.text, "一 A 二 B 三 C 四 D 五。")
+        XCTAssertEqual(paragraph.inlineRuns, [
+            InlineRun(location: 2, length: 1, emphasis: [.bold, .kenten]),
+            InlineRun(location: 6, length: 1, emphasis: [.bold, .kenten]),
+            InlineRun(location: 10, length: 1, emphasis: [.italic, .kenten]),
+            InlineRun(location: 14, length: 1, emphasis: [.italic, .kenten])
+        ])
+    }
+
     func testImportsHeadingsBodyAndFigures() {
         let knownAsset = Asset(
             fileName: "images/cell-diagram.png",

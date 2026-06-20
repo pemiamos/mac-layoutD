@@ -1017,7 +1017,7 @@ private struct MarkdownParser {
         }
 
         let punctuation = CharacterSet.punctuationCharacters.union(
-            CharacterSet(charactersIn: "，。、；：！？（）【】《》「」『』“”‘’、")
+            CharacterSet(charactersIn: "=，。、；：！？（）【】《》「」『』“”‘’、")
         )
         return character.unicodeScalars.allSatisfy { punctuation.contains($0) }
     }

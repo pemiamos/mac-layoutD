@@ -45,6 +45,43 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertEqual(matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count, 2)
     }
 
+    func testExportsNestedKentenCombinationRunsWithoutStyleLeakage() throws {
+        let paragraph = Paragraph(
+            kind: .body,
+            text: "一 A 二 B 三 C 四 D 五。",
+            styleId: StyleID.body.rawValue,
+            inlineRuns: [
+                InlineRun(location: 2, length: 1, emphasis: [.bold, .kenten]),
+                InlineRun(location: 6, length: 1, emphasis: [.bold, .kenten]),
+                InlineRun(location: 10, length: 1, emphasis: [.italic, .kenten]),
+                InlineRun(location: 14, length: 1, emphasis: [.italic, .kenten])
+            ]
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "嵌套傍点", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])]
+        )
+        let frame = PageFrame(
+            kind: .text,
+            rect: Rect(x: 20, y: 20, width: 200, height: 100),
+            styleId: StyleID.body.rawValue,
+            content: .text(paragraph.text),
+            sourceParagraphId: paragraph.id
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-nested-kenten-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let story = try entry(output, "Stories/Story_uStory0_0.xml")
+        XCTAssertEqual(matches(in: story, pattern: "(FauxBold=\\\"true\\\" KentenKind=\\\"KentenSesameDot\\\"[^>]*><Content>[AB]</Content>)").count, 2)
+        XCTAssertEqual(matches(in: story, pattern: "(Skew=\\\"12\\\" KentenKind=\\\"KentenSesameDot\\\"[^>]*><Content>[CD]</Content>)").count, 2)
+        XCTAssertFalse(story.contains("Skew=\"12\"><Content>二</Content>"))
+        XCTAssertFalse(story.contains("FauxBold=\"true\"><Content>三</Content>"))
+    }
+
     func testExportsValidIDMLFromSampleProject() throws {
         let project = BookProject.sample
         let document = LayoutEngine().layout(project: project)
