@@ -3,6 +3,25 @@ import LayoutDImport
 import XCTest
 
 final class MarkdownBookImporterTests: XCTestCase {
+    func testPreservesBoldItalicAndNestedInlineRuns() throws {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 行内格式
+
+            普通 **粗体**、*斜体* 与 ***粗斜体***，`代码`不着重。
+            """
+        )
+        let paragraph = try XCTUnwrap(
+            project.sections[0].stories[0].paragraphs.first { $0.kind == .body }
+        )
+        XCTAssertEqual(paragraph.text, "普通 粗体、斜体 与 粗斜体，代码不着重。")
+        XCTAssertEqual(paragraph.inlineRuns, [
+            InlineRun(location: 3, length: 2, emphasis: [.bold]),
+            InlineRun(location: 6, length: 2, emphasis: [.italic]),
+            InlineRun(location: 11, length: 3, emphasis: [.bold, .italic])
+        ])
+    }
+
     func testImportsHeadingsBodyAndFigures() {
         let knownAsset = Asset(
             fileName: "images/cell-diagram.png",
