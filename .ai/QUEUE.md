@@ -82,15 +82,17 @@
   - **修复验收**：上面 4 种嵌套写法导出后，A=粗+傍点、B=粗+傍点、C=斜+傍点、D=斜+傍点，**均无字面 `*` 残留、无 emphasis 渗染到相邻 plain 文字**；补这 4 个端到端断言；`scripts/review-idml.sh` 仍 PASS。修好后用户再在 InDesign 肉眼确认傍点显示。
   - ✅ 嵌套解析 bug 已修（`dfd6ac8`），但见下方 **E3-3v**：傍点视觉首次人工验收**没出点**。
 
-- [~] **E3-3v 傍点在 InDesign 实际渲染（视觉退回，优先于 E3-7）** — 认领: <Codex> @ <feature/codex-e3-3v-kenten-composer>
+- [~] **E3-3v 傍点在 InDesign 实际渲染（视觉退回）** — Claude 直接改 @ dev commit `8ce89a8`（代码已落，待用户视觉复验）
   - ❌ **退回原因（2026-06-21 用户 InDesign 首次肉眼验收 `~/Desktop/layoutD傍点嵌套验收-0621.idml`）**：粗体/斜体都正常（C/D、内质网、高尔基体可见倾斜），但**着重号（傍点/芝麻点）整页一个都没画出来**——含纯傍点对照「重点内容」也无点。即 `KentenKind="KentenSesameDot"` 属性写进了 Story XML（解包可见），InDesign 却完全不渲染。这是「属性在、视觉无」的同类坑（参考当年 FontStyle→FauxBold）。
   - **根因方向（Claude 已勘，强线索待 Codex 验证）**：导出的 `<ParagraphStyleRange>` **从不写 `AppliedComposer`**（`IDMLExporter.swift:675` 只有 `AppliedParagraphStyle`）。**Kenten/着重号是 CJK 排版特性，InDesign 仅在段落使用 World-Ready / 日文段落排版器时才绘制**；默认拉丁 composer 下 `KentenKind` 被静默忽略 → 中英文都不出点，与现象吻合。
   - 文件：`IDMLExporter.swift`（段落/样式输出）、可能 `Styles.xml` 段落样式定义。
   - **修复方向**：给正文段落（至少含 kenten run 的段落，建议全体 CJK 段落）设 World-Ready 段落排版器。IDML 中即 `AppliedComposer`，候选值需 Codex 对照真·InDesign 存盘的 IDML 确认确切字符串（如 `$ID/Adobe Japanese Paragraph Composer` 或 `HL Composer J` 一类；别凭记忆硬写，写错 InDesign 会回退默认 composer 等于没改）。如仅 composer 仍不出点，再排查是否缺 `KentenFontSize`/`KentenCharacterSet` 等次要属性。
   - **验收**：① 重新导出本验收样例，**用户在 InDesign 肉眼确认 A/B/C/D 与「重点内容」逐字带着重点、普通字无点**（这关必须人看，无头测不出渲染对错）；② `scripts/review-idml.sh` 仍 PASS；③ 补端到端断言：Story 段落带正确的 `AppliedComposer`。⚠️ composer 改了别破坏已验收的横排断行/避头尾。
   - 备注：E3-3 的解析 commit `dfd6ac8` 不回滚（嵌套已对、属性无害）；本项只补 composer 让属性真正生效。
+  - ✅ **2026-06-21 Claude 已实现（dev `8ce89a8`）**：给每个 `<ParagraphStyleRange>` 写 `AppliedComposer="$ID/HL Composer Optyca"`（World-Ready 段落排版器），补端到端断言（每段都带该 composer）；187 测试 + review-idml.sh PASS。⚠️ composer 确切字符串取自 IDML 公开资料、**非真·InDesign 存盘比对**，已导两个变体给用户对比验收：`~/Desktop/傍点验收A-WorldReady排版器.idml`(`$ID/HL Composer Optyca`) 与 `~/Desktop/傍点验收B-日文排版器.idml`(`$ID/HL Composer J`)。待用户回报哪个出点：A 出点→保持；B 出点→把常量 `appliedComposer` 改成 `$ID/HL Composer J` 同步断言；都不出→另查 KentenFontSize 等。
+  - ⚠️ **与 E3-7 冲突预警**：本项已改 `IDMLExporter.swift`（dev `8ce89a8`），Codex 正在同文件做 E3-7——Codex 提交前务必 `git merge origin/dev` 同步本 commit，解决段落输出处的冲突。
 
-- [ ] **E3-7 脚注 → IDML**　← E3-3v 修完后再接（本批顺序：E3-3v → E3-7 → E3-4 → E3-6）
+- [~] **E3-7 脚注 → IDML**　← Codex 进行中（注意先 merge origin/dev 拿 E3-3v 的 IDMLExporter 改动）
   - 目标：`anchoredFootnoteIds` 映射到 IDML 脚注（Footnote 元素），而非当前的纯文字处理。
   - 文件：`IDMLExporter.swift`（仅导出侧；导入侧已就绪，别动）。
   - 起手提示（Claude 已勘）：**导入侧已经做好了**——`MarkdownBookImporter` 解析 `[^id]` 标记、收集定义、`postProcessFootnotesAndSideNotes()` 分配编号、把锚段的 `anchoredFootnoteIds`(`BookProject.swift:293`) 填好，并把脚注内容作为 `kind: .footnote(number:)` 段落（`styleId:"footnote"`）追加到 story 末尾。目前 IDMLExporter 把这些当普通段落画成裸文字。本项要做的是：在导出锚段时，对其每个 `anchoredFootnoteIds`，在对应锚点位置写出 InDesign `<Footnote>` 元素（内含 `<ParagraphStyleRange>/<CharacterStyleRange>/<Content>` 的脚注正文），并**不再**把那条 `.footnote(number:)` 段落作为正文裸段输出（避免脚注内容在正文里重复出现一次）。InDesign IDML 脚注的 XML 形态可对照官方 IDML 规范的 `Footnote` 元素（自动编号靠文档级 `<FootnoteOption>`，单个脚注不用自己写号）。
