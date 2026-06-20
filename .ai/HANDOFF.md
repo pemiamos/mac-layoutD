@@ -3,6 +3,40 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 05:41 | claude | 复审并合并 Antigravity 本批两道（feature/ag-e3-2，commit 44e2873 + 374c28e）——【已合 dev】。① E3-
+- **分支**：dev
+- **概述**：复审并合并 Antigravity 本批两道（feature/ag-e3-2，commit 44e2873 + 374c28e）——【已合 dev】。① E3-2 行内格式预览渲染：inlineRuns 一路透传进 LayoutEngine 的测量/断行/避头尾/孤寡行/分栏续接及 Canvas/PDF/PNG 三处绘制；斜体用 12° skew 矩阵（与 IDML Skew=12 同算法，预览↔导出对齐），粗体用 boldTrait；InlineRun.mapRuns 处理子串/续接 run 偏移；测试真断言到渲染层（boldTrait 命中、skew c=tan12°）。② 校对批注层：BookAnnotation 可选字段 + safeAnnotations + 旧档 decode 向后兼容，持久化进项目 JSON，未碰 IDMLExporter，确认不入 IDML 正文。review-idml.sh 在该分支 PASS（184 tests，比 dev 多 2）。已导 /tmp/emphasis_check.md 的预览 PNG：page-003 肉眼可见中文「粗体强调」与英文「bold word」字重明显加重，粗体视觉验收通过；斜体段被 demo 模板小文本框截断未露出，靠单测+同算法锁定。PNG 已放用户桌面待其放大确认斜体。
+- **改动文件**：（合并 AG 分支，本棒未自改代码）Sources/LayoutDCore/BookProject.swift, Sources/LayoutDCore/ChineseTypesetting.swift, Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDApp/{CanvasView,ToolbarView,main}.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift
+- **检查**：scripts/review-idml.sh 在 feature/ag-e3-2 PASS（swift build/test 184 tests 0 fail，IDML 端到端探针 6/6）；PNG 视觉：粗体（CJK+Latin）字重明显加重=通过，斜体待用户桌面 PNG 确认。dev 合并 commit 已落（--no-ff）。
+- **下一步**：① 待用户在桌面 PNG / InDesign 肉眼确认斜体倾斜与批注层显示后，Claude 合 dev→main 并 push。② Codex 道 E3-3 傍点嵌套 bug 仍 [~] 退回中（feature/codex-e3-3-kenten），等 Codex 修好 4 种嵌套写法（A/B/C/D）再复审。③ AG 道下一项「导出选项面板跟进」依赖 Codex E2-4/E3-8，非阻塞可先设计。
+
+## 2026-06-21 05:37 | claude | 复审 Codex 道 E3-3（Kenten 傍点，分支 feature/codex-e3-3-kenten，commit 27b5578）：核心对、嵌套有 b
+- **分支**：dev
+- **概述**：复审 Codex 道 E3-3（Kenten 傍点，分支 feature/codex-e3-3-kenten，commit 27b5578）：核心对、嵌套有 bug，【退回，未合 dev】。纯 ==着重==（不嵌套）在标题/列表/引用/callout/正文都正确出 KentenKind，ASCII a==b 不误判，review-idml.sh PASS（183 测试）——这部分质量好。但 Claude 端到端实测发现：傍点与 */** 嵌套时解析器状态错乱（漏字面星号、粗体降级成斜体、斜体污染到相邻 plain 文字）。Codex 交接里"可与粗体/斜体叠加"的说法不成立（它自己的探针只命中了恰好正确的那种组合）。
+- **改动文件**：未改代码（本棒为审核，工作区干净仍在 dev）。已在 .ai/QUEUE.md 把 E3-3 标回 [~] 并写入精确 repro 与修复验收标准。
+- **检查**：review-idml.sh 在 feature/codex-e3-3-kenten 上 PASS（183 tests）。Claude 自定义 kenten 探针：纯 ==着重== 6 处全对、跨 block 全对、ASCII a==b 不误判 ✓；但 `一 ==**A**== 二 **==B==** 三 ==*C*== 四 *==D==* 五` 实测：==**A**== 漏出字面*且A变Skew且斜体渗染到"二""三"；**==B==** 的B多带Skew；==*C*== 出"C*"字面星号；只有 *==D==* 正确。
+- **下一步**：【退给 Codex 修 E3-3 嵌套 bug】在 feature/codex-e3-3-kenten 上接着修：根因在 isValidInlineDelimiter 的 CJK flanking 判定与新加的 == 消费后、对紧跟 **/* 的开闭判定失误。验收：上述 4 种嵌套写法 A/B/C/D 全部 = 对应 emphasis + kenten，无字面*残留、无 emphasis 渗染到相邻 plain 文字；补 4 个端到端断言；review-idml.sh 仍 PASS。修好我再合 dev。另：Antigravity 的 E3-2（feature/ag-e3-2，commit 44e2873，PDF/PNG/Canvas inlineRuns 预览渲染）已完成待 Claude 审核——下一棒 Claude 审 E3-2 并按需给用户出 PNG 做视觉验收。
+
+## 2026-06-21 05:37 | antigravity | 实现了行内格式预览渲染 (E3-2) 和校对批注层两项任务。
+- **分支**：dev
+- **概述**：实现了行内格式预览渲染 (E3-2) 和校对批注层两项任务。
+1. 行内格式预览渲染：扩展了 CoreText 转换 attributedString (makeAttributedString) 的支持，使 PDF/PNG/Canvas 在渲染含有 inlineRuns 的文本帧时，能够准确应用粗体 (boldTrait) 与斜体 (通过 CGAffineTransform 12 度 Skew)；同时在 LayoutEngine 的 breakTextIntoLines / estimatedTextHeight 流程中，计算每一行及其前缀宽度时，也将 mapped runs 计入测量，确保排版布局与预览的字宽完全对齐；且 template 页面生成的 PageFrame 也保留了 sourceParagraphId 以做 runs 匹配。
+2. 校对批注层：在 BookProject 模型中新增了 persistence-safe 的 BookAnnotation 结构，以及 annotations 字段；在 AppState 增加更新通道，在 CanvasView 增加了根据缩放自动缩放的批注标记 (橘色 badge) 及其批注文本浮标的叠加渲染；在 CanvasView / main.swift 中实现交互：激活批注工具点击空白处可通过 NSAlert 输入框添加新批注，点击已有批注 15pt 内可确认删除它；所有批注完全独立于正文流，不参与排版，不带入 IDML 导出。
+提交的 commits:
+- 4d74873 docs(queue): mark E3-2 and annotation layer tasks as completed
+- 374c28e feat(annotation): support proofreading annotation layer on canvas
+- 44e2873 feat(preview): support inline runs in PDF/PNG/Canvas preview rendering
+- **改动文件**：Package.swift, Sources/LayoutDCore/BookProject.swift, Sources/LayoutDCore/ChineseTypesetting.swift, Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/ToolbarView.swift, Sources/LayoutDApp/main.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift, .ai/QUEUE.md
+- **检查**：swift build: pass, swift test (184 tests): pass, scripts/review-idml.sh: pass
+- **下一步**：已全部完成当前 Antigravity 道本批序列任务 (E3-2 & 校对批注层)。请 Claude 在主仓库合并分支 feature/ag-e3-2 并发布。
+
+## 2026-06-21 05:19 | claude | 行内强调这一整批经用户 InDesign 视觉验收通过，已合并 dev→main 并推送。用户实际打开导出样例确认：粗体加粗、斜体倾斜都可见，标题/列表/引用/
+- **分支**：dev
+- **概述**：行内强调这一整批经用户 InDesign 视觉验收通过，已合并 dev→main 并推送。用户实际打开导出样例确认：粗体加粗、斜体倾斜都可见，标题/列表/引用/知识点框的行内强调全部生效。这是 main 上第一次「真·人工视觉验收」的合并（此前 6faa1b0 的 visual verified 标签不准确，已被这次取代）。同时按用户要求给两道排了连续作业序列。
+- **改动文件**：合并提交 dfd7696（main）。本批累计内容：IDMLExporter.swift（粗体 FauxBold + 斜体 Skew="12"）、MarkdownBookImporter.swift（E3-1 统一 makeParagraph，标题/列表/引用/callout 保留 inlineRuns）、对应单测、scripts/review-idml.sh 探针、.ai/AGENTS.md+QUEUE.md+DECISIONS.md（worktree 隔离 + 连续作业流程）。
+- **检查**：用户 InDesign 视觉验收 PASS（粗体可见、斜体可见）。合并前 dev 工作区干净；scripts/review-idml.sh 在 0a334ba 上 PASS（182 测试 + 6 探针全过）。main: dfd7696，dev: 12b972b，origin 均已同步。
+- **下一步**：Codex/Antigravity 现在按 .ai/QUEUE.md「本批连续序列」连续作业、不停下问确认：Codex 道 E3-3→E3-7→E3-4→E3-6；AG 道 E3-2→校对批注层（从最新 dev 起新分支 feature/ag-e3-2，弃用旧 feature/ag-inline-preview）。Claude 下一轮批量审核两道攒出的 feature 分支，合 dev，再交用户视觉验收。可择机清理已合并/过时的本地分支：feature/codex-inline-blocks、feature/codex-inline-runs、feature/ag-inline-preview。
+
 ## 2026-06-21 02:10 | claude | 按用户决定，给三个 AI 搭好了 git worktree 物理隔离。Claude=主仓库 mac-layoutD（集成 dev/main），Codex=mac
 - **分支**：dev
 - **概述**：按用户决定，给三个 AI 搭好了 git worktree 物理隔离。Claude=主仓库 mac-layoutD（集成 dev/main），Codex=mac-layoutD-codex（停靠 codex-lane），Antigravity=mac-layoutD-ag（停靠 ag-lane），三副本共享同一 .git。四处 relay 配置的 RELAY_PROJECT_ROOT 已分别改指各自副本（改前都有 .bak-worktree 备份）。AGENTS.md/QUEUE.md 已更新隔离规则与新分工，DECISIONS.md 记了决策。两个停靠分支已快进到最新 dev，副本里已能读到隔离说明。新分工：Codex/Antigravity 只在自己副本+feature 分支提交，不合 dev/main、不必 push；dev/main 合并与交接日志冲突解决统一归 Claude。

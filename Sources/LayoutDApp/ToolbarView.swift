@@ -32,6 +32,14 @@ struct ToolbarView: View {
             Divider()
                 .padding(.horizontal, 4)
 
+            // Group 4: Annotations & Proofreading (overlay annotations)
+            VStack(spacing: 4) {
+                toolButton(.annotation)
+            }
+
+            Divider()
+                .padding(.horizontal, 4)
+
             // Group 5: Navigation tools
             VStack(spacing: 4) {
                 toolButton(.hand)

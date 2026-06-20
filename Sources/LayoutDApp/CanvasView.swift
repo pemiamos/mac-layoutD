@@ -255,6 +255,47 @@ final class CanvasView: NSView {
             draw(frame: frame, project: project, pageRect: pageRect)
         }
 
+        // Draw annotations for this page
+        if let annotations = project.annotations {
+            let pageAnnotations = annotations.filter { $0.pageNumber == page.number }
+            for annotation in pageAnnotations {
+                let x = pageRect.minX + CGFloat(annotation.x) * zoomScale
+                let y = pageRect.minY + CGFloat(annotation.y) * zoomScale
+                
+                // Draw a small circle marker
+                let markerRadius: CGFloat = 6.0 * zoomScale
+                let markerRect = CGRect(x: x - markerRadius, y: y - markerRadius, width: markerRadius * 2, height: markerRadius * 2)
+                let path = NSBezierPath(ovalIn: markerRect)
+                NSColor.systemOrange.setFill()
+                path.fill()
+                NSColor.white.setStroke()
+                path.lineWidth = 1.5 * zoomScale
+                path.stroke()
+                
+                // Draw a small label box next to it
+                let text = annotation.text
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: min(max(8.0 * zoomScale, 7.0), 12.0)),
+                    .foregroundColor: NSColor.white
+                ]
+                let textSize = text.size(withAttributes: attributes)
+                
+                let labelPadding: CGFloat = 3.0 * zoomScale
+                let labelRect = CGRect(
+                    x: x + markerRadius + 2.0 * zoomScale,
+                    y: y - textSize.height / 2.0,
+                    width: textSize.width + labelPadding * 2,
+                    height: textSize.height + labelPadding
+                )
+                
+                let labelPath = NSBezierPath(roundedRect: labelRect, xRadius: 3 * zoomScale, yRadius: 3 * zoomScale)
+                NSColor.black.withAlphaComponent(0.75).setFill()
+                labelPath.fill()
+                
+                text.draw(at: CGPoint(x: labelRect.minX + labelPadding, y: labelRect.minY + labelPadding / 2.0), withAttributes: attributes)
+            }
+        }
+
         drawPageNumber(page.number, project: project, pageRect: pageRect)
     }
 
@@ -352,10 +393,11 @@ final class CanvasView: NSView {
                     ),
                     kind: frame.kind,
                     textColorOverride: componentTextColor,
-                    applyDefaultInset: false
+                    applyDefaultInset: false,
+                    sourceParagraphId: frame.sourceParagraphId
                 )
             } else {
-                drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor)
+                drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor, sourceParagraphId: frame.sourceParagraphId)
             }
         case .asset(let assetId):
             drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect, maskShape: frame.maskShape)
@@ -476,7 +518,8 @@ final class CanvasView: NSView {
         rect: CGRect,
         kind: PageFrameKind,
         textColorOverride: NSColor? = nil,
-        applyDefaultInset: Bool = true
+        applyDefaultInset: Bool = true,
+        sourceParagraphId: UUID? = nil
     ) {
         let style: ParagraphStyle
         if kind == .footnote {
@@ -509,11 +552,20 @@ final class CanvasView: NSView {
 
         let tokenColor = project.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
         let textColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
+        
+        var mappedRuns: [InlineRun]? = nil
+        if let sourceParagraphId = sourceParagraphId,
+           let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+           let runs = paragraph.inlineRuns {
+            mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
+        }
+
         let attrString = ChineseTypesetting.makeAttributedString(
             text: text,
             style: style,
             foregroundColor: textColor.cgColor,
-            zoomScale: zoomScale
+            zoomScale: zoomScale,
+            inlineRuns: mappedRuns
         )
         
         let drawingRect = applyDefaultInset ? rect.insetBy(dx: 4, dy: 2) : rect
