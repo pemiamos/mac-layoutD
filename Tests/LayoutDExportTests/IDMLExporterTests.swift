@@ -82,6 +82,39 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertFalse(story.contains("FauxBold=\"true\"><Content>三</Content>"))
     }
 
+    func testExportsAnchoredFootnoteAsNativeIDMLWithoutDuplicatePageFooter() throws {
+        let footnote = Paragraph(
+            kind: .footnote(number: 1),
+            text: "这是脚注内容。",
+            styleId: "footnote"
+        )
+        let body = Paragraph(
+            kind: .body,
+            text: "正文一句话¹。",
+            styleId: StyleID.body.rawValue,
+            anchoredFootnoteIds: [footnote.id]
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "脚注", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [body, footnote])])]
+        )
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-footnote-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let stories = try zipEntries(output)
+            .filter { $0.hasPrefix("Stories/Story_") }
+            .map { try entry(output, $0) }
+            .joined(separator: "\n")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Footnote>[\\s\\S]*?<Content>这是脚注内容。</Content>[\\s\\S]*?</Footnote>)").count, 1)
+        XCTAssertFalse(stories.contains("<Content>¹</Content>"), "脚注锚点应由原生 Footnote 取代，而非保留 Unicode 上标")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Content>这是脚注内容。</Content>)").count, 1,
+                       "脚注正文只能位于 Footnote 内，不得作为页脚 frame 再导出一次")
+    }
+
     func testExportsValidIDMLFromSampleProject() throws {
         let project = BookProject.sample
         let document = LayoutEngine().layout(project: project)

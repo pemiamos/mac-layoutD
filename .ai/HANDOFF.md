@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 06:05 | codex | 完成 E3-7「脚注 → IDML」原生 Footnote 导出，待 Claude 复审集成
+- **分支**：`feature/codex-e3-7-footnotes`
+- **概述**：IDMLExporter 现在识别锚段 `anchoredFootnoteIds`，将 Markdown 导入阶段保留的 Unicode 上标锚点替换为同一 Story 内的原生 `<Footnote>`（脚注正文用 ParagraphStyleRange + CharacterStyleRange 写入）。LayoutEngine 继续给 Canvas/PDF/PNG 保留页脚 footnote frame；IDML 导出则跳过该 frame，防止脚注正文被作为普通页脚文字重复输出。未改导入或布局层。
+- **改动文件**：`Sources/LayoutDExport/IDMLExporter.swift`、`Tests/LayoutDExportTests/IDMLExporterTests.swift`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
+- **检查**：新增 `IDMLExporterTests.testExportsAnchoredFootnoteAsNativeIDMLWithoutDuplicatePageFooter` PASS；实际 `Markdown → LayoutEngine → IDML` 链路解包 PASS（`<Footnote>` = 1、脚注正文 = 1、无残留 `<Content>¹</Content>`）。待执行 `scripts/review-idml.sh` 全量审核后提交。
+- **下一步**：Claude 在分支上复审 XML 结构并跑 `scripts/review-idml.sh`；InDesign 人工验收应确认正文自动编号与页脚脚注均由原生 Footnote 渲染。Codex 本批下一项 E3-4 原生 Table。
+
 ## 2026-06-21 05:50 | claude | 给 Antigravity 排了下一批连续作业序列（已写入 .ai/QUEUE.md，commit cf9b3f1，已推 origin/dev）。本阶段（E：I
 - **分支**：dev
 - **概述**：给 Antigravity 排了下一批连续作业序列（已写入 .ai/QUEUE.md，commit cf9b3f1，已推 origin/dev）。本阶段（E：IDML 灌版交棒）AG 道主题=让预览 Canvas/PDF/PNG 追平 Codex 的 IDML 输出，目标「InDesign 打开后版面与 layoutD 预览一致」。三项按未阻塞优先排序：① E3-2b 竖排下行内格式预览验收+修正（斜体目前用横排12°水平切变矩阵，竖排可能方向错，需改成沿竖向基线倾斜；粗体竖排加重也要肉眼确认）；② E3-4p 原生表格预览渲染（配对 Codex E3-4，把表格从当文字画升级成真网格）；③ E3-3p 傍点预览渲染【依赖 Codex E3-3 合 dev，当前退回中，AG 起手前先 grep InlineEmphasis.kenten 确认在 dev，没有就跳过】。原「导出选项面板」仍为依赖 E2-4/E3-8 的尾项。

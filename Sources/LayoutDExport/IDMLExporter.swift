@@ -76,6 +76,10 @@ public struct IDMLExporter {
             for (fi, frame) in page.frames.enumerated() {
                 switch frame.content {
                 case .text(let raw):
+                    // 脚注由锚点 Story 内的原生 <Footnote> 承载。LayoutEngine 仍会
+                    // 为 Canvas/PDF/PNG 生成页脚 frame；IDML 不能再把那份 frame 当
+                    // 普通正文导出，否则 InDesign 会出现两份脚注内容。
+                    guard frame.kind != .footnote else { continue }
                     let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !text.isEmpty else { continue }
                     let storySelf = "uStory\(pi)_\(fi)"
@@ -105,8 +109,16 @@ public struct IDMLExporter {
                     } else {
                         frameInlineRuns = nil
                     }
+                    let frameFootnotes: [Paragraph]
+                    if let paragraphID = frame.sourceParagraphId,
+                       let paragraph = paragraphsByID[paragraphID] {
+                        frameFootnotes = paragraph.safeAnchoredFootnoteIds.compactMap { paragraphsByID[$0] }
+                    } else {
+                        frameFootnotes = []
+                    }
                     let storyContent = storyXML(self: storySelf, styleRef: styleRef,
-                                                vertical: vertical, text: text, inlineRuns: frameInlineRuns)
+                                                vertical: vertical, text: text, inlineRuns: frameInlineRuns,
+                                                footnotes: frameFootnotes)
                     storyFiles["Stories/Story_\(storySelf).xml"] = storyContent
                     storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                     storyListIds.append(storySelf)
@@ -657,7 +669,8 @@ public struct IDMLExporter {
         styleRef: String,
         vertical: Bool,
         text: String,
-        inlineRuns: [InlineRun]? = nil
+        inlineRuns: [InlineRun]? = nil,
+        footnotes: [Paragraph] = []
     ) -> String {
         let orientation = vertical ? "Vertical" : "Horizontal"
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
@@ -673,7 +686,7 @@ public struct IDMLExporter {
         let body = effectiveParagraphs.map { line, start in
             """
             \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
-            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? []))
+            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes))
             \t\t</ParagraphStyleRange>
             """
         }.joined(separator: "\n")
@@ -688,7 +701,48 @@ public struct IDMLExporter {
         """
     }
 
-    private func characterStyleRanges(for text: String, globalStart: Int, inlineRuns: [InlineRun]) -> String {
+    private func characterStyleRanges(
+        for text: String,
+        globalStart: Int,
+        inlineRuns: [InlineRun],
+        footnotes: [Paragraph] = []
+    ) -> String {
+        guard !footnotes.isEmpty else {
+            return styledCharacterRanges(for: text, globalStart: globalStart, inlineRuns: inlineRuns)
+        }
+
+        // Markdown importer 已把 [^id] 替换为对应的 Unicode 上标，并以出现顺序保存
+        // anchoredFootnoteIds。将该上标替换成 Footnote，交由 InDesign 的 FootnoteOption
+        // 自动绘制编号；未命中的文本仍走既有行内样式导出。
+        let characters = Array(text)
+        var cursor = 0
+        var output = ""
+        for footnote in footnotes {
+            guard let marker = footnoteMarker(for: footnote), !marker.isEmpty,
+                  let markerStart = firstMatch(of: Array(marker), in: characters, from: cursor) else {
+                continue
+            }
+            if markerStart > cursor {
+                output += styledCharacterRanges(
+                    for: String(characters[cursor..<markerStart]),
+                    globalStart: globalStart + cursor,
+                    inlineRuns: inlineRuns
+                )
+            }
+            output += footnoteXML(footnote)
+            cursor = markerStart + marker.count
+        }
+        if cursor < characters.count {
+            output += styledCharacterRanges(
+                for: String(characters[cursor...]),
+                globalStart: globalStart + cursor,
+                inlineRuns: inlineRuns
+            )
+        }
+        return output
+    }
+
+    private func styledCharacterRanges(for text: String, globalStart: Int, inlineRuns: [InlineRun]) -> String {
         let characters = Array(text)
         guard !characters.isEmpty else { return "" }
         var styles = Array(repeating: Set<InlineEmphasis>(), count: characters.count)
@@ -722,6 +776,38 @@ public struct IDMLExporter {
             }
             return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(attrs)><Content>\(esc(content))</Content></CharacterStyleRange>"
         }.joined(separator: "\n")
+    }
+
+    private func footnoteXML(_ paragraph: Paragraph) -> String {
+        let body = styledCharacterRanges(
+            for: paragraph.text,
+            globalStart: 0,
+            inlineRuns: paragraph.inlineRuns ?? []
+        )
+        return """
+        \t\t\t<Footnote>
+        \t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/$ID/[No paragraph style]">
+        \(body)
+        \t\t\t\t</ParagraphStyleRange>
+        \t\t\t</Footnote>
+        """
+    }
+
+    private func footnoteMarker(for paragraph: Paragraph) -> String? {
+        guard case .footnote(let number) = paragraph.kind else { return nil }
+        let digits: [Character: Character] = [
+            "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
+            "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹"
+        ]
+        return String(number).compactMap { digits[$0] }.map(String.init).joined()
+    }
+
+    private func firstMatch(of needle: [Character], in haystack: [Character], from start: Int) -> Int? {
+        guard !needle.isEmpty, start <= haystack.count - needle.count else { return nil }
+        for index in start...(haystack.count - needle.count) where Array(haystack[index..<(index + needle.count)]) == needle {
+            return index
+        }
+        return nil
     }
 
     // MARK: - 打包（纯 Swift ZIP32；mimetype store-first）
