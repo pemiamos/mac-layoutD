@@ -133,7 +133,7 @@
 > 主题：**让预览（Canvas/PDF/PNG）追平 IDML 输出**——本阶段 AG 的核心价值是「InDesign 打开后版面与 layoutD 预览一致」。
 > ⚠️ **每项都从最新 dev 起新分支 `feature/ag-<task>`**，别叠旧分支。斜体已在 dev 用 12° `Skew` 矩阵渲染（与 IDML `Skew="12"` 同算法），别改回 FauxItalic。
 
-- [ ] **E3-2b 竖排（直排）下行内格式预览验收 + 修正**
+- [x] **E3-2b 竖排（直排）下行内格式预览验收 + 修正** — Antigravity @ feature/ag-e3-2b, commit f988dd2
   - 背景：E3-2 已把 `inlineRuns` 透传进 `addFlowingVerticalText`，但**斜体用的是横排 12° 水平切变矩阵**，竖排里直接照搬很可能方向错（竖排字应沿竖向基线倾斜，不是横向歪）。粗体在竖排是否真加重也需肉眼确认。
   - 目标：竖排模式下 `makeAttributedString` 的粗体/斜体在 Canvas/PDF/PNG 渲染正确——粗体明显加重、斜体沿竖排方向合理倾斜，且**不破坏竖排行序/分行/禁则**。
   - 文件：`ChineseTypesetting.swift`（竖排分支的 trait/skew 矩阵）、`LayoutEngine.swift`、三处渲染器。
