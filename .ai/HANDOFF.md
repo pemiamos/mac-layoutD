@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 05:50 | claude | 给 Antigravity 排了下一批连续作业序列（已写入 .ai/QUEUE.md，commit cf9b3f1，已推 origin/dev）。本阶段（E：I
+- **分支**：dev
+- **概述**：给 Antigravity 排了下一批连续作业序列（已写入 .ai/QUEUE.md，commit cf9b3f1，已推 origin/dev）。本阶段（E：IDML 灌版交棒）AG 道主题=让预览 Canvas/PDF/PNG 追平 Codex 的 IDML 输出，目标「InDesign 打开后版面与 layoutD 预览一致」。三项按未阻塞优先排序：① E3-2b 竖排下行内格式预览验收+修正（斜体目前用横排12°水平切变矩阵，竖排可能方向错，需改成沿竖向基线倾斜；粗体竖排加重也要肉眼确认）；② E3-4p 原生表格预览渲染（配对 Codex E3-4，把表格从当文字画升级成真网格）；③ E3-3p 傍点预览渲染【依赖 Codex E3-3 合 dev，当前退回中，AG 起手前先 grep InlineEmphasis.kenten 确认在 dev，没有就跳过】。原「导出选项面板」仍为依赖 E2-4/E3-8 的尾项。
+- **改动文件**：.ai/QUEUE.md
+- **检查**：无代码改动（仅排队列）；commit cf9b3f1 已推 origin/dev。
+- **下一步**：Antigravity：在 ag-lane 上 git merge origin/dev 同步本批队列，按 E3-2b → E3-4p →（E3-3p 视依赖）顺序连做，每项从最新 dev 起 feature/ag-<task> 分支、自审 review-idml.sh PASS 再提交，一轮收尾写汇总 handoff。Claude：待 AG 交回竖排/表格分支后批量复审 + 出 PNG 交用户视觉验。Codex：E3-3 傍点嵌套 bug 仍待修，修好 E3-3 后 AG 的 E3-3p 才能起。
+
 ## 2026-06-21 05:41 | claude | 复审并合并 Antigravity 本批两道（feature/ag-e3-2，commit 44e2873 + 374c28e）——【已合 dev】。① E3-
 - **分支**：dev
 - **概述**：复审并合并 Antigravity 本批两道（feature/ag-e3-2，commit 44e2873 + 374c28e）——【已合 dev】。① E3-2 行内格式预览渲染：inlineRuns 一路透传进 LayoutEngine 的测量/断行/避头尾/孤寡行/分栏续接及 Canvas/PDF/PNG 三处绘制；斜体用 12° skew 矩阵（与 IDML Skew=12 同算法，预览↔导出对齐），粗体用 boldTrait；InlineRun.mapRuns 处理子串/续接 run 偏移；测试真断言到渲染层（boldTrait 命中、skew c=tan12°）。② 校对批注层：BookAnnotation 可选字段 + safeAnnotations + 旧档 decode 向后兼容，持久化进项目 JSON，未碰 IDMLExporter，确认不入 IDML 正文。review-idml.sh 在该分支 PASS（184 tests，比 dev 多 2）。已导 /tmp/emphasis_check.md 的预览 PNG：page-003 肉眼可见中文「粗体强调」与英文「bold word」字重明显加重，粗体视觉验收通过；斜体段被 demo 模板小文本框截断未露出，靠单测+同算法锁定。PNG 已放用户桌面待其放大确认斜体。
