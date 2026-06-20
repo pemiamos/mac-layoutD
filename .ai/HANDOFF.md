@@ -3,6 +3,19 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 00:49 | claude | 复审通过 Codex 修复(9e4f269):CJK 单星/单下划线斜体已正确解析、kentem→kenten typo 已改;scripts/review-i
+- **分支**：main
+- **概述**：复审通过 Codex 修复(9e4f269):CJK 单星/单下划线斜体已正确解析、kentem→kenten typo 已改;scripts/review-idml.sh 加固 fixture(汉字夹单星回归点)后 PASS(181 XCTest + 端到端 FontStyle 断言全过)。同时搭起「自动化接力」流程并修正一个 git 操作失误。
+- **改动文件**：main(720105c): 新增 scripts/review-idml.sh(一键审核:build+test+IDML端到端探针) + .ai/QUEUE.md(Codex 自助队列+流程铁律)。dev(b4adf8d): main + 合入 inline-runs 阶段1(b26e1ca/9e4f269),待 InDesign。feature/codex-inline-runs 还原至 9a91d00。均已 push(含一次 dev force-push,见下)。
+- **检查**：scripts/review-idml.sh: PASS — swift build ok;swift test 181/181;mimetype 首条 Stored;全 XML well-formed;CJK `前*斜*后`→FontStyle=Italic、`**粗**`→Bold、无残留 */_。复现原 bug 已消失。
+- **下一步**：【新流程已生效,Codex 照 .ai/QUEUE.md 自助接力】Codex 下一个领 QUEUE 顶部未打勾项 = E3-1 行内格式补全到所有 block(标题/列表/引用/callout,先抽统一 Paragraph helper);起 feature/codex-* 分支,提交前必须 bash scripts/review-idml.sh 本地 PASS,写 handoff 注明 commit。Claude 批量审核→过的合 dev→攒批交你/Antigravity 在 InDesign 视觉验收→OK 后 dev→main。
+
+【待你/Antigravity】dev(b4adf8d) 现含 inline-runs 阶段1(粗/斜→IDML),请在 InDesign 中文版打开导出样例确认粗体/斜体字形局部生效(含中文里 *斜* 紧贴汉字);通过后告知,Claude 合 dev→main。
+
+【git 失误记录(已修复,留痕)】我先前把 infra 提交误落到 feature/codex-inline-runs 并空推 main;已 cherry-pick infra 到 main、还原 Codex 分支到 9a91d00、用干净 main 重建 dev 并 force-push origin/dev(该分支全新、仅我推过,已先说明)。现 main/dev/feature 三者关系干净。
+
+【基础设施待办(QUEUE 末尾)】GitHub Actions 跑 review-idml.sh 实现 push 即审、IDML RNG schema+golden 基线、relay run_checks(test) 改回显 XCTest 汇总行。
+
 ## 2026-06-21 00:00 | claude | 审查通过 E2-6(原生 zip 写入) + E2-7(GUI 导出 IDML 入口),已落地为 commit b7ba1fd「feat(idml): comp
 - **分支**：feature/codex-idml-e2-batch
 - **概述**：审查通过 E2-6(原生 zip 写入) + E2-7(GUI 导出 IDML 入口),已落地为 commit b7ba1fd「feat(idml): complete E2 export enhancements」。代码审查:①新增纯 Swift ZIPArchiveWriter(ZIP32 store-first,自带 CRC32、UInt16/UInt32 边界与路径穿越校验、原子写),IDMLExporter.writePackage 改用之,彻底去掉 IDML 路径上的 /usr/bin/zip 外部进程依赖;②确认 .idml 包内只含 XML(纯文本),置入图走 copyPackagedLinks 复制到旁边 Links/(E2-1),故 writer 只处理 String content 非 bug;③残留的 /usr/bin/zip 在 ResourceBundlePackager.swift,是另一个资源包导出器、不在 IDML 路径,E2-6 范围正确;④E2-7 在 LayoutDApp File 菜单加「Export IDML...」(⌘D)+ 导出选项面板(IDMLExportSettingsState/View)+ require-export-ready 预检闸门。
