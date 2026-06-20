@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 05:41 | claude | 复审并合并 Antigravity 本批两道（feature/ag-e3-2，commit 44e2873 + 374c28e）——【已合 dev】。① E3-
+- **分支**：dev
+- **概述**：复审并合并 Antigravity 本批两道（feature/ag-e3-2，commit 44e2873 + 374c28e）——【已合 dev】。① E3-2 行内格式预览渲染：inlineRuns 一路透传进 LayoutEngine 的测量/断行/避头尾/孤寡行/分栏续接及 Canvas/PDF/PNG 三处绘制；斜体用 12° skew 矩阵（与 IDML Skew=12 同算法，预览↔导出对齐），粗体用 boldTrait；InlineRun.mapRuns 处理子串/续接 run 偏移；测试真断言到渲染层（boldTrait 命中、skew c=tan12°）。② 校对批注层：BookAnnotation 可选字段 + safeAnnotations + 旧档 decode 向后兼容，持久化进项目 JSON，未碰 IDMLExporter，确认不入 IDML 正文。review-idml.sh 在该分支 PASS（184 tests，比 dev 多 2）。已导 /tmp/emphasis_check.md 的预览 PNG：page-003 肉眼可见中文「粗体强调」与英文「bold word」字重明显加重，粗体视觉验收通过；斜体段被 demo 模板小文本框截断未露出，靠单测+同算法锁定。PNG 已放用户桌面待其放大确认斜体。
+- **改动文件**：（合并 AG 分支，本棒未自改代码）Sources/LayoutDCore/BookProject.swift, Sources/LayoutDCore/ChineseTypesetting.swift, Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDApp/{CanvasView,ToolbarView,main}.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift
+- **检查**：scripts/review-idml.sh 在 feature/ag-e3-2 PASS（swift build/test 184 tests 0 fail，IDML 端到端探针 6/6）；PNG 视觉：粗体（CJK+Latin）字重明显加重=通过，斜体待用户桌面 PNG 确认。dev 合并 commit 已落（--no-ff）。
+- **下一步**：① 待用户在桌面 PNG / InDesign 肉眼确认斜体倾斜与批注层显示后，Claude 合 dev→main 并 push。② Codex 道 E3-3 傍点嵌套 bug 仍 [~] 退回中（feature/codex-e3-3-kenten），等 Codex 修好 4 种嵌套写法（A/B/C/D）再复审。③ AG 道下一项「导出选项面板跟进」依赖 Codex E2-4/E3-8，非阻塞可先设计。
+
 ## 2026-06-21 05:37 | claude | 复审 Codex 道 E3-3（Kenten 傍点，分支 feature/codex-e3-3-kenten，commit 27b5578）：核心对、嵌套有 b
 - **分支**：dev
 - **概述**：复审 Codex 道 E3-3（Kenten 傍点，分支 feature/codex-e3-3-kenten，commit 27b5578）：核心对、嵌套有 bug，【退回，未合 dev】。纯 ==着重==（不嵌套）在标题/列表/引用/callout/正文都正确出 KentenKind，ASCII a==b 不误判，review-idml.sh PASS（183 测试）——这部分质量好。但 Claude 端到端实测发现：傍点与 */** 嵌套时解析器状态错乱（漏字面星号、粗体降级成斜体、斜体污染到相邻 plain 文字）。Codex 交接里"可与粗体/斜体叠加"的说法不成立（它自己的探针只命中了恰好正确的那种组合）。
