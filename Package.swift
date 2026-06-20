@@ -51,7 +51,7 @@ let package = Package(
         ),
         .testTarget(
             name: "LayoutDCoreTests",
-            dependencies: ["LayoutDCore", "LayoutDEngine", "LayoutDDesignAI"]
+            dependencies: ["LayoutDCore", "LayoutDEngine", "LayoutDDesignAI", "LayoutDCheck", "LayoutDImport"]
         ),
         .testTarget(
             name: "LayoutDImportTests",

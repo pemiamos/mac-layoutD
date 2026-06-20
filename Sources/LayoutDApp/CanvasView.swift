@@ -352,10 +352,11 @@ final class CanvasView: NSView {
                     ),
                     kind: frame.kind,
                     textColorOverride: componentTextColor,
-                    applyDefaultInset: false
+                    applyDefaultInset: false,
+                    sourceParagraphId: frame.sourceParagraphId
                 )
             } else {
-                drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor)
+                drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor, sourceParagraphId: frame.sourceParagraphId)
             }
         case .asset(let assetId):
             drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect, maskShape: frame.maskShape)
@@ -476,7 +477,8 @@ final class CanvasView: NSView {
         rect: CGRect,
         kind: PageFrameKind,
         textColorOverride: NSColor? = nil,
-        applyDefaultInset: Bool = true
+        applyDefaultInset: Bool = true,
+        sourceParagraphId: UUID? = nil
     ) {
         let style: ParagraphStyle
         if kind == .footnote {
@@ -509,11 +511,20 @@ final class CanvasView: NSView {
 
         let tokenColor = project.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
         let textColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
+        
+        var mappedRuns: [InlineRun]? = nil
+        if let sourceParagraphId = sourceParagraphId,
+           let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+           let runs = paragraph.inlineRuns {
+            mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
+        }
+
         let attrString = ChineseTypesetting.makeAttributedString(
             text: text,
             style: style,
             foregroundColor: textColor.cgColor,
-            zoomScale: zoomScale
+            zoomScale: zoomScale,
+            inlineRuns: mappedRuns
         )
         
         let drawingRect = applyDefaultInset ? rect.insetBy(dx: 4, dy: 2) : rect

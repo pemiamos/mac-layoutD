@@ -10,7 +10,8 @@ public enum ChineseTypesetting {
         text: String,
         style: ParagraphStyle,
         foregroundColor: CGColor? = nil,
-        zoomScale: Double = 1.0
+        zoomScale: Double = 1.0,
+        inlineRuns: [InlineRun]? = nil
     ) -> NSAttributedString {
         let baseFontSize = style.fontSize * zoomScale
         let baseFont = CTFontCreateWithName(style.fontName as CFString, CGFloat(baseFontSize), nil)
@@ -100,6 +101,38 @@ public enum ChineseTypesetting {
                     attrString.addAttribute(NSAttributedString.Key(kCTBaselineOffsetAttributeName as String), value: scaledOffset as CFNumber, range: nsRange)
                 }
             }
+            
+            if let inlineRuns = inlineRuns {
+                for run in inlineRuns {
+                    let runRange = NSRange(location: run.location, length: run.length)
+                    let stringLength = attrString.length
+                    let safeLocation = max(0, min(runRange.location, stringLength))
+                    let safeLength = max(0, min(runRange.length, stringLength - safeLocation))
+                    let safeRange = NSRange(location: safeLocation, length: safeLength)
+                    guard safeRange.length > 0 else { continue }
+                    
+                    attrString.enumerateAttribute(NSAttributedString.Key(kCTFontAttributeName as String), in: safeRange, options: []) { value, range, stop in
+                        guard let fontVal = value else { return }
+                        let oldFont = fontVal as! CTFont
+                        
+                        let fontSize = CTFontGetSize(oldFont)
+                        var font = oldFont
+                        
+                        if run.emphasis.contains(.bold) {
+                            if let boldFont = CTFontCreateCopyWithSymbolicTraits(font, 0.0, nil, .boldTrait, .boldTrait) {
+                                font = boldFont
+                            }
+                        }
+                        
+                        if run.emphasis.contains(.italic) {
+                            var skewMatrix = CGAffineTransform(a: 1.0, b: 0.0, c: CGFloat(tan(12.0 * Double.pi / 180.0)), d: 1.0, tx: 0.0, ty: 0.0)
+                            font = CTFontCreateCopyWithAttributes(font, fontSize, &skewMatrix, nil)
+                        }
+                        
+                        attrString.addAttribute(NSAttributedString.Key(kCTFontAttributeName as String), value: font, range: range)
+                    }
+                }
+            }
         }
         
         applyPunctuationCompression(to: attrString, fontSize: style.fontSize * zoomScale)
@@ -145,8 +178,8 @@ public enum ChineseTypesetting {
         }
     }
 
-    public static func estimatedTextWidth(text: String, style: ParagraphStyle) -> Double {
-        let attrString = makeAttributedString(text: text, style: style)
+    public static func estimatedTextWidth(text: String, style: ParagraphStyle, inlineRuns: [InlineRun]? = nil) -> Double {
+        let attrString = makeAttributedString(text: text, style: style, inlineRuns: inlineRuns)
         let line = CTLineCreateWithAttributedString(attrString)
         var ascent: CGFloat = 0
         var descent: CGFloat = 0
@@ -159,7 +192,8 @@ public enum ChineseTypesetting {
         _ text: String,
         style: ParagraphStyle,
         columnWidth: Double,
-        hangingWidth: Double = 0.0
+        hangingWidth: Double = 0.0,
+        inlineRuns: [InlineRun]? = nil
     ) -> [String] {
         let trimmedText = text.trimmedForLayout
         guard !trimmedText.isEmpty else { return [] }
@@ -184,7 +218,9 @@ public enum ChineseTypesetting {
             while low <= high {
                 let mid = (low + high) / 2
                 let prefix = String(remaining.prefix(mid))
-                let width = estimatedTextWidth(text: prefix, style: style)
+                let startIndexInOriginal = trimmedText.count - remaining.count
+                let mappedRuns = InlineRun.mapRuns(inlineRuns ?? [], toSubstringFrom: startIndexInOriginal, length: mid)
+                let width = estimatedTextWidth(text: prefix, style: style, inlineRuns: mappedRuns)
                 if width <= columnWidth {
                     bestK = mid
                     low = mid + 1
@@ -204,7 +240,9 @@ public enum ChineseTypesetting {
                         let nextChar = remaining[remaining.index(remaining.startIndex, offsetBy: tempK)]
                         if isHangable(nextChar) {
                             let candidatePrefix = String(remaining.prefix(tempK + 1))
-                            let width = estimatedTextWidth(text: candidatePrefix, style: style)
+                            let startIndexInOriginal = trimmedText.count - remaining.count
+                            let mappedRuns = InlineRun.mapRuns(inlineRuns ?? [], toSubstringFrom: startIndexInOriginal, length: tempK + 1)
+                            let width = estimatedTextWidth(text: candidatePrefix, style: style, inlineRuns: mappedRuns)
                             if width <= columnWidth + hangingWidth {
                                 tempK += 1
                                 k = tempK
@@ -234,7 +272,9 @@ public enum ChineseTypesetting {
                     if ChineseLineBreakRules.forbidsLineStart(nextChar) {
                         // Try to pull it
                         let candidatePrefix = String(remaining.prefix(k + 1))
-                        let width = estimatedTextWidth(text: candidatePrefix, style: style)
+                        let startIndexInOriginal = trimmedText.count - remaining.count
+                        let mappedRuns = InlineRun.mapRuns(inlineRuns ?? [], toSubstringFrom: startIndexInOriginal, length: k + 1)
+                        let width = estimatedTextWidth(text: candidatePrefix, style: style, inlineRuns: mappedRuns)
                         let maxAllowedWidth = columnWidth + (isHangable(nextChar) ? hangingWidth : 0.0)
                         if width <= maxAllowedWidth {
                             k += 1

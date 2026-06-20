@@ -191,10 +191,11 @@ public struct PNGExporter {
                     project: project,
                     in: textRect,
                     context: context,
-                    textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project)
+                    textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project),
+                    sourceParagraphId: frame.sourceParagraphId
                 )
             } else {
-                drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context, textColorHex: frame.textColorHex)
+                drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context, textColorHex: frame.textColorHex, sourceParagraphId: frame.sourceParagraphId)
             }
         case .asset(let assetId):
             drawAsset(assetId: assetId, isLeftHalf: nil, project: project, in: rect, context: context, maskShape: frame.maskShape)
@@ -234,7 +235,7 @@ public struct PNGExporter {
         context.restoreGState()
     }
 
-    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind = .text, project: BookProject, in rect: CGRect, context: CGContext, textColorHex: String? = nil) {
+    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind = .text, project: BookProject, in rect: CGRect, context: CGContext, textColorHex: String? = nil, sourceParagraphId: UUID? = nil) {
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -275,10 +276,18 @@ public struct PNGExporter {
             textColor = NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).cgColor
         }
 
+        var mappedRuns: [InlineRun]? = nil
+        if let sourceParagraphId = sourceParagraphId,
+           let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+           let runs = paragraph.inlineRuns {
+            mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
+        }
+
         let attributedString = ChineseTypesetting.makeAttributedString(
             text: text,
             style: style,
-            foregroundColor: textColor
+            foregroundColor: textColor,
+            inlineRuns: mappedRuns
         )
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()

@@ -6,6 +6,45 @@ import LayoutDImport
 import XCTest
 
 final class LayoutDCoreTests: XCTestCase {
+    func testInlineRunsAttributedStringAndMapping() throws {
+        let text = "Hello World"
+        let runs = [
+            InlineRun(location: 0, length: 5, emphasis: [.bold]),
+            InlineRun(location: 6, length: 5, emphasis: [.italic])
+        ]
+        
+        // 1. Test mapRuns to substring
+        let mappedSubstring = InlineRun.mapRuns(runs, toSubstringFrom: 6, length: 5)
+        XCTAssertEqual(mappedSubstring.count, 1)
+        XCTAssertEqual(mappedSubstring[0].location, 0)
+        XCTAssertEqual(mappedSubstring[0].length, 5)
+        XCTAssertEqual(mappedSubstring[0].emphasis, [.italic])
+        
+        // 2. Test mapRuns by alignment
+        let mappedAligned = InlineRun.mapRuns(runs, from: "Hello World", to: "Hello  World")
+        XCTAssertNotNil(mappedAligned)
+        XCTAssertEqual(mappedAligned?.count, 2)
+        
+        // 3. Test makeAttributedString
+        let style = ParagraphStyle.body
+        let attrString = ChineseTypesetting.makeAttributedString(
+            text: text,
+            style: style,
+            inlineRuns: runs
+        )
+        
+        // Retrieve font at index 0 (should be bold)
+        var range = NSRange()
+        let font0 = attrString.attribute(NSAttributedString.Key(kCTFontAttributeName as String), at: 0, effectiveRange: &range) as! CTFont
+        let traits0 = CTFontGetSymbolicTraits(font0)
+        XCTAssertTrue(traits0.contains(.boldTrait))
+        
+        // Retrieve font at index 6 (should have matrix/skew for italic)
+        let font6 = attrString.attribute(NSAttributedString.Key(kCTFontAttributeName as String), at: 6, effectiveRange: &range) as! CTFont
+        let matrix = CTFontGetMatrix(font6)
+        XCTAssertEqual(matrix.c, CGFloat(tan(12.0 * Double.pi / 180.0)), accuracy: 0.001)
+    }
+
     func testParagraphInlineRunsRoundTripAndLegacyDecode() throws {
         let paragraph = Paragraph(
             kind: .body,
