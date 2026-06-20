@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 01:57 | claude | 完成上一条交接里排的「下一步②」：重新生成覆盖标题/列表/引用/admonition callout 强调的综合验收样例（基于 FauxBold/FauxIta
+- **分支**：dev
+- **概述**：完成上一条交接里排的「下一步②」：重新生成覆盖标题/列表/引用/admonition callout 强调的综合验收样例（基于 FauxBold/FauxItalic 修复 + 已合并的 E3-1），解包确认 14 处 CharacterStyleRange 全部正确带 FauxBold/FauxItalic、无残留 */_ 分隔符。已复制到用户桌面并删除了此前那份有 bug 的旧样例，避免用户打开错文件。本轮工作到此收尾。
+- **改动文件**：(无代码改动，仅生成验收样例并投递到 ~/Desktop/layoutD行内强调综合样例-0621b.idml；旧的 ~/Desktop/layoutD行内强调样例-0621.idml 已删除)
+- **检查**：手动解包校验：14 处 FauxBold/FauxItalic CharacterStyleRange 命中（含 H2 标题粗体"细胞"、列表斜体"细胞膜"/粗体"核糖体"、blockquote 粗体"重点"/斜体"侧重"、admonition callout 粗体"ATP"/斜体"水解"），grep 确认无残留 * _ 分隔符。scripts/review-idml.sh 已在合并 commit 3d7fef6 上跑过 PASS（182 测试 + 6 探针全过）。
+- **下一步**：等用户在 InDesign 里实际打开桌面新样例确认视觉效果（粗体不再是粉色高亮替代字形、斜体有真实倾斜）。确认 OK 后可以把 dev 合到 main。另有两件待用户知情/决策的事尚未处理：① main 上 commit 6faa1b0 的 message 写"visual verified"但实际未经真正人工验收，是误导性记录，未重写历史，仅留痕说明；② 发现 Codex/Antigravity/用户的 git GUI 工具共享同一本地仓库路径会有并发 checkout 互相打扰的风险（已发生一次良性误切分支，用 cherry-pick 纠正），候选方案 git worktree 隔离需要用户决定是否实施。Codex 队列下一项任务 E3-3 Kenten 待重新认领。
+
 ## 2026-06-21 01:55 | claude | 修复行内强调渲染 bug（FauxBold/FauxItalic 替代 FontStyle），合并 Codex E3-1
 - **分支**：dev
 - **概述**：用户发来 InDesign 截图反馈：粗体文字显示为粉红色高亮（替代字形警告），斜体完全无视觉效果——证明此前标注"已验证通过"的行内格式功能实际未生效。根因：`IDMLExporter.swift` 的 `characterStyleRanges` 只写了 `FontStyle="Bold"/"Italic"` 属性字符串，但 `Resources/Fonts.xml` 没有声明对应字重的字体资源，InDesign 找不到就用替代字形顶上。修复：改用 `FauxBold="true"`/`FauxItalic="true"`（算法模拟粗斜体，不依赖字体是否真有对应字重变体，中文宋体等常没有），同步更新了单测断言和 `scripts/review-idml.sh` 的探针逻辑（原探针只验证 XML 字符串结构，没验证"是否真的会在 InDesign 里正确渲染"，这正是这个 bug 能蒙过自动化关卡的原因）。随后核实并合并了 Codex 在 `feature/codex-inline-blocks` 完成的 E3-1（统一 `makeParagraph` 构造路径，标题/列表/引用/callout 现保留 inlineRuns），文件范围与本次 fix 不重叠，diff 审查通过。
