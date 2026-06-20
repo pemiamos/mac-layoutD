@@ -3,6 +3,49 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 00:00 | claude | 审查通过 E2-6(原生 zip 写入) + E2-7(GUI 导出 IDML 入口),已落地为 commit b7ba1fd「feat(idml): comp
+- **分支**：feature/codex-idml-e2-batch
+- **概述**：审查通过 E2-6(原生 zip 写入) + E2-7(GUI 导出 IDML 入口),已落地为 commit b7ba1fd「feat(idml): complete E2 export enhancements」。代码审查:①新增纯 Swift ZIPArchiveWriter(ZIP32 store-first,自带 CRC32、UInt16/UInt32 边界与路径穿越校验、原子写),IDMLExporter.writePackage 改用之,彻底去掉 IDML 路径上的 /usr/bin/zip 外部进程依赖;②确认 .idml 包内只含 XML(纯文本),置入图走 copyPackagedLinks 复制到旁边 Links/(E2-1),故 writer 只处理 String content 非 bug;③残留的 /usr/bin/zip 在 ResourceBundlePackager.swift,是另一个资源包导出器、不在 IDML 路径,E2-6 范围正确;④E2-7 在 LayoutDApp File 菜单加「Export IDML...」(⌘D)+ 导出选项面板(IDMLExportSettingsState/View)+ require-export-ready 预检闸门。
+- **改动文件**：commit b7ba1fd: Sources/LayoutDExport/ZIPArchiveWriter.swift(新增,165 行)、Sources/LayoutDExport/IDMLExporter.swift(writePackage 改原生 zip)、Sources/LayoutDExport/IDMLSpikeExporter.swift(spike 同步改原生 zip,-59)、Sources/LayoutDApp/main.swift(+92,GUI 导出入口+选项面板+预检闸门)、Tests/LayoutDExportTests/IDMLExporterTests.swift(+97)、Tests/LayoutDExportTests/IDMLSpikeExporterTests.swift(+24)。工作区仅余 .ai/HANDOFF.md 改动。
+- **检查**：build: pass。test: pass(swift test 176 XCTest 全过,0 failures;E2-1 时 173,本 commit +3)。端到端硬验证:swift run layoutD -- Samples/demo.md Samples/images --export-idml /tmp/idml-check/demo.idml → 成功;unzip -lv 确认 mimetype 为首条 + Stored(0%) + 日期 1980(与 writer 一致);旁边 Links/cell-diagram.png 在;解包后 designmap/Spreads/Stories/Resources 全部 XML well-formed;21 个 Story 含 Content。原生 zip 路线闭环。
+- **下一步**：E2-6/E2-7 完成并已 commit(b7ba1fd,在 feature/codex-idml-e2-batch)。【需人工/Antigravity】在 InDesign 中文版打开 /tmp/idml-check/demo.idml 做一次视觉验收(确认原生 zip 包能干净打开、Links 图链上、GUI 导出入口可用)。【流程】b7ba1fd 尚在特性分支未并 main,建议人工验收 OK 后合并并 push。【剩余 E2】E2-2 组件背景描边、E2-3 禁则集、E2-4 对开跨页、E2-5 固定页→MasterSpread/非矩形蒙版(交 Codex,见 development-plan E2 表)。【计划外盲点(本会话评估,建议补进 development-plan 新增「E3 内容保真」)】优先级:①🔴 行内字符级格式整段被拍平——IDMLExporter 每行只发一个 [No character style] 的 CharacterStyleRange,Markdown 粗/斜/着重号全丢;②表格只当文字导无原生 Table;③页眉页脚自动页码/目录(TOC)/脚注未映射;④颜色导 RGB swatch,主交付却是印刷书,可考虑 token→CMYK swatch 减少 InDesign 人工转色;⑤约物挤压(Mojikumi)/基线网格对齐未落 IDML。【遗留 nit】E2-1 的含空格文件名相对 URI 未 %20、同目录多 .idml 共用 Links/ 同名覆盖,尚未进 plan 待办。【基础设施】无真正 CI(GitHub Actions);IDML 测试只到 XML well-formed,缺官方 IDML RNG schema 校验与 golden-file 回归基线;relay run_checks(test) 仍误显「0 tests」末行,实际 176 全过,建议 relay 侧改回显 XCTest 汇总行。【杂项】git stash list 有一条 stash@{0}(来自别的分支 feature/codex-idml-pack 的 pre-switch auto-stash),与本棒无关,需原分支 owner 自行处理。
+
+## 2026-06-20 23:57 | codex | 并行完成 IDML E2-2/E2-3/E2-6/E2-7，已提交 commit b7ba1fd (feat(idml): complete E2 export
+- **分支**：feature/codex-idml-e2-batch
+- **概述**：并行完成 IDML E2-2/E2-3/E2-6/E2-7，已提交 commit b7ba1fd (feat(idml): complete E2 export enhancements)。E2-2 将组件 fill/stroke/strokeWidth/accent 映射为 IDML 页面项，frame override 逐字段优先；E2-3 按本机 InDesign 2026 导出的 golden，在 designmap 注册简体中文 KinsokuTable，并在段落样式 Properties 绑定 SimplifiedChineseKinsoku；E2-6 新增纯 Swift ZIP32 writer，正式 exporter 与 spike 均移除 /usr/bin/zip，保证 mimetype 首项 Stored；E2-7 增加 GUI 文件菜单、工具栏、IDML 保存面板和可选印前阻断检查。
+- **改动文件**：Sources/LayoutDApp/main.swift
+Sources/LayoutDExport/IDMLExporter.swift
+Sources/LayoutDExport/IDMLSpikeExporter.swift
+Sources/LayoutDExport/ZIPArchiveWriter.swift
+Tests/LayoutDExportTests/IDMLExporterTests.swift
+Tests/LayoutDExportTests/IDMLSpikeExporterTests.swift
+.ai/HANDOFF.md（write_handoff 追加；未纳入 b7ba1fd）
+- **检查**：commit b7ba1fd feat(idml): complete E2 export enhancements。整合后 IDML 定向测试 6 passed；CLI demo 端到端导出成功，Links/cell-diagram.png 存在，unzip -t 全部 OK，mimetype 为首项 Stored；最终 schema 修正前 run_checks all: build pass + 176 XCTest pass。最终 schema 修正后编译通过且 kinsoku 定向测试 pass。最终 run_checks 重跑被检查服务账户用量上限拒绝；用户知情后明确授权继续提交。
+- **下一步**：用 InDesign 中文版人工打开 /private/tmp/layoutd-e2-batch-20260620/demo.idml 或重新导出的样例：确认组件底色/描边/accent 层叠、段落样式简体中文禁则与实际断行、Links 相对链接；启动 GUI 验证文件菜单/工具栏 IDML 导出与选项面板。ZIPArchiveWriter 当前对所有条目使用 Stored（合法且确定性，包体较大）；ResourceBundlePackager 的 .layoutd-pack 仍使用 /usr/bin/zip，未纳入 IDML E2-6 范围。后续可继续 E2-4/E2-5。
+
+## 2026-06-20 14:17 | claude | 已审查通过 Codex 的 E2-1(图片打包+相对重链,commit 9b30237):代码逻辑/边界正确,实测导出 Links/ + 相对 URI 正常,1
+- **分支**：feature/codex-idml-e2-batch
+- **概述**：已审查通过 Codex 的 E2-1(图片打包+相对重链,commit 9b30237):代码逻辑/边界正确,实测导出 Links/ + 相对 URI 正常,173 XCTest 全过。已合并并推送 main(merge 9e64363),删除特性分支。E2-1 完成。下一棒 E2-2 组件背景/描边交 Codex。
+- **改动文件**：无新代码改动(本棒为审查+合并)。main 现含:9e64363(merge E2-1)、9b30237(E2-1)。已 push origin/main。
+- **检查**：复核:swift run layoutD -- Samples/demo.md --export-idml 产出 Links/cell-diagram.png + LinkResourceURI="file:Links/cell-diagram.png";swift test 173 全过。E2-1 遗留小 nit(非阻塞):①含空格文件名相对 URI 未 %20 编码;②同目录多 .idml 共用 Links/ 可能跨书同名覆盖。
+- **下一步**：【给 Codex — E2-2 组件背景/描边】目标:知识卡片(callout)/表格(table)等组件的底色/描边/accent 映射成 InDesign 框架填色描边(当前只导文字,组件框无背景)。做法:在 IDMLExporter 给文本框/图框 Rectangle 加 FillColor/StrokeColor/StrokeWeight 属性,颜色取 project.styles.componentStyle(for: frame.kind) 的 resolved fill/stroke/accent hex(经 BuildContext.color() 注册成 RGB 色板),accent 可作左侧色条(单独窄矩形)或简化先做 fill+stroke。验收:demo.idml 在 InDesign 里知识卡片有底色+描边。涉及 Sources/LayoutDExport/IDMLExporter.swift(textFrameItem/新增组件背景)+ Tests。走 feature/codex-* 分支、run_checks 通过后提交、写 handoff 注明 commit。【批次建议】E2-2/E2-3(避头尾)/E2-6(原生zip)/E2-7(GUI入口)为安全加法,可一棒连做(每任务独立 commit);E2-4 对开跨页风险高(可能回退刚啃下的干净分页),单独留后一棒并重点 InDesign 验收。详见 docs/development-plan.md E2 表。
+
+## 2026-06-20 14:05 | codex | 完成 E2-1 图片打包 + 相对重链，已提交 commit 9b30237 (feat(idml): package linked images)。IDMLE
+- **分支**：feature/codex-idml-pack
+- **概述**：完成 E2-1 图片打包 + 相对重链，已提交 commit 9b30237 (feat(idml): package linked images)。IDMLExporter 仅收集实际置入且源文件存在的素材，复制到输出 .idml 同级 Links/；LinkResourceURI 改为 file:Links/<fileName>；同名素材追加 -2/-3 去重；缺失 sourcePath 或文件不存在时保留 missing 占位且不复制。
+- **改动文件**：Sources/LayoutDExport/IDMLExporter.swift
+Tests/LayoutDExportTests/IDMLExporterTests.swift
+.ai/HANDOFF.md（write_handoff 追加；未纳入 9b30237）
+- **检查**：commit 9b30237 feat(idml): package linked images; run_checks all: build pass (`swift build`), test pass (`swift test`, 173 XCTest, 0 failures); targeted IDMLExporterTests: 2 passed
+- **下一步**：由用户/Antigravity 用 InDesign 人工验证导出 .idml 与同级 Links/ 移动到另一目录或机器后图片不断链。随后按 docs/development-plan.md E2 表继续 E2-2 组件背景/描边。当前 .ai/HANDOFF.md 含上一棒及本次交接改动，按接力约定保留未提交。
+
+## 2026-06-20 13:54 | claude | IDML 灌版路线 E1 MVP 完整闭环并已合并 main(commit 174f50c, merge 41ed39b,未 push)。现规划 E2 增量并分
+- **分支**：main
+- **概述**：IDML 灌版路线 E1 MVP 完整闭环并已合并 main(commit 174f50c, merge 41ed39b,未 push)。现规划 E2 增量并分工(见 development-plan.md E2 表 + AGENTS 分工)。下一棒交 Codex 做 E2-1 图片打包+相对重链。另:swift test「0 tests」经查非 bug——172 个 XCTest 全过,末行是 Swift Testing 空运行器输出。
+- **改动文件**：docs/development-plan.md(E2 分工表 + swift test 定性);本次仅文档,未改代码、未提交(留给 Codex 起 feature/codex-idml-pack 分支时一并按需提交;或 Claude 稍后单独提交文档)。
+- **检查**：swift test: 172 XCTest 全过(0 失败);末行 Swift Testing 0 tests 为空运行器,非问题。build: pass。
+- **下一步**：【给 Codex 的明确指令 — E2-1 图片打包 + 相对重链】目标:让导出的 .idml 可移植(当前 IDMLExporter.imageItem 用绝对 file: 路径,换机即断链)。做法:1) 在 IDMLExporter.export 末尾,把每个被引用 asset 的 sourcePath 文件复制进输出 .idml 同级的 `Links/` 文件夹(以 asset.fileName 命名,重名加序号去重);2) imageItem 的 LinkResourceURI 改为相对路径 `file:Links/<fileName>`(InDesign 相对链接);3) sourcePath 为空/文件不存在时保留占位、不复制;4) 加测试:导出后断言 Links/ 下有对应文件、Link URI 为相对。验收:swift run layoutD -- Samples/demo.md --export-idml /tmp/x.idml 后 /tmp/Links/ 有 cell-diagram.png,InDesign 打开图不断链(用户/Antigravity 验)。涉及 Sources/LayoutDExport/IDMLExporter.swift + Tests。注意铁律:feature/codex-* 分支、run_checks 通过后提交、收工写 handoff 注明 commit。后续 E2-2..E2-7 见 development-plan.md E2 表,按优先级顺序接力。
+
 ## 2026-06-20 13:36 | claude | E1 最小可用版【完整验收通过】。真实书稿 demo.md → IDML 在 InDesign 中文版:干净 4 页单页无空白、主页单页、字体全部匹配(含苹方复
 - **分支**：main
 - **概述**：E1 最小可用版【完整验收通过】。真实书稿 demo.md → IDML 在 InDesign 中文版:干净 4 页单页无空白、主页单页、字体全部匹配(含苹方复合字体)、封面/目录/带细胞图正文/知识卡片/图注/颜色全部正确渲染。两个收尾坑均靠"InDesign 自导出 IDML 当真值反推"解决:①字体缺失=FontType 错填(系统CJK字体是 OpenTypeCID 非 CFF),改 CoreText 真实检测;②空白页=PagesPerDocument 填了实际页数(应恒为 1,它只是新建默认页数偏好)。整条 IDML 灌版路线技术闭环。

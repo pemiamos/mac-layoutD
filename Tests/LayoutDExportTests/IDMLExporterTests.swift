@@ -79,6 +79,103 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertFalse(spreadXML.contains(source.path))
     }
 
+    func testExportsComponentFillStrokeAndAccentAsPageItems() throws {
+        var project = BookProject.sample
+        project.styles.componentStyles = [
+            ComponentStyle(
+                id: "knowledgeCard",
+                displayName: "知识卡片",
+                frameKind: .callout,
+                fillColorHex: "#E0F5ED",
+                strokeColorHex: "#2D7A78",
+                accentColorHex: "#E07A5F",
+                strokeWidth: 0.8,
+                accentWidth: 4
+            )
+        ]
+        let frame = PageFrame(
+            kind: .callout,
+            rect: Rect(x: 20, y: 30, width: 200, height: 80),
+            content: .text("知识卡片")
+        )
+        let document = LaidOutDocument(
+            projectId: project.id,
+            pages: [LaidOutPage(number: 1, frames: [frame])]
+        )
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-component-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let graphic = try entry(output, "Resources/Graphic.xml")
+        for swatch in ["CE0F5ED", "C2D7A78", "CE07A5F"] {
+            XCTAssertTrue(graphic.contains("Self=\"Color/\(swatch)\""), "缺少组件色板 \(swatch)")
+        }
+        let spreadName = try XCTUnwrap(zipEntries(output).first { $0.hasPrefix("Spreads/Spread_") })
+        let spread = try entry(output, spreadName)
+        XCTAssertTrue(spread.contains("<TextFrame Self=\"uTF0_0\""))
+        XCTAssertTrue(spread.contains("FillColor=\"Color/CE0F5ED\""))
+        XCTAssertTrue(spread.contains("StrokeColor=\"Color/C2D7A78\""))
+        XCTAssertTrue(spread.contains("StrokeWeight=\"0.800\""))
+        XCTAssertTrue(spread.contains("<Rectangle Self=\"uAccent0_0\""))
+        XCTAssertTrue(spread.contains("FillColor=\"Color/CE07A5F\""))
+        XCTAssertTrue(spread.contains("Anchor=\"-242.205 -338.505\""))
+        XCTAssertTrue(spread.contains("Anchor=\"-238.205 -258.505\""), "accent 应为 4pt 宽、与组件等高")
+    }
+
+    func testFrameAppearanceOverridesComponentDefaults() throws {
+        var project = BookProject.sample
+        project.styles.componentStyles = ComponentStyle.defaultChineseScience
+        let frame = PageFrame(
+            kind: .callout,
+            rect: Rect(x: 20, y: 30, width: 200, height: 80),
+            content: .text("覆盖样式"),
+            backgroundColorHex: "#112233",
+            strokeColorHex: "#445566",
+            strokeWidth: 2.25
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-component-override-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let spreadName = try XCTUnwrap(zipEntries(output).first { $0.hasPrefix("Spreads/Spread_") })
+        let spread = try entry(output, spreadName)
+        XCTAssertTrue(spread.contains("FillColor=\"Color/C112233\""))
+        XCTAssertTrue(spread.contains("StrokeColor=\"Color/C445566\""))
+        XCTAssertTrue(spread.contains("StrokeWeight=\"2.250\""))
+    }
+
+    func testExportsChineseKinsokuTableAndBindsParagraphStyles() throws {
+        let project = BookProject.sample
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-kinsoku-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let designmap = try entry(output, "designmap.xml")
+        let tableRef = "KinsokuTable/$ID/kSimpChineseKinsokuName"
+        let tables = matches(in: designmap, pattern: "(<KinsokuTable\\b[^>]*/>)")
+        XCTAssertEqual(tables.count, 1)
+        let table = try XCTUnwrap(tables.first)
+        XCTAssertTrue(table.contains("Self=\"\(tableRef)\""))
+        XCTAssertTrue(ChineseLineBreakRules.forbiddenLineStartCharacters.contains("，"))
+        XCTAssertTrue(ChineseLineBreakRules.forbiddenLineEndCharacters.contains("（"))
+
+        let styles = try entry(output, "Resources/Styles.xml")
+        for style in project.styles.paragraphStyles {
+            let styleID = NSRegularExpression.escapedPattern(for: style.id)
+            let pattern = "(<ParagraphStyle[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?</ParagraphStyle>)"
+            XCTAssertEqual(matches(in: styles, pattern: pattern).count, 1,
+                           "段落样式 \(style.id) 未绑定 layoutD 禁则集")
+        }
+    }
+
     // MARK: - helpers
 
     private func zipEntries(_ url: URL) throws -> [String] {

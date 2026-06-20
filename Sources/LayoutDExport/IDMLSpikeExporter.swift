@@ -10,8 +10,7 @@ import Foundation
 /// v2 再单独压测「复合字体（合成字体）」落 IDML 的保真——v1 故意不造合成字体元素，
 /// 以免一个没把握的结构把整包带崩，先证基础包有效性 + 竖排。
 ///
-/// IDML 是 ZIP 包：`mimetype` 必须是第一个且以 store（不压缩）方式写入，其余部分再追加。
-/// 这里借 `/usr/bin/zip` 完成（spike 级实现；正式 IDML 导出会改走原生 zip 写入）。
+/// IDML 是 ZIP 包：`mimetype` 必须是第一个且以 store（不压缩）方式写入。
 public struct IDMLSpikeExporter {
     public init() {}
 
@@ -32,13 +31,6 @@ public struct IDMLSpikeExporter {
     public func export(to outputURL: URL, imagePath: String?) throws {
         let halfH = pageH / 2.0
         let fm = FileManager.default
-
-        // 1. 临时目录里把包内各部分铺开。
-        let work = fm.temporaryDirectory.appendingPathComponent("layoutd-idml-spike-\(ProcessInfo.processInfo.globallyUniqueString)")
-        try fm.createDirectory(at: work, withIntermediateDirectories: true)
-        for sub in ["META-INF", "Resources", "MasterSpreads", "Spreads", "Stories", "XML"] {
-            try fm.createDirectory(at: work.appendingPathComponent(sub), withIntermediateDirectories: true)
-        }
 
         let imageURI: String = {
             guard let imagePath, !imagePath.isEmpty else { return "file:image-not-linked.png" }
@@ -65,52 +57,11 @@ public struct IDMLSpikeExporter {
             "Stories/Story_uStoryV.xml": storyVertical()
         ]
 
-        for (rel, content) in files {
-            let dest = work.appendingPathComponent(rel)
-            try content.data(using: .utf8)!.write(to: dest, options: .atomic)
+        let orderedPaths = ["mimetype"] + files.keys.filter { $0 != "mimetype" }.sorted()
+        let entries = orderedPaths.map { path in
+            ZIPArchiveWriter.Entry(path: path, data: Data(files[path]!.utf8))
         }
-
-        // mimetype 文件不带换行，content(using:) 已无尾换行，OK。
-
-        // 2. 打包：mimetype 先 store，再追加其余。
-        if fm.fileExists(atPath: outputURL.path) {
-            try fm.removeItem(at: outputURL)
-        }
-        try createParent(of: outputURL)
-
-        try runZip(["-X", "-0", outputURL.path, "mimetype"], cwd: work)
-        try runZip(
-            ["-X", "-r", "-9", outputURL.path,
-             "designmap.xml", "META-INF", "Resources", "MasterSpreads", "Spreads", "Stories", "XML"],
-            cwd: work
-        )
-
-        try? fm.removeItem(at: work)
-    }
-
-    // MARK: - 打包辅助
-
-    private func runZip(_ args: [String], cwd: URL) throws {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
-        proc.arguments = args
-        proc.currentDirectoryURL = cwd
-        let pipe = Pipe()
-        proc.standardError = pipe
-        proc.standardOutput = pipe
-        try proc.run()
-        proc.waitUntilExit()
-        if proc.terminationStatus != 0 {
-            let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            throw SpikeError.zipFailed("zip \(args.joined(separator: " ")) → \(out)")
-        }
-    }
-
-    private func createParent(of url: URL) throws {
-        try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
+        try ZIPArchiveWriter.write(entries: entries, to: outputURL)
     }
 
     private func esc(_ s: String) -> String {

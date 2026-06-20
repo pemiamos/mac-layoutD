@@ -9,7 +9,7 @@ import LayoutDCore
 /// 最小可用版(MVP)的取舍——已覆盖：每页一个 Spread、文本框→Story(段落样式 + 竖排)、
 /// 图片框→Rectangle+Image+Link、颜色 token→RGB 色板、复合字体→Fonts.xml 内 CompositeFont。
 /// 暂未覆盖(后续增量，见 development-plan 阶段 E1)：固定美术页→MasterSpread、对开跨页、
-/// 非矩形蒙版、避头尾禁则集、组件背景/描边、字体样式名拆分。
+/// 非矩形蒙版、字体样式名拆分。
 ///
 /// 颜色按 layoutD 的 RGB 管线导出为 RGB 色板；CMYK 分色 / PDF/X 交 InDesign(印前路线 A)。
 public struct IDMLExporter {
@@ -48,6 +48,11 @@ public struct IDMLExporter {
                 if let hex = frame.textColorHex { _ = ctx.color(hex) }
                 if let hex = frame.backgroundColorHex { _ = ctx.color(hex) }
                 if let hex = frame.strokeColorHex { _ = ctx.color(hex) }
+                if let component = project.styles.componentStyle(for: frame.kind) {
+                    if let hex = component.resolvedFillColorHex(project: project) { _ = ctx.color(hex) }
+                    if let hex = component.resolvedStrokeColorHex(project: project) { _ = ctx.color(hex) }
+                    if let hex = component.resolvedAccentColorHex(project: project) { _ = ctx.color(hex) }
+                }
             }
         }
 
@@ -71,8 +76,22 @@ public struct IDMLExporter {
                     let style = ctx.resolvedStyle(id: frame.styleId)
                     let styleRef = "ParagraphStyle/\(xmlSafe(style.id))"
                     let vertical = style.layoutDirection == .vertical
+                    let component = project.styles.componentStyle(for: frame.kind)
+                    let fillColor = frame.backgroundColorHex ?? component?.resolvedFillColorHex(project: project)
+                    let strokeColor = frame.strokeColorHex ?? component?.resolvedStrokeColorHex(project: project)
+                    let strokeWidth = frame.strokeWidth ?? component?.strokeWidth ?? 0
                     items.append(textFrameItem(self: "uTF\(pi)_\(fi)", story: storySelf,
-                                               rect: frame.rect, pageW: pageW, pageH: pageH))
+                                               rect: frame.rect, fillColor: fillColor,
+                                               strokeColor: strokeColor, strokeWidth: strokeWidth,
+                                               pageW: pageW, pageH: pageH))
+                    // Accent 必须位于有底色的文本框之上，否则会被框架填色遮住。
+                    if let accentColor = component?.resolvedAccentColorHex(project: project),
+                       let accentWidth = component?.accentWidth, accentWidth > 0 {
+                        let accentRect = Rect(x: frame.rect.x, y: frame.rect.y,
+                                              width: min(accentWidth, frame.rect.width), height: frame.rect.height)
+                        items.append(colorRectangleItem(self: "uAccent\(pi)_\(fi)", rect: accentRect,
+                                                        fillColor: accentColor, pageW: pageW, pageH: pageH))
+                    }
                     let storyContent = storyXML(self: storySelf, styleRef: styleRef,
                                                 vertical: vertical, text: text)
                     storyFiles["Stories/Story_\(storySelf).xml"] = storyContent
@@ -330,12 +349,29 @@ public struct IDMLExporter {
 
     // MARK: - 页面项
 
-    private func textFrameItem(self id: String, story: String, rect: Rect, pageW: Double, pageH: Double) -> String {
+    private func colorRef(_ hex: String?) -> String {
+        guard let hex else { return "Swatch/None" }
+        let normalized = BuildContext.normalizeHex(hex)
+        return normalized == "000000" ? "Color/Black" : "Color/C\(normalized)"
+    }
+
+    private func textFrameItem(self id: String, story: String, rect: Rect,
+                               fillColor: String?, strokeColor: String?, strokeWidth: Double,
+                               pageW: Double, pageH: Double) -> String {
         """
-        \t\t<TextFrame Self="\(id)" ParentStory="\(story)" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" ItemTransform="1 0 0 1 0 0">
+        \t\t<TextFrame Self="\(id)" ParentStory="\(story)" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="\(colorRef(fillColor))" StrokeColor="\(colorRef(strokeColor))" StrokeWeight="\(fmt(max(strokeWidth, 0)))" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH))
         \t\t\t<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
         \t\t</TextFrame>
+        """
+    }
+
+    private func colorRectangleItem(self id: String, rect: Rect, fillColor: String,
+                                    pageW: Double, pageH: Double) -> String {
+        """
+        \t\t<Rectangle Self="\(id)" ContentType="Unassigned" FillColor="\(colorRef(fillColor))" StrokeColor="Swatch/None" StrokeWeight="0" ItemTransform="1 0 0 1 0 0">
+        \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH))
+        \t\t</Rectangle>
         """
     }
 
@@ -369,6 +405,7 @@ public struct IDMLExporter {
         <Document \(pkgNS) Self="layoutd_doc" DOMVersion="\(dom)" Name="layoutd-export.indd" StoryList="\(storyList.joined(separator: " "))">
         \t<idPkg:Graphic src="Resources/Graphic.xml"/>
         \t<idPkg:Fonts src="Resources/Fonts.xml"/>
+        \t<KinsokuTable Self="KinsokuTable/$ID/kSimpChineseKinsokuName" Name="$ID/kSimpChineseKinsokuName"/>
         \t<idPkg:Styles src="Resources/Styles.xml"/>
         \t<idPkg:Preferences src="Resources/Preferences.xml"/>
         \t<idPkg:Tags src="XML/Tags.xml"/>
@@ -479,11 +516,12 @@ public struct IDMLExporter {
             let applied = isComposite ? "CF_\(xmlSafe(style.id))" : famFallback
             let fontStyleAttr = isComposite ? "" : " FontStyle=\"\(esc(styleFallback))\""
             paras += """
-            \t\t<ParagraphStyle Self="ParagraphStyle/\(xmlSafe(style.id))" Imported="false" Name="\(esc(style.displayName))" PointSize="\(fmt(style.fontSize))" Leading="\(fmt(style.lineHeight))" FirstLineIndent="\(fmt(style.firstLineIndent))" SpaceBefore="\(fmt(style.spaceBefore))" SpaceAfter="\(fmt(style.spaceAfter))" FillColor="\(fill)"\(fontStyleAttr) Justification="LeftJustified">
+            \t\t<ParagraphStyle Self="ParagraphStyle/\(xmlSafe(style.id))" Imported="false" Name="\(esc(style.displayName))" PointSize="\(fmt(style.fontSize))" Leading="\(fmt(style.lineHeight))" FirstLineIndent="\(fmt(style.firstLineIndent))" SpaceBefore="\(fmt(style.spaceBefore))" SpaceAfter="\(fmt(style.spaceAfter))" FillColor="\(fill)"\(fontStyleAttr) Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
             \t\t\t<Properties>
             \t\t\t\t<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
             \t\t\t\t<PreviewColor type="enumeration">Nothing</PreviewColor>
             \t\t\t\t<AppliedFont type="string">\(esc(applied))</AppliedFont>
+            \t\t\t\t<KinsokuSet type="enumeration">SimplifiedChineseKinsoku</KinsokuSet>
             \t\t\t</Properties>
             \t\t</ParagraphStyle>\n
             """
@@ -585,40 +623,14 @@ public struct IDMLExporter {
         """
     }
 
-    // MARK: - 打包（mimetype store-first，其余追加）
+    // MARK: - 打包（纯 Swift ZIP32；mimetype store-first）
 
     private func writePackage(files: [String: String], to outputURL: URL) throws {
-        let fm = FileManager.default
-        let work = fm.temporaryDirectory.appendingPathComponent("layoutd-idml-\(ProcessInfo.processInfo.globallyUniqueString)")
-        try fm.createDirectory(at: work, withIntermediateDirectories: true)
-        for (rel, content) in files {
-            let dest = work.appendingPathComponent(rel)
-            try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try content.data(using: .utf8)!.write(to: dest, options: .atomic)
+        let orderedPaths = ["mimetype"] + files.keys.filter { $0 != "mimetype" }.sorted()
+        let entries = orderedPaths.compactMap { path -> ZIPArchiveWriter.Entry? in
+            guard let content = files[path] else { return nil }
+            return ZIPArchiveWriter.Entry(path: path, data: Data(content.utf8))
         }
-        if fm.fileExists(atPath: outputURL.path) { try fm.removeItem(at: outputURL) }
-        try fm.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-
-        try runZip(["-X", "-0", outputURL.path, "mimetype"], cwd: work)
-        var rest = ["-X", "-r", "-9", outputURL.path, "designmap.xml", "META-INF", "Resources", "MasterSpreads", "Spreads", "XML"]
-        if fm.fileExists(atPath: work.appendingPathComponent("Stories").path) { rest.append("Stories") }
-        try runZip(rest, cwd: work)
-        try? fm.removeItem(at: work)
-    }
-
-    private func runZip(_ args: [String], cwd: URL) throws {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
-        proc.arguments = args
-        proc.currentDirectoryURL = cwd
-        let pipe = Pipe()
-        proc.standardError = pipe
-        proc.standardOutput = pipe
-        try proc.run()
-        proc.waitUntilExit()
-        if proc.terminationStatus != 0 {
-            let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            throw ExportError.zipFailed("zip \(args.joined(separator: " ")) → \(out)")
-        }
+        try ZIPArchiveWriter.write(entries: entries, to: outputURL)
     }
 }
