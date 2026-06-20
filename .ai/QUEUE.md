@@ -110,10 +110,19 @@
   - **验收**：①补端到端断言——解包后脚注 `<Footnote>` 内的 `<ParagraphStyleRange AppliedParagraphStyle=...>` 必须指向带 `CF_` 字体的样式、**不得**是 `$ID/[No paragraph style]`；②`scripts/review-idml.sh` 仍 PASS；③Claude 复审后重导样例投桌面，用户在 InDesign 肉眼确认脚注中文正常显示（无豆腐）。
   - ⚠️ 与 dev 的 E3-3v(composer 改 `storyXML` ParagraphStyleRange 行) 同文件，**合 dev 前** `git merge origin/dev` 同步并 reconcile（E3-7v 改了 storyXML 签名+正文调用处，E3-3v 改了同函数的 ParagraphStyleRange 行，会冲突需人工合）。
 
-- [ ] **E3-4 原生表格 Table**
-  - 目标：table 组件从「当文字导」升级为 IDML 原生 `<Table>/<Cell>`（行列/边框/底色），可在 InDesign 调列宽。
-  - 文件：`IDMLExporter.swift`。
-  - 验收：demo 里表格导出后在 InDesign 是真表格、可选列。
+- [ ] **E3-4 原生表格 Table**　← **Codex 现役（E3-7 已合 dev，这是本批下一项）**
+  - 目标：table 从「拍平成纯文字导」升级为 IDML 原生 `<Table>/<Row>/<Column>/<Cell>`（行列/边框/底色），InDesign 里是真表格、可调列宽。
+  - **起手提示（Claude 已勘，先 `git merge origin/dev` 拿 E3-7 合并后的 IDMLExporter，已变）**：
+    - ⚠️ **当前是有损的**：`MarkdownBookImporter.flushTableBuffer()`（`MarkdownBookImporter.swift:252`）其实**已经算出了结构化 `rows: [[String]]`**，却又用 `rows.map{ $0.joined(separator:"    ") }.joined(separator:"\n")` **拍平成一个纯文本字符串**塞进 `Paragraph(kind: .table, text:…)`。模型里**没有行列维度**——导出侧拿不到结构，只能当文字画。
+    - 因此本项是**贯穿 模型→导入→布局→导出 的链路改造**（都在 Codex 道：BookProject.swift / MarkdownBookImporter.swift / IDMLExporter.swift）：
+      1. **模型**：给表格加结构化承载。建议在 `Paragraph` 上加可选 `tableCells: [[String]]?`（Codable，旧文件 decode 为 nil 不破坏），`kind: .table` 时填充；`text` 可保留作降级/预览用。
+      2. **导入**：`flushTableBuffer` 不再拍平，把 `rows` 原样存进 `tableCells`（注意每格仍走 `normalizeInlineMarkdown` 以便日后行内格式；表头行可记一个 `headerRows=1`）。
+      3. **布局**：`LayoutEngine` 目前把 `.table` 段当文字测高；先保证不崩（可继续用 text 占位测高），IDML 路径用结构出真表格。真·网格预览是 AG 道 E3-4p，别在本项碰渲染层。
+      4. **导出**：`IDMLExporter` 对 `.table` 段输出 InDesign `<Table ColumnCount=… RowCount=… HeaderRowCount=…>`，逐格 `<Cell Name="i:j" …><Content>…</Content></Cell>`；列宽先均分（页宽/列数），边框/底色给个朴素默认（可后续迭代）。Cell 内文字复用既有 `characterStyleRanges`，并和正文一样带 `AppliedComposer`。
+    - IDML Table 的 XML 形态对照官方 IDML 规范的 `Table`/`Cell` 元素；Table 嵌在某个 Story 的 `<ParagraphStyleRange><CharacterStyleRange>` 里通过 `<Table>` 子元素承载，单元格 `Name` 为 `"行:列"`。
+  - 文件：`Sources/LayoutDCore/BookProject.swift`、`Sources/LayoutDImport/MarkdownBookImporter.swift`、`Sources/LayoutDExport/IDMLExporter.swift`。
+  - 验收：①`printf '| 名称 | 功能 |\n| --- | --- |\n| 线粒体 | 产能 |\n| 核糖体 | 合成蛋白质 |\n'` 导出后**解包 grep `<Table` / `<Cell`** 确认是原生表格（不是一段裸文字），列数=2、行数=3（含表头）；②补端到端断言（Table/Cell 元素数、单元格文本归位、无「4 空格拼接」残留）；③`scripts/review-idml.sh` 仍 PASS；④用户在 InDesign 打开确认是可选列、可调宽的真表格。
+  - ⚠️ 端到端验收必须解包 IDML grep `<Table`/`<Cell`，别只靠单测——本项目踩过「单测绿但功能坏」的坑。
 
 - [ ] **E3-6 目录（TOC）动态化**
   - 目标：当前目录是死文字；改为 InDesign 动态 TOC（或至少正确的 TOC 段落样式 + PageReference）。
