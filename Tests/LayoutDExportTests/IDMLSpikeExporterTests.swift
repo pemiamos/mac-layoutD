@@ -35,6 +35,19 @@ final class IDMLSpikeExporterTests: XCTestCase {
         // 3. mimetype 必须是 ZIP 的第一个条目（IDML 包约定）。
         XCTAssertEqual(entries.first, "mimetype", "mimetype 必须是包内第一个条目")
 
+        // ZIP local header: first entry must be stored (method 0), named mimetype, with exact data.
+        let archive = try Data(contentsOf: url)
+        XCTAssertEqual(readUInt32LE(archive, at: 0), 0x0403_4b50)
+        XCTAssertEqual(readUInt16LE(archive, at: 8), 0)
+        let nameLength = Int(readUInt16LE(archive, at: 26))
+        let extraLength = Int(readUInt16LE(archive, at: 28))
+        let name = String(data: archive.subdata(in: 30..<(30 + nameLength)), encoding: .utf8)
+        XCTAssertEqual(name, "mimetype")
+        let payloadStart = 30 + nameLength + extraLength
+        let payloadSize = Int(readUInt32LE(archive, at: 18))
+        let payload = String(data: archive.subdata(in: payloadStart..<(payloadStart + payloadSize)), encoding: .utf8)
+        XCTAssertEqual(payload, "application/vnd.adobe.indesign-idml-package")
+
         // 4. 竖排 story 确实带上了 Vertical 取向（这是整条路线要证伪的关键点）。
         let verticalStory = try unzipEntry(url, entry: "Stories/Story_uStoryV.xml")
         XCTAssertTrue(verticalStory.contains("StoryOrientation=\"Vertical\""))
@@ -67,5 +80,16 @@ final class IDMLSpikeExporterTests: XCTestCase {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         proc.waitUntilExit()
         return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private func readUInt16LE(_ data: Data, at offset: Int) -> UInt16 {
+        UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+    }
+
+    private func readUInt32LE(_ data: Data, at offset: Int) -> UInt32 {
+        UInt32(data[offset])
+            | (UInt32(data[offset + 1]) << 8)
+            | (UInt32(data[offset + 2]) << 16)
+            | (UInt32(data[offset + 3]) << 24)
     }
 }

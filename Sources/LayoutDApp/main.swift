@@ -292,6 +292,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         workspaceController?.exportPNGPreviews()
     }
 
+    @objc private func exportIDML(_ sender: Any?) {
+        workspaceController?.exportIDML()
+    }
+
     @objc private func exportPreflightReport(_ sender: Any?) {
         workspaceController?.exportPreflightReport()
     }
@@ -387,6 +391,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 title: "Export PDF...",
                 action: #selector(exportPDF(_:)),
                 keyEquivalent: "e"
+            )
+        )
+        fileMenu.items.last?.target = self
+        fileMenu.addItem(
+            NSMenuItem(
+                title: "Export IDML...",
+                action: #selector(exportIDML(_:)),
+                keyEquivalent: "d"
             )
         )
         fileMenu.items.last?.target = self
@@ -884,6 +896,53 @@ final class WorkspaceViewController: NSViewController {
         }
     }
 
+    func exportIDML() {
+        let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
+        let savePanel = NSSavePanel()
+        savePanel.title = "Export IDML"
+        savePanel.nameFieldStringValue = safeFileName(appState.project.metadata.title) + ".idml"
+        savePanel.allowedContentTypes = [UTType(filenameExtension: "idml")].compactMap { $0 }
+        savePanel.canCreateDirectories = true
+
+        let settingsState = IDMLExportSettingsState()
+        savePanel.accessoryView = NSHostingView(rootView: IDMLExportSettingsView(state: settingsState))
+
+        guard let window = view.window else { return }
+        savePanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = savePanel.url, let self else { return }
+
+            if settingsState.requireExportReady {
+                let report = self.appState.inspectorEngine.preflight(
+                    project: self.appState.project,
+                    document: document,
+                    exportOptions: self.appState.pdfExportOptions
+                )
+                guard report.exportReady else {
+                    let errorCount = report.severityCounts[IssueSeverity.error.rawValue, default: 0]
+                    self.showExportResult(
+                        message: "IDML export blocked",
+                        detail: "Preflight found \(errorCount) blocking error(s). Disable the export-ready requirement or fix them first."
+                    )
+                    return
+                }
+            }
+
+            do {
+                try IDMLExporter().export(
+                    document: document,
+                    project: self.appState.project,
+                    to: url
+                )
+                self.showExportResult(
+                    message: "IDML exported",
+                    detail: "\(url.path)\nLinked images were copied to the adjacent Links folder."
+                )
+            } catch {
+                self.showExportResult(message: "IDML export failed", detail: error.localizedDescription)
+            }
+        }
+    }
+
     func exportPreflightReport() {
         let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
         let report = appState.inspectorEngine.preflight(
@@ -1096,6 +1155,27 @@ class PNGExportSettingsState: ObservableObject {
     @Published var scale: Double = 2.0
 }
 
+final class IDMLExportSettingsState: ObservableObject {
+    @Published var requireExportReady = false
+}
+
+struct IDMLExportSettingsView: View {
+    @ObservedObject var state: IDMLExportSettingsState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("IDML 导出选项").font(.headline)
+            Toggle("仅在印前检查通过时导出", isOn: $state.requireExportReady)
+            Text("置入图片会复制到 IDML 同级的 Links 文件夹，并使用相对链接。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(width: 320)
+    }
+}
+
 struct PNGExportSettingsView: View {
     @ObservedObject var state: PNGExportSettingsState
 
@@ -1136,6 +1216,7 @@ extension NSToolbarItem.Identifier {
     static let lockPage = NSToolbarItem.Identifier("lockPage")
     static let resetPage = NSToolbarItem.Identifier("resetPage")
     static let exportPDF = NSToolbarItem.Identifier("exportPDF")
+    static let exportIDML = NSToolbarItem.Identifier("exportIDML")
     static let exportPackage = NSToolbarItem.Identifier("exportPackage")
 }
 
@@ -1149,6 +1230,7 @@ extension WorkspaceViewController: NSToolbarDelegate {
     @objc func toolbarZoomIn(_ sender: Any?) { zoomIn() }
     @objc func toolbarFitWidth(_ sender: Any?) { fitWidth() }
     @objc func toolbarExportPDF(_ sender: Any?) { exportPDF() }
+    @objc func toolbarExportIDML(_ sender: Any?) { exportIDML() }
     @objc func toolbarExportPackage(_ sender: Any?) { exportProjectPackage() }
     
     @objc func toolbarToggleLock(_ sender: Any?) {
@@ -1181,6 +1263,7 @@ extension WorkspaceViewController: NSToolbarDelegate {
             .resetPage,
             .flexibleSpace,
             .exportPDF,
+            .exportIDML,
             .exportPackage
         ]
     }
@@ -1202,6 +1285,7 @@ extension WorkspaceViewController: NSToolbarDelegate {
             .resetPage,
             .flexibleSpace,
             .exportPDF,
+            .exportIDML,
             .exportPackage
         ]
     }
@@ -1297,6 +1381,14 @@ extension WorkspaceViewController: NSToolbarDelegate {
             item.image = NSImage(systemSymbolName: "arrow.up.doc", accessibilityDescription: "Export PDF")
             item.target = self
             item.action = #selector(toolbarExportPDF(_:))
+
+        case .exportIDML:
+            item.label = "导出 IDML"
+            item.paletteLabel = "导出 IDML"
+            item.toolTip = "导出供 InDesign 精调的 IDML 文件"
+            item.image = NSImage(systemSymbolName: "doc.badge.gearshape", accessibilityDescription: "Export IDML")
+            item.target = self
+            item.action = #selector(toolbarExportIDML(_:))
             
         case .exportPackage:
             item.label = "打包"
