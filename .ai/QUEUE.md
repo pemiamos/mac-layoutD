@@ -40,7 +40,7 @@
 > 负责文件：`Sources/LayoutDImport/*`、`Sources/LayoutDCore/BookProject.swift`、
 > `Sources/LayoutDExport/IDMLExporter.swift`、`ZIPArchiveWriter.swift`
 
-- [ ] **E3-1 行内格式补全到所有 block**
+- [~] **E3-1 行内格式补全到所有 block** — 认领: Codex @ `feature/codex-inline-blocks`
   - 目标：当前只普通正文段落持久化 inlineRuns；扩到标题/列表/引用/callout。先抽一个统一的 `Paragraph` 构造 helper，再让所有 Markdown block 分支走它。
   - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`、`Sources/LayoutDCore/BookProject.swift`(如需)。
   - 验收：`printf '## **粗**标题\n\n- 列表*斜*项\n> 引用**强调**\n'` 导出 IDML 后，标题/列表/引用里的强调都出对应 FontStyle；`scripts/review-idml.sh` PASS。
