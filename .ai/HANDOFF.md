@@ -3,6 +3,55 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-20 13:36 | claude | E1 最小可用版【完整验收通过】。真实书稿 demo.md → IDML 在 InDesign 中文版:干净 4 页单页无空白、主页单页、字体全部匹配(含苹方复
+- **分支**：main
+- **概述**：E1 最小可用版【完整验收通过】。真实书稿 demo.md → IDML 在 InDesign 中文版:干净 4 页单页无空白、主页单页、字体全部匹配(含苹方复合字体)、封面/目录/带细胞图正文/知识卡片/图注/颜色全部正确渲染。两个收尾坑均靠"InDesign 自导出 IDML 当真值反推"解决:①字体缺失=FontType 错填(系统CJK字体是 OpenTypeCID 非 CFF),改 CoreText 真实检测;②空白页=PagesPerDocument 填了实际页数(应恒为 1,它只是新建默认页数偏好)。整条 IDML 灌版路线技术闭环。
+- **改动文件**：Sources/LayoutDExport/IDMLExporter.swift(最终:CoreText 检测真实 FontType + PostScript 名 + 本地化家族/样式名;DocumentPreference 逐字段对齐 InDesign 非对开输出、PagesPerDocument=1、FacingPages=false;spread 纵向偏移≈1.235×pageH;页 ItemTransform=-W/2,-H/2)。+ 之前的 CLI --export-idml、ProjectLoader、IDMLExporterTests、docs。均未提交(AI 不动 git)。
+- **检查**：build pass。InDesign 中文版人工终验:4 页单页无空白、主页单页、无缺失字体框、内容/图/颜色/复合字体全部正确。demo.idml 即产物。swift test 仍报 0 tests(既有发现问题,测试代码已写,待排查)。
+- **下一步**：E1 MVP 闭环。后续增量(均为增强非阻塞):对开跨页(facing spread)选项、固定美术页→MasterSpread、避头尾→禁则集、组件背景/描边(知识卡片底色)、图片打包(IDML+Links)与相对重链、把 /usr/bin/zip 换原生 zip 写入、首选项面板暴露 IDML 导出。另需排查 swift test「0 tests」发现配置。建议:这批改动可提交(用户决定是否动 git)。
+
+## 2026-06-20 13:23 | claude | E1 字体问题彻底解决:用 InDesign 自导出 IDML 当真值,定位到根因是 FontType 错填(系统 CJK 字体如苹方是 OpenTypeCID
+- **分支**：main
+- **概述**：E1 字体问题彻底解决:用 InDesign 自导出 IDML 当真值,定位到根因是 FontType 错填(系统 CJK 字体如苹方是 OpenTypeCID,我填了 CFF→匹配到不可用的(OTF)变体)。改用 CoreText 真实检测字体格式 + 真实 PostScript 名后,demo.idml 在 InDesign 不再弹缺失字体框,苹方/宋体/Helvetica/Georgia 全部解析正常。剩页数:FacingPages=false 仍被无视、主页仍对开、4 页变 7 页(空白 2/4/5)——已请用户导一份「非对开」参考 IDML 反推。
+- **改动文件**：Sources/LayoutDExport/IDMLExporter.swift(CoreText 检测 FontType:OpenTypePostScript→OpenTypeCID、TrueType、OpenTypeTT 等;spread 纵向 Y 偏移;DocumentPreference 补全放 Preferences.xml,FacingPages=false)。未提交。
+- **检查**：build pass。InDesign 人工验收:字体缺失框消失(全部匹配成功)。遗留:页数仍 4→7、主页对开(FacingPages=false 被无视;spread Y 偏移与 facing 改动均未改变页数,根因待非对开参考 IDML 揭示)。
+- **下一步**：1) 等用户导出「取消对开页」的参考 IDML,解包照抄 InDesign 非对开文档的 DocumentPreference + page/spread ItemTransform 写法(参照之前苹方 FontType 真值反推的成功经验)。2) 据此修 IDMLExporter 消除空白页。3) 之后继续 E1 增量(对开跨页可选、固定页→MasterSpread、避头尾、组件背景、图片打包重链、原生 zip)。4) 排查 swift test「0 tests」。
+
+## 2026-06-20 10:01 | claude | E1 最小可用本质跑通:真实 demo.md 的完整内容(封面/目录/带细胞图正文/知识卡片/图注)已正确映射进 InDesign 中文版并渲染。剩两个 InD
+- **分支**：main
+- **概述**：E1 最小可用本质跑通:真实 demo.md 的完整内容(封面/目录/带细胞图正文/知识卡片/图注)已正确映射进 InDesign 中文版并渲染。剩两个 InDesign 私有行为坑待解:①字体跨语言命名(PingFang 在 InDesign 叫「苹方-简/中粗体」,英文名对不上→标题字体缺失,正文宋体正常);②非对开设置被无视(FacingPages=false 放 Preferences.xml 和 designmap 都没用→InDesign 按对开重分页、插空白页,4 页变 7 页)。已请用户导出一份 InDesign 自建的非对开+苹方 IDML 作真值反推。
+- **改动文件**：Sources/LayoutDExport/IDMLExporter.swift(本轮:CoreText 解析真实 PostScript 名 + 本地化家族/样式名;字体按家族归并、家族+样式拆分;DocumentPreference 移入 designmap.xml 带 FacingPages=false/AllowPageShuffle=false;页名=页码)。改动未提交(AI 不动 git)。
+- **检查**：build pass。demo.md→IDML 全 XML well-formed。InDesign 人工验收:内容/结构/图/颜色/竖排全部正确渲染。遗留:字体 CF_heading1/CF_heading2/CF_caption + 苹方系列报缺失(根因:InDesign 中文版按本地化名「苹方-简/中粗体」索引,CoreText 在本机返回英文名,对不上;Songti/Helvetica/Georgia 正常);页数 4→7(根因:FacingPages=false 被无视,主页仍对开,InDesign 插空白页 2/4/5,内容落 1/3/6/7)。
+- **下一步**：1) 等用户给「InDesign 自建·非对开·含苹方」的参考 IDML,解包照抄两处真值:非对开的 DocumentPreference/spread 写法 + 苹方的家族/样式/PostScript 名。2) 据此修 IDMLExporter:真正关 facing(消空白页)+ 字体名按 InDesign 真值(或改 layoutD 默认标题字体为干净匹配者)。3) 之后继续 E1 增量(对开跨页、固定页→MasterSpread、避头尾、组件背景、图片打包重链、原生 zip)。4) 排查 swift test「0 tests」。
+
+## 2026-06-20 08:25 | claude | 阶段 E1 最小可用版落地:新增 IDMLExporter,把真实 BookProject + LaidOutDocument 映射成 IDML,CLI --e
+- **分支**：main
+- **概述**：阶段 E1 最小可用版落地:新增 IDMLExporter,把真实 BookProject + LaidOutDocument 映射成 IDML,CLI --export-idml 接入既有导出管线。demo.md 端到端导出成功、全部 XML well-formed,等用户在 InDesign 中文版人工验收版面。
+- **改动文件**：新增 Sources/LayoutDExport/IDMLExporter.swift(真实项目→IDML:每页一个单页 Spread、文本框→Story+段落样式+竖排、图片框→Rectangle+Image+Link、颜色 token→RGB 色板、复合字体→Fonts.xml 内 CompositeFont);Sources/LayoutDApp/main.swift(--export-idml 接入导出分支 + help);Sources/LayoutDApp/ProjectLoader.swift(exportIDMLURL 字段/三处构造/解析);新增 Tests/LayoutDExportTests/IDMLExporterTests.swift;docs/development-plan.md(E1 勾选 MVP)。改动未提交(AI 不动 git)。
+- **检查**：build: pass(run_checks)。端到端:swift run layoutD -- Samples/demo.md --export-idml /tmp/demo.idml 成功 → 4 spread + 多 story;解包后所有 xml 经 xmllint 全 well-formed;designmap 25 条 idPkg 引用齐全无悬挂;5 段落样式(中文名)各挂 CF_* 复合字体、7 字体族、颜色 ink/accent 转 RGB 色板。demo.idml 已复制到桌面待人工验收。swift test 仍报 0 tests(既有发现问题未解,测试本身已写)。
+- **下一步**：1)【需人工】InDesign 中文版打开桌面 demo.idml,看版面是否到位、字体是否缺失(PingFang SC Semibold 等"家族+样式名"可能被当缺失字体,需拆分家族名+FontStyle)、竖排/图/色板是否正确。2) 按 development-plan E1 后续增量推进:对开跨页、固定美术页→MasterSpread、避头尾禁则集、组件背景描边、图片打包重链、首页幻影 Section、原生 zip。3) 排查 swift test"0 tests"发现问题。
+
+## 2026-06-19 18:25 | claude | 阶段 E0 spike v2【通过】:复合字体(合成字体)在 InDesign 中文版完整 round-trip——「正文复合体」六条字符类(汉字/假名/全角约
+- **分支**：main
+- **概述**：阶段 E0 spike v2【通过】:复合字体(合成字体)在 InDesign 中文版完整 round-trip——「正文复合体」六条字符类(汉字/假名/全角约物/全角记号→宋体,半角欧文/半角数字→Helvetica)全部正确落地,复合字体编辑器确认。至此 IDML 灌版路线的全部 CJK 排版风险(竖排 + 复合字体)已清零,路线无未知数。
+- **改动文件**：Sources/LayoutDExport/IDMLSpikeExporter.swift(v2:新增 compositeFont() 合成字体,关键修正——合成字体必须放在 Resources/Fonts.xml 内、不能放 designmap;新增"正文复合体"段落样式;横排 story 改用之)。改动未提交(AI 不动 git)。
+- **检查**：build: pass。InDesign 中文版人工验收 v2:首次放 designmap → 弹"缺失字体 正文复合体 Regular"(未被当合成字体);改放 Resources/Fonts.xml → 不再缺失,复合字体编辑器显示"正文复合体"六条字符类映射全部正确(汉字等→宋体-简、半角欧文/数字→Helvetica),样本预览按类切字体生效。v1.1 各项(竖排/置入图/CMYK/边距分栏页面)保持正常;绿色版面网格确认为视图开关(已关闭)。
+- **下一步**：spike 全部通过,路线技术上彻底证伪通过。进入阶段 E1:BookProject → IDML 全量映射。要点:Section/页→Spread/Page、ParagraphStyle/StyleLibrary→ParagraphStyle、颜色 token→Color/Swatch(CMYK)、复合字体→Fonts.xml 内 CompositeFont、竖排→StoryOrientation=Vertical、固定美术页→MasterSpread、置入图→Rectangle+Image+Link(必填 Space/ActualPpi/EffectivePpi/ImageRenderingIntent)+图片打包与相对重链;避头尾→禁则集(标准 InDesign 功能,低风险);首跨页幻影 page 1 用起始页码=2 的 Section 消除。另:排查 swift test"0 tests"发现问题;正式 IDML 导出把 spike 的 /usr/bin/zip 改原生 zip 写入。
+
+## 2026-06-19 18:04 | claude | 阶段 E0 IDML 灌版路线最小验证 spike 在 InDesign 中文版人工验收【通过】。spike v1.1 修掉了 v1 的两个问题(图链、版面网格
+- **分支**：main
+- **概述**：阶段 E0 IDML 灌版路线最小验证 spike 在 InDesign 中文版人工验收【通过】。spike v1.1 修掉了 v1 的两个问题(图链、版面网格),整条路线技术上确认可行。
+- **改动文件**：Sources/LayoutDExport/IDMLSpikeExporter.swift(v1.1:补全 Image/Link 必填属性使图链生效;页面改边距分栏 + 去网格属性 + 关页面重排)。其余文件同上一交接(决策 + 文档 + CLI 入口 + 测试)。改动未提交(AI 不动 git)。
+- **检查**：build: pass。InDesign 中文版人工验收(用户截图)v1.1:✅ 干净打开无报错;✅ 跨页[2-3];✅ 横排中文;✅ 竖排中文(自上而下、行自右向左);✅ 置入图(细胞结构示意)链上并渲染;✅ 版面网格消失、边距分栏干净页面;✅ CMYK 色板 LayoutD Accent。唯一遗留(修饰级):facing-pages 规则导致多一张独立 page 1(整书有封面后自然消失,或加起始页码=2 的 Section 可消)。
+- **下一步**：路线已证伪通过。建议顺序:1) spike v2——压测「复合字体(合成字体)」落 IDML 的保真(v1 故意未造合成字体元素,这是最后一个 CJK 排版风险点);2) v2 通过后进入阶段 E1:BookProject → IDML 全量映射(Section/页→Spread/Page、段落样式→ParagraphStyle、颜色 token→Swatch、固定页→MasterSpread、竖排→StoryOrientation、避头尾→禁则集、图片打包+相对重链);3) 顺带排查 swift test「0 tests」发现问题。
+
+## 2026-06-19 17:48 | claude | 架构转向 IDML 灌版路线:记录决策 + 同步文档 + 落地阶段 E0 最小验证 spike。layoutD 主交付改为「灌版引擎 → 导出 IDML → I
+- **分支**：main
+- **概述**：架构转向 IDML 灌版路线:记录决策 + 同步文档 + 落地阶段 E0 最小验证 spike。layoutD 主交付改为「灌版引擎 → 导出 IDML → InDesign 人工精调 + 印前」,保留基本结构化编辑工具,CMYK/PDF/X 仍不自建(强化印前路线 A)。spike 容器层已硬验证通过,等用户在 InDesign 中文版人工验收。
+- **改动文件**：.ai/DECISIONS.md(record_decision 追加 IDML 转向); .ai/PROJECT_CONTEXT.md; docs/architecture.md; docs/development-plan.md(新增阶段 E); docs/prepress-delivery-workflow.md; 新增 Sources/LayoutDExport/IDMLSpikeExporter.swift; Sources/LayoutDApp/main.swift(新增 --idml-spike CLI 入口); 新增 Tests/LayoutDExportTests/IDMLSpikeExporterTests.swift。改动未提交(按本项目内存约定 AI 不动 git)。
+- **检查**：build: pass (swift build, run_checks). swift test: 报告 0 tests(疑似 Swift Testing runner 与 XCTest 发现问题,非本次新增引起,PDFExporterTests 同样未被计入,需后续排查测试发现配置)。改用实跑产物硬验证:swift run layoutD -- --idml-spike /tmp/layoutd-spike.idml 成功;unzip 检查:mimetype 为 Stored(0%)且是首个条目、13 个部件齐全;xmllint 校验 designmap/Graphic/Styles/Spread/Story_V/MasterSpread 全部 well-formed;Graphic.xml 含 CMYK「LayoutD Accent」、Story_uStoryV 含 StoryOrientation=Vertical。
+- **下一步**：1) 【阻塞,需人工】在 InDesign 中文版打开 /tmp/layoutd-spike.idml,确认:能干净打开无报错、横排/竖排文本框文字在、置入图链上、CMYK Swatch 在色板里、竖排方向正确。把任何报错原文回报以便迭代。2) v1 通过后做 spike v2:压测「复合字体(合成字体)」落 IDML 的保真(v1 故意未造合成字体元素)。3) 排查 swift test「0 tests」发现问题(影响 CI 质量门)。4) v2 通过后进入阶段 E1:BookProject → IDML 全量映射。
+
 ## 2026-06-19 17:37 | codex | 新增独立 Ghostscript helper，把 LayoutD RGB PDF 转为 CMYK PDF/X-1a，不改 LayoutDExport/Swif
 - **分支**：feature-codex-gs-cmyk-pdfx
 - **概述**：新增独立 Ghostscript helper，把 LayoutD RGB PDF 转为 CMYK PDF/X-1a，不改 LayoutDExport/Swift 管线。脚本 scripts/to-cmyk-pdfx.sh 默认使用 /Library/Application Support/Adobe/Color/Profiles/JapanColor2011Coated.icc，找不到则回退 Euroscale/FOGRA/SWOP/Generic CMYK；生成自定义 PDF/X-1a pdfmark，嵌 OutputIntent，强制 CMYK 转换。实测普通 ICC 转换会把 RGB 黑字转富黑，采用 Ghostscript 10.03 的 -dBlackText=true 让正文黑字以 C=M=Y=0、K=100 方式输出；脚本注释已写明该策略与 Ghostscript AGPL 本地使用边界。已提交并推送：4fc6a09 feat: add Ghostscript CMYK PDF/X helper，分支 feature-codex-gs-cmyk-pdfx。

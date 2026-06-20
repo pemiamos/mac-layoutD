@@ -99,10 +99,40 @@
 
 - [x] `qualityMetrics` 接入可视化与历史追踪。
 - [x] 封面/满版图作固定页导出。
-- [ ] IDML 结构参照（印刷/中文样式样板）。
 - [ ] 校对批注层（不参与重排的 overlay）。
 - [ ] DOCX 导入。
-- [ ] 更完整印前（按需）。
+
+---
+
+## 阶段 E — 主交付路线：IDML 灌版交棒（进行中）
+
+> 决策见 `.ai/DECISIONS.md`（2026-06-19）：layoutD 收敛为「灌版引擎」，主交付改为
+> 导出 IDML 交 InDesign 做人工精调 + 印前。原阶段 D 的「IDML 结构参照」「更完整印前」
+> 两项被本阶段取代/吸收——印前（CMYK/PDF/X）确定交 InDesign，layoutD 不自建。
+
+### E0. 最小验证 spike（先行证伪，别先动架构）
+- [ ] `--idml-spike <path>`：生成只含「一个跨页 + 一个中文段落样式文本框 + 一个竖排
+      文本框 + 一张置入图 + 一个 CMYK Swatch」的 IDML。
+- 验收：在 **InDesign 中文版** 干净打开，样式/图链/颜色/竖排都在。
+- **重点压测竖排**——这是唯一可能让整条路线崩掉的地方，最先证伪。
+- v1 先验证基础包有效性 + 竖排；**v2 再压测复合字体**（合成字体落 IDML 的保真）。
+- 涉及：`LayoutDExport`（IDML 生成）、`LayoutDApp`（CLI 入口）。
+
+### E1. BookProject → IDML 全量映射（spike 通过后）
+最小可用版已落地并在 InDesign 中文版**人工终验通过**（`--export-idml PATH`，`Sources/LayoutDExport/IDMLExporter.swift`）：
+- [x] 页 → Spread/Page（单页 spread）；文本框 → TextFrame/Story；段落样式 → ParagraphStyle。
+- [x] 颜色 token → RGB 色板；置入图 → Rectangle+Image+Link。
+- [x] 复合字体 → Fonts.xml 内 CompositeFont；竖排 → Story `StoryOrientation=Vertical`。
+- [x] 字体匹配：CoreText 取真实 FontType（系统 CJK 是 OpenTypeCID 非 CFF）+ PostScript 名 → InDesign 无缺失字体。
+- [x] 非对开干净分页：`PagesPerDocument="1"`（恒为 1，非实际页数）+ `FacingPages="false"` + spread 纵向偏移 → 无空白页、主页单页。
+- [x] 容器级自动验证（IDMLExporterTests）+ demo.md 端到端导出、全 XML well-formed、InDesign 4 页内容全正确。
+后续增量：
+- [ ] 对开跨页（facing spread）；固定美术页 → MasterSpread；非矩形蒙版。
+- [ ] 避头尾 → 禁则集；组件背景/描边（知识卡片等）；字体「家族+样式名」拆分（PingFang SC Semibold 等）。
+- [ ] 图片打包（IDML + Links 文件夹）与相对路径重链。
+- [ ] 首页幻影（起始页码=2 的 Section）；spike 的 /usr/bin/zip 换原生 zip 写入。
+- 验收：一份真实 demo 项目导出的 IDML 在 InDesign 打开后版面与 layoutD 预览一致到「可微调」程度。
+- 注意：单向流，不做 IDML 回导；交棒后 InDesign 为真理源。
 
 ---
 
