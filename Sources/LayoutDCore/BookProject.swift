@@ -281,6 +281,9 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
     public var anchoredAssetIds: [UUID]
     public var anchoredFootnoteIds: [UUID]?
     public var anchoredSideNoteIds: [UUID]?
+    /// Optional character-level formatting. Offsets are measured in Swift `Character`s
+    /// within `text`, keeping the flattened string as the backwards-compatible truth.
+    public var inlineRuns: [InlineRun]?
 
     public init(
         id: UUID = UUID(),
@@ -289,7 +292,8 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
         styleId: String,
         anchoredAssetIds: [UUID] = [],
         anchoredFootnoteIds: [UUID]? = nil,
-        anchoredSideNoteIds: [UUID]? = nil
+        anchoredSideNoteIds: [UUID]? = nil,
+        inlineRuns: [InlineRun]? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -298,6 +302,7 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
         self.anchoredAssetIds = anchoredAssetIds
         self.anchoredFootnoteIds = anchoredFootnoteIds
         self.anchoredSideNoteIds = anchoredSideNoteIds
+        self.inlineRuns = inlineRuns
     }
 
     public var safeAnchoredFootnoteIds: [UUID] {
@@ -308,6 +313,31 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
     public var safeAnchoredSideNoteIds: [UUID] {
         get { anchoredSideNoteIds ?? [] }
         set { anchoredSideNoteIds = newValue }
+    }
+}
+
+public enum InlineEmphasis: String, Codable, Hashable, Sendable {
+    case bold
+    case italic
+    case kenten
+}
+
+public struct InlineRun: Codable, Equatable, Sendable {
+    public var location: Int
+    public var length: Int
+    public var emphasis: Set<InlineEmphasis>
+    public var colorTokenRef: String?
+
+    public init(
+        location: Int,
+        length: Int,
+        emphasis: Set<InlineEmphasis> = [],
+        colorTokenRef: String? = nil
+    ) {
+        self.location = location
+        self.length = length
+        self.emphasis = emphasis
+        self.colorTokenRef = colorTokenRef
     }
 }
 

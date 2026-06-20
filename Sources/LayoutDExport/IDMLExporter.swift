@@ -35,6 +35,12 @@ public struct IDMLExporter {
         let pageH = project.pageSetup.pageSize.height
         let pages = document.pages.sorted { $0.number < $1.number }
         let packagedLinks = packagedLinks(for: pages, assets: project.assets)
+        let paragraphsByID = Dictionary(
+            uniqueKeysWithValues: project.sections
+                .flatMap(\.stories)
+                .flatMap(\.paragraphs)
+                .map { ($0.id, $0) }
+        )
 
         var ctx = BuildContext(project: project)
 
@@ -92,8 +98,15 @@ public struct IDMLExporter {
                         items.append(colorRectangleItem(self: "uAccent\(pi)_\(fi)", rect: accentRect,
                                                         fillColor: accentColor, pageW: pageW, pageH: pageH))
                     }
+                    let frameInlineRuns: [InlineRun]?
+                    if let paragraphID = frame.sourceParagraphId,
+                       let paragraph = paragraphsByID[paragraphID] {
+                        frameInlineRuns = inlineRuns(for: text, from: paragraph)
+                    } else {
+                        frameInlineRuns = nil
+                    }
                     let storyContent = storyXML(self: storySelf, styleRef: styleRef,
-                                                vertical: vertical, text: text)
+                                                vertical: vertical, text: text, inlineRuns: frameInlineRuns)
                     storyFiles["Stories/Story_\(storySelf).xml"] = storyContent
                     storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                     storyListIds.append(storySelf)
@@ -600,15 +613,67 @@ public struct IDMLExporter {
         """
     }
 
-    private func storyXML(self id: String, styleRef: String, vertical: Bool, text: String) -> String {
+    private func inlineRuns(for frameText: String, from paragraph: Paragraph) -> [InlineRun]? {
+        guard let paragraphRuns = paragraph.inlineRuns, !paragraphRuns.isEmpty else { return nil }
+        let sourceCharacters = Array(paragraph.text)
+        let frameCharacters = Array(frameText)
+        let sourceVisible = sourceCharacters.enumerated().filter { !$0.element.isWhitespace }
+        let frameVisible = frameCharacters.enumerated().filter { !$0.element.isWhitespace }
+        guard !frameVisible.isEmpty, frameVisible.count <= sourceVisible.count else { return nil }
+
+        let matchingStart = (0...(sourceVisible.count - frameVisible.count)).first { candidate in
+            zip(sourceVisible[candidate...], frameVisible).allSatisfy { pair in
+                pair.0.element == pair.1.element
+            }
+        }
+        guard let matchingStart else { return nil }
+
+        var emphasisByFrameCharacter = Array(repeating: Set<InlineEmphasis>(), count: frameCharacters.count)
+        for (visibleOffset, frameCharacter) in frameVisible.enumerated() {
+            let sourceOffset = sourceVisible[matchingStart + visibleOffset].offset
+            for run in paragraphRuns where run.location <= sourceOffset && sourceOffset < run.location + run.length {
+                emphasisByFrameCharacter[frameCharacter.offset].formUnion(run.emphasis)
+            }
+        }
+
+        var runs: [InlineRun] = []
+        var start: Int?
+        var active = Set<InlineEmphasis>()
+        for offset in 0...emphasisByFrameCharacter.count {
+            let emphasis = offset < emphasisByFrameCharacter.count ? emphasisByFrameCharacter[offset] : []
+            if emphasis != active {
+                if let start, !active.isEmpty {
+                    runs.append(InlineRun(location: start, length: offset - start, emphasis: active))
+                }
+                start = emphasis.isEmpty ? nil : offset
+                active = emphasis
+            }
+        }
+        return runs.isEmpty ? nil : runs
+    }
+
+    private func storyXML(
+        self id: String,
+        styleRef: String,
+        vertical: Bool,
+        text: String,
+        inlineRuns: [InlineRun]? = nil
+    ) -> String {
         let orientation = vertical ? "Vertical" : "Horizontal"
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
         // 每个非空行作为一个段落（ParagraphStyleRange）。
-        let paragraphs = text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        let body = (paragraphs.isEmpty ? [text] : paragraphs).map { line in
+        var lineStart = 0
+        let paragraphs = text.components(separatedBy: "\n").compactMap { rawLine -> (String, Int)? in
+            defer { lineStart += rawLine.count + 1 }
+            let leading = rawLine.prefix { $0.isWhitespace }.count
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            return line.isEmpty ? nil : (line, lineStart + leading)
+        }
+        let effectiveParagraphs = paragraphs.isEmpty ? [(text, 0)] : paragraphs
+        let body = effectiveParagraphs.map { line, start in
             """
             \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
-            \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>\(esc(line))</Content></CharacterStyleRange>
+            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? []))
             \t\t</ParagraphStyleRange>
             """
         }.joined(separator: "\n")
@@ -621,6 +686,38 @@ public struct IDMLExporter {
         \t</Story>
         </idPkg:Story>
         """
+    }
+
+    private func characterStyleRanges(for text: String, globalStart: Int, inlineRuns: [InlineRun]) -> String {
+        let characters = Array(text)
+        guard !characters.isEmpty else { return "" }
+        var styles = Array(repeating: Set<InlineEmphasis>(), count: characters.count)
+        for run in inlineRuns {
+            let start = max(0, run.location - globalStart)
+            let end = min(characters.count, run.location + run.length - globalStart)
+            guard start < end else { continue }
+            for index in start..<end { styles[index].formUnion(run.emphasis) }
+        }
+
+        var ranges: [(String, Set<InlineEmphasis>)] = []
+        var start = 0
+        for index in 1...characters.count where index == characters.count || styles[index] != styles[start] {
+            ranges.append((String(characters[start..<index]), styles[start]))
+            start = index
+        }
+        return ranges.map { content, emphasis in
+            let fontStyle: String
+            if emphasis.contains(.bold) && emphasis.contains(.italic) {
+                fontStyle = " FontStyle=\"Bold Italic\""
+            } else if emphasis.contains(.bold) {
+                fontStyle = " FontStyle=\"Bold\""
+            } else if emphasis.contains(.italic) {
+                fontStyle = " FontStyle=\"Italic\""
+            } else {
+                fontStyle = ""
+            }
+            return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(fontStyle)><Content>\(esc(content))</Content></CharacterStyleRange>"
+        }.joined(separator: "\n")
     }
 
     // MARK: - 打包（纯 Swift ZIP32；mimetype store-first）

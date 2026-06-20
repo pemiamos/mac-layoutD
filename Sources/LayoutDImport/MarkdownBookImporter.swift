@@ -223,8 +223,15 @@ private struct MarkdownParser {
         guard !paragraphBuffer.isEmpty else {
             return
         }
-        let text = normalizeInlineMarkdown(paragraphBuffer.joined(separator: " "))
-        currentParagraphs.append(Paragraph(kind: .body, text: text, styleId: StyleID.body.rawValue))
+        let inline = parseInlineMarkdown(paragraphBuffer.joined(separator: " "))
+        currentParagraphs.append(
+            Paragraph(
+                kind: .body,
+                text: inline.text,
+                styleId: StyleID.body.rawValue,
+                inlineRuns: inline.runs.isEmpty ? nil : inline.runs
+            )
+        )
         paragraphBuffer.removeAll(keepingCapacity: true)
     }
 
@@ -773,18 +780,103 @@ private struct MarkdownParser {
     }
 
     private func normalizeInlineMarkdown(_ text: String) -> String {
-        var result = replacingMarkdownLinks(in: text)
-        result = strippingPairedInlineDelimiter("**", from: result)
-        result = strippingPairedInlineDelimiter("__", from: result)
-        result = strippingPairedInlineDelimiter("*", from: result)
-        result = strippingPairedInlineDelimiter("_", from: result)
-        result = strippingPairedInlineDelimiter("`", from: result)
-        result = result.replacingOccurrences(of: "\\*", with: "*")
-        result = result.replacingOccurrences(of: "\\_", with: "_")
-        result = result.replacingOccurrences(of: "\\`", with: "`")
-        result = result.replacingOccurrences(of: "\\[", with: "[")
-        result = result.replacingOccurrences(of: "\\]", with: "]")
-        return result
+        parseInlineMarkdown(text).text
+    }
+
+    private struct ParsedInlineMarkdown {
+        var text: String
+        var runs: [InlineRun]
+    }
+
+    /// Flattens the supported Markdown delimiters while retaining bold/italic spans.
+    /// Code spans remain unstyled and escaped delimiters remain literal.
+    private func parseInlineMarkdown(_ text: String) -> ParsedInlineMarkdown {
+        let source = replacingMarkdownLinks(in: text)
+        var output = ""
+        var stylesByCharacter: [Set<InlineEmphasis>] = []
+        var active: Set<InlineEmphasis> = []
+        var codeSpan = false
+        var index = source.startIndex
+
+        func hasClosingDelimiter(_ delimiter: String, after start: String.Index) -> Bool {
+            firstDelimiterIndex(in: source, delimiter: delimiter, startingAt: start, kind: .closing) != nil
+        }
+
+        func isValidDelimiter(_ delimiter: String, at start: String.Index, kind: InlineDelimiterKind) -> Bool {
+            guard let end = source.index(start, offsetBy: delimiter.count, limitedBy: source.endIndex) else {
+                return false
+            }
+            return isValidInlineDelimiter(start..<end, in: source, kind: kind)
+        }
+
+        while index < source.endIndex {
+            if source[index] == "\\" {
+                let next = source.index(after: index)
+                if next < source.endIndex, "*_`[]\\".contains(source[next]) {
+                    output.append(source[next])
+                    stylesByCharacter.append(codeSpan ? [] : active)
+                    index = source.index(after: next)
+                    continue
+                }
+            }
+
+            let remaining = source[index...]
+            if remaining.hasPrefix("`") {
+                let next = source.index(after: index)
+                let kind: InlineDelimiterKind = codeSpan ? .closing : .opening
+                if isValidDelimiter("`", at: index, kind: kind),
+                   (codeSpan || hasClosingDelimiter("`", after: next)) {
+                    codeSpan.toggle()
+                    index = next
+                    continue
+                }
+            }
+
+            if !codeSpan {
+                let boldDelimiter = remaining.hasPrefix("**") ? "**" : (remaining.hasPrefix("__") ? "__" : nil)
+                if let delimiter = boldDelimiter {
+                    let next = source.index(index, offsetBy: delimiter.count)
+                    let kind: InlineDelimiterKind = active.contains(.bold) ? .closing : .opening
+                    if isValidDelimiter(delimiter, at: index, kind: kind),
+                       (active.contains(.bold) || hasClosingDelimiter(delimiter, after: next)) {
+                        if active.contains(.bold) { active.remove(.bold) } else { active.insert(.bold) }
+                        index = next
+                        continue
+                    }
+                }
+
+                let italicDelimiter = remaining.hasPrefix("*") ? "*" : (remaining.hasPrefix("_") ? "_" : nil)
+                if let delimiter = italicDelimiter {
+                    let next = source.index(after: index)
+                    let kind: InlineDelimiterKind = active.contains(.italic) ? .closing : .opening
+                    if isValidDelimiter(delimiter, at: index, kind: kind),
+                       (active.contains(.italic) || hasClosingDelimiter(delimiter, after: next)) {
+                        if active.contains(.italic) { active.remove(.italic) } else { active.insert(.italic) }
+                        index = next
+                        continue
+                    }
+                }
+            }
+
+            output.append(source[index])
+            stylesByCharacter.append(codeSpan ? [] : active)
+            index = source.index(after: index)
+        }
+
+        var runs: [InlineRun] = []
+        var runStart: Int?
+        var runStyle: Set<InlineEmphasis> = []
+        for offset in 0...stylesByCharacter.count {
+            let style = offset < stylesByCharacter.count ? stylesByCharacter[offset] : []
+            if style != runStyle {
+                if let start = runStart, !runStyle.isEmpty {
+                    runs.append(InlineRun(location: start, length: offset - start, emphasis: runStyle))
+                }
+                runStart = style.isEmpty ? nil : offset
+                runStyle = style
+            }
+        }
+        return ParsedInlineMarkdown(text: output, runs: runs)
     }
 
     private func replacingMarkdownLinks(in text: String) -> String {
@@ -814,26 +906,6 @@ private struct MarkdownParser {
         }
 
         return output
-    }
-
-    private func strippingPairedInlineDelimiter(_ delimiter: String, from text: String) -> String {
-        var result = text
-
-        while let opening = firstDelimiterIndex(in: result, delimiter: delimiter, startingAt: result.startIndex, kind: .opening),
-              let closing = firstDelimiterIndex(
-                in: result,
-                delimiter: delimiter,
-                startingAt: result.index(opening, offsetBy: delimiter.count),
-                kind: .closing
-              ) {
-            let closingEnd = result.index(closing, offsetBy: delimiter.count)
-            result.removeSubrange(closing..<closingEnd)
-
-            let openingEnd = result.index(opening, offsetBy: delimiter.count)
-            result.removeSubrange(opening..<openingEnd)
-        }
-
-        return result
     }
 
     private func firstDelimiterIndex(
@@ -894,7 +966,20 @@ private struct MarkdownParser {
         }
 
         let previousCharacter = text[text.index(before: index)]
-        return isInlineDelimiterBoundary(previousCharacter)
+        return isInlineDelimiterBoundary(previousCharacter) || isCJKCharacter(previousCharacter)
+    }
+
+    private func isCJKCharacter(_ character: Character) -> Bool {
+        character.unicodeScalars.allSatisfy { scalar in
+            switch scalar.value {
+            case 0x2E80...0x2FFF, 0x3040...0x30FF, 0x31F0...0x31FF,
+                 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xAC00...0xD7AF,
+                 0xF900...0xFAFF, 0x20000...0x2FA1F:
+                return true
+            default:
+                return false
+            }
+        }
     }
 
     private func isInlineDelimiterBoundary(_ character: Character) -> Bool {
