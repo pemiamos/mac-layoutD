@@ -27,6 +27,10 @@ public struct IDMLExporter {
     private let header = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
     private let pkgNS = "xmlns:idPkg=\"http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging\""
     private let dom = "16.0"
+    // 着重号(Kenten)、避头尾等 CJK 排版特性只在 World-Ready / 日文段落排版器下渲染；
+    // 默认拉丁排版器会静默忽略 KentenKind。World-Ready 段落排版器的 IDML 内部名为
+    // "$ID/HL Composer Optyca"（日文段落排版器为 "$ID/HL Composer J"）。
+    private let appliedComposer = "$ID/HL Composer Optyca"
 
     // MARK: - 入口
 
@@ -672,7 +676,7 @@ public struct IDMLExporter {
         let effectiveParagraphs = paragraphs.isEmpty ? [(text, 0)] : paragraphs
         let body = effectiveParagraphs.map { line, start in
             """
-            \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
+            \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)">
             \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? []))
             \t\t</ParagraphStyleRange>
             """

@@ -80,6 +80,12 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertEqual(matches(in: story, pattern: "(Skew=\\\"12\\\" KentenKind=\\\"KentenSesameDot\\\"[^>]*><Content>[CD]</Content>)").count, 2)
         XCTAssertFalse(story.contains("Skew=\"12\"><Content>二</Content>"))
         XCTAssertFalse(story.contains("FauxBold=\"true\"><Content>三</Content>"))
+        // 着重号只在 CJK 段落排版器下渲染：每个 ParagraphStyleRange 必须带 World-Ready 排版器，
+        // 否则 InDesign 静默忽略 KentenKind（属性在但视觉无点）。
+        XCTAssertEqual(
+            matches(in: story, pattern: "(<ParagraphStyleRange\\b[^>]*\\bAppliedComposer=\\\"\\$ID/HL Composer Optyca\\\")").count,
+            matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count
+        )
     }
 
     func testExportsValidIDMLFromSampleProject() throws {
