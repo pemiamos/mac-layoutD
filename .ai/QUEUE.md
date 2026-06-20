@@ -99,15 +99,16 @@
   - 验收：`printf '正文一句话[^a]。\n\n[^a]: 这是脚注内容。\n'` 导出后，①InDesign 打开识别为真脚注（正文出上标编号、页脚出脚注正文、自动编号），不是裸文字；②正文里**不**再出现重复的脚注正文裸段；③`scripts/review-idml.sh` 仍 PASS，并补一条端到端断言（story XML 里出现 `<Footnote` 元素、且脚注正文不再作为独立正文段重复）。
   - ⚠️ 端到端验收必须解包 IDML grep `<Footnote`，别只靠单测——本项目踩过「单测绿但功能坏」的坑。
 
-- [~] **E3-7v 脚注正文在 InDesign 渲染（视觉退回）** — Codex 现役，优先于 E3-4。Claude 已勘根因
+- [~] **E3-7v 脚注正文在 InDesign 渲染（视觉退回）** — Claude 直接改 @ `feature/codex-e3-7-footnotes` commit `d449077`（代码已落，待用户 InDesign 视觉复验 `~/Desktop/layoutD脚注验收-0621-v2.idml`）。根因+修复见下
   - **现象**（用户 0621 InDesign 肉眼验收 `~/Desktop/layoutD脚注验收-0621.idml`）：原生脚注机制成立——正文锚点自动编号 1/2、页底有分隔线+脚注区、无重复。**但脚注正文里的中文全是缺字方框（豆腐 ☒☒☒），只有 `ATP` 等拉丁字符正常**。
   - **repro**：`printf '细胞是生命的基本单位[^a]。\n\n[^a]: 细胞由细胞膜、细胞质和细胞核构成。\n'` → 导出 → 解包 → 脚注区中文不显示。
   - **根因（两段断链，Claude 已勘）**：
     1. 脚注段没有专属段落样式：`StyleID` 枚举只有 `body/heading1/heading2/caption/callout`，**无 `footnote`**；导入器却把脚注段建成 `styleId:"footnote"`（`MarkdownBookImporter.swift:411`）。导出器仅遍历 `project.styles.paragraphStyles` 生成样式 → Styles.xml 里**没有 `ParagraphStyle/footnote`**，也就没有 `CF_footnote` 复合字体。
     2. `footnoteXML`（`IDMLExporter.swift:789`）把脚注的 `AppliedParagraphStyle` 硬编码成 `ParagraphStyle/$ID/[No paragraph style]`（无 AppliedFont）。正文段引用的是带 `CF_body` 复合字体的 `ParagraphStyle/body`，所以正文中文正常、脚注中文退回拉丁默认字体变豆腐。
   - **修复方向**（仅导出侧）：让脚注的 `<ParagraphStyleRange>` 引用一个带中文复合字体（`CF_*`）的段落样式。最稳：引用已存在的 `ParagraphStyle/body`；更规范：注册一个脚注专属小字号段落样式（可基于 caption）并引用之。务必确认被引用的样式真的在 Styles.xml 里生成（带 `CF_` AppliedFont），别再指向 `[No paragraph style]`。
+  - **✅ 已修（Claude，commit `d449077`）**：footnoteXML 改为按 caption→body→空样式 的优先级引用带 `CF_` 复合字体的样式（caption 8.5pt/无首行缩进，最像脚注），footnoteStyleRef 一路 thread 进 storyXML→characterStyleRanges→footnoteXML。解包验证脚注现挂 `ParagraphStyle/caption`（带 `CF_caption`）。补了端到端断言（脚注样式不得 `[No paragraph style]`、须带 `CF_`）。swift test 188/0、review-idml.sh 6/0 PASS。**待用户 InDesign 肉眼确认脚注中文无豆腐**。
   - **验收**：①补端到端断言——解包后脚注 `<Footnote>` 内的 `<ParagraphStyleRange AppliedParagraphStyle=...>` 必须指向带 `CF_` 字体的样式、**不得**是 `$ID/[No paragraph style]`；②`scripts/review-idml.sh` 仍 PASS；③Claude 复审后重导样例投桌面，用户在 InDesign 肉眼确认脚注中文正常显示（无豆腐）。
-  - ⚠️ 与 dev 的 E3-3v(composer 改 `storyXML` ParagraphStyleRange 行) 同文件，提交前 `git merge origin/dev` 同步并 reconcile。
+  - ⚠️ 与 dev 的 E3-3v(composer 改 `storyXML` ParagraphStyleRange 行) 同文件，**合 dev 前** `git merge origin/dev` 同步并 reconcile（E3-7v 改了 storyXML 签名+正文调用处，E3-3v 改了同函数的 ParagraphStyleRange 行，会冲突需人工合）。
 
 - [ ] **E3-4 原生表格 Table**
   - 目标：table 组件从「当文字导」升级为 IDML 原生 `<Table>/<Cell>`（行列/边框/底色），可在 InDesign 调列宽。
