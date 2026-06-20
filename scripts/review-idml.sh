@@ -72,15 +72,16 @@ for f in glob.glob(os.path.join(root,'Stories','*.xml')):
         attr,body=m.groups()
         txt=''.join(re.findall(r'<Content>(.*?)</Content>',body,re.S))
         if not txt.strip(): continue
-        fs=re.search(r'FontStyle="([^"]*)"',attr)
-        spans.append((fs.group(1) if fs else None, txt))
-def styled(sub,style):
-    return any(style==fs and sub in txt for fs,txt in spans)
+        bold='FauxBold="true"' in attr
+        italic='Skew="12"' in attr
+        spans.append((bold, italic, txt))
+def styled(sub,want_bold,want_italic):
+    return any(sub in txt and bold==want_bold and italic==want_italic for bold,italic,txt in spans)
 def residue(ch):
-    return any(ch in txt for _,txt in spans)
+    return any(ch in txt for _,_,txt in spans)
 checks=[
-    ("粗体词→Bold",      styled("粗体","Bold")),
-    ("斜体词(CJK)→Italic", styled("斜体","Italic")),
+    ("粗体词→FauxBold",      styled("粗体",True,False)),
+    ("斜体词(CJK)→Skew(伪斜体)", styled("斜体",False,True)),
     ("无残留 * 分隔符",   not residue("*")),
     ("无残留 _ 分隔符",   not residue("_")),
 ]

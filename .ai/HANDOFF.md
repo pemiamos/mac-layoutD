@@ -3,6 +3,46 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 02:10 | claude | 按用户决定，给三个 AI 搭好了 git worktree 物理隔离。Claude=主仓库 mac-layoutD（集成 dev/main），Codex=mac
+- **分支**：dev
+- **概述**：按用户决定，给三个 AI 搭好了 git worktree 物理隔离。Claude=主仓库 mac-layoutD（集成 dev/main），Codex=mac-layoutD-codex（停靠 codex-lane），Antigravity=mac-layoutD-ag（停靠 ag-lane），三副本共享同一 .git。四处 relay 配置的 RELAY_PROJECT_ROOT 已分别改指各自副本（改前都有 .bak-worktree 备份）。AGENTS.md/QUEUE.md 已更新隔离规则与新分工，DECISIONS.md 记了决策。两个停靠分支已快进到最新 dev，副本里已能读到隔离说明。新分工：Codex/Antigravity 只在自己副本+feature 分支提交，不合 dev/main、不必 push；dev/main 合并与交接日志冲突解决统一归 Claude。
+- **改动文件**：.ai/AGENTS.md, .ai/QUEUE.md, .ai/DECISIONS.md（commit 3ec9585，已 push dev）；外部配置（不在仓库）：~/.codex/config.toml、~/.gemini/config/mcp_config.json、~/.gemini/antigravity-ide/mcp_config.json、~/.gemini/antigravity/mcp_config.json 的 RELAY_PROJECT_ROOT 改指各自 worktree
+- **检查**：worktree 建立确认：git worktree list 三条（dev/codex-lane/ag-lane）。两副本 sanity check 通过：.ai/HANDOFF.md 可读、git 干净在各自分支、swift 可用、AGENTS.md 含隔离说明。四处 relay 配置 RELAY_PROJECT_ROOT 已逐一 grep 确认指向正确副本。dev 当前 HEAD 3ec9585。
+- **下一步**：⚠️ Codex 和 Antigravity 必须重启应用，新的 RELAY_PROJECT_ROOT 才会生效（MCP server 启动时读环境变量）——这步要用户做。重启后两道开工就会落在各自副本里。Codex 下一项任务仍是 E3-3 Kenten（傍点）。另：FauxBold 修复后的综合验收样例在用户桌面 layoutD行内强调综合样例-0621b.idml，等用户 InDesign 视觉验收，验收 OK 后 Claude 可把 dev 合 main。旧分支 feature/codex-inline-blocks（已合 dev）、feature/ag-inline-preview（仅含已 cherry-pick 的 commit）可择机清理。
+
+## 2026-06-21 01:57 | claude | 完成上一条交接里排的「下一步②」：重新生成覆盖标题/列表/引用/admonition callout 强调的综合验收样例（基于 FauxBold/FauxIta
+- **分支**：dev
+- **概述**：完成上一条交接里排的「下一步②」：重新生成覆盖标题/列表/引用/admonition callout 强调的综合验收样例（基于 FauxBold/FauxItalic 修复 + 已合并的 E3-1），解包确认 14 处 CharacterStyleRange 全部正确带 FauxBold/FauxItalic、无残留 */_ 分隔符。已复制到用户桌面并删除了此前那份有 bug 的旧样例，避免用户打开错文件。本轮工作到此收尾。
+- **改动文件**：(无代码改动，仅生成验收样例并投递到 ~/Desktop/layoutD行内强调综合样例-0621b.idml；旧的 ~/Desktop/layoutD行内强调样例-0621.idml 已删除)
+- **检查**：手动解包校验：14 处 FauxBold/FauxItalic CharacterStyleRange 命中（含 H2 标题粗体"细胞"、列表斜体"细胞膜"/粗体"核糖体"、blockquote 粗体"重点"/斜体"侧重"、admonition callout 粗体"ATP"/斜体"水解"），grep 确认无残留 * _ 分隔符。scripts/review-idml.sh 已在合并 commit 3d7fef6 上跑过 PASS（182 测试 + 6 探针全过）。
+- **下一步**：等用户在 InDesign 里实际打开桌面新样例确认视觉效果（粗体不再是粉色高亮替代字形、斜体有真实倾斜）。确认 OK 后可以把 dev 合到 main。另有两件待用户知情/决策的事尚未处理：① main 上 commit 6faa1b0 的 message 写"visual verified"但实际未经真正人工验收，是误导性记录，未重写历史，仅留痕说明；② 发现 Codex/Antigravity/用户的 git GUI 工具共享同一本地仓库路径会有并发 checkout 互相打扰的风险（已发生一次良性误切分支，用 cherry-pick 纠正），候选方案 git worktree 隔离需要用户决定是否实施。Codex 队列下一项任务 E3-3 Kenten 待重新认领。
+
+## 2026-06-21 01:55 | claude | 修复行内强调渲染 bug（FauxBold/FauxItalic 替代 FontStyle），合并 Codex E3-1
+- **分支**：dev
+- **概述**：用户发来 InDesign 截图反馈：粗体文字显示为粉红色高亮（替代字形警告），斜体完全无视觉效果——证明此前标注"已验证通过"的行内格式功能实际未生效。根因：`IDMLExporter.swift` 的 `characterStyleRanges` 只写了 `FontStyle="Bold"/"Italic"` 属性字符串，但 `Resources/Fonts.xml` 没有声明对应字重的字体资源，InDesign 找不到就用替代字形顶上。修复：改用 `FauxBold="true"`/`FauxItalic="true"`（算法模拟粗斜体，不依赖字体是否真有对应字重变体，中文宋体等常没有），同步更新了单测断言和 `scripts/review-idml.sh` 的探针逻辑（原探针只验证 XML 字符串结构，没验证"是否真的会在 InDesign 里正确渲染"，这正是这个 bug 能蒙过自动化关卡的原因）。随后核实并合并了 Codex 在 `feature/codex-inline-blocks` 完成的 E3-1（统一 `makeParagraph` 构造路径，标题/列表/引用/callout 现保留 inlineRuns），文件范围与本次 fix 不重叠，diff 审查通过。
+- **改动文件**：Sources/LayoutDExport/IDMLExporter.swift, Tests/LayoutDExportTests/IDMLExporterTests.swift, scripts/review-idml.sh, Sources/LayoutDImport/MarkdownBookImporter.swift, Tests/LayoutDImportTests/MarkdownBookImporterTests.swift, .ai/QUEUE.md, .ai/HANDOFF.md
+- **检查**：FauxBold/FauxItalic fix 提交 e05a66d→cherry-pick 到 dev 为 b567808，已 push。E3-1 通过 `git merge feature/codex-inline-blocks --no-ff` 合入（本 commit）。**待办**：合并后需重跑 `scripts/review-idml.sh` 确认 E3-1 新场景（标题/列表/引用/callout 强调）与 FauxBold fix 叠加无回归，再 push。
+- **重要澄清**：`main`/`dev` 上 commit `6faa1b0` 的 message 写"visual verified"，但实际从未发生真正的人工 InDesign 视觉验收——之前送给用户的文件是用对话内卡片发的，用户明确反馈打不开。这次的 FauxBold bug 正是用户第一次真正打开 IDML 看到的结果。不重写已推送历史，但下一棒/用户应知道这条 message 不准确。
+- **已知风险（未解决）**：发现 Codex 的本地 shell 与本次操作的本地 shell 在同一个 `.git` 工作目录上并发执行了 checkout（用 `git reflog` 还原确认），导致一次 commit 误落到 `feature/ag-inline-preview` 分支（已用 cherry-pick 纠正，无数据丢失）。三个 AI 客户端的 relay 配置目前共享同一个本地路径 `/Users/amos/Documents/GitHub/mac-layoutD`，存在并发 checkout/commit 互相打扰的理论风险；本次解决冲突期间还发现用户本机的 git GUI 工具也指向同一路径，会实时弹出该路径的合并冲突提示，进一步说明同一文件夹被多方（多个 AI + 用户 GUI 工具）同时盯着的风险是真实存在的。候选方案是 `git worktree` 物理隔离，但需要同步改 Codex/Antigravity 的 relay 配置指向各自独立路径，这是架构级变更，需要先跟用户说明，本轮未实施。
+- **下一步**：① 重跑 review-idml.sh 确认合并后无回归 → push dev。② 重新生成覆盖标题/列表/引用/callout 强调的验收样例，放桌面，告知用户新文件名（提示需要在 InDesign 里关闭旧文件重开才能看到新内容，之前截图针对的是修复前的旧文件）。③ 跟用户说明 worktree 隔离方案，决定是否实施。④ Codex 下一项任务 E3-3 Kenten，待重新认领。
+
+## 2026-06-21 01:27 | claude | 核实并确认：审核退回的 CJK 单分隔符斜体 bug 已被自行修复并合并（commit 9e4f269，在 dev HEAD `b4adf8d` 内），typo
+- **分支**：dev
+- **概述**：核实并确认：审核退回的 CJK 单分隔符斜体 bug 已被自行修复并合并（commit 9e4f269，在 dev HEAD `b4adf8d` 内），typo kentem→kenten 也已修正——之前对 dev 样例导出 7/7 FontStyle 命中正确并非偶然。响应用户"批量化流程+双AI分工+文件投递到桌面"的明确要求：1) 重写 `.ai/AGENTS.md` 分工段，把 Antigravity 从"IDE内验证"升级为对等编码道；2) 重写 `.ai/QUEUE.md` 为双道队列（Codex道=IDML导出管线+内容模型，Antigravity道=预览渲染+GUI），按文件边界分工避免冲突，加挂牌认领机制（`- [~] 认领: <名字>`），批量排了 9 项(Codex)+3 项(Antigravity)任务；3) 把验收样例 `行内强调样例.idml` 复制到用户桌面（文件名 `layoutD行内强调样例-0621.idml`），不再用对话内卡片发送。
+- **改动文件**：.ai/AGENTS.md, .ai/QUEUE.md
+- **检查**：纯文档变更，无需 build/test；commit 0bae822 已 push 到 origin/dev。scripts/review-idml.sh 此前已对 dev 当前 HEAD 验证 PASS（mimetype/XML/FontStyle 7处全过）。
+- **下一步**：Codex / Antigravity 现在直接读 `.ai/QUEUE.md` 自助领取各自道里最上面未打勾任务，做完跑 `scripts/review-idml.sh` PASS 才提交。Claude 下一轮改为批量审核：攒几个 feature/codex-*、feature/ag-* 分支一起跑探针，过审的合并进 dev，dev 攒一批后再交用户在 InDesign/GUI 做视觉验收，不再逐任务来回。用户桌面已有 `layoutD行内强调样例-0621.idml` 待视觉确认（非阻塞，可与后续任务并行）。
+
+## 2026-06-21 01:39 | codex | 完成 Codex 道 E3-1：抽取统一 makeParagraph(kind:markdown:styleId:) 构造路径，标题（ATX/Setext）、列
+- **分支**：feature/codex-inline-blocks
+- **概述**：完成 Codex 道 E3-1：抽取统一 makeParagraph(kind:markdown:styleId:) 构造路径，标题（ATX/Setext）、列表、引用、admonition callout 现保留 inlineRuns；一级标题仍以去除 Markdown 后的纯文本写入项目元数据/章节名。实现提交：8201059 feat(import): preserve inline runs across blocks。
+- **改动文件**：Sources/LayoutDImport/MarkdownBookImporter.swift
+Tests/LayoutDImportTests/MarkdownBookImporterTests.swift
+.ai/QUEUE.md
+.ai/HANDOFF.md
+- **检查**：commit 8201059 (feat(import): preserve inline runs across blocks); relay run_checks(test): pass; scripts/review-idml.sh: PASS, swift test 182/182, XML/mimetype/原行内格式探针全过；专用 E3-1 IDML 解包探针：标题粗体、列表斜体、引用粗体、callout 粗体+斜体均生成对应 CharacterStyleRange，且无 */_ 分隔符残留
+- **下一步**：Claude 批量审核并合入 dev。注意共享工作区执行期间曾被切到 feature/ag-inline-preview，Codex 已切回自己的分支后提交；Samples/Links、Samples/demo.idml、Samples/test_emphasis_visual.* 为对方/用户未跟踪文件，未修改、未提交。Codex 下一项队列任务为 E3-3 Kenten，待下一棒重新认领。
+
 ## 2026-06-21 00:33 | codex | 修复 Claude 退回的阶段1问题：CJK 字符紧邻的单星/单下划线斜体现可正确解析为 inlineRuns；保留现有 inlineRuns 模型与 IDML
 - **分支**：feature/codex-inline-runs
 - **概述**：修复 Claude 退回的阶段1问题：CJK 字符紧邻的单星/单下划线斜体现可正确解析为 inlineRuns；保留现有 inlineRuns 模型与 IDML 导出实现；将 public Codable case `kentem` 更正为 `kenten`。代码提交：9e4f269 fix(import): support CJK inline italic delimiters。

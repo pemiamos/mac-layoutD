@@ -106,17 +106,18 @@ private struct MarkdownParser {
                 : nil
             if let heading = parseSetextHeading(line: line, nextLine: nextLine) {
                 flushAllBuffers()
+                let headingText = normalizeInlineMarkdown(heading.text)
                 if heading.level == 1 {
                     flushSection()
                     if title == nil {
-                        title = heading.text
+                        title = headingText
                     }
-                    currentSectionTitle = heading.text
+                    currentSectionTitle = headingText
                 } else {
                     currentParagraphs.append(
-                        Paragraph(
+                        makeParagraph(
                             kind: .heading(level: heading.level),
-                            text: heading.text,
+                            markdown: heading.text,
                             styleId: StyleID.heading2.rawValue
                         )
                     )
@@ -149,17 +150,18 @@ private struct MarkdownParser {
 
             if let heading = parseHeading(line) {
                 flushAllBuffers()
+                let headingText = normalizeInlineMarkdown(heading.text)
                 if heading.level == 1 {
                     flushSection()
                     if title == nil {
-                        title = heading.text
+                        title = headingText
                     }
-                    currentSectionTitle = heading.text
+                    currentSectionTitle = headingText
                 } else {
                     currentParagraphs.append(
-                        Paragraph(
+                        makeParagraph(
                             kind: .heading(level: heading.level),
-                            text: heading.text,
+                            markdown: heading.text,
                             styleId: StyleID.heading2.rawValue
                         )
                     )
@@ -178,9 +180,9 @@ private struct MarkdownParser {
             if let listItem = parseListItem(line) {
                 flushAllBuffers()
                 currentParagraphs.append(
-                    Paragraph(
+                    makeParagraph(
                         kind: .listItem,
-                        text: listItem,
+                        markdown: listItem,
                         styleId: StyleID.body.rawValue
                     )
                 )
@@ -223,13 +225,11 @@ private struct MarkdownParser {
         guard !paragraphBuffer.isEmpty else {
             return
         }
-        let inline = parseInlineMarkdown(paragraphBuffer.joined(separator: " "))
         currentParagraphs.append(
-            Paragraph(
+            makeParagraph(
                 kind: .body,
-                text: inline.text,
-                styleId: StyleID.body.rawValue,
-                inlineRuns: inline.runs.isEmpty ? nil : inline.runs
+                markdown: paragraphBuffer.joined(separator: " "),
+                styleId: StyleID.body.rawValue
             )
         )
         paragraphBuffer.removeAll(keepingCapacity: true)
@@ -240,7 +240,11 @@ private struct MarkdownParser {
             return
         }
         currentParagraphs.append(
-            Paragraph(kind: .callout, text: normalizeInlineMarkdown(calloutBuffer.joined(separator: " ")), styleId: StyleID.callout.rawValue)
+            makeParagraph(
+                kind: .callout,
+                markdown: calloutBuffer.joined(separator: " "),
+                styleId: StyleID.callout.rawValue
+            )
         )
         calloutBuffer.removeAll(keepingCapacity: true)
     }
@@ -304,19 +308,19 @@ private struct MarkdownParser {
         }
 
         if !sideNoteBuffer.isEmpty {
-            sideNoteBuffer.append(normalizeInlineMarkdown(line))
+            sideNoteBuffer.append(line)
             return
         }
 
         if !calloutBuffer.isEmpty {
-            calloutBuffer.append(normalizeInlineMarkdown(line))
+            calloutBuffer.append(line)
             return
         }
 
         currentParagraphs.append(
-            Paragraph(
+            makeParagraph(
                 kind: .quote,
-                text: normalizeInlineMarkdown(line),
+                markdown: line,
                 styleId: StyleID.callout.rawValue
             )
         )
@@ -646,7 +650,7 @@ private struct MarkdownParser {
             return nil
         }
 
-        let text = normalizeInlineMarkdown(String(line[line.index(after: markerEnd)...]).trimmed)
+        let text = String(line[line.index(after: markerEnd)...]).trimmed
         guard !text.isEmpty else {
             return nil
         }
@@ -678,7 +682,7 @@ private struct MarkdownParser {
             return nil
         }
 
-        let text = normalizeInlineMarkdown(line)
+        let text = line
         guard !text.isEmpty else {
             return nil
         }
@@ -687,7 +691,7 @@ private struct MarkdownParser {
 
     private func parseListItem(_ line: String) -> String? {
         if line.hasPrefix("- ") || line.hasPrefix("* ") {
-            let text = normalizeInlineMarkdown(String(line.dropFirst(2)).trimmed)
+            let text = String(line.dropFirst(2)).trimmed
             return text.isEmpty ? nil : text
         }
 
@@ -715,7 +719,7 @@ private struct MarkdownParser {
         }
 
         let marker = String(line[..<textStart]).trimmed
-        let text = normalizeInlineMarkdown(String(line[line.index(after: textStart)...]).trimmed)
+        let text = String(line[line.index(after: textStart)...]).trimmed
         guard !text.isEmpty else {
             return nil
         }
@@ -781,6 +785,20 @@ private struct MarkdownParser {
 
     private func normalizeInlineMarkdown(_ text: String) -> String {
         parseInlineMarkdown(text).text
+    }
+
+    private func makeParagraph(
+        kind: ParagraphKind,
+        markdown: String,
+        styleId: String
+    ) -> Paragraph {
+        let inline = parseInlineMarkdown(markdown)
+        return Paragraph(
+            kind: kind,
+            text: inline.text,
+            styleId: styleId,
+            inlineRuns: inline.runs.isEmpty ? nil : inline.runs
+        )
     }
 
     private struct ParsedInlineMarkdown {
@@ -1259,7 +1277,7 @@ private struct MarkdownParser {
 
         let markerStart = line.index(line.startIndex, offsetBy: 2)
         let marker = String(line[markerStart..<closing]).uppercased()
-        let title = normalizeInlineMarkdown(String(line[line.index(after: closing)...]).trimmed)
+        let title = String(line[line.index(after: closing)...]).trimmed
         let label = admonitionLabel(marker)
         guard !label.isEmpty else {
             return nil
