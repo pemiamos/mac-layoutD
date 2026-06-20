@@ -68,7 +68,7 @@
   - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`、`Sources/LayoutDCore/BookProject.swift`(如需)。
   - 验收：`printf '## **粗**标题\n\n- 列表*斜*项\n> 引用**强调**\n'` 导出 IDML 后，标题/列表/引用里的强调都出对应 FontStyle；`scripts/review-idml.sh` PASS。
 
-- [~] **E3-3 傍点（Kenten 着重号）** — 认领: Codex @ `feature/codex-e3-3-kenten`
+- [x] **E3-3 傍点（Kenten 着重号）** — Codex @ `feature/codex-e3-3-kenten`, commit `27b5578`
   - 目标：`InlineEmphasis.kenten`（已改名，原 typo `kentem` 已修）落地——定一种 Markdown 语法（如 `==着重==` 或约定）→ 解析成 kenten run → IDML 用 `KentenKind`/着重号属性输出。
   - 文件：`MarkdownBookImporter.swift`（语法解析）、`IDMLExporter.swift`（IDML 属性输出）。
   - 验收：着重段导出 IDML，解包后对应 CharacterStyleRange 含着重号属性；端到端探针断言 + 用户在 InDesign 人工确认显示傍点。

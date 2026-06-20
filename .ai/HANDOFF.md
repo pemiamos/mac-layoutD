@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 05:28 | codex | 完成 Codex 道 E3-3：落地 Kenten 傍点语法与 IDML 导出，代码提交 27b5578（feat(idml): export kenten emphasis）
+- **分支**：feature/codex-e3-3-kenten
+- **概述**：完成 E3-3。约定 Markdown 语法为 `==着重==`，导入时解析成 `InlineEmphasis.kenten`，可与粗体/斜体叠加；IDML 导出时在 `CharacterStyleRange` 上写 `KentenKind="KentenSesameDot"`、`KentenAlignment="AlignKentenCenter"`、`KentenPosition="AboveRight"`。标题/列表/引用/callout/正文均已随既有 `inlineRuns` 路径保真；ASCII `a==b` / `speed==fast` 维持字面量，不误判为着重。代码提交：27b5578 `feat(idml): export kenten emphasis`。
+- **改动文件**：`.ai/QUEUE.md`（E3-3 认领/完成标记）；`Sources/LayoutDImport/MarkdownBookImporter.swift`（新增 `==...==` 解析）；`Sources/LayoutDExport/IDMLExporter.swift`（CharacterStyleRange 输出 Kenten 属性）；`Tests/LayoutDImportTests/MarkdownBookImporterTests.swift`（kenten + block 保真 + ASCII `==` 回归）；`Tests/LayoutDExportTests/IDMLExporterTests.swift`（Kenten 属性导出断言）。
+- **检查**：`bash scripts/review-idml.sh` PASS：`swift build` PASS，`swift test` PASS（183 tests, 0 failures），IDML 端到端探针 PASS。额外自定义探针：`/private/tmp/layoutd-kenten.md` → `/private/tmp/layoutd-kenten.idml` 解包后命中 6 处 `KentenKind="KentenSesameDot"`（标题/列表/引用/callout/正文/粗斜+kenten 组合），且正文 XML 无残留 `==`。另：`xcrun xctest` 定向执行 `IDMLExporterTests/testExportsInlineRunsAsCharacterStyleRangesAcrossLines` 通过。
+- **下一步**：Codex 道下一项是 E3-7「脚注 → IDML」。若继续本队列，建议仍从本分支收尾后另起新分支认领 E3-7；用户侧仍需在 InDesign 里肉眼确认傍点显示样式是否符合预期（自动化只能确认 XML 属性已落地）。
+
 ## 2026-06-21 05:19 | claude | 行内强调这一整批经用户 InDesign 视觉验收通过，已合并 dev→main 并推送。用户实际打开导出样例确认：粗体加粗、斜体倾斜都可见，标题/列表/引用/
 - **分支**：dev
 - **概述**：行内强调这一整批经用户 InDesign 视觉验收通过，已合并 dev→main 并推送。用户实际打开导出样例确认：粗体加粗、斜体倾斜都可见，标题/列表/引用/知识点框的行内强调全部生效。这是 main 上第一次「真·人工视觉验收」的合并（此前 6faa1b0 的 visual verified 标签不准确，已被这次取代）。同时按用户要求给两道排了连续作业序列。
