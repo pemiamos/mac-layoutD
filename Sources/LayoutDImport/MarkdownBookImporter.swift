@@ -966,7 +966,20 @@ private struct MarkdownParser {
         }
 
         let previousCharacter = text[text.index(before: index)]
-        return isInlineDelimiterBoundary(previousCharacter)
+        return isInlineDelimiterBoundary(previousCharacter) || isCJKCharacter(previousCharacter)
+    }
+
+    private func isCJKCharacter(_ character: Character) -> Bool {
+        character.unicodeScalars.allSatisfy { scalar in
+            switch scalar.value {
+            case 0x2E80...0x2FFF, 0x3040...0x30FF, 0x31F0...0x31FF,
+                 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xAC00...0xD7AF,
+                 0xF900...0xFAFF, 0x20000...0x2FA1F:
+                return true
+            default:
+                return false
+            }
+        }
     }
 
     private func isInlineDelimiterBoundary(_ character: Character) -> Bool {

@@ -22,6 +22,43 @@ final class MarkdownBookImporterTests: XCTestCase {
         ])
     }
 
+    func testPreservesCJKSingleDelimiterItalicRuns() throws {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 中文斜体
+
+            前*单星*后，前_下划线_后，**粗体**与*斜体*相邻。
+            """
+        )
+        let paragraph = try XCTUnwrap(
+            project.sections[0].stories[0].paragraphs.first { $0.kind == .body }
+        )
+
+        XCTAssertEqual(paragraph.text, "前单星后，前下划线后，粗体与斜体相邻。")
+        XCTAssertEqual(paragraph.inlineRuns, [
+            InlineRun(location: 1, length: 2, emphasis: [.italic]),
+            InlineRun(location: 6, length: 3, emphasis: [.italic]),
+            InlineRun(location: 11, length: 2, emphasis: [.bold]),
+            InlineRun(location: 14, length: 2, emphasis: [.italic])
+        ])
+    }
+
+    func testDoesNotTreatASCIIIntrawordDelimitersAsItalic() throws {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # ASCII 边界
+
+            foo*bar*与 foo_bar_baz
+            """
+        )
+        let paragraph = try XCTUnwrap(
+            project.sections[0].stories[0].paragraphs.first { $0.kind == .body }
+        )
+
+        XCTAssertEqual(paragraph.text, "foo*bar*与 foo_bar_baz")
+        XCTAssertNil(paragraph.inlineRuns)
+    }
+
     func testImportsHeadingsBodyAndFigures() {
         let knownAsset = Asset(
             fileName: "images/cell-diagram.png",

@@ -319,7 +319,7 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
 public enum InlineEmphasis: String, Codable, Hashable, Sendable {
     case bold
     case italic
-    case kentem
+    case kenten
 }
 
 public struct InlineRun: Codable, Equatable, Sendable {
