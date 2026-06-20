@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 01:27 | claude | 核实并确认：审核退回的 CJK 单分隔符斜体 bug 已被自行修复并合并（commit 9e4f269，在 dev HEAD `b4adf8d` 内），typo
+- **分支**：dev
+- **概述**：核实并确认：审核退回的 CJK 单分隔符斜体 bug 已被自行修复并合并（commit 9e4f269，在 dev HEAD `b4adf8d` 内），typo kentem→kenten 也已修正——之前对 dev 样例导出 7/7 FontStyle 命中正确并非偶然。响应用户"批量化流程+双AI分工+文件投递到桌面"的明确要求：1) 重写 `.ai/AGENTS.md` 分工段，把 Antigravity 从"IDE内验证"升级为对等编码道；2) 重写 `.ai/QUEUE.md` 为双道队列（Codex道=IDML导出管线+内容模型，Antigravity道=预览渲染+GUI），按文件边界分工避免冲突，加挂牌认领机制（`- [~] 认领: <名字>`），批量排了 9 项(Codex)+3 项(Antigravity)任务；3) 把验收样例 `行内强调样例.idml` 复制到用户桌面（文件名 `layoutD行内强调样例-0621.idml`），不再用对话内卡片发送。
+- **改动文件**：.ai/AGENTS.md, .ai/QUEUE.md
+- **检查**：纯文档变更，无需 build/test；commit 0bae822 已 push 到 origin/dev。scripts/review-idml.sh 此前已对 dev 当前 HEAD 验证 PASS（mimetype/XML/FontStyle 7处全过）。
+- **下一步**：Codex / Antigravity 现在直接读 `.ai/QUEUE.md` 自助领取各自道里最上面未打勾任务，做完跑 `scripts/review-idml.sh` PASS 才提交。Claude 下一轮改为批量审核：攒几个 feature/codex-*、feature/ag-* 分支一起跑探针，过审的合并进 dev，dev 攒一批后再交用户在 InDesign/GUI 做视觉验收，不再逐任务来回。用户桌面已有 `layoutD行内强调样例-0621.idml` 待视觉确认（非阻塞，可与后续任务并行）。
+
 ## 2026-06-21 00:33 | codex | 修复 Claude 退回的阶段1问题：CJK 字符紧邻的单星/单下划线斜体现可正确解析为 inlineRuns；保留现有 inlineRuns 模型与 IDML
 - **分支**：feature/codex-inline-runs
 - **概述**：修复 Claude 退回的阶段1问题：CJK 字符紧邻的单星/单下划线斜体现可正确解析为 inlineRuns；保留现有 inlineRuns 模型与 IDML 导出实现；将 public Codable case `kentem` 更正为 `kenten`。代码提交：9e4f269 fix(import): support CJK inline italic delimiters。
