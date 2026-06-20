@@ -3,6 +3,16 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 01:39 | codex | 完成 Codex 道 E3-1：抽取统一 makeParagraph(kind:markdown:styleId:) 构造路径，标题（ATX/Setext）、列
+- **分支**：feature/codex-inline-blocks
+- **概述**：完成 Codex 道 E3-1：抽取统一 makeParagraph(kind:markdown:styleId:) 构造路径，标题（ATX/Setext）、列表、引用、admonition callout 现保留 inlineRuns；一级标题仍以去除 Markdown 后的纯文本写入项目元数据/章节名。实现提交：8201059 feat(import): preserve inline runs across blocks。
+- **改动文件**：Sources/LayoutDImport/MarkdownBookImporter.swift
+Tests/LayoutDImportTests/MarkdownBookImporterTests.swift
+.ai/QUEUE.md
+.ai/HANDOFF.md
+- **检查**：commit 8201059 (feat(import): preserve inline runs across blocks); relay run_checks(test): pass; scripts/review-idml.sh: PASS, swift test 182/182, XML/mimetype/原行内格式探针全过；专用 E3-1 IDML 解包探针：标题粗体、列表斜体、引用粗体、callout 粗体+斜体均生成对应 CharacterStyleRange，且无 */_ 分隔符残留
+- **下一步**：Claude 批量审核并合入 dev。注意共享工作区执行期间曾被切到 feature/ag-inline-preview，Codex 已切回自己的分支后提交；Samples/Links、Samples/demo.idml、Samples/test_emphasis_visual.* 为对方/用户未跟踪文件，未修改、未提交。Codex 下一项队列任务为 E3-3 Kenten，待下一棒重新认领。
+
 ## 2026-06-21 00:33 | codex | 修复 Claude 退回的阶段1问题：CJK 字符紧邻的单星/单下划线斜体现可正确解析为 inlineRuns；保留现有 inlineRuns 模型与 IDML
 - **分支**：feature/codex-inline-runs
 - **概述**：修复 Claude 退回的阶段1问题：CJK 字符紧邻的单星/单下划线斜体现可正确解析为 inlineRuns；保留现有 inlineRuns 模型与 IDML 导出实现；将 public Codable case `kentem` 更正为 `kenten`。代码提交：9e4f269 fix(import): support CJK inline italic delimiters。
