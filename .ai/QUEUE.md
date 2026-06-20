@@ -128,10 +128,28 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDExport/PDFExporter.swift`、
 > `PNGExporter.swift`、`Sources/LayoutDApp/*`
 >
-> **🔁 本批连续序列（按顺序连做，做完一个自审 PASS 就接下一个，不停下问）：E3-2 → 校对批注层**。
+> **🔁 本批连续序列（按顺序连做，做完一个自审 PASS 就接下一个，不停下问）：E3-2b 竖排行内 → E3-4p 表格预览 →（待 Codex E3-3 合 dev 后）E3-3p 傍点预览**。
 > 约 1 小时或做到这批做完/撞阻塞为止，收尾写一条汇总 handoff。
-> ⚠️ **从最新 dev 起新分支 `feature/ag-e3-2`**，**别再用旧分支 `feature/ag-inline-preview`**——
-> 它上面那条 `e05a66d`（FauxItalic）已被 dev 的 `Skew` 修复取代，叠在旧分支上会把斜体修复冲掉。
+> 主题：**让预览（Canvas/PDF/PNG）追平 IDML 输出**——本阶段 AG 的核心价值是「InDesign 打开后版面与 layoutD 预览一致」。
+> ⚠️ **每项都从最新 dev 起新分支 `feature/ag-<task>`**，别叠旧分支。斜体已在 dev 用 12° `Skew` 矩阵渲染（与 IDML `Skew="12"` 同算法），别改回 FauxItalic。
+
+- [ ] **E3-2b 竖排（直排）下行内格式预览验收 + 修正**
+  - 背景：E3-2 已把 `inlineRuns` 透传进 `addFlowingVerticalText`，但**斜体用的是横排 12° 水平切变矩阵**，竖排里直接照搬很可能方向错（竖排字应沿竖向基线倾斜，不是横向歪）。粗体在竖排是否真加重也需肉眼确认。
+  - 目标：竖排模式下 `makeAttributedString` 的粗体/斜体在 Canvas/PDF/PNG 渲染正确——粗体明显加重、斜体沿竖排方向合理倾斜，且**不破坏竖排行序/分行/禁则**。
+  - 文件：`ChineseTypesetting.swift`（竖排分支的 trait/skew 矩阵）、`LayoutEngine.swift`、三处渲染器。
+  - 验收：竖排测试稿（含粗/斜词的引文）导 PNG，目标词字重/倾斜正确、竖排列序不乱；补端到端断言（竖排 + run 分段）；`scripts/review-idml.sh` PASS。修好后 Claude 出 PNG 交用户肉眼验。
+
+- [ ] **E3-4p 原生表格预览渲染**（配对 Codex E3-4 IDML 原生表格）
+  - 背景：表格组件当前在预览里基本当文字画；Codex 那边要升级成 IDML 原生 `<Table>`。预览侧也要画成真表格才能「预览=输出」。
+  - 目标：table 组件在 Canvas/PDF/PNG 渲染为真实网格——行列线、单元格底色、内边距、按列宽分配，文字落在单元格内。
+  - 文件：`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`LayoutEngine.swift`（如需表格测量/分页）。
+  - 验收：demo 里的表格导 PNG 是带边框的真网格（非裸文字流），列对齐、底色正确；单测断言表格 frame 产出行列结构；`scripts/review-idml.sh` PASS。
+
+- [ ] **E3-3p 傍点（Kenten 着重号）预览渲染**　⚠️ **依赖：待 Codex E3-3 合进 dev 后再做**（当前 E3-3 退回修复中）
+  - 背景：Codex E3-3 让 `==着重==` 落地为 `InlineEmphasis.kenten` → IDML `KentenKind`。预览侧需在着重字**旁/上画着重点（芝麻点）**，否则预览看不出傍点。
+  - 目标：Canvas/PDF/PNG 对 `.kenten` run 的每个字符绘制着重号（横排在字下/字右、竖排在字右侧，对标 InDesign 默认 KentenSesameDot 位置）。
+  - 文件：`ChineseTypesetting.swift` 或三处渲染器的字形装饰逻辑。
+  - 验收：`==着重==` 导 PNG，着重字逐字带着重点、普通字没有；横排/竖排位置合理；`scripts/review-idml.sh` PASS。**起手前先确认 `InlineEmphasis.kenten` 已在 dev**（`git merge origin/dev` 后 grep 得到），没有就跳过这项、先做别的或写 handoff 说明卡点。
 
 - [x] **E3-2 行内格式预览渲染** — Antigravity @ `feature/ag-e3-2`, commit `44e2873`
   - 目标：PDF/PNG/Canvas 三处预览按 `inlineRuns` 切粗/斜（当前预览整段同字重，仅 IDML 已保真）。`LayoutEngine.swift` 的 `addText` 若需精确测量，把 run 透传进 measurement（已按字符类切复合字体，扩成叠加 emphasis）。
