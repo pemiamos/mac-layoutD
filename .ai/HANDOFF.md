@@ -7,7 +7,7 @@
 - **分支**：`feature/codex-e3-7-footnotes`
 - **概述**：IDMLExporter 现在识别锚段 `anchoredFootnoteIds`，将 Markdown 导入阶段保留的 Unicode 上标锚点替换为同一 Story 内的原生 `<Footnote>`（脚注正文用 ParagraphStyleRange + CharacterStyleRange 写入）。LayoutEngine 继续给 Canvas/PDF/PNG 保留页脚 footnote frame；IDML 导出则跳过该 frame，防止脚注正文被作为普通页脚文字重复输出。未改导入或布局层。
 - **改动文件**：`Sources/LayoutDExport/IDMLExporter.swift`、`Tests/LayoutDExportTests/IDMLExporterTests.swift`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
-- **检查**：新增 `IDMLExporterTests.testExportsAnchoredFootnoteAsNativeIDMLWithoutDuplicatePageFooter` PASS；实际 `Markdown → LayoutEngine → IDML` 链路解包 PASS（`<Footnote>` = 1、脚注正文 = 1、无残留 `<Content>¹</Content>`）。待执行 `scripts/review-idml.sh` 全量审核后提交。
+- **检查**：提交 `8be4467 feat(export): emit native IDML footnotes`；新增 `IDMLExporterTests.testExportsAnchoredFootnoteAsNativeIDMLWithoutDuplicatePageFooter` PASS；实际 `Markdown → LayoutEngine → IDML` 链路解包 PASS（`<Footnote>` = 1、脚注正文 = 1、无残留 `<Content>¹</Content>`）；`scripts/review-idml.sh` PASS（swift build、188 tests、IDML 探针 6/6）。
 - **下一步**：Claude 在分支上复审 XML 结构并跑 `scripts/review-idml.sh`；InDesign 人工验收应确认正文自动编号与页脚脚注均由原生 Footnote 渲染。Codex 本批下一项 E3-4 原生 Table。
 
 ## 2026-06-21 05:50 | claude | 给 Antigravity 排了下一批连续作业序列（已写入 .ai/QUEUE.md，commit cf9b3f1，已推 origin/dev）。本阶段（E：I
