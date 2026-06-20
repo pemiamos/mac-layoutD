@@ -6,6 +6,25 @@ import LayoutDImport
 import XCTest
 
 final class LayoutDCoreTests: XCTestCase {
+    func testParagraphInlineRunsRoundTripAndLegacyDecode() throws {
+        let paragraph = Paragraph(
+            kind: .body,
+            text: "普通粗斜",
+            styleId: StyleID.body.rawValue,
+            inlineRuns: [
+                InlineRun(location: 2, length: 1, emphasis: [.bold]),
+                InlineRun(location: 3, length: 1, emphasis: [.italic])
+            ]
+        )
+        let data = try JSONEncoder().encode(paragraph)
+        XCTAssertEqual(try JSONDecoder().decode(Paragraph.self, from: data), paragraph)
+
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "inlineRuns")
+        let legacyData = try JSONSerialization.data(withJSONObject: json)
+        XCTAssertNil(try JSONDecoder().decode(Paragraph.self, from: legacyData).inlineRuns)
+    }
+
     func testSampleProjectEncodesAndDecodes() throws {
         let project = BookProject.sample
         let data = try ProjectFile.encode(project)

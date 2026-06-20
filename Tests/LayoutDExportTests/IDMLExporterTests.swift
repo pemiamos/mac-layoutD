@@ -7,6 +7,42 @@ import XCTest
 /// 阶段 E1：真实 BookProject → IDML 全量映射的容器级验证。
 /// 「在 InDesign 中文版能否干净打开 + 版面到位」仍需人工验收。
 final class IDMLExporterTests: XCTestCase {
+    func testExportsInlineRunsAsCharacterStyleRangesAcrossLines() throws {
+        let paragraph = Paragraph(
+            kind: .body,
+            text: "细胞ATP粗体\n斜体粗斜",
+            styleId: StyleID.body.rawValue,
+            inlineRuns: [
+                InlineRun(location: 2, length: 3, emphasis: [.bold]),
+                InlineRun(location: 8, length: 2, emphasis: [.italic]),
+                InlineRun(location: 10, length: 2, emphasis: [.bold, .italic])
+            ]
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "行内格式", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])]
+        )
+        let frame = PageFrame(
+            kind: .text,
+            rect: Rect(x: 20, y: 20, width: 200, height: 100),
+            styleId: StyleID.body.rawValue,
+            content: .text("细胞 ATP 粗体\n斜体粗斜"),
+            sourceParagraphId: paragraph.id
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-inline-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let story = try entry(output, "Stories/Story_uStory0_0.xml")
+        XCTAssertTrue(story.contains("FontStyle=\"Bold\"><Content>ATP</Content>"), "自动插入的中西文空格不应破坏 run 对齐")
+        XCTAssertTrue(story.contains("FontStyle=\"Italic\"><Content>斜体</Content>"))
+        XCTAssertTrue(story.contains("FontStyle=\"Bold Italic\"><Content>粗斜</Content>"))
+        XCTAssertEqual(matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count, 2)
+    }
+
     func testExportsValidIDMLFromSampleProject() throws {
         let project = BookProject.sample
         let document = LayoutEngine().layout(project: project)

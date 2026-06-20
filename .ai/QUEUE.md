@@ -1,63 +1,116 @@
-# 任务队列 Task Queue（Codex 自助接力用）
+# 任务队列 Task Queue（Codex / Antigravity 自助接力用）
 
-> 目的：让开发更自动化。Codex 不必每轮等 Claude 手喂任务——读本文件，领最上面**未打勾**的任务做。
-> Claude 维护本队列与每项的「目标/文件/验收」；做完后 Claude 批量审核。
-> 队列顺序 = 优先级；越靠上越先做。
+> 目的：让开发更自动化。两边都不必每轮等 Claude 手喂任务——读本文件，领**自己道里**最上面未打勾的任务做。
+> Claude 维护本队列与每项的「目标/文件/验收」；攒一批分支后 Claude 批量审核，不再一个一个提交、一个一个审。
+> 两道按文件边界分工，正常不会改到同一文件；真出现冲突按下方「认领协议」处理。
 
 ## 流程铁律（每一棒都照做）
 
-**Codex（执行）每领一个任务：**
-1. `read_latest_handoff()` + 读本文件，领最上面未打勾任务。
-2. 起 `feature/codex-<task>` 分支。
-3. 实现 + 写**端到端验收**（不能只靠单测——本项目踩过「单测全绿但功能坏」的坑）。
-4. **必须** `bash scripts/review-idml.sh` 本地 PASS 后才提交（这就是 Claude 审核要跑的同一套）。
-5. commit（feat/fix 规范）+ `write_handoff` 注明 commit hash。
-6. 能连续跑就接着领下一个；不能就停，等下次被唤起。
+**Codex / Antigravity（执行）每领一个任务：**
+1. `read_latest_handoff()` + 读本文件，领**自己道**里最上面未打勾任务。
+2. 把该行 `- [ ]` 改成 `- [~] 认领: <你的名字> @ <分支名>`（挂牌，避免撞车），单独提交或随手改一起带上。
+3. 起 `feature/codex-<task>` 或 `feature/ag-<task>` 分支。
+4. 实现 + 写**端到端验收**（不能只靠单测——本项目踩过「单测全绿但功能坏」的坑）。
+5. **必须** `bash scripts/review-idml.sh` 本地 PASS 后才提交（这就是 Claude 审核要跑的同一套）。
+6. commit（feat/fix 规范）+ 把该行改成 `- [x]`（注明 commit hash）+ `write_handoff` 同样注明 commit。
+7. 能连续跑就接着领下一个；不能就停，等下次被唤起。
 
 **Claude（审核）批量做：**
-1. 攒几个 `feature/codex-*` 分支一起审。
+1. 攒几个 `feature/codex-*` / `feature/ag-*` 分支一起审，不逐个来回。
 2. 每个分支跑 `scripts/review-idml.sh`：全绿才算过；有 FAIL 把精确 repro 退回交接。
 3. 过的合进 `dev` 集成分支（不直接进 main）。
-4. `dev` 攒一批后交你/Antigravity 在 InDesign 做**视觉验收**（无头验证不了渲染对错，这关必须人看）。
-5. InDesign OK → Claude 合 `dev` → `main` 并 push。
+4. `dev` 攒一批后交用户在 InDesign/GUI 做**视觉验收**（无头验证不了渲染对错，这关必须人看）。
+5. 验收 OK → Claude 合 `dev` → `main` 并 push；验收有问题 → 直接在 Claude 这边改。
 
-**分工边界**：Codex 写代码；Claude 审核 + 合并 + 维护队列；你/Antigravity 做 InDesign 视觉验收。
+**认领协议（避免两道撞同一文件）**：两道文件边界天然不重叠（见下方"负责文件"）。如果某任务臨时需要碰对方道的文件，先在本文件该任务下加一行「⚠️ 跨道改 `<文件>`，已知会 <对方>」再动手。
 
 ---
 
 ## 进行中 / 待集成
 
-- [x] **行内格式 阶段1**（粗体/斜体 → IDML CharacterStyleRange，含 CJK 单分隔符）— commit `9e4f269`，已审核 PASS，在 `dev` 集成分支**等 InDesign 视觉验收**。
+- [x] **行内格式 阶段1**（粗体/斜体 → IDML CharacterStyleRange，含 CJK 单分隔符）
+  — commit `b26e1ca`→`9e4f269`(CJK 修复)，已合并 `dev`（`b4adf8d`）。
+  结构层 `scripts/review-idml.sh` 全绿（mimetype/XML/FontStyle 断言全过）；
+  **等用户在桌面打开导出样例做最终 InDesign 视觉确认**（非阻塞，可继续后续任务）。
 
-## 队列（按优先级）
+---
+
+## Codex 道队列（IDML 导出管线 + 内容模型）
+
+> 负责文件：`Sources/LayoutDImport/*`、`Sources/LayoutDCore/BookProject.swift`、
+> `Sources/LayoutDExport/IDMLExporter.swift`、`ZIPArchiveWriter.swift`
 
 - [ ] **E3-1 行内格式补全到所有 block**
   - 目标：当前只普通正文段落持久化 inlineRuns；扩到标题/列表/引用/callout。先抽一个统一的 `Paragraph` 构造 helper，再让所有 Markdown block 分支走它。
   - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`、`Sources/LayoutDCore/BookProject.swift`(如需)。
   - 验收：`printf '## **粗**标题\n\n- 列表*斜*项\n> 引用**强调**\n'` 导出 IDML 后，标题/列表/引用里的强调都出对应 FontStyle；`scripts/review-idml.sh` PASS。
 
-- [ ] **E3-2 行内格式预览渲染**
-  - 目标：PDF/PNG/Canvas 三处预览按 `inlineRuns` 切粗/斜（当前预览整段同字重，仅 IDML 已保真）。引擎 `addText`(LayoutEngine.swift) 若需精确测量，把 run 透传进 measurement（已按字符类切复合字体，扩成叠加 emphasis）。
-  - 验收：含粗/斜的页 PNG 里目标词字重不同（你/Antigravity 视觉验）；单测断言渲染层收到 run。
-
 - [ ] **E3-3 傍点（Kenten 着重号）**
-  - 目标：`InlineEmphasis.kenten` 落地——定一种 Markdown 语法（如 `==着重==` 或约定）→ 解析成 kenten run → IDML 用 `KentenKind`/着重号属性输出 + 预览画点。
-  - 验收：着重段导出 IDML 在 InDesign 显示傍点（人工验）。
+  - 目标：`InlineEmphasis.kenten`（已改名，原 typo `kentem` 已修）落地——定一种 Markdown 语法（如 `==着重==` 或约定）→ 解析成 kenten run → IDML 用 `KentenKind`/着重号属性输出。
+  - 文件：`MarkdownBookImporter.swift`（语法解析）、`IDMLExporter.swift`（IDML 属性输出）。
+  - 验收：着重段导出 IDML，解包后对应 CharacterStyleRange 含着重号属性；端到端探针断言 + 用户在 InDesign 人工确认显示傍点。
+
+- [ ] **E3-7 脚注 → IDML**
+  - 目标：`anchoredFootnoteIds` 映射到 IDML 脚注（Footnote 元素），而非当前的纯文字处理。
+  - 文件：`IDMLExporter.swift`。
+  - 验收：含脚注的段落导出后，InDesign 识别为脚注（自动编号/页脚排版），不是裸文字。
 
 - [ ] **E3-4 原生表格 Table**
   - 目标：table 组件从「当文字导」升级为 IDML 原生 `<Table>/<Cell>`（行列/边框/底色），可在 InDesign 调列宽。
+  - 文件：`IDMLExporter.swift`。
   - 验收：demo 里表格导出后在 InDesign 是真表格、可选列。
 
-- [ ] **E3-5 页眉/页脚/自动页码**
-  - 目标：running header/footer + 页码（folio）映射到 MasterSpread 的页码文本变量，跨页自动。
-  - 验收：多页书导出后 InDesign 主页有自动页码 + 章节页眉。
+- [ ] **E3-6 目录（TOC）动态化**
+  - 目标：当前目录是死文字；改为 InDesign 动态 TOC（或至少正确的 TOC 段落样式 + PageReference）。
+  - 文件：`MarkdownBookImporter.swift`（标题锚点）、`IDMLExporter.swift`（TOC/PageReference）。
+  - 验收：改动正文后目录页码在 InDesign 里能"更新目录"刷新，不是手敲数字。
 
-- [ ] **E3-6 目录（TOC）**：当前目录是死文字；改为 InDesign 动态 TOC（或至少正确的 TOC 段落样式 + PageReference）。
-- [ ] **E3-7 脚注**：`anchoredFootnoteIds` → IDML 脚注。
-- [ ] **E3-8 token → CMYK 色板**：颜色当前导 RGB swatch；增可选项由 token 算 CMYK 值发 `Space="CMYK"` 色板，减少 InDesign 人工转色（不自建色彩管线，只发数值）。
-- [ ] **E3-9 约物挤压 + 基线网格对齐**：Mojikumi 标点间距集 + 段落「对齐基线网格」映射进 IDML，使 InDesign 排版与 layoutD 预览一致。
-- [ ] **E2-4 对开跨页（facing spread）**：按 `pageSetup.facingPages` 生成 2 页 spread + 起始页码 Section。风险高（可能回退干净分页），单独一棒、重点 InDesign 验收。
-- [ ] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版**：满版图/扉页固定页映射；扇面/八角图框 PathGeometry 蒙版。
+- [ ] **E3-8 token → CMYK 色板**
+  - 目标：颜色当前导 RGB swatch；增可选项由 token 算 CMYK 值发 `Space="CMYK"` 色板，减少 InDesign 人工转色（不自建色彩管线，只发数值）。
+  - 文件：`IDMLExporter.swift`。
+  - 验收：导出后色板面板里对应色为 CMYK 模式，数值合理（非简单 RGB→CMYK 近似导致明显偏色）。
+
+- [ ] **E3-9 约物挤压 + 基线网格对齐**
+  - 目标：Mojikumi 标点间距集 + 段落「对齐基线网格」映射进 IDML，使 InDesign 排版与 layoutD 预览一致。
+  - 文件：`IDMLExporter.swift`。
+  - 验收：含中文标点的段落导出后，InDesign 里标点挤压效果与 layoutD 预览基本一致；启用基线网格对齐的段落确实贴线。
+
+- [ ] **E2-4 对开跨页（facing spread）**
+  - 目标：按 `pageSetup.facingPages` 生成 2 页 spread + 起始页码 Section。
+  - 文件：`IDMLExporter.swift`。
+  - ⚠️ 风险高（可能打破当前"单页 spread 干净分页"），单独一棒、改完先确认非对开模式没有回归，再重点交用户 InDesign 验收对开效果。
+
+- [ ] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版**
+  - 目标：满版图/扉页固定页映射成 MasterSpread；扇面/八角图框用 PathGeometry 蒙版。
+  - 文件：`IDMLExporter.swift`。
+  - 验收：固定页导出后版心位置/满版图正确；非矩形蒙版图框在 InDesign 里裁切正确。
+
+- [ ] **D-2 DOCX 导入**（阶段 D 遗留）
+  - 目标：新增 `DOCXBookImporter.swift`，解析 DOCX → `BookProject` 模型（复用 Markdown 导入已有的段落/样式映射思路）。
+  - 文件：新文件 `Sources/LayoutDImport/DOCXBookImporter.swift`（不碰 `MarkdownBookImporter.swift`，避免和上面几项排队冲突）。
+  - 验收：一份结构良好的 DOCX 能导入并正确分段、保留基本粗斜体。
+
+---
+
+## Antigravity 道队列（预览渲染 + GUI）
+
+> 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDExport/PDFExporter.swift`、
+> `PNGExporter.swift`、`Sources/LayoutDApp/*`
+
+- [ ] **E3-2 行内格式预览渲染**
+  - 目标：PDF/PNG/Canvas 三处预览按 `inlineRuns` 切粗/斜（当前预览整段同字重，仅 IDML 已保真）。`LayoutEngine.swift` 的 `addText` 若需精确测量，把 run 透传进 measurement（已按字符类切复合字体，扩成叠加 emphasis）。
+  - 文件：`LayoutEngine.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`CanvasView.swift`。
+  - 验收：含粗/斜的页 PNG/Canvas 里目标词字重不同（用户视觉验）；单测断言渲染层确实收到 run 并分段绘制。
+
+- [ ] **校对批注层**（阶段 D 遗留，不参与重排的 overlay）
+  - 目标：新增批注/校对标记层，叠加在 Canvas 上但不影响实际排版（类似 PDF 注释，不是 frame）。
+  - 文件：`AppState.swift`（新状态）、`CanvasView.swift`（叠加渲染）、可能新文件 `AnnotationLayer.swift`。
+  - 验收：能在画布上加批注标记、保存随项目持久化、不参与自动重排/不被导出带进 IDML 正文。
+
+- [ ] **导出选项面板跟进**（待 Codex 的 E2-4 / E3-8 任一项落地后联动，非阻塞可先设计）
+  - 目标：「导出 IDML…」面板加开关：对开跨页模式、CMYK 色板模式。
+  - 文件：`ToolbarView.swift` 或导出选项相关 View。
+  - 验收：开关能正确传参到 `IDMLExporter`，关闭时行为与当前一致（向后兼容）。
 
 ---
 

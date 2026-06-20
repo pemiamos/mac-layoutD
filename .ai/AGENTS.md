@@ -26,15 +26,23 @@
 - 把大任务拆成给 Codex 的明确指令，写进 handoff
 - 收尾时做总结和下一步规划
 
-### Codex（落地 / 改码 / 测试）
-- 实际写代码、重构、修 lint/type error
-- 跑 `run_checks()`，把结果写进 handoff 的 checks 字段
+### Codex（落地 / 改码 / 测试）——道一：IDML 导出管线 + 内容模型
+- 负责文件：`Sources/LayoutDImport/*`、`Sources/LayoutDCore/BookProject.swift`（模型新增字段）、
+  `Sources/LayoutDExport/IDMLExporter.swift`、`ZIPArchiveWriter.swift`
+- 任务来源：`.ai/QUEUE.md` 的「Codex 道队列」，自助领取，按序做
+- 实际写代码、重构、修 lint/type error；端到端验收（不能只靠单测）
+- 跑 `run_checks()` + `scripts/review-idml.sh`，结果写进 handoff 的 checks 字段
 - 改完用 `git_diff_summary()` 自查改动范围
 
-### Antigravity（IDE 内多文件 / 前端验证）
-- IDE 内跨文件理解、前端交互/视觉验证、局部重构
+### Antigravity（落地 / 改码）——道二：预览渲染 + GUI
+- 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDExport/PDFExporter.swift`、
+  `PNGExporter.swift`、`Sources/LayoutDApp/*`（CanvasView/AppState/ToolbarView 等）
+- 任务来源：`.ai/QUEUE.md` 的「Antigravity 道队列」，自助领取，按序做
+- 实际写代码：预览渲染按模型字段（如 `inlineRuns`）切样式、GUI 交互、批注层等
 - 与 Gemini/Google 生态相关的任务
-- 验证前一棒的改动在 UI 上是否正常
+- 同样跑 `run_checks()`，结果写进 handoff
+- **InDesign 视觉终验现由用户做**（人工打开导出的 IDML/PDF 看效果）；Antigravity 不再是"被动验收者"，
+  而是和 Codex 对等的编码道——两道按文件边界分工，互不踩同一文件，可以并行开工。
 
 ## 一轮标准流程
 ```
