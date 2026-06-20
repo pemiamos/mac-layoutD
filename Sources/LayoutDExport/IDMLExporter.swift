@@ -706,13 +706,15 @@ public struct IDMLExporter {
             start = index
         }
         return ranges.map { content, emphasis in
-            // 用 FauxBold/FauxItalic（算法模拟）而非 FontStyle="Bold" 字符串：
-            // FontStyle 要求 Fonts.xml 里真有同名字重的字体资源，否则 InDesign 找不到
-            // 对应字重，会用替代字形顶上（视觉上是粉色高亮，等于没生效）。Faux* 不依赖
-            // 字体是否真有 Bold/Italic 变体（中文宋体常没有），稳定出效果。
+            // 粗体用 FauxBold（算法加粗），斜体用 Skew（切变倾斜角）而非 FontStyle 字符串：
+            // FontStyle="Bold"/"Italic" 要求 Fonts.xml 里真有同名字重/斜体的字体资源，否则
+            // InDesign 找不到，会用替代字形顶上（视觉上是粉色高亮，等于没生效）。
+            // 中文宋体等常既没有 Bold 也没有 Italic 变体。
+            // 注意：FauxItalic="true" 实测在 InDesign 里对 CJK 不出可见倾斜，必须用 Skew
+            //（伪斜体/切变，单位度）才稳定可见；12° 是 InDesign 伪斜体常用值。
             var attrs = ""
             if emphasis.contains(.bold) { attrs += " FauxBold=\"true\"" }
-            if emphasis.contains(.italic) { attrs += " FauxItalic=\"true\"" }
+            if emphasis.contains(.italic) { attrs += " Skew=\"12\"" }
             return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(attrs)><Content>\(esc(content))</Content></CharacterStyleRange>"
         }.joined(separator: "\n")
     }

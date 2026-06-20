@@ -38,8 +38,8 @@ final class IDMLExporterTests: XCTestCase {
 
         let story = try entry(output, "Stories/Story_uStory0_0.xml")
         XCTAssertTrue(story.contains("FauxBold=\"true\"><Content>ATP</Content>"), "自动插入的中西文空格不应破坏 run 对齐")
-        XCTAssertTrue(story.contains("FauxItalic=\"true\"><Content>斜体</Content>"))
-        XCTAssertTrue(story.contains("FauxBold=\"true\" FauxItalic=\"true\"><Content>粗斜</Content>"))
+        XCTAssertTrue(story.contains("Skew=\"12\"><Content>斜体</Content>"))
+        XCTAssertTrue(story.contains("FauxBold=\"true\" Skew=\"12\"><Content>粗斜</Content>"))
         XCTAssertEqual(matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count, 2)
     }
 
