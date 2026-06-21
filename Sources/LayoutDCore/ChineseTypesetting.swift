@@ -5,6 +5,7 @@ public enum ChineseTypesetting {
     public static let openingPunctuation = Set<Character>("（【〔《〈「『“‘")
     public static let closingPunctuation = Set<Character>("）】〕》〉」』”’")
     public static let middleEndingPunctuation = Set<Character>("，。、；：！？")
+    public static let kentenAttributeName = NSAttributedString.Key("LayoutDKenten")
 
     public static func makeAttributedString(
         text: String,
@@ -111,6 +112,10 @@ public enum ChineseTypesetting {
                     let safeRange = NSRange(location: safeLocation, length: safeLength)
                     guard safeRange.length > 0 else { continue }
                     
+                    if run.emphasis.contains(.kenten) {
+                        attrString.addAttribute(ChineseTypesetting.kentenAttributeName, value: true, range: safeRange)
+                    }
+                    
                     attrString.enumerateAttribute(NSAttributedString.Key(kCTFontAttributeName as String), in: safeRange, options: []) { value, range, stop in
                         guard let fontVal = value else { return }
                         let oldFont = fontVal as! CTFont
@@ -125,7 +130,16 @@ public enum ChineseTypesetting {
                         }
                         
                         if run.emphasis.contains(.italic) {
-                            var skewMatrix = CGAffineTransform(a: 1.0, b: 0.0, c: CGFloat(tan(12.0 * Double.pi / 180.0)), d: 1.0, tx: 0.0, ty: 0.0)
+                            var skewMatrix: CGAffineTransform
+                            if style.layoutDirection == .vertical {
+                                // Vertical italic: vertical lines stay vertical, horizontal lines tilt.
+                                // Shear along the y-axis: y' = y + x * tan(12°)
+                                skewMatrix = CGAffineTransform(a: 1.0, b: CGFloat(tan(12.0 * Double.pi / 180.0)), c: 0.0, d: 1.0, tx: 0.0, ty: 0.0)
+                            } else {
+                                // Horizontal italic: horizontal lines stay horizontal, vertical lines tilt.
+                                // Shear along the x-axis: x' = x + y * tan(12°)
+                                skewMatrix = CGAffineTransform(a: 1.0, b: 0.0, c: CGFloat(tan(12.0 * Double.pi / 180.0)), d: 1.0, tx: 0.0, ty: 0.0)
+                            }
                             font = CTFontCreateCopyWithAttributes(font, fontSize, &skewMatrix, nil)
                         }
                         
@@ -301,5 +315,200 @@ public enum ChineseTypesetting {
         }
         
         return lines
+    }
+
+    public static func drawKentenDots(
+        for frame: CTFrame,
+        in context: CGContext,
+        layoutDirection: LayoutDirection?,
+        zoomScale: CGFloat
+    ) {
+        let path = CTFrameGetPath(frame)
+        let rect = path.boundingBox
+        let origin = rect.origin
+        
+        let lines = CTFrameGetLines(frame) as! [CTLine]
+        let count = lines.count
+        guard count > 0 else { return }
+        
+        var lineOrigins = [CGPoint](repeating: .zero, count: count)
+        CTFrameGetLineOrigins(frame, CFRange(location: 0, length: 0), &lineOrigins)
+        
+        context.saveGState()
+        
+        for i in 0..<count {
+            let line = lines[i]
+            let lineOrigin = lineOrigins[i]
+            
+            let runs = CTLineGetGlyphRuns(line) as! [CTRun]
+            for run in runs {
+                let attributes = CTRunGetAttributes(run) as! [NSAttributedString.Key: Any]
+                guard attributes[kentenAttributeName] != nil else { continue }
+                
+                let glyphCount = CTRunGetGlyphCount(run)
+                guard glyphCount > 0 else { continue }
+                
+                guard let fontVal = attributes[NSAttributedString.Key(kCTFontAttributeName as String)] else { continue }
+                let font = fontVal as! CTFont
+                let fontSize = CTFontGetSize(font)
+                
+                let foregroundColor: CGColor
+                if let colorVal = attributes[NSAttributedString.Key(kCTForegroundColorAttributeName as String)] {
+                    foregroundColor = (colorVal as! CGColor)
+                } else {
+                    foregroundColor = CGColor(gray: 0, alpha: 1)
+                }
+                
+                var positions = [CGPoint](repeating: .zero, count: glyphCount)
+                CTRunGetPositions(run, CFRange(location: 0, length: 0), &positions)
+                
+                var glyphAdvances = [CGSize](repeating: .zero, count: glyphCount)
+                CTRunGetAdvances(run, CFRange(location: 0, length: 0), &glyphAdvances)
+                
+                let descent = CTFontGetDescent(font)
+                
+                let dotRadius = fontSize * 0.12
+                let gap = fontSize * 0.12
+                
+                context.setFillColor(foregroundColor)
+                
+                for g in 0..<glyphCount {
+                    let pos = positions[g]
+                    let advance = glyphAdvances[g]
+                    let glyphWidth = advance.width
+                    
+                    var dotCenter: CGPoint
+                    if layoutDirection == .vertical {
+                        // Vertical: to the right of the character
+                        let x = origin.x + lineOrigin.x + pos.x + fontSize / 2 + dotRadius + gap
+                        let y = origin.y + lineOrigin.y + pos.y
+                        dotCenter = CGPoint(x: x, y: y)
+                    } else {
+                        // Horizontal: under the character
+                        let x = origin.x + lineOrigin.x + pos.x + glyphWidth / 2
+                        let y = origin.y + lineOrigin.y + pos.y - descent - gap - dotRadius
+                        dotCenter = CGPoint(x: x, y: y)
+                    }
+                    
+                    let dotRect = CGRect(
+                        x: dotCenter.x - dotRadius,
+                        y: dotCenter.y - dotRadius,
+                        width: dotRadius * 2,
+                        height: dotRadius * 2
+                    )
+                    context.fillEllipse(in: dotRect)
+                }
+            }
+        }
+        
+        context.restoreGState()
+    }
+}
+
+public struct TableLayoutHelper {
+    public struct TableData {
+        public var rows: [[String]]
+        public var columnCount: Int {
+            rows.map(\.count).max() ?? 0
+        }
+    }
+
+    public static func parseTableText(_ text: String) -> TableData {
+        let rawRows = text.components(separatedBy: .newlines)
+        var parsedRows: [[String]] = []
+        for rawRow in rawRows {
+            let cells = rawRow.components(separatedBy: "    ")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            if !cells.allSatisfy({ $0.isEmpty }) {
+                parsedRows.append(cells)
+            }
+        }
+        return TableData(rows: parsedRows)
+    }
+
+    public static func allocateColumnWidths(
+        tableData: TableData,
+        totalWidth: Double,
+        fontName: String,
+        fontSize: Double,
+        zoomScale: Double = 1.0
+    ) -> [Double] {
+        let colCount = tableData.columnCount
+        guard colCount > 0 else { return [] }
+        
+        var maxCellWidths = [Double](repeating: 0.0, count: colCount)
+        let ctFont = CTFontCreateWithName(fontName as CFString, CGFloat(fontSize * zoomScale), nil)
+        
+        for row in tableData.rows {
+            for col in 0..<colCount {
+                let cellText = col < row.count ? row[col] : ""
+                let attrString = NSAttributedString(
+                    string: cellText,
+                    attributes: [NSAttributedString.Key(kCTFontAttributeName as String): ctFont]
+                )
+                let line = CTLineCreateWithAttributedString(attrString)
+                let width = CTLineGetTypographicBounds(line, nil, nil, nil)
+                maxCellWidths[col] = max(maxCellWidths[col], Double(width))
+            }
+        }
+        
+        let sumMeasured = maxCellWidths.reduce(0, +)
+        if sumMeasured > 0 {
+            let minWidth = totalWidth / Double(colCount) * 0.5
+            var widths = [Double](repeating: 0.0, count: colCount)
+            for col in 0..<colCount {
+                let share = (maxCellWidths[col] / sumMeasured) * totalWidth
+                widths[col] = max(minWidth, share)
+            }
+            let sumWidths = widths.reduce(0, +)
+            for col in 0..<colCount {
+                widths[col] = (widths[col] / sumWidths) * totalWidth
+            }
+            return widths
+        } else {
+            let eqWidth = totalWidth / Double(colCount)
+            return [Double](repeating: eqWidth, count: colCount)
+        }
+    }
+
+    public static func calculateRowHeights(
+        tableData: TableData,
+        colWidths: [Double],
+        style: ParagraphStyle,
+        textInsetX: Double,
+        textInsetY: Double,
+        zoomScale: Double = 1.0
+    ) -> [Double] {
+        var rowHeights: [Double] = []
+        let cellWidths = colWidths
+        let cellCount = cellWidths.count
+        
+        for row in tableData.rows {
+            var maxCellHeight = style.lineHeight * zoomScale
+            for col in 0..<cellCount {
+                let cellText = col < row.count ? row[col] : ""
+                if cellText.isEmpty { continue }
+                
+                let attrString = ChineseTypesetting.makeAttributedString(
+                    text: cellText,
+                    style: style,
+                    zoomScale: zoomScale
+                )
+                let framesetter = CTFramesetterCreateWithAttributedString(attrString)
+                let usableWidth = max(1.0, cellWidths[col] - textInsetX * 2 * zoomScale)
+                let constraint = CGSize(width: usableWidth, height: .greatestFiniteMagnitude)
+                let size = CTFramesetterSuggestFrameSizeWithConstraints(
+                    framesetter,
+                    CFRange(location: 0, length: attrString.length),
+                    nil,
+                    constraint,
+                    nil
+                )
+                let cellHeight = Double(size.height) + textInsetY * 2 * zoomScale
+                maxCellHeight = max(maxCellHeight, cellHeight)
+            }
+            rowHeights.append(maxCellHeight)
+        }
+        return rowHeights
     }
 }

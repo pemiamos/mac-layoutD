@@ -9,6 +9,13 @@
 - **改动文件**：(未填)
 - **检查**：AG worktree swift build PASS（e3-10p + dev 的 E3-6 合并后可编译）。dev commit 32e71e3 已 push。
 - **下一步**：① AG 可继续 E3-10p（界面若仍显示 Working 让其停一下/重开，工作区已干净）。② 今后各道：同步 dev 不碰 QUEUE.md→无冲突；进度写 handoff，Claude 更新队列。③ 待办不变：E3-6 等用户 InDesign 复看三条目录后合 main；Claude 道 E3-4b→E2-5→E2-4；Codex D-2 进行中。④ 注意 AG 的 e3-10p 分支已含 dev 的 E3-6（含我对 LayoutEngine addStory 的 H2 收集改动），后续合 AG 分支时 LayoutEngine 已对账过。
+## 2026-06-21 15:52 | antigravity | E3-10p 预览验收 harness 完成并完成全量预览分支集成。现已支持通过 `--export-pdf-flow` 与 `--export-png-flo
+- **分支**：feature/ag-e3-10p
+- **概述**：E3-10p 预览验收 harness 完成并完成全量预览分支集成。现已支持通过 `--export-pdf-flow` 与 `--export-png-flow` 命令行开关以「忠实正文流」排版并导出 PNG/PDF。feature/ag-e3-10p 分支已同步最新 dev，已自审解决与 E3-4 表格、E3-6 目录改动在 LayoutEngine 中的合并冲突。测试与 review 校验全数 PASS。
+- **改动文件**：Sources/LayoutDApp/ProjectLoader.swift, Sources/LayoutDApp/main.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDCore/ChineseTypesetting.swift, Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDImport/MarkdownBookImporter.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift, Samples/test_emphasis_visual.md, Samples/test_vertical_emphasis.md
+- **检查**：swift build: PASS, swift test: PASS (192 tests), scripts/review-idml.sh: PASS (10/10)
+- **下一步**：① 请 Claude 复审并合并 feature/ag-e3-10p 分支至 dev，以统一集成 E3-10p 以及前序的三条预览分支（e3-3p 傍点、e3-2b 竖排、e3-4p 表格）；
+② 邀请用户通过命令行 `--export-png-flow` 导出 Samples 下的测试稿，在桌面端肉眼确认横排/竖排傍点（着重号）与竖排斜体字体的渲染视觉效果。
 
 ## 2026-06-21 15:31 | claude | E3-6 目录：用户 InDesign 截图确认点导引线+页码右对齐已渲染（Claude 的 TabList 修复生效，视觉 PASS）。但发现静态目录只列 H
 - **分支**：dev

@@ -180,20 +180,32 @@ public struct PNGExporter {
                 if frame.backgroundColorHex == nil {
                     drawComponentBackground(componentStyle, project: project, in: rect, context: context)
                 }
-                let textRect = rect.insetBy(
-                    dx: CGFloat(componentStyle.textInsetX),
-                    dy: CGFloat(componentStyle.textInsetY)
-                )
-                drawText(
-                    text,
-                    styleId: frame.styleId,
-                    kind: frame.kind,
-                    project: project,
-                    in: textRect,
-                    context: context,
-                    textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project),
-                    sourceParagraphId: frame.sourceParagraphId
-                )
+                if frame.kind == .table {
+                    drawTable(
+                        text,
+                        style: style,
+                        componentStyle: componentStyle,
+                        project: project,
+                        rect: rect,
+                        context: context,
+                        textColorHex: frame.textColorHex
+                    )
+                } else {
+                    let textRect = rect.insetBy(
+                        dx: CGFloat(componentStyle.textInsetX),
+                        dy: CGFloat(componentStyle.textInsetY)
+                    )
+                    drawText(
+                        text,
+                        styleId: frame.styleId,
+                        kind: frame.kind,
+                        project: project,
+                        in: textRect,
+                        context: context,
+                        textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project),
+                        sourceParagraphId: frame.sourceParagraphId
+                    )
+                }
             } else {
                 drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context, textColorHex: frame.textColorHex, sourceParagraphId: frame.sourceParagraphId)
             }
@@ -232,6 +244,142 @@ public struct PNGExporter {
             context.setFillColor(accent.cgColor)
             context.fill(accentRect)
         }
+        context.restoreGState()
+    }
+
+    private func drawTable(
+        _ text: String,
+        style: ParagraphStyle,
+        componentStyle: ComponentStyle,
+        project: BookProject,
+        rect: CGRect,
+        context: CGContext,
+        textColorHex: String?
+    ) {
+        let tableData = TableLayoutHelper.parseTableText(text)
+        let colCount = tableData.columnCount
+        let rowCount = tableData.rows.count
+        guard colCount > 0, rowCount > 0 else { return }
+        
+        let strokeColor: NSColor
+        if let strokeHex = componentStyle.resolvedStrokeColorHex(project: project) {
+            strokeColor = NSColor.from(hex: strokeHex) ?? .black
+        } else {
+            strokeColor = .black
+        }
+        let strokeWidth = CGFloat(componentStyle.strokeWidth)
+        
+        let colWidths = TableLayoutHelper.allocateColumnWidths(
+            tableData: tableData,
+            totalWidth: Double(rect.width),
+            fontName: style.fontName,
+            fontSize: style.fontSize,
+            zoomScale: 1.0
+        )
+        let rowHeights = TableLayoutHelper.calculateRowHeights(
+            tableData: tableData,
+            colWidths: colWidths,
+            style: style,
+            textInsetX: componentStyle.textInsetX,
+            textInsetY: componentStyle.textInsetY,
+            zoomScale: 1.0
+        )
+        
+        let textColor: CGColor
+        if let hex = textColorHex, let color = NSColor.from(hex: hex) {
+            textColor = color.cgColor
+        } else if let tokenHex = project.resolvedColorHex(style.colorToken), let color = NSColor.from(hex: tokenHex) {
+            textColor = color.cgColor
+        } else {
+            textColor = NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).cgColor
+        }
+        
+        // Draw backgrounds and text (from top to bottom)
+        var currentY = rect.maxY
+        for r in 0..<rowCount {
+            let rowHeight = CGFloat(rowHeights[r])
+            let cells = tableData.rows[r]
+            currentY -= rowHeight
+            
+            var currentX = rect.minX
+            for c in 0..<colCount {
+                let cellWidth = CGFloat(colWidths[c])
+                let cellRect = CGRect(x: currentX, y: currentY, width: cellWidth, height: rowHeight)
+                
+                context.saveGState()
+                if r == 0 {
+                    if let accentHex = componentStyle.resolvedAccentColorHex(project: project), let headerColor = NSColor.from(hex: accentHex) {
+                        context.setFillColor(headerColor.withAlphaComponent(0.15).cgColor)
+                    } else if let fillHex = componentStyle.resolvedFillColorHex(project: project), let fillColor = NSColor.from(hex: fillHex) {
+                        context.setFillColor(fillColor.withAlphaComponent(0.3).cgColor)
+                    } else {
+                        context.setFillColor(NSColor(white: 0.9, alpha: 1).cgColor)
+                    }
+                } else {
+                    if let fillHex = componentStyle.resolvedFillColorHex(project: project), let fillColor = NSColor.from(hex: fillHex) {
+                        context.setFillColor(fillColor.cgColor)
+                    } else {
+                        context.setFillColor(NSColor.white.cgColor)
+                    }
+                }
+                context.fill(cellRect)
+                context.restoreGState()
+                
+                let cellText = c < cells.count ? cells[c] : ""
+                if !cellText.isEmpty {
+                    let insetX = CGFloat(componentStyle.textInsetX)
+                    let insetY = CGFloat(componentStyle.textInsetY)
+                    let textRect = cellRect.insetBy(dx: insetX, dy: insetY)
+                    
+                    context.saveGState()
+                    context.translateBy(x: textRect.minX, y: textRect.minY)
+                    
+                    let attrString = ChineseTypesetting.makeAttributedString(
+                        text: cellText,
+                        style: style,
+                        foregroundColor: textColor,
+                        zoomScale: 1.0
+                    )
+                    
+                    let path = CGPath(rect: CGRect(x: 0, y: 0, width: textRect.width, height: textRect.height), transform: nil)
+                    let framesetter = CTFramesetterCreateWithAttributedString(attrString)
+                    let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
+                    
+                    context.textMatrix = .identity
+                    CTFrameDraw(frame, context)
+                    context.restoreGState()
+                }
+                
+                currentX += cellWidth
+            }
+        }
+        
+        // Draw grid lines
+        context.saveGState()
+        context.setStrokeColor(strokeColor.cgColor)
+        context.setLineWidth(strokeWidth)
+        
+        // Outer border
+        context.stroke(rect)
+        
+        // Horizontal grid lines
+        var currentLineY = rect.maxY
+        for r in 0..<(rowCount - 1) {
+            currentLineY -= CGFloat(rowHeights[r])
+            context.move(to: CGPoint(x: rect.minX, y: currentLineY))
+            context.addLine(to: CGPoint(x: rect.maxX, y: currentLineY))
+            context.strokePath()
+        }
+        
+        // Vertical grid lines
+        var currentLineX = rect.minX
+        for c in 0..<(colCount - 1) {
+            currentLineX += CGFloat(colWidths[c])
+            context.move(to: CGPoint(x: currentLineX, y: rect.minY))
+            context.addLine(to: CGPoint(x: currentLineX, y: rect.maxY))
+            context.strokePath()
+        }
+        
         context.restoreGState()
     }
 
@@ -305,6 +453,7 @@ public struct PNGExporter {
             frameAttrs as CFDictionary?
         )
         CTFrameDraw(frame, context)
+        ChineseTypesetting.drawKentenDots(for: frame, in: context, layoutDirection: style.layoutDirection, zoomScale: 1.0)
     }
 
     private func drawAsset(assetId: UUID, isLeftHalf: Bool?, project: BookProject, in rect: CGRect, context: CGContext, maskShape: ImageMaskShape?) {
