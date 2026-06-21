@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 17:36 | antigravity | 重建并整理了 feature/ag-e2-5p 和 feature/ag-e3-6p 分支，确保它们都是直接基于最新 dev (ag-lane) 起的干净分支且
+- **分支**：feature/ag-e3-6p
+- **概述**：重建并整理了 feature/ag-e2-5p 和 feature/ag-e3-6p 分支，确保它们都是直接基于最新 dev (ag-lane) 起的干净分支且只包含 feat 核心提交（无冗余 doc/merge 提交）。使用 --export-png-flow 输出了流式 PNG 预览图并进行了肉眼复验，目录页的点导引线与页码对齐、横竖排着重号（傍点）渲染完全正确。
+- **改动文件**：Sources/LayoutDCore/ChineseTypesetting.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift
+- **检查**：swift test: pass (194 tests), review-idml.sh: pass, PNG flow visual inspection: pass
+- **下一步**：由 Claude 直接合并干净的 feature/ag-e2-5p 和 feature/ag-e3-6p 分支。这两个分支现已包含完全对账和测试通过的最新特性。
+
 ## 2026-06-21 15:44 | claude | 解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HA
 - **分支**：dev
 - **概述**：解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HANDOFF.md 冲突、自行解冲突卡死；Claude 在 AG worktree 按 dev 权威版 checkout --theirs 解掉两文档冲突、补完 merge（1d93ba8），AG worktree build PASS、已解套可继续。根因：Claude 在 dev 频繁改 QUEUE.md + 各道也改 QUEUE.md → 每次同步必冲突。根治（commit 32e71e3 push origin/dev）：① .gitattributes 给 .ai/HANDOFF.md + .ai/DECISIONS.md 设 merge=union（append-only 永不冲突）；② AGENTS.md 铁律 8：QUEUE.md 归 Claude 独占，各道不再勾 [x]/挂 [~]，进度只走 write_handoff，Claude 据交接更新；③ 各道遇文档冲突别硬解，checkout --theirs .ai/QUEUE.md。同步更新记忆 codex-antigravity-dual-lane。
