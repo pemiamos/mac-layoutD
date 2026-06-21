@@ -166,9 +166,18 @@ private struct LayoutContext {
                 continue
             }
 
+            // 正文里的子标题（H2+）也进目录，否则静态目录只剩书名级 H1、需用户在
+            // InDesign 手动「更新目录」才补全。level 1 走 addSectionTitle 不在此重复收集。
+            if case .heading(let level) = paragraph.kind, level >= 2 {
+                let headingTitle = paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !headingTitle.isEmpty, tableOfContents.last?.title != headingTitle {
+                    tableOfContents.append(TableOfContentsEntry(level: level, title: headingTitle, pageNumber: currentPage.number))
+                }
+            }
+
             let style = project.styles.paragraphStyle(id: paragraph.styleId)
             let frameKind = frameKind(for: paragraph.kind)
-            
+
             if project.pageSetup.layoutDirection == .vertical {
                 let minReqWidth = style.lineHeight + style.spaceBefore + style.spaceAfter
                 let leftLimit = pageLeftMargin(for: currentAbsolutePageNumber)
