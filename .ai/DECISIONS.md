@@ -40,3 +40,6 @@
 - **决策**：根治文档冲突卡死：① .ai/HANDOFF.md 与 .ai/DECISIONS.md 在 .gitattributes 设 merge=union（append-only 日志两边自动保留、永不冲突）；② .ai/QUEUE.md 归 Claude 独占维护，Codex/Antigravity 不再编辑它（不勾 [x]、不挂 [~]），进度只写进 write_handoff，由 Claude 据交接更新队列；③ 各道同步 dev 仍跑 git merge origin/dev，不碰 QUEUE.md 即干净；万一仍冲突，git checkout --theirs .ai/QUEUE.md 取 dev 权威版后继续，别硬解。已写入 .ai/AGENTS.md 铁律 8。
 - **理由**：2026-06-21 AG 开工 git merge origin/dev 时在 QUEUE.md/HANDOFF.md 撞冲突、自行解冲突卡死（界面停在 Working）。根因：Claude 在 dev 频繁改 QUEUE.md 排任务，各道也改 QUEUE.md 勾完成 → 每次同步必冲突，而 lane AI 不擅长解冲突。union 解决 append-only 日志；QUEUE 由单一所有者（Claude）维护消除冲突源。
 
+## 2026-06-21 | codex | D-2 DOCX 导入采用内置最小 OOXML ZIP 读取器
+- **决策**：`.docx` 读取在 `DOCXBookImporter.swift` 内实现最小 ZIP central-directory reader；支持 stored 与 deflate entry，并用 macOS `Compression` 解压。首版只读取 `word/document.xml`、`word/styles.xml`、`word/numbering.xml`，不调用外部 `unzip`。
+- **理由**：当前 Swift Foundation 环境没有 `Archive` API；引入第三方 ZIP 包或外部进程会扩大依赖面。最小读取器可离线、可测试，且足以完成 D-2 的正文/样式/列表/表格映射。Zip64、加密、图片 media 与其它 OOXML 部件首版明确降级或报错。

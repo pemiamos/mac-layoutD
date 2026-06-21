@@ -39,7 +39,7 @@ swift run layoutD -- Samples/demo.md
 
 Inside the app:
 
-- `File -> Open Project, Markdown, or Chapter Package...` opens `.layoutd`, `.json`, `.md`, `.markdown`, `.txt`, or a chapter package directory.
+- `File -> Open Project, Markdown/DOCX, or Chapter Package...` opens `.layoutd`, `.json`, `.md`, `.markdown`, `.txt`, `.docx`, or a chapter package directory. DOCX import preserves headings, basic bold/italic runs, lists, and tables; embedded images are not imported in the first version.
 - `File -> Save Project...` saves the current structured project as `.layoutd`.
 - `File -> Export PDF...` exports the current layout.
 - `File -> Export PNG Previews...` exports page preview images as `page-001.png`, `page-002.png`, and so on.

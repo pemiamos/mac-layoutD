@@ -770,7 +770,7 @@ final class WorkspaceViewController: NSViewController {
 
     func openProject() {
         let openPanel = NSOpenPanel()
-        openPanel.title = "Open Project, Markdown Manuscript, or Chapter Package"
+        openPanel.title = "Open Project, Markdown/DOCX Manuscript, or Chapter Package"
         openPanel.allowsMultipleSelection = false
         openPanel.canChooseDirectories = true
         openPanel.canChooseFiles = true
@@ -779,7 +779,8 @@ final class WorkspaceViewController: NSViewController {
             UTType.json,
             UTType(filenameExtension: "md"),
             UTType(filenameExtension: "markdown"),
-            UTType(filenameExtension: "txt")
+            UTType(filenameExtension: "txt"),
+            UTType(filenameExtension: "docx")
         ].compactMap { $0 }
 
         guard let window = view.window else {

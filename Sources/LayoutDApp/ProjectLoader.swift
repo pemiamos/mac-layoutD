@@ -169,6 +169,8 @@ struct ProjectLoader {
             let data = try Data(contentsOf: inputURL)
             let project = try ProjectFile.decode(data)
             return resolvingRelativeAssetPaths(in: project, relativeTo: inputURL.deletingLastPathComponent())
+        case "docx":
+            return try DOCXBookImporter(defaultAuthor: NSUserName()).importDocument(from: inputURL)
         default:
             return try loadMarkdownProject(manuscriptURL: inputURL, assetDirectoryURL: assetDirectoryURL)
         }
@@ -182,6 +184,8 @@ struct ProjectLoader {
         switch inputURL.pathExtension.lowercased() {
         case "layoutd", "json":
             return "项目：\(inputURL.lastPathComponent)"
+        case "docx":
+            return "DOCX 导入：\(inputURL.lastPathComponent)"
         default:
             return "导入：\(inputURL.lastPathComponent)"
         }
