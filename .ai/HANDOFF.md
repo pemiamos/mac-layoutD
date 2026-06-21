@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 18:16 | claude | 合并 AG 17:36 交接的两条「真变基」预览分支。这次 AG 做对了:feature/ag-e2-5p(7f486ab 蒙版预览 polygonPoints
+- **分支**：dev
+- **概述**：合并 AG 17:36 交接的两条「真变基」预览分支。这次 AG 做对了:feature/ag-e2-5p(7f486ab 蒙版预览 polygonPoints)/feature/ag-e3-6p(d234d22 目录预览 makeTOCAttributedString 点导引线+制表位+层级缩进) 都真正从最新 dev 起、含 c5fcfb7、AG 已 --export-png-flow 肉眼复验。注意:两条 base 是 71c1c4b(含 flow harness 但落后当前 dev ~10 提交),merge-tree 0 文本冲突但需防语义破坏——Claude 在 /tmp 隔离 worktree 顺序合两条,e3-6p 撞测试文件加性冲突(testImageMaskShapePolygonPoints vs testTOCAttributedString,两独立测试都保留)已手解,build+199测试+review-idml 6/0 全 PASS 后才合 dev。两条预览侧(E3-6p/E2-5p)至此完成,与各自导出侧(E3-6/E2-5)配对齐。已合 dev(merge dad96a5)并 push origin/dev=dad96a5。踩坑:push 前误用 git pull --rebase(本地已=origin+我的merge),它重放我的 merge 导致 d234d22 冲突半截 rebase,已 git rebase --abort 恢复——dev ref 未受影响、push 成功、结果正确。教训:本地已是 origin 基础+自己 merge、只为 push 时直接 push 或 pull --ff-only,别 pull --rebase。另:feature/ag-inline-preview 是远古废分支(base 无 c5fcfb7、diff -3203 行会删 DOCXImporter/大半 IDMLExporter),勿合,建议删。
+- **改动文件**：Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDCore/ChineseTypesetting.swift, Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDEngine/LayoutEngine.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift (经 merge ag-e2-5p + ag-e3-6p)
+- **检查**：dev(dad96a5) swift build PASS; swift test 199/0; scripts/review-idml.sh 6/0 PASS。已 push origin/dev=dad96a5。
+- **下一步**：① 用户:InDesign/PNG 复看目录点导引线 + 蒙版裁形预览(AG 已自验,用户终验)。② Claude 道:仅剩 E2-4 对开跨页(最高风险,单独一棒,改完务必回归非对开模式)。③ 清理废分支:feature/ag-inline-preview(远古废分支勿合)、已合的 ag-e2-4p/ag-e3-6p/ag-e2-5p/ag-export-options/codex-*。④ 并发警示:仍有第二个 Claude 会话在同一 checkout 操作,git 写操作直接 push 或 pull --ff-only,勿 pull --rebase 重放本地 merge;守 N1/N2/N3。⑤ dev 上预览侧(E3-6p/E2-5p/E2-4p)+导出侧基本配齐,可考虑攒批交用户 InDesign 视觉总验后合 main。
+
 ## 2026-06-21 17:54 | claude | 完成 Claude 道 E2-5 非矩形蒙版——已合 dev（merge 404596b，push origin/dev）。maskGeometry 输出八角(
 - **分支**：dev
 - **概述**：完成 Claude 道 E2-5 非矩形蒙版——已合 dev（merge 404596b，push origin/dev）。maskGeometry 输出八角(8点)/扇面(环形扇区弧线近似)PathGeometry，imageItem 走它、串入 frame.maskShape，图片仍放满 rect 被框裁成形；.rect/nil 回退矩形(无回归)。端到端断言：八角8点/矩形4点/扇面≥16点。197 测试 + review 6/0 PASS。桌面 E2-5蒙版验收-0621.idml(八角+扇面各一)待用户 InDesign 复看。固定美术页「不叠主页项」一项判定 N/A：当前 MasterSpread 为空(无页码等元素)、满版图本就出血矩形导出，无可叠之物。注：蒙版经 LayoutPlan/override 驱动(非 markdown)，符合项目"编辑走 LayoutPlan"模型。Claude 道仅剩 E2-4 对开跨页(最高风险)。

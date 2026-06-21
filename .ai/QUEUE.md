@@ -245,13 +245,13 @@
   - 文件：`Sources/LayoutDApp/main.swift`（CLI/导出路径）、`PNGExporter.swift`/`PDFExporter.swift`、`LayoutEngine.swift`（如需正文连续成帧）。
   - 验收：含 `==着重==`、`**粗**`、`*斜*`、竖排段的测试稿导 PNG，**逐项都能在图里肉眼看到**（傍点出点、粗体加重、斜体倾斜、竖排倾斜方向正确）；`scripts/review-idml.sh` PASS。这条做完，E3-3p / E3-2b 才能真正走完视觉验收。
 
-- [ ] **E3-6p 目录（TOC）预览渲染**（配对 Claude E3-6 动态目录）
+- [x] **E3-6p 目录（TOC）预览渲染**（配对 Claude E3-6 动态目录） — ✅ AG `feature/ag-e3-6p`(d234d22, 真变基自最新 dev) `makeTOCAttributedString` 点导引线/制表位/层级缩进，已合 dev（merge `dad96a5`，2026-06-21 18:1x Claude）。AG 已 `--export-png-flow` 肉眼复验；build+199测试+review-idml 6/0 PASS。合并仅测试文件加性冲突，已解。
   - 背景：Claude 在导出侧把目录做成结构化段落（标题 + tab 点导引线 + 右对齐页码）和动态 `<TOCStyle>`。预览侧（Canvas/PDF/PNG）当前目录基本是裸文字行，需追平。
   - 目标：预览里目录条目按层级缩进、标题与页码间画**点导引线（dot leader）**、页码右对齐贴版心右边；与导出版式一致。
   - 文件：`LayoutEngine.swift`（目录条目成帧/制表位）、`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
   - 验收：含多级标题的稿件导 PNG，目录页点导引线连续、页码右对齐、层级缩进正确；单测断言目录条目带 tab/leader 结构；`scripts/review-idml.sh` PASS。
 
-- [ ] **E2-5p 非矩形蒙版预览渲染**（配对 Claude E2-5 扇面/八角蒙版）
+- [x] **E2-5p 非矩形蒙版预览渲染**（配对 Claude E2-5 扇面/八角蒙版） — ✅ AG `feature/ag-e2-5p`(7f486ab, 真变基自最新 dev) 统一 `polygonPoints` 八角/扇面预览裁形，已合 dev（merge `dad96a5`，2026-06-21 18:1x Claude）。与导出侧 E2-5(404596b) 互补。AG 已 `--export-png-flow` 肉眼复验；build+199测试+review-idml 6/0 PASS。
   - 背景：模型已有 `ImageMaskShape{rect,fan,octagon}`（`LayoutPlan.swift:114`）+ 帧 `maskShape`；Claude 在导出侧让图框按多边形 PathGeometry 裁切。预览侧需把图也裁成同形状，否则预览≠输出。
   - 目标：Canvas/PDF/PNG 对 `maskShape == .fan/.octagon` 的图框，用对应多边形路径裁剪置入图（八角 8 点、扇面弧近似），`rect` 维持现状。
   - 文件：`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`、必要时 `LayoutEngine.swift`/`ChineseTypesetting.swift` 旁的图形工具。
