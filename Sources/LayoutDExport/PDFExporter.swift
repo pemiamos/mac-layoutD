@@ -419,6 +419,7 @@ public struct PDFExporter {
                 if frame.backgroundColorHex == nil {
                     drawComponentBackground(componentStyle, project: project, in: rect, context: context)
                 }
+                
                 if frame.kind == .table {
                     drawTable(
                         text,
@@ -442,12 +443,23 @@ public struct PDFExporter {
                         rect: textRect,
                         context: context,
                         textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project),
-                        sourceParagraphId: frame.sourceParagraphId
+                        sourceParagraphId: frame.sourceParagraphId,
+                        tableOfContentsEntries: frame.tableOfContentsEntries
                     )
                 }
             } else {
                 let textRect = rect
-                drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, rect: textRect, context: context, textColorHex: frame.textColorHex, sourceParagraphId: frame.sourceParagraphId)
+                drawText(
+                    text,
+                    styleId: frame.styleId,
+                    kind: frame.kind,
+                    project: project,
+                    rect: textRect,
+                    context: context,
+                    textColorHex: frame.textColorHex,
+                    sourceParagraphId: frame.sourceParagraphId,
+                    tableOfContentsEntries: frame.tableOfContentsEntries
+                )
             }
         case .asset, .spreadAsset:
             drawImagePlaceholder(frame: frame, project: project, in: context, rect: rect)
@@ -621,7 +633,7 @@ public struct PDFExporter {
         context.restoreGState()
     }
 
-    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind, project: BookProject, rect: CGRect, context: CGContext, textColorHex: String? = nil, sourceParagraphId: UUID? = nil) {
+    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind, project: BookProject, rect: CGRect, context: CGContext, textColorHex: String? = nil, sourceParagraphId: UUID? = nil, tableOfContentsEntries: [TableOfContentsEntry]? = nil) {
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -662,19 +674,30 @@ public struct PDFExporter {
             textColor = NSColor.black.cgColor
         }
 
-        var mappedRuns: [InlineRun]? = nil
-        if let sourceParagraphId = sourceParagraphId,
-           let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
-           let runs = paragraph.inlineRuns {
-            mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
-        }
+        let attributedString: NSAttributedString
+        if let entries = tableOfContentsEntries, !entries.isEmpty {
+            attributedString = ChineseTypesetting.makeTOCAttributedString(
+                entries: entries,
+                project: project,
+                containerWidth: Double(rect.width),
+                zoomScale: 1.0,
+                foregroundColor: textColor
+            )
+        } else {
+            var mappedRuns: [InlineRun]? = nil
+            if let sourceParagraphId = sourceParagraphId,
+               let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+               let runs = paragraph.inlineRuns {
+                mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
+            }
 
-        let attributedString = ChineseTypesetting.makeAttributedString(
-            text: text,
-            style: style,
-            foregroundColor: textColor,
-            inlineRuns: mappedRuns
-        )
+            attributedString = ChineseTypesetting.makeAttributedString(
+                text: text,
+                style: style,
+                foregroundColor: textColor,
+                inlineRuns: mappedRuns
+            )
+        }
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
         path.addRect(rect)

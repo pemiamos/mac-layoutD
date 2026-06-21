@@ -404,11 +404,12 @@ final class CanvasView: NSView {
                         kind: frame.kind,
                         textColorOverride: componentTextColor,
                         applyDefaultInset: false,
-                        sourceParagraphId: frame.sourceParagraphId
+                        sourceParagraphId: frame.sourceParagraphId,
+                        tableOfContentsEntries: frame.tableOfContentsEntries
                     )
                 }
             } else {
-                drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor, sourceParagraphId: frame.sourceParagraphId)
+                drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor, sourceParagraphId: frame.sourceParagraphId, tableOfContentsEntries: frame.tableOfContentsEntries)
             }
         case .asset(let assetId):
             drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect, maskShape: frame.maskShape)
@@ -654,7 +655,8 @@ final class CanvasView: NSView {
         kind: PageFrameKind,
         textColorOverride: NSColor? = nil,
         applyDefaultInset: Bool = true,
-        sourceParagraphId: UUID? = nil
+        sourceParagraphId: UUID? = nil,
+        tableOfContentsEntries: [TableOfContentsEntry]? = nil
     ) {
         let style: ParagraphStyle
         if kind == .footnote {
@@ -688,22 +690,33 @@ final class CanvasView: NSView {
         let tokenColor = project.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
         let textColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
         
-        var mappedRuns: [InlineRun]? = nil
-        if let sourceParagraphId = sourceParagraphId,
-           let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
-           let runs = paragraph.inlineRuns {
-            mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
-        }
-
-        let attrString = ChineseTypesetting.makeAttributedString(
-            text: text,
-            style: style,
-            foregroundColor: textColor.cgColor,
-            zoomScale: zoomScale,
-            inlineRuns: mappedRuns
-        )
-        
         let drawingRect = applyDefaultInset ? rect.insetBy(dx: 4, dy: 2) : rect
+        
+        let attrString: NSAttributedString
+        if let entries = tableOfContentsEntries, !entries.isEmpty {
+            attrString = ChineseTypesetting.makeTOCAttributedString(
+                entries: entries,
+                project: project,
+                containerWidth: Double(drawingRect.width),
+                zoomScale: zoomScale,
+                foregroundColor: textColor.cgColor
+            )
+        } else {
+            var mappedRuns: [InlineRun]? = nil
+            if let sourceParagraphId = sourceParagraphId,
+               let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+               let runs = paragraph.inlineRuns {
+                mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
+            }
+
+            attrString = ChineseTypesetting.makeAttributedString(
+                text: text,
+                style: style,
+                foregroundColor: textColor.cgColor,
+                zoomScale: zoomScale,
+                inlineRuns: mappedRuns
+            )
+        }
         
         guard let cgContext = NSGraphicsContext.current?.cgContext else { return }
         cgContext.saveGState()
