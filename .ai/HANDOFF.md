@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-22 07:08 | antigravity | 完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 featu
+- **分支**：ag-lane
+- **概述**：完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 feature 分支。
+- **改动文件**：(无，仅做分支同步与本地废弃分支清理)
+- **检查**：swift build: pass, swift test: pass (194 tests)
+- **下一步**：① 用户或 Claude 进行已合并功能的 IDML 导出与跨页渲染的视觉终验；② 供 Claude 继续推进 E2-4 对开跨页任务；③ Codex 待命或继续根据后续需求调整。
+
 ## 2026-06-21 17:54 | claude | 完成 Claude 道 E2-5 非矩形蒙版——已合 dev（merge 404596b，push origin/dev）。maskGeometry 输出八角(
 - **分支**：dev
 - **概述**：完成 Claude 道 E2-5 非矩形蒙版——已合 dev（merge 404596b，push origin/dev）。maskGeometry 输出八角(8点)/扇面(环形扇区弧线近似)PathGeometry，imageItem 走它、串入 frame.maskShape，图片仍放满 rect 被框裁成形；.rect/nil 回退矩形(无回归)。端到端断言：八角8点/矩形4点/扇面≥16点。197 测试 + review 6/0 PASS。桌面 E2-5蒙版验收-0621.idml(八角+扇面各一)待用户 InDesign 复看。固定美术页「不叠主页项」一项判定 N/A：当前 MasterSpread 为空(无页码等元素)、满版图本就出血矩形导出，无可叠之物。注：蒙版经 LayoutPlan/override 驱动(非 markdown)，符合项目"编辑走 LayoutPlan"模型。Claude 道仅剩 E2-4 对开跨页(最高风险)。
