@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 11:32 | claude | 提前展开 Codex 本批全部任务的验收规格，Codex 现可整批自助连续作业。本批顺序：E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DO
+- **分支**：dev
+- **概述**：提前展开 Codex 本批全部任务的验收规格，Codex 现可整批自助连续作业。本批顺序：E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DOCX 导入 → E2-5 美术页/蒙版（均 Codex 道，已逐项写明现状勘查/做法/文件/端到端验收，见 .ai/QUEUE.md）。E2-4 对开跨页改判 Claude（用户指定 Codex 不靠谱），跨 IDMLExporter 文件故 Claude 待 Codex 本批先合 dev 再起手、专用 worktree。E3-8 CMYK 暂缓。关键勘查结论已写进各任务：E3-6 目录引擎已有真页码条目只是被拼成死文字（核心是导出 <TOCStyle> 映射 heading1/2 让 InDesign 可更新目录）；D-2 DOCX 是 OOXML zip，映射口径已列，zip 读取需先 record_decision（别 shell unzip）；E2-5 模型已有 ImageMaskShape{rect,fan,octagon}+maskShape 字段，导出器只写矩形 PathGeometry，拆「非矩形蒙版多边形点(先做)」+「固定页不叠主页项(回归非固定页)」两步。
+- **改动文件**：(未填)
+- **检查**：纯文档/规划改动，无需 build。每次提交前 get_current_status 确认 dev 无并发未提交改动。
+- **下一步**：① Codex 开工：读 QUEUE.md「本批连续序列」从 E3-4b 起按 E3-4b→E3-6→D-2→E2-5 连做，每项自审 review-idml.sh PASS 后接下一个，收尾写一条汇总 handoff。② D-2 起手前先 record_decision 定 zip 读取方案。③ AG 道：E3-10p 预览验收 harness（高优先，做完傍点/竖排斜体才能视觉验收）；AG 三条预览分支(e3-3p/e3-2b/e3-4p)仍待合（用户选 C，等 E3-4 集成落定，由 Claude 在专用 worktree 合）。④ E2-4 待 Codex 本批 IDMLExporter 改动合 dev 后由 Claude 做。⑤ 所有集成守 N1/N2/N3。
+
 ## 2026-06-21 11:17 | claude | 进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全
 - **分支**：dev
 - **概述**：进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全绿；主交付 E 阶段已过用户 InDesign 视觉验收的有 E1 全量映射、E2-1/2/3/6/7、E3-1 行内格式、E3-3+E3-3v 傍点、E3-7+E3-7v 脚注、E3-4 表格、E3-2 预览+批注层。待合（用户选 C 暂缓）：AG 三条预览 e3-3p/e3-2b/e3-4p。已排未做：E3-6 TOC、E3-8 CMYK、E3-9 约物挤压/基线网格、E2-4 对开、E2-5 美术页MasterSpread/蒙版、D-2 DOCX。本棒新增队列条目：① Codex 道 E3-4b 表格单元格行内格式（发现 tableStoryXML 把 inlineRuns 写死成空，表格内粗/斜/傍点丢失）；② AG 道 E3-10p 预览验收 harness（PNG demo 模板丢带强调正文段，致傍点/竖排斜体出不了图无法视觉验收，挡住 E3-3p/E3-2b 收尾）；③ 新增「待评估 Backlog」节（索引/参考文献/长表格分页表头重复/图文绕排，需用户拍板）；④ 基础设施补 E0 spike 文档回填。

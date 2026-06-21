@@ -186,24 +186,25 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDExport/PDFExporter.swift`、
 > `PNGExporter.swift`、`Sources/LayoutDApp/*`
 >
-> **🔁 本批连续序列（按顺序连做，做完一个自审 PASS 就接下一个，不停下问）：E3-2b 竖排行内 → E3-4p 表格预览 →（待 Codex E3-3 合 dev 后）E3-3p 傍点预览**。
+> **✅ 上一批（E3-2b 竖排斜体 / E3-4p 表格预览 / E3-3p 傍点预览）AG 已全部实现、Claude 已审过（构建+189测试+IDML 6/6 全过），分支 `feature/ag-e3-2b`/`-e3-4p`/`-e3-3p` 待合 dev——用户选 C 暂缓合并、由 Claude 待 E3-4 集成落定后在专用 worktree 合。AG 不必重做这三项。**
+> **🔁 AG 当前可做（按优先）：① E3-10p 预览验收 harness（高优先，下方）；② 导出选项面板跟进（依赖项变动见该条）。**
 > 约 1 小时或做到这批做完/撞阻塞为止，收尾写一条汇总 handoff。
 > 主题：**让预览（Canvas/PDF/PNG）追平 IDML 输出**——本阶段 AG 的核心价值是「InDesign 打开后版面与 layoutD 预览一致」。
 > ⚠️ **每项都从最新 dev 起新分支 `feature/ag-<task>`**，别叠旧分支。斜体已在 dev 用 12° `Skew` 矩阵渲染（与 IDML `Skew="12"` 同算法），别改回 FauxItalic。
 
-- [ ] **E3-2b 竖排（直排）下行内格式预览验收 + 修正**
+- [~] **E3-2b 竖排（直排）下行内格式预览验收 + 修正** — ✅ AG 实现 `feature/ag-e3-2b`(f988dd2)、Claude 审过，**待合 dev**（用户选 C 暂缓）。竖排斜体改用 b=tan12° 切变（横笔倾斜竖笔不动）。AG 不必重做。
   - 背景：E3-2 已把 `inlineRuns` 透传进 `addFlowingVerticalText`，但**斜体用的是横排 12° 水平切变矩阵**，竖排里直接照搬很可能方向错（竖排字应沿竖向基线倾斜，不是横向歪）。粗体在竖排是否真加重也需肉眼确认。
   - 目标：竖排模式下 `makeAttributedString` 的粗体/斜体在 Canvas/PDF/PNG 渲染正确——粗体明显加重、斜体沿竖排方向合理倾斜，且**不破坏竖排行序/分行/禁则**。
   - 文件：`ChineseTypesetting.swift`（竖排分支的 trait/skew 矩阵）、`LayoutEngine.swift`、三处渲染器。
   - 验收：竖排测试稿（含粗/斜词的引文）导 PNG，目标词字重/倾斜正确、竖排列序不乱；补端到端断言（竖排 + run 分段）；`scripts/review-idml.sh` PASS。修好后 Claude 出 PNG 交用户肉眼验。
 
-- [ ] **E3-4p 原生表格预览渲染**（配对 Codex E3-4 IDML 原生表格）
+- [~] **E3-4p 原生表格预览渲染**（配对 Codex E3-4 IDML 原生表格） — ✅ AG 实现 `feature/ag-e3-4p`(4f091fc)、Claude 审过+视觉验收过（表格网格出图 PASS），**待合 dev**（用户选 C 暂缓；合时与 dev 的 E3-4 在 LayoutEngine 有冲突，解法已记交接）。AG 不必重做。
   - 背景：表格组件当前在预览里基本当文字画；Codex 那边要升级成 IDML 原生 `<Table>`。预览侧也要画成真表格才能「预览=输出」。
   - 目标：table 组件在 Canvas/PDF/PNG 渲染为真实网格——行列线、单元格底色、内边距、按列宽分配，文字落在单元格内。
   - 文件：`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`LayoutEngine.swift`（如需表格测量/分页）。
   - 验收：demo 里的表格导 PNG 是带边框的真网格（非裸文字流），列对齐、底色正确；单测断言表格 frame 产出行列结构；`scripts/review-idml.sh` PASS。
 
-- [ ] **E3-3p 傍点（Kenten 着重号）预览渲染**　⚠️ **依赖：待 Codex E3-3 合进 dev 后再做**（当前 E3-3 退回修复中）
+- [~] **E3-3p 傍点（Kenten 着重号）预览渲染** — ✅ AG 实现 `feature/ag-e3-3p`(ce26883)、Claude 审过，**待合 dev**（用户选 C 暂缓）。用自定义属性 LayoutDKenten 标记 run + drawKentenDots 画点（横排字下/竖排字右）。视觉验收待 E3-10p harness 出图。AG 不必重做。
   - 背景：Codex E3-3 让 `==着重==` 落地为 `InlineEmphasis.kenten` → IDML `KentenKind`。预览侧需在着重字**旁/上画着重点（芝麻点）**，否则预览看不出傍点。
   - 目标：Canvas/PDF/PNG 对 `.kenten` run 的每个字符绘制着重号（横排在字下/字右、竖排在字右侧，对标 InDesign 默认 KentenSesameDot 位置）。
   - 文件：`ChineseTypesetting.swift` 或三处渲染器的字形装饰逻辑。
@@ -225,8 +226,8 @@
   - 文件：`Sources/LayoutDApp/main.swift`（CLI/导出路径）、`PNGExporter.swift`/`PDFExporter.swift`、`LayoutEngine.swift`（如需正文连续成帧）。
   - 验收：含 `==着重==`、`**粗**`、`*斜*`、竖排段的测试稿导 PNG，**逐项都能在图里肉眼看到**（傍点出点、粗体加重、斜体倾斜、竖排倾斜方向正确）；`scripts/review-idml.sh` PASS。这条做完，E3-3p / E3-2b 才能真正走完视觉验收。
 
-- [ ] **导出选项面板跟进**（待 Codex 的 E2-4 / E3-8 任一项落地后联动，非阻塞可先设计）
-  - 目标：「导出 IDML…」面板加开关：对开跨页模式、CMYK 色板模式。
+- [ ] **导出选项面板跟进**（依赖变动：E3-8 CMYK 已暂缓、E2-4 对开改 Claude 做——本项**待 E2-4 落 dev 后**再接「对开跨页」开关；非阻塞可先把面板骨架设计好）
+  - 目标：「导出 IDML…」面板加开关：对开跨页模式（待 E2-4）；CMYK 色板模式（E3-8 暂缓，先留位不接线）。
   - 文件：`ToolbarView.swift` 或导出选项相关 View。
   - 验收：开关能正确传参到 `IDMLExporter`，关闭时行为与当前一致（向后兼容）。
 
