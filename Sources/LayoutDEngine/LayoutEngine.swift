@@ -166,9 +166,18 @@ private struct LayoutContext {
                 continue
             }
 
+            // 正文里的子标题（H2+）也进目录，否则静态目录只剩书名级 H1、需用户在
+            // InDesign 手动「更新目录」才补全。level 1 走 addSectionTitle 不在此重复收集。
+            if case .heading(let level) = paragraph.kind, level >= 2 {
+                let headingTitle = paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !headingTitle.isEmpty, tableOfContents.last?.title != headingTitle {
+                    tableOfContents.append(TableOfContentsEntry(level: level, title: headingTitle, pageNumber: currentPage.number))
+                }
+            }
+
             let style = project.styles.paragraphStyle(id: paragraph.styleId)
             let frameKind = frameKind(for: paragraph.kind)
-            
+
             if project.pageSetup.layoutDirection == .vertical {
                 let minReqWidth = style.lineHeight + style.spaceBefore + style.spaceAfter
                 let leftLimit = pageLeftMargin(for: currentAbsolutePageNumber)
@@ -227,8 +236,19 @@ private struct LayoutContext {
     }
 
     private mutating func addText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil) {
-        let text = normalizedText(text)
-        
+        let text = normalizedText(text, isTable: kind == .table)
+
+        // 原生表格：按网格估高落框，而非用拍平文本测高（否则框太矮，InDesign 里整张表
+        // 溢流、只显示前几行）。导出器据 sourceParagraphId 的 tableCells 输出真 <Table>。
+        if kind == .table,
+           let sourceParagraphId,
+           let paragraph = findParagraph(id: sourceParagraphId),
+           let cells = paragraph.tableCells, !cells.isEmpty {
+            let tableHeight = estimatedTableHeight(cells: cells, style: style)
+            placeTextFrame(text, height: tableHeight, style: style, kind: kind,
+                           spaceBefore: style.spaceBefore, sourceParagraphId: sourceParagraphId)
+            return
+        }
         var paragraphRuns: [InlineRun]? = nil
         if let sourceParagraphId = sourceParagraphId,
            let paragraph = findParagraph(id: sourceParagraphId),
@@ -241,7 +261,30 @@ private struct LayoutContext {
             return
         }
         
-        let height = estimatedTextHeight(text: text, style: style, width: columnWidth, inlineRuns: paragraphRuns)
+        let height: Double
+        if kind == .table {
+            let componentStyle = project.styles.componentStyle(for: .table)
+            let textInsetX = componentStyle?.textInsetX ?? 8.0
+            let textInsetY = componentStyle?.textInsetY ?? 6.0
+            let tableData = TableLayoutHelper.parseTableText(text)
+            let colWidths = TableLayoutHelper.allocateColumnWidths(
+                tableData: tableData,
+                totalWidth: columnWidth,
+                fontName: style.fontName,
+                fontSize: style.fontSize
+            )
+            let heights = TableLayoutHelper.calculateRowHeights(
+                tableData: tableData,
+                colWidths: colWidths,
+                style: style,
+                textInsetX: textInsetX,
+                textInsetY: textInsetY
+            )
+            height = heights.reduce(0.0, +)
+        } else {
+            height = estimatedTextHeight(text: text, style: style, width: columnWidth, inlineRuns: paragraphRuns)
+        }
+        
         if shouldKeepHeadingWithNext(style: style, height: height) {
             advanceToNextColumnOrPage()
         }
@@ -898,7 +941,10 @@ private struct LayoutContext {
         cursorY = ceil(cursorY / grid) * grid
     }
 
-    private func normalizedText(_ text: String) -> String {
+    private func normalizedText(_ text: String, isTable: Bool = false) -> String {
+        if isTable {
+            return text.trimmedForLayout
+        }
         let collapsed = text
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmedForLayout
@@ -939,6 +985,29 @@ private struct LayoutContext {
             nil
         )
         return max(ceil(size.height), style.lineHeight)
+    }
+
+    /// 表格按网格估高：每行取其各单元格估高的最大值（单元格在等分列宽内自动折行），
+    /// 再对所有行求和。`cellInset` 与 IDML 导出的 Cell inset 保持一致，避免低估折行
+    /// 导致 InDesign 溢流。略偏保守（宁高勿矮）以确保整张表落进文本框。
+    private func estimatedTableHeight(cells: [[String]], style: ParagraphStyle) -> Double {
+        let columnCount = cells.map(\.count).max() ?? 0
+        guard columnCount > 0 else { return style.lineHeight }
+        let cellInset = 2.0
+        let cellWidth = columnWidth / Double(columnCount)
+        let textWidth = max(10, cellWidth - cellInset * 2)
+        let minRowHeight = max(18, style.lineHeight)
+        var total = 0.0
+        for row in cells {
+            var rowHeight = minRowHeight
+            for column in 0..<columnCount {
+                let cellText = column < row.count ? row[column] : ""
+                let height = estimatedTextHeight(text: cellText, style: style, width: textWidth) + cellInset * 2
+                rowHeight = max(rowHeight, height)
+            }
+            total += rowHeight
+        }
+        return total
     }
 
     private func estimatedFootnoteHeight(_ paragraph: Paragraph) -> Double {
@@ -1119,7 +1188,8 @@ private struct LayoutContext {
                     kind: .text,
                     rect: Rect(x: leftMargin, y: margins.top + 72, width: contentWidth, height: 420),
                     styleId: StyleID.body.rawValue,
-                    content: .text(body)
+                    content: .text(body),
+                    tableOfContentsEntries: entries
                 )
             ]
         )
@@ -1534,11 +1604,6 @@ private extension LayoutPlan {
     }
 }
 
-private struct TableOfContentsEntry: Equatable {
-    var level: Int
-    var title: String
-    var pageNumber: Int
-}
 
 
 

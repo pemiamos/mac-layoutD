@@ -3,6 +3,124 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 15:44 | claude | 解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HA
+- **分支**：dev
+- **概述**：解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HANDOFF.md 冲突、自行解冲突卡死；Claude 在 AG worktree 按 dev 权威版 checkout --theirs 解掉两文档冲突、补完 merge（1d93ba8），AG worktree build PASS、已解套可继续。根因：Claude 在 dev 频繁改 QUEUE.md + 各道也改 QUEUE.md → 每次同步必冲突。根治（commit 32e71e3 push origin/dev）：① .gitattributes 给 .ai/HANDOFF.md + .ai/DECISIONS.md 设 merge=union（append-only 永不冲突）；② AGENTS.md 铁律 8：QUEUE.md 归 Claude 独占，各道不再勾 [x]/挂 [~]，进度只走 write_handoff，Claude 据交接更新；③ 各道遇文档冲突别硬解，checkout --theirs .ai/QUEUE.md。同步更新记忆 codex-antigravity-dual-lane。
+- **改动文件**：(未填)
+- **检查**：AG worktree swift build PASS（e3-10p + dev 的 E3-6 合并后可编译）。dev commit 32e71e3 已 push。
+- **下一步**：① AG 可继续 E3-10p（界面若仍显示 Working 让其停一下/重开，工作区已干净）。② 今后各道：同步 dev 不碰 QUEUE.md→无冲突；进度写 handoff，Claude 更新队列。③ 待办不变：E3-6 等用户 InDesign 复看三条目录后合 main；Claude 道 E3-4b→E2-5→E2-4；Codex D-2 进行中。④ 注意 AG 的 e3-10p 分支已含 dev 的 E3-6（含我对 LayoutEngine addStory 的 H2 收集改动），后续合 AG 分支时 LayoutEngine 已对账过。
+## 2026-06-21 15:52 | antigravity | E3-10p 预览验收 harness 完成并完成全量预览分支集成。现已支持通过 `--export-pdf-flow` 与 `--export-png-flo
+- **分支**：feature/ag-e3-10p
+- **概述**：E3-10p 预览验收 harness 完成并完成全量预览分支集成。现已支持通过 `--export-pdf-flow` 与 `--export-png-flow` 命令行开关以「忠实正文流」排版并导出 PNG/PDF。feature/ag-e3-10p 分支已同步最新 dev，已自审解决与 E3-4 表格、E3-6 目录改动在 LayoutEngine 中的合并冲突。测试与 review 校验全数 PASS。
+- **改动文件**：Sources/LayoutDApp/ProjectLoader.swift, Sources/LayoutDApp/main.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDCore/ChineseTypesetting.swift, Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDImport/MarkdownBookImporter.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift, Samples/test_emphasis_visual.md, Samples/test_vertical_emphasis.md
+- **检查**：swift build: PASS, swift test: PASS (192 tests), scripts/review-idml.sh: PASS (10/10)
+- **下一步**：① 请 Claude 复审并合并 feature/ag-e3-10p 分支至 dev，以统一集成 E3-10p 以及前序的三条预览分支（e3-3p 傍点、e3-2b 竖排、e3-4p 表格）；
+② 邀请用户通过命令行 `--export-png-flow` 导出 Samples 下的测试稿，在桌面端肉眼确认横排/竖排傍点（着重号）与竖排斜体字体的渲染视觉效果。
+
+## 2026-06-21 15:31 | claude | E3-6 目录：用户 InDesign 截图确认点导引线+页码右对齐已渲染（Claude 的 TabList 修复生效，视觉 PASS）。但发现静态目录只列 H
+- **分支**：dev
+- **概述**：E3-6 目录：用户 InDesign 截图确认点导引线+页码右对齐已渲染（Claude 的 TabList 修复生效，视觉 PASS）。但发现静态目录只列 H1 书名，正文 H2 子标题没进——根因 LayoutEngine 只收集 section 标题(level1)+story.title(level2)，不收正文 .heading(level>=2) 段落。已修：addStory 段落循环里收集 H2+ 进 tableOfContents（挂 tocLevel2），补端到端断言（testTOCCollectsSubheadingsNotJustTopLevel）。导出验证 demo 目录现三条：细胞里的城市(3)/能量从哪里来(3)/为什么图注很重要(4)。191 测试 + review-idml.sh 6/0 PASS。已合 dev（merge b8a4522，push origin/dev），重导 ~/Desktop/E3-6目录验收-0621.idml（含 H2）。注：本次改了 LayoutEngine.swift（AG 负责文件、AG 正做 e3-10p），改动局部（addStory 几行），AG 分支合并时可能小冲突。
+- **改动文件**：(未填)
+- **检查**：dev swift build PASS；191 测试 0 失败；review-idml.sh 6/0 PASS；解包确认目录 story 含 H1+2×H2 三条目、H2 挂 tocLevel2、合法嵌套 TabList。
+- **下一步**：① 用户在 InDesign 复看 ~/Desktop/E3-6目录验收-0621.idml：目录应有书名+两个二级标题三条、各带点导引线右对齐页码；OK 后 Claude 合 dev→main。② Claude 道剩余串行：E3-4b→E2-5→E2-4。③ AG 进行中 E3-10p（注意其 LayoutEngine 改动与本次 addStory 改动合并时对账）、Codex 进行中 D-2。④ 守 N1/N2/N3。
+
+## 2026-06-21 12:01 | claude | 审核并合并 Codex 的 E3-6 目录动态化——已合 dev（merge dd2c49b，docs commit 413aca0，push origin/d
+- **分支**：dev
+- **概述**：审核并合并 Codex 的 E3-6 目录动态化——已合 dev（merge dd2c49b，docs commit 413aca0，push origin/dev）。Codex `feature/codex-e3-6-toc`(748c60c) 本体正确：输出 <TOCStyle>+heading1/2→tocLevel1/2 映射、结构化目录条目、目录 story 挂 AppliedTOCStyle。Claude 接手修一处保真坑（这本是 Claude 任务）：tocStoryXML 的右对齐+点导引线写成 ParagraphStyleRange 扁平属性(TabStopAlignment/Leader/Position)，InDesign 会静默忽略→改为合法嵌套 <Properties><TabList><ListItem>(Alignment/AlignmentCharacter/Leader/Position)；测试同步改断言新 TabList 形态+反断言不得有扁平属性。190 测试 + review-idml.sh 6/0 PASS。已导验收样例 ~/Desktop/E3-6目录验收-0621.idml。过程踩坑：合并前 .ai/HANDOFF.md 未提交挡住 merge，清理后重合成功。另注：AG 已自行开工 feature/ag-e3-10p（E3-10p 预览harness）、Codex 已开工 feature/codex-d2-docx-import（D-2），新分工生效。
+- **改动文件**：(未填)
+- **检查**：dev 上 swift build PASS；合并源分支 190 测试 0 失败、review-idml.sh 6/0 PASS。导出 IDML 已解包确认目录 story 为合法嵌套 TabList(RightAlign+Leader=.)。
+- **下一步**：① 用户在 InDesign 打开 ~/Desktop/E3-6目录验收-0621.idml 肉眼验收：目录页码右对齐+点导引线连续、Layout→更新目录能按标题样式重建。⚠️ 制表位是「属性在视觉无」高发区，若不出导引线再排查 TabList 字段。② 验收 OK 后 Claude 合 dev→main。③ Claude 道剩余串行：E3-4b→E2-5→E2-4。④ AG 进行中 E3-10p、Codex 进行中 D-2，攒出分支后 Claude 批量审。⑤ 守 N1/N2/N3。
+## 2026-06-21 15:51 | codex | 完成 D-2「DOCX 导入」，待 Claude 复审集成
+- **分支**：`feature/codex-d2-docx-import`
+- **概述**：新增独立 `DOCXBookImporter`，以最小内置 OOXML ZIP 读取器解析 `.docx` 的 `word/document.xml` 和可选 `word/styles.xml`：段落样式映射标题/正文/列表/引用，`w:rPr` 的 `w:b`/`w:i` 映射到 Character 口径的 `inlineRuns`，`w:tbl` 映射为结构化 `tableCells`。支持 stored 与标准 deflate entry；图片/media 首版不导入。`ProjectLoader` 与 GUI 文件选择器均已接受 `.docx`，README 已声明首版能力边界。
+- **改动文件**：`Sources/LayoutDImport/DOCXBookImporter.swift`、`Sources/LayoutDApp/ProjectLoader.swift`、`Sources/LayoutDApp/main.swift`、`Tests/LayoutDImportTests/DOCXBookImporterTests.swift`、`README.md`、`.ai/DECISIONS.md`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
+- **检查**：提交 `85d7a00 feat(import): add DOCX manuscript importer`；真实 OOXML fixture 定向测试 PASS（H1、粗/斜 run、列表、表格）；标准 deflate `.docx → layoutD CLI → IDML` 实测 PASS；`scripts/review-idml.sh` PASS（swift build、190 tests、IDML 探针 6/6）。
+- **下一步**：Claude 复审 importer 的 ZIP 边界和 XML 映射；用户可在 GUI 或 CLI 打开一份真实 Word DOCX，确认首版文本导入效果。嵌入图片、复杂编号样式、修订/批注、Zip64 仍在首版范围外。
+
+## 2026-06-21 11:32 | claude | 提前展开 Codex 本批全部任务的验收规格，Codex 现可整批自助连续作业。本批顺序：E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DO
+- **分支**：dev
+- **概述**：提前展开 Codex 本批全部任务的验收规格，Codex 现可整批自助连续作业。本批顺序：E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DOCX 导入 → E2-5 美术页/蒙版（均 Codex 道，已逐项写明现状勘查/做法/文件/端到端验收，见 .ai/QUEUE.md）。E2-4 对开跨页改判 Claude（用户指定 Codex 不靠谱），跨 IDMLExporter 文件故 Claude 待 Codex 本批先合 dev 再起手、专用 worktree。E3-8 CMYK 暂缓。关键勘查结论已写进各任务：E3-6 目录引擎已有真页码条目只是被拼成死文字（核心是导出 <TOCStyle> 映射 heading1/2 让 InDesign 可更新目录）；D-2 DOCX 是 OOXML zip，映射口径已列，zip 读取需先 record_decision（别 shell unzip）；E2-5 模型已有 ImageMaskShape{rect,fan,octagon}+maskShape 字段，导出器只写矩形 PathGeometry，拆「非矩形蒙版多边形点(先做)」+「固定页不叠主页项(回归非固定页)」两步。
+- **改动文件**：(未填)
+- **检查**：纯文档/规划改动，无需 build。每次提交前 get_current_status 确认 dev 无并发未提交改动。
+- **下一步**：① Codex 开工：读 QUEUE.md「本批连续序列」从 E3-4b 起按 E3-4b→E3-6→D-2→E2-5 连做，每项自审 review-idml.sh PASS 后接下一个，收尾写一条汇总 handoff。② D-2 起手前先 record_decision 定 zip 读取方案。③ AG 道：E3-10p 预览验收 harness（高优先，做完傍点/竖排斜体才能视觉验收）；AG 三条预览分支(e3-3p/e3-2b/e3-4p)仍待合（用户选 C，等 E3-4 集成落定，由 Claude 在专用 worktree 合）。④ E2-4 待 Codex 本批 IDMLExporter 改动合 dev 后由 Claude 做。⑤ 所有集成守 N1/N2/N3。
+
+## 2026-06-21 11:17 | claude | 进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全
+- **分支**：dev
+- **概述**：进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全绿；主交付 E 阶段已过用户 InDesign 视觉验收的有 E1 全量映射、E2-1/2/3/6/7、E3-1 行内格式、E3-3+E3-3v 傍点、E3-7+E3-7v 脚注、E3-4 表格、E3-2 预览+批注层。待合（用户选 C 暂缓）：AG 三条预览 e3-3p/e3-2b/e3-4p。已排未做：E3-6 TOC、E3-8 CMYK、E3-9 约物挤压/基线网格、E2-4 对开、E2-5 美术页MasterSpread/蒙版、D-2 DOCX。本棒新增队列条目：① Codex 道 E3-4b 表格单元格行内格式（发现 tableStoryXML 把 inlineRuns 写死成空，表格内粗/斜/傍点丢失）；② AG 道 E3-10p 预览验收 harness（PNG demo 模板丢带强调正文段，致傍点/竖排斜体出不了图无法视觉验收，挡住 E3-3p/E3-2b 收尾）；③ 新增「待评估 Backlog」节（索引/参考文献/长表格分页表头重复/图文绕排，需用户拍板）；④ 基础设施补 E0 spike 文档回填。
+- **改动文件**：(未填)
+- **检查**：仅文档改动，无需 build。提交前 get_current_status 确认 dev 无并发未提交改动（仅自身 HANDOFF.md）。911bd07 已推 origin/dev。
+- **下一步**：① E3-10p（预览验收 harness）优先级高——做完傍点/竖排斜体才能走完视觉验收，建议 AG 道优先。② E3-4b 表格内行内格式 Codex 道可接。③ AG 三条预览分支仍待合（用户选 C，等 E3-4 集成落定）。④ 待评估 Backlog 四项需用户决定是否进路线图再排期。⑤ 所有集成动作遵守 AGENTS.md 的 N1/N2/N3（专用临时 worktree）。
+
+## 2026-06-21 11:08 | claude | 用户选 C：AG 三条预览分支（e3-3p/e3-2b/e3-4p）暂不合，等主仓库并发的 E3-4 集成彻底落定再说——本棒未动任何 feature 分支。另
+- **分支**：dev
+- **概述**：用户选 C：AG 三条预览分支（e3-3p/e3-2b/e3-4p）暂不合，等主仓库并发的 E3-4 集成彻底落定再说——本棒未动任何 feature 分支。另落实并发流程优化：因当天两个 Claude 对话同时用主仓库撞车，补三条铁律 N1/N2/N3 写入 .ai/AGENTS.md 隔离章节并 record_decision，commit 9496bbd 已 push origin/dev。核心：worktree 隔离只防「按 AI」互撞、防不住「同 AI 多对话并发同一副本」；今后集成/审核/试合一律在 git worktree add --detach /tmp/<任务>-wt 的专用临时副本里做（必 test -d 校验创建成功，失败别让命令落回主仓库），同仓库不开两个同-AI 对话否则各带独立 worktree，动手前 get_current_status 探并发。同步更新记忆 shared-git-directory-concurrency-risk（从"已解决"改为"部分解决+残留盲区+N1/N2/N3 对策"）。
+- **改动文件**：(未填)
+- **检查**：仅文档/规则改动，无需 build。提交前 get_current_status 确认 dev 上无并发未提交改动（仅自身 HANDOFF.md）。9496bbd 已推 origin/dev。
+- **下一步**：① AG 三条预览分支待合（用户选 C 暂缓）——待 E3-4 集成定后，按上一条交接记录的解法合：e3-3p 干净 → e3-2b 解 Tests/LayoutDCoreTests.swift 加性断言 → e3-4p 解 LayoutEngine.swift（normalizedText isTable 签名 + 保留 estimatedTableHeight 早返回块）。务必在专用临时 worktree 里做（N2）。② 表格预览已视觉 PASS；傍点+竖排斜体走 PNG demo 模板呈现不出，需用户在 app GUI 看或另开任务修 brochure 模板正文流。③ 今后所有集成动作遵守 N1/N2/N3。
+
+## 2026-06-21 10:58 | claude | 【更新前一条交接】复审 AG 三条预览分支 + 视觉尝试。期间 dev 已被并发会话推进到 c139836（E3-4 原生表格 ae82104 已合 dev，标
+- **分支**：dev
+- **概述**：【更新前一条交接】复审 AG 三条预览分支 + 视觉尝试。期间 dev 已被并发会话推进到 c139836（E3-4 原生表格 ae82104 已合 dev，标注用户视觉 PASS）。在 detached worktree(off c139836) 把三条全合实测：e3-3p 干净；e3-2b 仅 Tests/LayoutDCoreTests.swift 加性断言冲突（两块都留）；e3-4p 与 E3-4 在 LayoutEngine.swift 真冲突——已正确解：保留 dev 的「表格按 estimatedTableHeight 估高早返回」块 + 采用 e3-4p 的 normalizedText(text, isTable: kind == .table) 新签名（isTable 时只 trim 不折叠空格）。合后 swift build PASS。视觉：导 PNG 仅表格网格预览成功露出（青表头+黑网格，图已放桌面 预览验收-表格网格-0621.png）；傍点 drawKentenDots 与竖排斜体在 PNG demo 模板里露不出——demo/brochure 模板每页只落一个正文段且丢弃带强调段落（与上一棒同墙）。两者目前仅靠单测锁定（kenten 属性命中 + 竖排 b=tan12°/c=0）。⚠️ 复盘：本棒两次误操作均已完整撤销无损——①在 feature/claude-e3-4-table 上误合 e3-3p 已 reset 回 c2d8583 并保住未提交 IDMLExporter 改动（后被并发会话提交为 ac7a0e8）；②worktree add 失败致命令误落主仓库 dev、误建废弃分支 tmp/png-int 已删，dev 未受影响。
+- **改动文件**：(未填)
+- **检查**：detached worktree(off dev c139836) 三条全合：swift build PASS。冲突 2 处均已解（test 加性断言；LayoutEngine 表格估高 vs normalizedText 签名）。PNG 视觉：表格网格 PASS；傍点/竖排斜体 demo 模板无法呈现（非功能问题）。
+- **下一步**：① 合并顺序与冲突解法（已验证可直接照搬）：e3-3p（干净）→ e3-2b（解 Tests/LayoutDCoreTests.swift：matrix.b==0 + kenten 两断言 + 竖排 b=tan12°/c=0 三块全留）→ e3-4p（解 LayoutEngine.swift addText：用 normalizedText(text, isTable: kind == .table) 赋值 + 保留 dev 的 estimatedTableHeight 表格早返回块）。② 表格预览已视觉 PASS 可合；傍点+竖排斜体无法走 PNG 验收——需用户在 app GUI(Canvas) 肉眼看，或专门做预览验收 harness（demo brochure 模板会丢带强调正文段，建议另开任务修该模板的正文流）。③ e3-2b 还给 importer 加了 layout_direction frontmatter 开关，合后可验竖排。④ 注意主仓库现处 dev 且可能有并发会话——动手前先 get_current_status 确认无人占用。
+
+## 2026-06-21 06:51 | claude | 用户指派 Claude 直接做 E3-7v（脚注正文 InDesign 中文豆腐）。已在 feature/codex-codex-e3-7-footnotes 
+- **分支**：dev
+- **概述**：用户指派 Claude 直接做 E3-7v（脚注正文 InDesign 中文豆腐）。已在 feature/codex-codex-e3-7-footnotes 上修复并提交 commit d449077：根因是 footnoteXML 把脚注 ParagraphStyleRange 硬编码成 $ID/[No paragraph style]（无 AppliedFont）+ 无 footnote 段落样式注册，InDesign 退回拉丁默认字体故中文豆腐。修法（仅导出侧）：footnoteXML 改按 caption→body→空样式 优先级引用带 CF_ 复合字体的段落样式（caption 8.5pt/无首行缩进，最像脚注），并把 footnoteStyleRef 一路 thread 进 storyXML→characterStyleRanges→footnoteXML。解包验证脚注现挂 ParagraphStyle/caption（带 CF_caption 复合字体）。补端到端断言：脚注 ParagraphStyleRange 不得为 [No paragraph style]、其引用样式在 Styles.xml 须带 CF_ AppliedFont。已重导样例投桌面 ~/Desktop/layoutD脚注验收-0621-v2.idml（4 连续脚注）。E3-7+E3-7v 仍在 feature 分支未合 dev——合前需 git merge origin/dev reconcile 与 E3-3v 的 storyXML 冲突。
+- **改动文件**：(未填)
+- **检查**：swift build PASS；swift test 188/0 PASS；scripts/review-idml.sh 6/0 REVIEW PASS；解包验证脚注 ParagraphStyleRange→ParagraphStyle/caption、caption 带 CF_caption AppliedFont。InDesign 肉眼复验=待用户确认（脚注中文是否无豆腐）。
+- **下一步**：① 用户在 InDesign 打开 ~/Desktop/layoutD脚注验收-0621-v2.idml，确认页底脚注区中文正常显示（无缺字方框）、编号①-④仍在。② 视觉过关后 Claude 把 feature/codex-e3-7-footnotes 合 dev——合前 git merge origin/dev 解决 E3-7v(改 storyXML 签名+正文调用) 与 E3-3v(改同函数 ParagraphStyleRange 行加 AppliedComposer) 的冲突，合后让脚注段是否也需 AppliedComposer 一并定夺。③ Codex 本批下一项 E3-4 原生 Table。④ 若脚注仍有问题（如想要更小字号/专属样式）再迭代。
+
+## 2026-06-21 06:15 | claude | 用户对 ~/Desktop/layoutD脚注验收-0621.idml 做 E3-7 脚注首次 InDesign 肉眼验收：原生脚注机制成立（正文锚点自动编号 
+- **分支**：dev
+- **概述**：用户对 ~/Desktop/layoutD脚注验收-0621.idml 做 E3-7 脚注首次 InDesign 肉眼验收：原生脚注机制成立（正文锚点自动编号 1/2、页底分隔线+脚注区、无重复正文），但【脚注正文中文全是缺字方框/豆腐，只有 ATP 等拉丁字符正常】。Claude 已勘根因两段断链：①StyleID 枚举无 footnote，导入器却把脚注段建成 styleId:"footnote"（MarkdownBookImporter.swift:411），导出器仅遍历 project.styles.paragraphStyles→Styles.xml 无 ParagraphStyle/footnote、无 CF_ 复合字体；②footnoteXML（IDMLExporter.swift:789）把脚注 AppliedParagraphStyle 硬编码成 $ID/[No paragraph style]（无 AppliedFont），正文段引用带 CF_body 的 ParagraphStyle/body 故正常、脚注退回拉丁默认字体变豆腐。同 kenten「机制在视觉无」型，单测全绿（Footnote=1、正文不重复）但肉眼才暴露。已在 QUEUE 新开 E3-7v 视觉退回（commit 1ef657f 已推 origin/dev），写精确 repro+根因+修复方向（脚注 ParagraphStyleRange 改引用带 CF_ 字体的样式，最稳 body 或注册脚注专属小字号样式），优先于 E3-4，退给 Codex。E3-7 暂不合 dev。存 reference 记忆 idml-footnote-needs-cjk-font。E3-7 的 Footnote 管线本身（识别锚点、跳过页脚 frame 防重复）复审 PASS、不回滚。
+- **改动文件**：(未填)
+- **检查**：结构层全绿：swift build/test 188/0、scripts/review-idml.sh 6/0 PASS，端到端探针单脚注/多位数 11 脚注均正确。但 InDesign 肉眼验收=FAIL：脚注正文中文豆腐（缺 CJK 字体）。正文自动编号/脚注区/无重复=PASS。
+- **下一步**：① Codex（现役 E3-7v，优先 E3-4）：在 feature 分支让脚注 <ParagraphStyleRange> 引用带 CF_ 复合字体的段落样式（最稳 ParagraphStyle/body，或注册脚注专属小字号样式并确认其在 Styles.xml 生成带 CF_ AppliedFont）；补端到端断言「脚注 ParagraphStyleRange 不得是 [No paragraph style]、须带 CF_ 字体」；提交前 git merge origin/dev 同步 E3-3v 对 storyXML ParagraphStyleRange 行的改动并 reconcile；review-idml.sh PASS 后提交。② Claude：Codex 交回后复审+重导样例投桌面，请用户再次 InDesign 确认脚注中文正常。③ E3-7 与 E3-7v 一并待视觉过关后才合 dev。
+
+## 2026-06-21 06:10 | claude | 复审 Codex E3-7「脚注→IDML 原生 Footnote」(分支 feature/codex-e3-7-footnotes, commit 8be44
+- **分支**：dev
+- **概述**：复审 Codex E3-7「脚注→IDML 原生 Footnote」(分支 feature/codex-e3-7-footnotes, commit 8be4467)：结论 PASS。在 mac-layoutD-codex worktree 跑 swift build/test=188 通过、scripts/review-idml.sh=6/0 PASS；另用临时探针做 Markdown→IDML 端到端：单脚注 <Footnote>=1/正文=1/无残留上标；多位数压力测试 11 条脚注(含 ¹⁰¹¹ 与 ¹ 共享前缀)全部生成原生 Footnote、正文无遗漏、无残留 <Content>¹</Content>——即我担心的「上标定位歧义」实测不成立(按脚注顺序+cursor前移已规避)。已导脚注验收样例投桌面 ~/Desktop/layoutD脚注验收-0621.idml(4 连续脚注)等 InDesign 肉眼确认自动编号。代码质量两点(非阻塞)：①footnoteMarker() 在导出侧又抄了一份 0-9→上标对照表，与 MarkdownBookImporter.superscriptString() 两处维护，建议抽公用；②脚注 ParagraphStyleRange 用 [No paragraph style] 无 AppliedComposer，与 dev 在做的 E3-3v composer 改动同改 storyXML 的 ParagraphStyleRange 行——合 dev 时会冲突需人工 reconcile。未合 dev(dev 工作区有 E3-3v 未提交改动且同改该行)。
+- **改动文件**：(未填)
+- **检查**：swift build PASS；swift test 188/0 PASS；scripts/review-idml.sh 6/0 REVIEW PASS；端到端探针：单脚注 Footnote=1/正文=1/无残留上标；多位数 11 脚注全 PASS、missingBodies=[]、无残留 ¹/¹⁰/¹¹。InDesign 肉眼验收=待用户确认。
+- **下一步**：① 用户在 InDesign 打开 ~/Desktop/layoutD脚注验收-0621.idml，确认 4 锚点显示自动编号、页底成脚注区、无重复脚注正文。② 合 dev 需等 E3-3v(composer) 未提交改动落定——两者同改 storyXML 的 ParagraphStyleRange 行，先定 E3-3v 去留再 merge，并让脚注段也带 AppliedComposer 保持一致。③ 可选清理：合并导出侧 footnoteMarker 与 importer superscriptString 为单一来源。④ Codex 本批下一项 E3-4 原生 Table。
+
+## 2026-06-21 06:08 | claude | 用户指派 Claude 直接修 E3-3v 傍点视觉退回（Codex 占着 E3-7）。已实现：给每个 <ParagraphStyleRange> 写 Appl
+- **分支**：dev
+- **概述**：用户指派 Claude 直接修 E3-3v 傍点视觉退回（Codex 占着 E3-7）。已实现：给每个 <ParagraphStyleRange> 写 AppliedComposer（dev commit 8ce89a8）。根因=着重号 KentenKind 是 CJK 排版特性，InDesign 仅在 World-Ready/日文段落排版器下绘制，默认拉丁排版器静默忽略→属性在但整页无点。从 IDML 公开资料查到内部名：World-Ready 段落排版器=$ID/HL Composer Optyca、日文段落排版器=$ID/HL Composer J（默认拉丁=$ID/HL Composer，不出点）。代码常量 appliedComposer 取 World-Ready（$ID/HL Composer Optyca），补端到端断言（每个 ParagraphStyleRange 都带该 composer）。⚠️ 该字符串非真·InDesign 存盘比对、无法无头验证渲染，故同时导出两个变体投桌面让用户对比：傍点验收A-WorldReady排版器.idml 与 傍点验收B-日文排版器.idml。粗/斜上一轮已验收 OK，本轮专验傍点出不出点。
+- **改动文件**：Sources/LayoutDExport/IDMLExporter.swift（新增常量 appliedComposer + ParagraphStyleRange 写 AppliedComposer）, Tests/LayoutDExportTests/IDMLExporterTests.swift（每段带 composer 的端到端断言）, .ai/QUEUE.md（E3-3v 标记代码已落待复验 + E3-7 冲突预警）。commit 8ce89a8(fix)+c6b5d30(queue)，均已推 origin/dev。桌面投递：~/Desktop/傍点验收A-WorldReady排版器.idml、~/Desktop/傍点验收B-日文排版器.idml。
+- **检查**：swift build PASS；swift test 187 tests 0 fail；scripts/review-idml.sh PASS（6/6）；解包确认 A 变体段落带 $ID/HL Composer Optyca 且 4 处 KentenSesameDot 仍在、B 变体带 $ID/HL Composer J。傍点 InDesign 实际出点=待用户验。
+- **下一步**：① 用户：在 InDesign 打开桌面 A、B 两个 IDML，看哪个的着重字（A/B/C/D 与「重点内容」）真出了芝麻点。回报结果：A 出点→代码保持现状即过；B 出点→Claude 把常量 appliedComposer 改 $ID/HL Composer J 并同步断言；两个都不出点→另查 KentenFontSize/KentenCharacterSet 等次要属性或需真·InDesign 存盘比对确切属性集。② Codex：E3-7 在同一文件 IDMLExporter.swift，提交前务必 git merge origin/dev 同步 8ce89a8（段落输出处会冲突），解决后再自审提交。③ dev→main 继续 HOLD 到傍点视觉过关 + AG 斜体竖排一起验收。④ AG：E3-3p 傍点预览渲染（Canvas/PDF 自绘点）与本 IDML composer 问题独立，可起。
+
+## 2026-06-21 06:02 | claude | 用户对 ~/Desktop/layoutD傍点嵌套验收-0621.idml 做了 E3-3 傍点首次 InDesign 肉眼验收：粗体(FauxBold)/斜体
+- **分支**：dev
+- **概述**：用户对 ~/Desktop/layoutD傍点嵌套验收-0621.idml 做了 E3-3 傍点首次 InDesign 肉眼验收：粗体(FauxBold)/斜体(Skew=12)都正常（C/D、内质网、高尔基体可见倾斜），但【傍点/着重号整页一个都没画出来】——含纯傍点对照「重点内容」也无点。即 KentenKind="KentenSesameDot" 属性写进 Story XML（解包可见）但 InDesign 完全不渲染，属「属性在、视觉无」同类坑（FontStyle→FauxBold 那种）。Claude 已勘根因方向：IDMLExporter 的 ParagraphStyleRange（IDMLExporter.swift:675）从不写 AppliedComposer；kenten 是 CJK 排版特性，InDesign 仅在段落用 World-Ready/日文段落排版器时才画着重号，默认拉丁 composer 下 KentenKind 被静默忽略——与中英文都不出点的现象吻合。已在 QUEUE.md 新开 E3-3v（视觉退回，优先于 E3-7），写入精确 repro + composer 修复方向 + 人工验收标准；E3-3 解析 commit dfd6ac8 不回滚（嵌套已对、属性无害），本项只补 composer 让属性生效。已存一条 reference 记忆 idml-kenten-needs-cjk-composer。
+- **改动文件**：.ai/QUEUE.md（E3-3v 视觉退回条目 + E3-7 顺延，commit ec1a54c，已推 origin/dev）；用户桌面投递 ~/Desktop/layoutD傍点嵌套验收-0621.idml（4 种嵌套+中文+纯傍点对照，Claude 解包验过 KentenKind/FauxBold/Skew 属性齐全无泄漏，但 InDesign 实测不渲染傍点）。无代码改动。
+- **检查**：本棒无代码改动。前序：E3-3 嵌套修复已合 dev（a710df5，swift test 187/0、review-idml.sh 6/6 PASS）。本次为视觉验收结果记录：傍点 InDesign 渲染=FAIL（无点），粗/斜=PASS。
+- **下一步**：① Codex（现役 E3-3v，优先于 E3-7）：在 mac-layoutD-codex 起 feature/codex-e3-3v-kenten-composer，给含 kenten 的 CJK 段落写 World-Ready 段落排版器 AppliedComposer——确切字符串必须对照真·InDesign 存盘 IDML 确认（如 $ID/Adobe Japanese Paragraph Composer 一类），别凭记忆硬写（写错会回退默认 composer 等于没改）；若仅 composer 仍不出点再查 KentenFontSize/KentenCharacterSet。改完别破坏横排断行/避头尾。补 Story 段落带 AppliedComposer 的端到端断言，review-idml.sh PASS 后提交。② Claude：Codex 交回后复审 + 重导样例投桌面，请用户再次 InDesign 肉眼确认傍点出点。③ dev→main 继续 HOLD（傍点未过视觉验收）。④ AG：E3-3p 傍点预览渲染仍可起（依赖的 InlineEmphasis.kenten 已在 dev），但预览侧画点是 Canvas/PDF/PNG 自绘，与 IDML composer 问题独立。
+
+## 2026-06-21 05:53 | claude | 复审并合并 Codex E3-3 嵌套傍点修复（feature/codex-e3-3-kenten，commit dfd6ac8）——【已合 dev 并推 or
+- **分支**：dev
+- **概述**：复审并合并 Codex E3-3 嵌套傍点修复（feature/codex-e3-3-kenten，commit dfd6ac8）——【已合 dev 并推 origin】。修复根因：parseInlineMarkdown 的 CJK flanking 标点集没把 = 当标点，导致 ==..== 与 */** 嵌套时开闭判定错乱；codex 把 "=" 加进 punctuation set 即修正。复审没只看 diff：在 codex worktree 重建临时独立探针（无空格嵌套 甲==**乙**==丙、相邻 **A**==B==**C**、混序、italic+kenten 无内空格、ASCII a==b== 负例、纯傍点），全部正确——A/B=粗体+傍点、C/D=斜体+傍点，无字面 */= 残留、无样式渗染到相邻 plain 文字、ASCII 不误判。codex 新增的两道定向回归（导入 inlineRuns 精确 location/length + IDML 导出 FauxBold/Skew×KentenKind 且无泄漏断言）也针对当初退回的那条 repro。探针文件已删，worktree 干净。合并时 HANDOFF.md 双方追加冲突由 Claude 解决（两条 handoff 都保留，新在上）。
+- **改动文件**：合并 feature/codex-e3-3-kenten：Sources/LayoutDImport/MarkdownBookImporter.swift（= 纳入 flanking 标点 + == 解析块）, Tests/LayoutDImportTests/MarkdownBookImporterTests.swift（嵌套导入回归）, Tests/LayoutDExportTests/IDMLExporterTests.swift（嵌套组合导出+无泄漏）, .ai/QUEUE.md；本棒另提交 .ai/HANDOFF.md（补记上一棒 cf9b3f1 对应交接 6322abe + 合并冲突解决）。merge commit a710df5。
+- **检查**：合并后在 dev 上 swift build PASS；swift test 187 tests 0 fail（含 codex 2 道新回归 + AG 预览道）；scripts/review-idml.sh PASS（6/6 探针）。Claude 独立 harsh 探针 7 例全对（含 ASCII 负例与无空格嵌套）。已 push origin/dev（cf9b3f1..a710df5）。
+- **下一步**：① 用户：傍点（KentenSesameDot）最终外观仍需在 InDesign 肉眼确认——结构与算法已锁，但视觉没人工验过；需要我出一份覆盖 4 种嵌套的 IDML 样例投桌面就说一声。② dev→main：E3-3 已进 dev，但 main 合并应等 AG 的斜体竖排 PNG + 本批傍点视觉一起经用户验收后再做（避免 main 又出未验收标签）。③ Codex：复审通过，下一项 E3-7「脚注→IDML」。④ AG：E3-3 已在 dev，InlineEmphasis.kenten 可 grep 到，E3-3p 傍点预览渲染的依赖已解除，可起。
+
+## 2026-06-21 05:50 | claude | 给 Antigravity 排了下一批连续作业序列（已写入 .ai/QUEUE.md，commit cf9b3f1，已推 origin/dev）。本阶段（E：I
+- **分支**：dev
+- **概述**：给 Antigravity 排了下一批连续作业序列（已写入 .ai/QUEUE.md，commit cf9b3f1，已推 origin/dev）。本阶段（E：IDML 灌版交棒）AG 道主题=让预览 Canvas/PDF/PNG 追平 Codex 的 IDML 输出，目标「InDesign 打开后版面与 layoutD 预览一致」。三项按未阻塞优先排序：① E3-2b 竖排下行内格式预览验收+修正（斜体目前用横排12°水平切变矩阵，竖排可能方向错，需改成沿竖向基线倾斜；粗体竖排加重也要肉眼确认）；② E3-4p 原生表格预览渲染（配对 Codex E3-4，把表格从当文字画升级成真网格）；③ E3-3p 傍点预览渲染【依赖 Codex E3-3 合 dev，当前退回中，AG 起手前先 grep InlineEmphasis.kenten 确认在 dev，没有就跳过】。原「导出选项面板」仍为依赖 E2-4/E3-8 的尾项。
+- **改动文件**：.ai/QUEUE.md
+- **检查**：无代码改动（仅排队列）；commit cf9b3f1 已推 origin/dev。
+- **下一步**：Antigravity：在 ag-lane 上 git merge origin/dev 同步本批队列，按 E3-2b → E3-4p →（E3-3p 视依赖）顺序连做，每项从最新 dev 起 feature/ag-<task> 分支、自审 review-idml.sh PASS 再提交，一轮收尾写汇总 handoff。Claude：待 AG 交回竖排/表格分支后批量复审 + 出 PNG 交用户视觉验。Codex：E3-3 傍点嵌套 bug 仍待修，修好 E3-3 后 AG 的 E3-3p 才能起。
+
+## 2026-06-21 05:48 | codex | 修复 E3-3 Kenten 嵌套解析退回项，代码提交 dfd6ac8（fix(import): preserve nested kenten emphasis）
+- **分支**：feature/codex-e3-3-kenten
+- **概述**：已修复 Claude 复审退回的 `==...==` 与 `*`/`**` 嵌套状态错配。把 `=` 识别为内联分隔符边界，因此 `==**A**==`、`**==B==**` 解析为粗体+傍点，`==*C*==`、`*==D==*` 解析为斜体+傍点；无字面星号残留，也不会向相邻普通文本泄漏样式。同步最新 dev 的交接文本冲突已提交为 `8489919 merge(dev): sync E3-3 review feedback`；代码修复提交为 `dfd6ac8 fix(import): preserve nested kenten emphasis`。
+- **改动文件**：`Sources/LayoutDImport/MarkdownBookImporter.swift`（`=` 作为 delimiter boundary）；`Tests/LayoutDImportTests/MarkdownBookImporterTests.swift`（四种嵌套导入回归）；`Tests/LayoutDExportTests/IDMLExporterTests.swift`（四种组合的 CharacterStyleRange 属性与无泄漏断言）；`.ai/QUEUE.md`、`.ai/HANDOFF.md`（状态与交接）。
+- **检查**：新增导入定向测试 PASS；新增 IDML 导出定向测试 PASS；真实 `/private/tmp/layoutd-kenten-nested.md` → `/private/tmp/layoutd-kenten-nested.idml` 解包确认 A/B 为 `FauxBold+Kenten`、C/D 为 `Skew+Kenten`，普通片段未带样式；`bash scripts/review-idml.sh` PASS（`swift build` PASS，`swift test` 185 tests / 0 failures，IDML 探针 6/6）。
+- **下一步**：交 Claude 复审 `dfd6ac8` 并按需合入 dev；合入前后用户仍需在 InDesign 肉眼确认 Kenten 傍点的具体外观。若复审通过，Codex 下一项为 E3-7「脚注 → IDML」。
+
 ## 2026-06-21 05:41 | claude | 复审并合并 Antigravity 本批两道（feature/ag-e3-2，commit 44e2873 + 374c28e）——【已合 dev】。① E3-
 - **分支**：dev
 - **概述**：复审并合并 Antigravity 本批两道（feature/ag-e3-2，commit 44e2873 + 374c28e）——【已合 dev】。① E3-2 行内格式预览渲染：inlineRuns 一路透传进 LayoutEngine 的测量/断行/避头尾/孤寡行/分栏续接及 Canvas/PDF/PNG 三处绘制；斜体用 12° skew 矩阵（与 IDML Skew=12 同算法，预览↔导出对齐），粗体用 boldTrait；InlineRun.mapRuns 处理子串/续接 run 偏移；测试真断言到渲染层（boldTrait 命中、skew c=tan12°）。② 校对批注层：BookAnnotation 可选字段 + safeAnnotations + 旧档 decode 向后兼容，持久化进项目 JSON，未碰 IDMLExporter，确认不入 IDML 正文。review-idml.sh 在该分支 PASS（184 tests，比 dev 多 2）。已导 /tmp/emphasis_check.md 的预览 PNG：page-003 肉眼可见中文「粗体强调」与英文「bold word」字重明显加重，粗体视觉验收通过；斜体段被 demo 模板小文本框截断未露出，靠单测+同算法锁定。PNG 已放用户桌面待其放大确认斜体。

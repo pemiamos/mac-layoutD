@@ -27,6 +27,10 @@ public struct IDMLExporter {
     private let header = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
     private let pkgNS = "xmlns:idPkg=\"http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging\""
     private let dom = "16.0"
+    // 着重号(Kenten)、避头尾等 CJK 排版特性只在 World-Ready / 日文段落排版器下渲染；
+    // 默认拉丁排版器会静默忽略 KentenKind。World-Ready 段落排版器的 IDML 内部名为
+    // "$ID/HL Composer Optyca"（日文段落排版器为 "$ID/HL Composer J"）。
+    private let appliedComposer = "$ID/HL Composer Optyca"
 
     // MARK: - 入口
 
@@ -43,10 +47,17 @@ public struct IDMLExporter {
         )
 
         var ctx = BuildContext(project: project)
+        let includesTOC = pages.contains { page in
+            page.frames.contains { !($0.tableOfContentsEntries ?? []).isEmpty }
+        }
 
         // 先扫一遍：注册颜色、字体、复合字体、段落样式所需资源。
         for style in project.styles.paragraphStyles {
             ctx.registerParagraphStyle(style)
+        }
+        if includesTOC {
+            ctx.registerParagraphStyle(tocParagraphStyle(base: ctx.resolvedStyle(id: StyleID.heading2.rawValue), id: "tocLevel1", name: "目录一级"))
+            ctx.registerParagraphStyle(tocParagraphStyle(base: ctx.resolvedStyle(id: StyleID.caption.rawValue), id: "tocLevel2", name: "目录二级", indent: 12))
         }
         // 各页 frame 的颜色覆盖也要登记成色板。
         for page in pages {
@@ -76,6 +87,10 @@ public struct IDMLExporter {
             for (fi, frame) in page.frames.enumerated() {
                 switch frame.content {
                 case .text(let raw):
+                    // 脚注由锚点 Story 内的原生 <Footnote> 承载。LayoutEngine 仍会
+                    // 为 Canvas/PDF/PNG 生成页脚 frame；IDML 不能再把那份 frame 当
+                    // 普通正文导出，否则 InDesign 会出现两份脚注内容。
+                    guard frame.kind != .footnote else { continue }
                     let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !text.isEmpty else { continue }
                     let storySelf = "uStory\(pi)_\(fi)"
@@ -83,7 +98,10 @@ public struct IDMLExporter {
                     let styleRef = "ParagraphStyle/\(xmlSafe(style.id))"
                     let vertical = style.layoutDirection == .vertical
                     let component = project.styles.componentStyle(for: frame.kind)
-                    let fillColor = frame.backgroundColorHex ?? component?.resolvedFillColorHex(project: project)
+                    let resolvedFillHex = frame.backgroundColorHex ?? component?.resolvedFillColorHex(project: project)
+                    // 表格底色挪到单元格上（见下方 tableStoryXML），框本身不填色——否则框比
+                    // 表格高时底部会露出一块多余色块。
+                    let fillColor = frame.kind == .table ? nil : resolvedFillHex
                     let strokeColor = frame.strokeColorHex ?? component?.resolvedStrokeColorHex(project: project)
                     let strokeWidth = frame.strokeWidth ?? component?.strokeWidth ?? 0
                     items.append(textFrameItem(self: "uTF\(pi)_\(fi)", story: storySelf,
@@ -98,6 +116,30 @@ public struct IDMLExporter {
                         items.append(colorRectangleItem(self: "uAccent\(pi)_\(fi)", rect: accentRect,
                                                         fillColor: accentColor, pageW: pageW, pageH: pageH))
                     }
+                    // 原生表格：源段是 .table 且带结构化行列时，Story 内输出 InDesign
+                    // <Table>（真行列/可调宽），而非把拍平文本当普通段落画。
+                    if frame.kind == .table,
+                       let paragraphID = frame.sourceParagraphId,
+                       let cells = paragraphsByID[paragraphID]?.tableCells,
+                       !cells.isEmpty {
+                        let cellFillSwatch = resolvedFillHex.map { ctx.color($0) }
+                        storyFiles["Stories/Story_\(storySelf).xml"] = tableStoryXML(
+                            self: storySelf, styleRef: styleRef, cells: cells,
+                            frameWidth: frame.rect.width, cellFillSwatch: cellFillSwatch)
+                        storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
+                        storyListIds.append(storySelf)
+                        continue
+                    }
+                    if let entries = frame.tableOfContentsEntries, !entries.isEmpty {
+                        storyFiles["Stories/Story_\(storySelf).xml"] = tocStoryXML(
+                            self: storySelf,
+                            entries: entries,
+                            frameWidth: frame.rect.width
+                        )
+                        storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
+                        storyListIds.append(storySelf)
+                        continue
+                    }
                     let frameInlineRuns: [InlineRun]?
                     if let paragraphID = frame.sourceParagraphId,
                        let paragraph = paragraphsByID[paragraphID] {
@@ -105,8 +147,30 @@ public struct IDMLExporter {
                     } else {
                         frameInlineRuns = nil
                     }
+                    let frameFootnotes: [Paragraph]
+                    if let paragraphID = frame.sourceParagraphId,
+                       let paragraph = paragraphsByID[paragraphID] {
+                        frameFootnotes = paragraph.safeAnchoredFootnoteIds.compactMap { paragraphsByID[$0] }
+                    } else {
+                        frameFootnotes = []
+                    }
+                    // 脚注正文需要一个带中文复合字体（CF_*）的段落样式，否则 InDesign 退回
+                    // 拉丁默认字体、中文显示为豆腐。优先用 caption（小字号、无首行缩进，最像
+                    // 脚注），退而求其次用 body；都没有才用空样式。绝不再写死 [No paragraph style]。
+                    let emittedStyleIds = Set(ctx.paragraphStyles.map { $0.id })
+                    let footnoteStyleRef: String
+                    if frameFootnotes.isEmpty {
+                        footnoteStyleRef = "ParagraphStyle/$ID/[No paragraph style]"
+                    } else if emittedStyleIds.contains(StyleID.caption.rawValue) {
+                        footnoteStyleRef = "ParagraphStyle/\(StyleID.caption.rawValue)"
+                    } else if emittedStyleIds.contains(StyleID.body.rawValue) {
+                        footnoteStyleRef = "ParagraphStyle/\(StyleID.body.rawValue)"
+                    } else {
+                        footnoteStyleRef = "ParagraphStyle/$ID/[No paragraph style]"
+                    }
                     let storyContent = storyXML(self: storySelf, styleRef: styleRef,
-                                                vertical: vertical, text: text, inlineRuns: frameInlineRuns)
+                                                vertical: vertical, text: text, inlineRuns: frameInlineRuns,
+                                                footnotes: frameFootnotes, footnoteStyleRef: footnoteStyleRef)
                     storyFiles["Stories/Story_\(storySelf).xml"] = storyContent
                     storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                     storyListIds.append(storySelf)
@@ -134,7 +198,7 @@ public struct IDMLExporter {
             "META-INF/metadata.xml": metadata(),
             "Resources/Graphic.xml": graphic(ctx: ctx),
             "Resources/Fonts.xml": fonts(ctx: ctx),
-            "Resources/Styles.xml": styles(ctx: ctx),
+            "Resources/Styles.xml": styles(ctx: ctx, includesTOC: includesTOC),
             "Resources/Preferences.xml": preferences(pageW: pageW, pageH: pageH, pageCount: pages.count),
             "XML/Tags.xml": tags(),
             "XML/BackingStory.xml": backingStory(),
@@ -304,7 +368,13 @@ public struct IDMLExporter {
         }
 
         mutating func registerParagraphStyle(_ style: ParagraphStyle) {
-            let resolved = project.styles.paragraphStyle(id: style.id)
+            // Project styles are token-resolved by ID. Export-only styles (TOC levels)
+            // are already derived from a resolved base and do not exist in the project
+            // library; resolving those by ID would silently fall back to `.body`.
+            guard !paragraphStyles.contains(where: { $0.id == style.id }) else { return }
+            let resolved = project.styles.paragraphStyles.contains(where: { $0.id == style.id })
+                ? project.styles.paragraphStyle(id: style.id)
+                : style
             paragraphStyles.append(resolved)
             _ = color(project.resolvedColorHex(resolved.colorToken) ?? "#000000")
             if let cf = resolved.compositeFont, !cf.isEmpty {
@@ -517,7 +587,17 @@ public struct IDMLExporter {
         """
     }
 
-    private func styles(ctx: BuildContext) -> String {
+    private func tocParagraphStyle(base: ParagraphStyle, id: String, name: String, indent: Double = 0) -> ParagraphStyle {
+        var style = base
+        style.id = id
+        style.displayName = name
+        style.firstLineIndent = indent
+        style.spaceBefore = 0
+        style.spaceAfter = 2
+        return style
+    }
+
+    private func styles(ctx: BuildContext, includesTOC: Bool) -> String {
         var paras = ""
         for style in ctx.paragraphStyles {
             let colorHex = ctx.project.resolvedColorHex(style.colorToken) ?? "#000000"
@@ -539,6 +619,12 @@ public struct IDMLExporter {
             \t\t</ParagraphStyle>\n
             """
         }
+        let tocStyle = includesTOC ? """
+        \t\t<TOCStyle Self="TOCStyle/layoutD_TOC" Name="目录" IncludeBookDocuments="false" CreateBookmarks="true" ReplaceExisting="true">
+        \t\t\t<TOCStyleEntry Self="TOCStyleEntry/layoutD_TOC_heading1" AppliedParagraphStyle="ParagraphStyle/heading1" TOCEntryStyle="ParagraphStyle/tocLevel1" IncludePageNumber="true" PageNumberPosition="AfterEntry"/>
+        \t\t\t<TOCStyleEntry Self="TOCStyleEntry/layoutD_TOC_heading2" AppliedParagraphStyle="ParagraphStyle/heading2" TOCEntryStyle="ParagraphStyle/tocLevel2" IncludePageNumber="true" PageNumberPosition="AfterEntry"/>
+        \t\t</TOCStyle>
+        """ : ""
         return """
         \(header)
         <idPkg:Styles \(pkgNS) DOMVersion="\(dom)">
@@ -548,6 +634,7 @@ public struct IDMLExporter {
         \t<RootParagraphStyleGroup Self="u_rpsg">
         \t\t<ParagraphStyle Self="ParagraphStyle/$ID/[No paragraph style]" Imported="false" Name="$ID/[No paragraph style]"/>
         \(paras)\t</RootParagraphStyleGroup>
+        \(tocStyle)
         \t<RootCellStyleGroup Self="u_rcellsg"><CellStyle Self="CellStyle/$ID/[None]" Name="$ID/[None]"/></RootCellStyleGroup>
         \t<RootTableStyleGroup Self="u_rtsg"><TableStyle Self="TableStyle/$ID/[No table style]" Name="$ID/[No table style]"/></RootTableStyleGroup>
         \t<RootObjectStyleGroup Self="u_rosg"><ObjectStyle Self="ObjectStyle/$ID/[None]" Name="$ID/[None]"/></RootObjectStyleGroup>
@@ -657,7 +744,9 @@ public struct IDMLExporter {
         styleRef: String,
         vertical: Bool,
         text: String,
-        inlineRuns: [InlineRun]? = nil
+        inlineRuns: [InlineRun]? = nil,
+        footnotes: [Paragraph] = [],
+        footnoteStyleRef: String = "ParagraphStyle/$ID/[No paragraph style]"
     ) -> String {
         let orientation = vertical ? "Vertical" : "Horizontal"
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
@@ -672,8 +761,8 @@ public struct IDMLExporter {
         let effectiveParagraphs = paragraphs.isEmpty ? [(text, 0)] : paragraphs
         let body = effectiveParagraphs.map { line, start in
             """
-            \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
-            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? []))
+            \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)">
+            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes, footnoteStyleRef: footnoteStyleRef))
             \t\t</ParagraphStyleRange>
             """
         }.joined(separator: "\n")
@@ -688,7 +777,49 @@ public struct IDMLExporter {
         """
     }
 
-    private func characterStyleRanges(for text: String, globalStart: Int, inlineRuns: [InlineRun]) -> String {
+    private func characterStyleRanges(
+        for text: String,
+        globalStart: Int,
+        inlineRuns: [InlineRun],
+        footnotes: [Paragraph] = [],
+        footnoteStyleRef: String = "ParagraphStyle/$ID/[No paragraph style]"
+    ) -> String {
+        guard !footnotes.isEmpty else {
+            return styledCharacterRanges(for: text, globalStart: globalStart, inlineRuns: inlineRuns)
+        }
+
+        // Markdown importer 已把 [^id] 替换为对应的 Unicode 上标，并以出现顺序保存
+        // anchoredFootnoteIds。将该上标替换成 Footnote，交由 InDesign 的 FootnoteOption
+        // 自动绘制编号；未命中的文本仍走既有行内样式导出。
+        let characters = Array(text)
+        var cursor = 0
+        var output = ""
+        for footnote in footnotes {
+            guard let marker = footnoteMarker(for: footnote), !marker.isEmpty,
+                  let markerStart = firstMatch(of: Array(marker), in: characters, from: cursor) else {
+                continue
+            }
+            if markerStart > cursor {
+                output += styledCharacterRanges(
+                    for: String(characters[cursor..<markerStart]),
+                    globalStart: globalStart + cursor,
+                    inlineRuns: inlineRuns
+                )
+            }
+            output += footnoteXML(footnote, styleRef: footnoteStyleRef)
+            cursor = markerStart + marker.count
+        }
+        if cursor < characters.count {
+            output += styledCharacterRanges(
+                for: String(characters[cursor...]),
+                globalStart: globalStart + cursor,
+                inlineRuns: inlineRuns
+            )
+        }
+        return output
+    }
+
+    private func styledCharacterRanges(for text: String, globalStart: Int, inlineRuns: [InlineRun]) -> String {
         let characters = Array(text)
         guard !characters.isEmpty else { return "" }
         var styles = Array(repeating: Set<InlineEmphasis>(), count: characters.count)
@@ -715,8 +846,160 @@ public struct IDMLExporter {
             var attrs = ""
             if emphasis.contains(.bold) { attrs += " FauxBold=\"true\"" }
             if emphasis.contains(.italic) { attrs += " Skew=\"12\"" }
+            if emphasis.contains(.kenten) {
+                attrs += " KentenKind=\"KentenSesameDot\""
+                attrs += " KentenAlignment=\"AlignKentenCenter\""
+                attrs += " KentenPosition=\"AboveRight\""
+            }
             return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(attrs)><Content>\(esc(content))</Content></CharacterStyleRange>"
         }.joined(separator: "\n")
+    }
+
+    private func footnoteXML(_ paragraph: Paragraph, styleRef: String) -> String {
+        let body = styledCharacterRanges(
+            for: paragraph.text,
+            globalStart: 0,
+            inlineRuns: paragraph.inlineRuns ?? []
+        )
+        // 脚注也是 CJK 段落，统一用 World-Ready 排版器（与正文一致）：对纯脚注无害，
+        // 又能在脚注内出现着重号/避头尾时正确排版。
+        return """
+        \t\t\t<Footnote>
+        \t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)">
+        \(body)
+        \t\t\t\t</ParagraphStyleRange>
+        \t\t\t</Footnote>
+        """
+    }
+
+    /// 原生 IDML 表格 Story。InDesign 的 <Table> 子元素顺序固定：先全部 <Column>，
+    /// 再全部 <Row>，最后全部 <Cell>（Cell 不嵌在 Row 里，靠 Name="列:行" 定位）。
+    /// 第一行视为表头。列宽按框宽均分；单元格四边给 0.5pt 黑边，使其在 InDesign 里
+    /// 一眼是真表格。单元格文字复用 styledCharacterRanges，并与正文一样带 World-Ready 排版器。
+    private func tableStoryXML(self id: String, styleRef: String, cells: [[String]], frameWidth: Double, cellFillSwatch: String? = nil) -> String {
+        let rowCount = cells.count
+        let columnCount = cells.map(\.count).max() ?? 0
+        guard rowCount > 0, columnCount > 0 else {
+            return storyXML(self: id, styleRef: styleRef, vertical: false, text: "")
+        }
+        let headerRowCount = 1
+        let bodyRowCount = rowCount - headerRowCount
+        let columnWidth = frameWidth > 0 ? frameWidth / Double(columnCount) : 80
+        let rowHeight = 18.0
+        let tableSelf = "\(id)_tbl"
+
+        let columns = (0..<columnCount).map { c in
+            "\t\t\t\t\t<Column Self=\"\(tableSelf)Col\(c)\" Name=\"\(c)\" SingleColumnWidth=\"\(fmt(columnWidth))\"/>"
+        }.joined(separator: "\n")
+
+        let rows = (0..<rowCount).map { r in
+            let rowType = r < headerRowCount ? "HeaderRow" : "BodyRow"
+            return "\t\t\t\t\t<Row Self=\"\(tableSelf)Row\(r)\" Name=\"\(r)\" SingleRowHeight=\"\(fmt(rowHeight))\" RowType=\"\(rowType)\"/>"
+        }.joined(separator: "\n")
+
+        // 四边 0.5pt 黑边 + 2pt 内边距（与 LayoutEngine.estimatedTableHeight 的 cellInset 一致，
+        // 否则估高与 InDesign 实际折行不符会溢流）。
+        let border = "TopEdgeStrokeWeight=\"0.5\" BottomEdgeStrokeWeight=\"0.5\" LeftEdgeStrokeWeight=\"0.5\" RightEdgeStrokeWeight=\"0.5\" TopEdgeStrokeColor=\"Color/Black\" BottomEdgeStrokeColor=\"Color/Black\" LeftEdgeStrokeColor=\"Color/Black\" RightEdgeStrokeColor=\"Color/Black\" TopInset=\"2\" BottomInset=\"2\" LeftInset=\"2\" RightInset=\"2\""
+        // 底色挂在单元格（而非整框）上，使色块正好贴合表格。
+        let fillAttr = cellFillSwatch.map { " FillColor=\"\($0)\"" } ?? ""
+        var cellsXML: [String] = []
+        for r in 0..<rowCount {
+            for c in 0..<columnCount {
+                let content = c < cells[r].count ? cells[r][c] : ""
+                let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: [])
+                cellsXML.append("""
+                \t\t\t\t\t<Cell Self="\(tableSelf)Cell\(c)_\(r)" Name="\(c):\(r)" RowSpan="1" ColumnSpan="1" AppliedCellStyle="CellStyle/$ID/[None]"\(fillAttr) \(border)>
+                \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)" FirstLineIndent="0" Justification="LeftJustified">
+                \(cellBody)
+                \t\t\t\t\t\t</ParagraphStyleRange>
+                \t\t\t\t\t</Cell>
+                """)
+            }
+        }
+
+        let table = """
+        \t\t\t\t<Table Self="\(tableSelf)" AppliedTableStyle="TableStyle/$ID/[No table style]" HeaderRowCount="\(headerRowCount)" FooterRowCount="0" BodyRowCount="\(bodyRowCount)" ColumnCount="\(columnCount)">
+        \(columns)
+        \(rows)
+        \(cellsXML.joined(separator: "\n"))
+        \t\t\t\t</Table>
+        """
+
+        return """
+        \(header)
+        <idPkg:Story \(pkgNS) DOMVersion="\(dom)">
+        \t<Story Self="\(id)" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+        \t\t<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+        \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)">
+        \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]">
+        \(table)
+        \t\t\t\t<Content></Content>
+        \t\t\t</CharacterStyleRange>
+        \t\t</ParagraphStyleRange>
+        \t</Story>
+        </idPkg:Story>
+        """
+    }
+
+    /// 目录 Story：每条是独立段落，标题和页码之间是右对齐 tab（点导引线由对应 TOC
+    /// 段落样式/TOCStyle 接管）。AppliedTOCStyle 让 InDesign 的“更新目录”按 heading1/
+    /// heading2 重建目录，当前条目仅用于首次打开时的可见版面。
+    private func tocStoryXML(self id: String, entries: [TableOfContentsEntry], frameWidth: Double) -> String {
+        // 制表位（右对齐 + 点导引线）必须用嵌套 <Properties><TabList><ListItem>，
+        // 不能用 ParagraphStyleRange 的扁平属性——InDesign 会静默忽略扁平属性，
+        // 导致页码不右对齐、无点导引线（属性在、视觉无）。Position 略减 6pt 留切口边距。
+        let tabPosition = max(frameWidth - 6.0, 0)
+        let tabList = """
+        \t\t\t<Properties>
+        \t\t\t\t<TabList type="list">
+        \t\t\t\t\t<ListItem type="record">
+        \t\t\t\t\t\t<Alignment type="enumeration">RightAlign</Alignment>
+        \t\t\t\t\t\t<AlignmentCharacter type="string">.</AlignmentCharacter>
+        \t\t\t\t\t\t<Leader type="string">.</Leader>
+        \t\t\t\t\t\t<Position type="unit">\(fmt(tabPosition))</Position>
+        \t\t\t\t\t</ListItem>
+        \t\t\t\t</TabList>
+        \t\t\t</Properties>
+        """
+        // 一个 story 里多段并存时，IDML 必须有显式段落分隔符（<Content> 内的字面换行
+        // U+000A，InDesign 读作段落回车）；否则多个 ParagraphStyleRange 会被并成一段、
+        // 各条目录的 tab/页码串行到同一段里（实测 InDesign 现象）。末条不加，避免空段。
+        let body = entries.enumerated().map { index, entry in
+            let style = entry.level <= 1 ? "tocLevel1" : "tocLevel2"
+            let paragraphBreak = index < entries.count - 1 ? "\n" : ""
+            return """
+            \t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/\(style)" AppliedComposer="\(appliedComposer)">
+            \(tabList)
+            \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>\(esc(entry.title))\t\(entry.pageNumber)\(paragraphBreak)</Content></CharacterStyleRange>
+            \t\t</ParagraphStyleRange>
+            """
+        }.joined(separator: "\n")
+        return """
+        \(header)
+        <idPkg:Story \(pkgNS) DOMVersion="\(dom)">
+        \t<Story Self="\(id)" AppliedTOCStyle="TOCStyle/layoutD_TOC" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+        \t\t<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+        \(body)
+        \t</Story>
+        </idPkg:Story>
+        """
+    }
+
+    private func footnoteMarker(for paragraph: Paragraph) -> String? {
+        guard case .footnote(let number) = paragraph.kind else { return nil }
+        let digits: [Character: Character] = [
+            "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
+            "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹"
+        ]
+        return String(number).compactMap { digits[$0] }.map(String.init).joined()
+    }
+
+    private func firstMatch(of needle: [Character], in haystack: [Character], from start: Int) -> Int? {
+        guard !needle.isEmpty, start <= haystack.count - needle.count else { return nil }
+        for index in start...(haystack.count - needle.count) where Array(haystack[index..<(index + needle.count)]) == needle {
+            return index
+        }
+        return nil
     }
 
     // MARK: - 打包（纯 Swift ZIP32；mimetype store-first）

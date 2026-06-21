@@ -20,3 +20,26 @@
 - **决策**：三个 AI 改用 git worktree 物理隔离工作副本。Claude=主仓库 mac-layoutD（集成区，dev/main）；Codex=mac-layoutD-codex（停靠 codex-lane）；Antigravity=mac-layoutD-ag（停靠 ag-lane）。三副本共享同一个 .git。四处 relay 配置的 RELAY_PROJECT_ROOT 已分别改指各自副本：Codex 的 ~/.codex/config.toml；Antigravity 的 ~/.gemini/config/mcp_config.json、~/.gemini/antigravity-ide/mcp_config.json、~/.gemini/antigravity/mcp_config.json；Claude 的 .mcp.json 不变。改前都做了 .bak-worktree 备份。新分工：Codex/Antigravity 只在自己副本+自己 feature 分支提交，不合 dev/main、不必 push；dev 与 main 的合并、交接日志冲突解决统一由 Claude 做，用户视觉验收后 Claude 才合 main。
 - **理由**：此前三个 AI 客户端 + 用户的 git GUI 工具都指向同一个本地工作目录，观察到一次并发 git checkout 导致 commit 误落到别的分支（cherry-pick 纠正，无数据丢失）。worktree 给每个 AI 独立的 checked-out 分支，谁切分支都不影响别人，从物理层面消除"HEAD 被切走"的风险。共享 .git 让 Claude 在主仓库本地就能看到两道分支，无需互相 push。把 dev/main 合并集中到 Claude，顺带解决了 .ai/HANDOFF.md 每次合并都冲突的老问题（两道不再触发该冲突）。relay 各指各自副本，保证 run_checks/git_status 报告的是该 AI 自己的工作树。回滚：git worktree remove + 用 .bak-worktree 还原四处配置。注意：Codex 与 Antigravity 需重启应用让新 RELAY_PROJECT_ROOT 生效。
 
+## 2026-06-21 11:06 | claude
+- **决策**：worktree 隔离是「按 AI」不是「按对话」，补三条并发铁律（N1/N2/N3，已写入 .ai/AGENTS.md 隔离章节）：N1 同一仓库不开两个同-AI 对话，必须并发则第二个对话带独立 worktree，禁止两对话共用同一 checkout；N2 集成/审核/试合一律在专用临时 worktree（git worktree add --detach /tmp/...-wt dev，且必 test -d 校验创建成功再 cd，失败别让命令落回主仓库），收尾 remove；N3 动手集成前 get_current_status()+git_status() 探并发，长集成前 record_decision() 占位当软锁。
+- **理由**：2026-06-21 实测吃亏：两个 Claude 对话同时用主仓库 mac-layoutD（一个合 E3-4 到 dev、一个做审核），导致 HEAD 被对方切走、git add -A 误吞对方未提交改动、worktree add 失败后命令误落主仓库误建废弃分支。已有的「三 AI 各持 worktree」隔离防不住「同 AI 多对话并发」这个盲区。N2 的专用临时 worktree 配方能同时根除「两对话撞车」与「命令误落主仓库」两类事故——本次最后改用 detached worktree 后即再未出事。
+
+## 2026-06-21 11:22 | claude
+- **决策**：「锦上添花」批排进开发计划（2026-06-21 用户确认）：E3-6 目录动态化 → D-2 DOCX 导入 → E2-5 美术页MasterSpread/蒙版 → E2-4 对开跨页（风险最高放最后），均 Codex 道按此顺序接力。E3-8 token→CMYK 色板暂缓（先不做，印前转色交 InDesign，非阻塞）。E3-9 约物挤压维持原排期不在本批。
+- **理由**：用户盘点进度后决定把锦上添花层除 CMYK 外全部纳入正式计划。排序按依赖与风险：TOC 自包含先做；DOCX 独立新文件可并行；美术页蒙版中等；对开跨页风险最高（可能打破当前干净分页）放最后单独一棒并先验非对开无回归。CMYK 暂缓因印前本就交 InDesign、非交付阻塞。
+
+## 2026-06-21 11:26 | claude
+- **决策**：E2-4 对开跨页改由 Claude 直接做（用户 2026-06-21 指定，不再由 Codex 做）。因 E2-4 改 IDMLExporter.swift（Codex 负责文件），跨道协议：Claude 须等 Codex 本批 IDMLExporter 改动（E3-4b/E3-6/E2-5）先合进 dev 再起手，在专用 worktree+feature 分支上做（守 N2），避免同文件两道并行冲突。E3-6 已展开为两层验收：1) 结构化目录段落（tab+点导引线，专属 TOC 段落样式）；2) 输出 <TOCStyle> 资源映射 heading1/heading2 让 InDesign「更新目录」可重建。
+- **理由**：用户判断 Codex 在高风险任务上不靠谱，对开跨页风险最高（可能打破当前干净分页），交 Claude 直接做更稳。代价是 Claude 要碰 Codex 负责文件 IDMLExporter，故用「等本批先合 dev + 专用 worktree」的时序隔离规避冲突——E2-4 本就排最后，时序天然吻合。
+
+## 2026-06-21 11:40 | claude
+- **决策**：分工再平衡（2026-06-21 用户决定，因 Codex 多次提交不靠谱需反复回修）：① Codex 砍到最少、只留隔离低风险任务——当前仅 D-2 DOCX 导入（全新独立文件，不碰现有导出）；② 原 Codex 的高风险 IDMLExporter 导出任务 E3-4b/E3-6/E2-5 全部改判 Claude 直接做（连同已改判的 E2-4），Claude 串行、各自专用 worktree，顺序 E3-4b→E3-6→E2-5→E2-4；③ AG 升为主力，预览+GUI 全线连续作业，本批序列 E3-10p→E3-6p 目录预览→E2-5p 蒙版预览→E2-4p 对开预览→导出选项面板（②③④为配对 Claude 导出侧的预览追平任务）。
+- **理由**：Codex 代码质量不稳定、回修成本高，故收缩其职责到 blast radius 最小的隔离任务（新文件 DOCX 导入，botch 也不伤现有导出、易回修）；高风险导出收进可靠的 Claude 手里且串行避免同文件冲突；AG 质量可靠且预览/GUI 是其专长，升主力承接最多任务，配对预览让「预览=输出」持续推进。文件边界：Claude=IDMLExporter 导出侧、Codex=新 DOCX 导入文件、AG=LayoutEngine/渲染器/GUI，三方仍不重叠。
+
+## 2026-06-21 15:43 | claude
+- **决策**：根治文档冲突卡死：① .ai/HANDOFF.md 与 .ai/DECISIONS.md 在 .gitattributes 设 merge=union（append-only 日志两边自动保留、永不冲突）；② .ai/QUEUE.md 归 Claude 独占维护，Codex/Antigravity 不再编辑它（不勾 [x]、不挂 [~]），进度只写进 write_handoff，由 Claude 据交接更新队列；③ 各道同步 dev 仍跑 git merge origin/dev，不碰 QUEUE.md 即干净；万一仍冲突，git checkout --theirs .ai/QUEUE.md 取 dev 权威版后继续，别硬解。已写入 .ai/AGENTS.md 铁律 8。
+- **理由**：2026-06-21 AG 开工 git merge origin/dev 时在 QUEUE.md/HANDOFF.md 撞冲突、自行解冲突卡死（界面停在 Working）。根因：Claude 在 dev 频繁改 QUEUE.md 排任务，各道也改 QUEUE.md 勾完成 → 每次同步必冲突，而 lane AI 不擅长解冲突。union 解决 append-only 日志；QUEUE 由单一所有者（Claude）维护消除冲突源。
+
+## 2026-06-21 | codex | D-2 DOCX 导入采用内置最小 OOXML ZIP 读取器
+- **决策**：`.docx` 读取在 `DOCXBookImporter.swift` 内实现最小 ZIP central-directory reader；支持 stored 与 deflate entry，并用 macOS `Compression` 解压。首版只读取 `word/document.xml`、`word/styles.xml`、`word/numbering.xml`，不调用外部 `unzip`。
+- **理由**：当前 Swift Foundation 环境没有 `Archive` API；引入第三方 ZIP 包或外部进程会扩大依赖面。最小读取器可离线、可测试，且足以完成 D-2 的正文/样式/列表/表格映射。Zip64、加密、图片 media 与其它 OOXML 部件首版明确降级或报错。

@@ -10,12 +10,13 @@ final class IDMLExporterTests: XCTestCase {
     func testExportsInlineRunsAsCharacterStyleRangesAcrossLines() throws {
         let paragraph = Paragraph(
             kind: .body,
-            text: "细胞ATP粗体\n斜体粗斜",
+            text: "细胞ATP着重\n斜体粗斜",
             styleId: StyleID.body.rawValue,
             inlineRuns: [
                 InlineRun(location: 2, length: 3, emphasis: [.bold]),
+                InlineRun(location: 5, length: 2, emphasis: [.kenten]),
                 InlineRun(location: 8, length: 2, emphasis: [.italic]),
-                InlineRun(location: 10, length: 2, emphasis: [.bold, .italic])
+                InlineRun(location: 10, length: 2, emphasis: [.bold, .italic, .kenten])
             ]
         )
         let project = BookProject(
@@ -26,7 +27,7 @@ final class IDMLExporterTests: XCTestCase {
             kind: .text,
             rect: Rect(x: 20, y: 20, width: 200, height: 100),
             styleId: StyleID.body.rawValue,
-            content: .text("细胞 ATP 粗体\n斜体粗斜"),
+            content: .text("细胞 ATP 着重\n斜体粗斜"),
             sourceParagraphId: paragraph.id
         )
         let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
@@ -38,9 +39,222 @@ final class IDMLExporterTests: XCTestCase {
 
         let story = try entry(output, "Stories/Story_uStory0_0.xml")
         XCTAssertTrue(story.contains("FauxBold=\"true\"><Content>ATP</Content>"), "自动插入的中西文空格不应破坏 run 对齐")
+        XCTAssertTrue(story.contains("KentenKind=\"KentenSesameDot\" KentenAlignment=\"AlignKentenCenter\" KentenPosition=\"AboveRight\"><Content>着重</Content>"))
         XCTAssertTrue(story.contains("Skew=\"12\"><Content>斜体</Content>"))
-        XCTAssertTrue(story.contains("FauxBold=\"true\" Skew=\"12\"><Content>粗斜</Content>"))
+        XCTAssertTrue(story.contains("FauxBold=\"true\" Skew=\"12\" KentenKind=\"KentenSesameDot\" KentenAlignment=\"AlignKentenCenter\" KentenPosition=\"AboveRight\"><Content>粗斜</Content>"))
         XCTAssertEqual(matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count, 2)
+    }
+
+    func testExportsNestedKentenCombinationRunsWithoutStyleLeakage() throws {
+        let paragraph = Paragraph(
+            kind: .body,
+            text: "一 A 二 B 三 C 四 D 五。",
+            styleId: StyleID.body.rawValue,
+            inlineRuns: [
+                InlineRun(location: 2, length: 1, emphasis: [.bold, .kenten]),
+                InlineRun(location: 6, length: 1, emphasis: [.bold, .kenten]),
+                InlineRun(location: 10, length: 1, emphasis: [.italic, .kenten]),
+                InlineRun(location: 14, length: 1, emphasis: [.italic, .kenten])
+            ]
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "嵌套傍点", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])]
+        )
+        let frame = PageFrame(
+            kind: .text,
+            rect: Rect(x: 20, y: 20, width: 200, height: 100),
+            styleId: StyleID.body.rawValue,
+            content: .text(paragraph.text),
+            sourceParagraphId: paragraph.id
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-nested-kenten-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let story = try entry(output, "Stories/Story_uStory0_0.xml")
+        XCTAssertEqual(matches(in: story, pattern: "(FauxBold=\\\"true\\\" KentenKind=\\\"KentenSesameDot\\\"[^>]*><Content>[AB]</Content>)").count, 2)
+        XCTAssertEqual(matches(in: story, pattern: "(Skew=\\\"12\\\" KentenKind=\\\"KentenSesameDot\\\"[^>]*><Content>[CD]</Content>)").count, 2)
+        XCTAssertFalse(story.contains("Skew=\"12\"><Content>二</Content>"))
+        XCTAssertFalse(story.contains("FauxBold=\"true\"><Content>三</Content>"))
+        // 着重号只在 CJK 段落排版器下渲染：每个 ParagraphStyleRange 必须带 World-Ready 排版器，
+        // 否则 InDesign 静默忽略 KentenKind（属性在但视觉无点）。
+        XCTAssertEqual(
+            matches(in: story, pattern: "(<ParagraphStyleRange\\b[^>]*\\bAppliedComposer=\\\"\\$ID/HL Composer Optyca\\\")").count,
+            matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count
+        )
+    }
+
+    func testExportsAnchoredFootnoteAsNativeIDMLWithoutDuplicatePageFooter() throws {
+        let footnote = Paragraph(
+            kind: .footnote(number: 1),
+            text: "这是脚注内容。",
+            styleId: "footnote"
+        )
+        let body = Paragraph(
+            kind: .body,
+            text: "正文一句话¹。",
+            styleId: StyleID.body.rawValue,
+            anchoredFootnoteIds: [footnote.id]
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "脚注", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [body, footnote])])]
+        )
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-footnote-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let stories = try zipEntries(output)
+            .filter { $0.hasPrefix("Stories/Story_") }
+            .map { try entry(output, $0) }
+            .joined(separator: "\n")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Footnote>[\\s\\S]*?<Content>这是脚注内容。</Content>[\\s\\S]*?</Footnote>)").count, 1)
+        XCTAssertFalse(stories.contains("<Content>¹</Content>"), "脚注锚点应由原生 Footnote 取代，而非保留 Unicode 上标")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Content>这是脚注内容。</Content>)").count, 1,
+                       "脚注正文只能位于 Footnote 内，不得作为页脚 frame 再导出一次")
+
+        // E3-7v 回归：脚注正文必须挂在带中文复合字体（CF_*）的段落样式上，否则
+        // InDesign 退回拉丁默认字体、中文显示为豆腐。绝不能再是 [No paragraph style]。
+        let footnoteStyleRefs = matches(
+            in: stories,
+            pattern: "<Footnote>\\s*<ParagraphStyleRange AppliedParagraphStyle=\"(ParagraphStyle/[^\"]+)\""
+        )
+        XCTAssertEqual(footnoteStyleRefs.count, 1, "应能取到脚注 ParagraphStyleRange 的样式引用")
+        let footnoteStyleRef = footnoteStyleRefs.first ?? ""
+        XCTAssertFalse(footnoteStyleRef.contains("[No paragraph style]"),
+                       "脚注段落样式不得是空样式（无字体→中文豆腐）")
+        // 被引用的样式必须在 Styles.xml 里带 CF_ 复合字体 AppliedFont。
+        let stylesXML = try entry(output, "Resources/Styles.xml")
+        let refId = footnoteStyleRef.replacingOccurrences(of: "ParagraphStyle/", with: "")
+        XCTAssertEqual(
+            matches(in: stylesXML,
+                    pattern: "<ParagraphStyle Self=\"ParagraphStyle/\(refId)\"[\\s\\S]*?<AppliedFont type=\"string\">(CF_[^<]+)</AppliedFont>").count,
+            1,
+            "脚注引用的段落样式必须带 CF_ 复合字体，确保中文有字形"
+        )
+    }
+
+    func testExportsStructuredDynamicTOCWithTabLeaders() throws {
+        let project = BookProject.sample
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-toc-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let styles = try entry(output, "Resources/Styles.xml")
+        XCTAssertTrue(styles.contains("<TOCStyle Self=\"TOCStyle/layoutD_TOC\""))
+        XCTAssertTrue(styles.contains("AppliedParagraphStyle=\"ParagraphStyle/heading1\""))
+        XCTAssertTrue(styles.contains("AppliedParagraphStyle=\"ParagraphStyle/heading2\""))
+        XCTAssertTrue(styles.contains("TOCEntryStyle=\"ParagraphStyle/tocLevel1\""))
+        XCTAssertTrue(styles.contains("TOCEntryStyle=\"ParagraphStyle/tocLevel2\""))
+
+        let stories = try zipEntries(output)
+            .filter { $0.hasPrefix("Stories/Story_") }
+            .map { try entry(output, $0) }
+        let tocStory = try XCTUnwrap(stories.first { $0.contains("AppliedTOCStyle=\"TOCStyle/layoutD_TOC\"") })
+        // 制表位必须是合法的嵌套 <TabList>，而非会被 InDesign 忽略的扁平属性。
+        XCTAssertTrue(tocStory.contains("<TabList type=\"list\">"))
+        XCTAssertTrue(tocStory.contains("<Alignment type=\"enumeration\">RightAlign</Alignment>"))
+        XCTAssertTrue(tocStory.contains("<Leader type=\"string\">.</Leader>"))
+        XCTAssertFalse(tocStory.contains("TabStopAlignment="), "不得用会被 InDesign 忽略的扁平 tab 属性")
+        XCTAssertTrue(tocStory.contains("\t"), "目录标题与页码必须由 tab 分隔，而非空格拼接")
+        XCTAssertFalse(tocStory.contains("图像不只是正文的附件  3"))
+    }
+
+    func testTOCCollectsSubheadingsNotJustTopLevel() throws {
+        // 正文里的二级标题也应进静态目录（否则只剩书名级 H1，需在 InDesign 手动更新目录才补全）。
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "目录层级测试", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "",
+                            paragraphs: [
+                                Paragraph(kind: .heading(level: 1), text: "第一章", styleId: StyleID.heading1.rawValue),
+                                Paragraph(kind: .body, text: "引言段落。", styleId: StyleID.body.rawValue),
+                                Paragraph(kind: .heading(level: 2), text: "一级能量", styleId: StyleID.heading2.rawValue),
+                                Paragraph(kind: .body, text: "正文一。", styleId: StyleID.body.rawValue),
+                                Paragraph(kind: .heading(level: 2), text: "二级图注", styleId: StyleID.heading2.rawValue),
+                                Paragraph(kind: .body, text: "正文二。", styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-toc2-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let tocStory = try XCTUnwrap(try zipEntries(output)
+            .filter { $0.hasPrefix("Stories/Story_") }
+            .map { try entry(output, $0) }
+            .first { $0.contains("AppliedTOCStyle=\"TOCStyle/layoutD_TOC\"") })
+        // 两个二级标题都要在目录里，且挂二级目录样式 tocLevel2。
+        XCTAssertTrue(tocStory.contains("一级能量"), "二级标题 1 应进目录")
+        XCTAssertTrue(tocStory.contains("二级图注"), "二级标题 2 应进目录")
+        XCTAssertTrue(tocStory.contains("ParagraphStyle/tocLevel2"), "子标题应使用二级目录样式")
+    }
+
+    func testExportsTableParagraphAsNativeIDMLTable() throws {
+        // E3-4：带结构化行列的 .table 段应导出为原生 <Table>/<Column>/<Row>/<Cell>，
+        // 而非拍平成「4 空格拼接」的裸文字。（importer 保留行列的断言见 LayoutDImport 测试。）
+        let cells = [["名称", "功能"], ["线粒体", "产能"], ["核糖体", "合成蛋白质"]]
+        let table = Paragraph(
+            kind: .table,
+            text: cells.map { $0.joined(separator: "    ") }.joined(separator: "\n"),
+            styleId: StyleID.body.rawValue,
+            tableCells: cells
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "表格", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [table])])]
+        )
+        let document = LayoutEngine().layout(project: project)
+
+        // 布局须按网格给表格分配足够高度（每行 ≥ 最小行高 18pt），否则 InDesign 里整张表
+        // 溢流、只显示前几行。这条防止回退到「按拍平文本测高」。
+        let tableFrame = document.pages.flatMap(\.frames).first { $0.kind == .table }
+        XCTAssertNotNil(tableFrame, "应生成 .table 帧")
+        XCTAssertGreaterThanOrEqual(tableFrame?.rect.height ?? 0, Double(cells.count) * 18,
+                                    "表格框高度须能容纳所有行")
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-table-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let stories = try zipEntries(output)
+            .filter { $0.hasPrefix("Stories/Story_") }
+            .map { try entry(output, $0) }
+            .joined(separator: "\n")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Table )").count, 1, "应输出 1 个原生 Table")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Column )").count, 2, "2 列")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Row )").count, 3, "3 行（含表头）")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Cell )").count, 6, "2×3=6 单元格")
+        XCTAssertTrue(stories.contains("HeaderRowCount=\"1\""), "首行应为表头")
+        for cell in ["名称", "功能", "线粒体", "产能", "核糖体", "合成蛋白质"] {
+            XCTAssertTrue(stories.contains("<Content>\(cell)</Content>"), "单元格 \(cell) 应归位到 Cell 内")
+        }
+        XCTAssertFalse(stories.contains("名称    功能"), "不得残留 4 空格拍平的裸文字")
+        // 单元格须左对齐且去掉正文首行缩进，否则窄列里文字被推到右边、参差不齐。
+        XCTAssertEqual(matches(in: stories, pattern: "(Justification=\"LeftJustified\")").count, 6,
+                       "每个单元格段落须左对齐")
+        XCTAssertEqual(matches(in: stories, pattern: "(FirstLineIndent=\"0\")").count, 6,
+                       "每个单元格段落须去掉首行缩进")
     }
 
     func testExportsValidIDMLFromSampleProject() throws {
@@ -206,7 +420,9 @@ final class IDMLExporterTests: XCTestCase {
         let styles = try entry(output, "Resources/Styles.xml")
         for style in project.styles.paragraphStyles {
             let styleID = NSRegularExpression.escapedPattern(for: style.id)
-            let pattern = "(<ParagraphStyle[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?</ParagraphStyle>)"
+            // `\s` guards against matching `<ParagraphStyleRange>` (or a future
+            // style-like element) while inspecting the concrete style definition.
+            let pattern = "(<ParagraphStyle\\s+[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?</ParagraphStyle>)"
             XCTAssertEqual(matches(in: styles, pattern: pattern).count, 1,
                            "段落样式 \(style.id) 未绑定 layoutD 禁则集")
         }

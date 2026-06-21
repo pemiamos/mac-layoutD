@@ -383,19 +383,30 @@ final class CanvasView: NSView {
                     drawComponentBackground(componentStyle, project: project, rect: rect)
                 }
                 let componentTextColor = textColor ?? componentStyle.resolvedTextColorHex(project: project).flatMap(NSColor.fromHex)
-                drawText(
-                    text,
-                    styleId: frame.styleId,
-                    project: project,
-                    rect: rect.insetBy(
-                        dx: CGFloat(componentStyle.textInsetX) * zoomScale,
-                        dy: CGFloat(componentStyle.textInsetY) * zoomScale
-                    ),
-                    kind: frame.kind,
-                    textColorOverride: componentTextColor,
-                    applyDefaultInset: false,
-                    sourceParagraphId: frame.sourceParagraphId
-                )
+                if frame.kind == .table {
+                    drawTable(
+                        text,
+                        style: style,
+                        componentStyle: componentStyle,
+                        project: project,
+                        rect: rect,
+                        textColor: componentTextColor
+                    )
+                } else {
+                    drawText(
+                        text,
+                        styleId: frame.styleId,
+                        project: project,
+                        rect: rect.insetBy(
+                            dx: CGFloat(componentStyle.textInsetX) * zoomScale,
+                            dy: CGFloat(componentStyle.textInsetY) * zoomScale
+                        ),
+                        kind: frame.kind,
+                        textColorOverride: componentTextColor,
+                        applyDefaultInset: false,
+                        sourceParagraphId: frame.sourceParagraphId
+                    )
+                }
             } else {
                 drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor, sourceParagraphId: frame.sourceParagraphId)
             }
@@ -511,6 +522,130 @@ final class CanvasView: NSView {
         }
     }
 
+    private func drawTable(
+        _ text: String,
+        style: ParagraphStyle,
+        componentStyle: ComponentStyle,
+        project: BookProject,
+        rect: CGRect,
+        textColor: NSColor?
+    ) {
+        let tableData = TableLayoutHelper.parseTableText(text)
+        let colCount = tableData.columnCount
+        let rowCount = tableData.rows.count
+        guard colCount > 0, rowCount > 0 else { return }
+        
+        let strokeColor = resolvedColor(memoryColor: frameStrokeColors[NSUUID() as UUID], persistedHex: componentStyle.strokeColorHex) ?? NSColor.black
+        let strokeWidth = CGFloat(componentStyle.strokeWidth) * zoomScale
+        
+        let colWidths = TableLayoutHelper.allocateColumnWidths(
+            tableData: tableData,
+            totalWidth: Double(rect.width),
+            fontName: style.fontName,
+            fontSize: style.fontSize,
+            zoomScale: zoomScale
+        )
+        let rowHeights = TableLayoutHelper.calculateRowHeights(
+            tableData: tableData,
+            colWidths: colWidths,
+            style: style,
+            textInsetX: componentStyle.textInsetX,
+            textInsetY: componentStyle.textInsetY,
+            zoomScale: zoomScale
+        )
+        
+        guard let cgContext = NSGraphicsContext.current?.cgContext else { return }
+        
+        // Draw backgrounds and text (from top to bottom)
+        var currentY = rect.maxY
+        for r in 0..<rowCount {
+            let rowHeight = CGFloat(rowHeights[r])
+            let cells = tableData.rows[r]
+            currentY -= rowHeight
+            
+            var currentX = rect.minX
+            for c in 0..<colCount {
+                let cellWidth = CGFloat(colWidths[c])
+                let cellRect = CGRect(x: currentX, y: currentY, width: cellWidth, height: rowHeight)
+                
+                cgContext.saveGState()
+                if r == 0 {
+                    if let accentHex = componentStyle.accentColorHex, let headerColor = NSColor.fromHex(accentHex) {
+                        headerColor.withAlphaComponent(0.15).setFill()
+                    } else if let fillHex = componentStyle.fillColorHex, let fillColor = NSColor.fromHex(fillHex) {
+                        fillColor.withAlphaComponent(0.3).setFill()
+                    } else {
+                        NSColor(white: 0.9, alpha: 1).setFill()
+                    }
+                } else {
+                    if let fillHex = componentStyle.fillColorHex, let fillColor = NSColor.fromHex(fillHex) {
+                        fillColor.setFill()
+                    } else {
+                        NSColor.white.setFill()
+                    }
+                }
+                cgContext.fill(cellRect)
+                cgContext.restoreGState()
+                
+                let cellText = c < cells.count ? cells[c] : ""
+                if !cellText.isEmpty {
+                    let insetX = CGFloat(componentStyle.textInsetX) * zoomScale
+                    let insetY = CGFloat(componentStyle.textInsetY) * zoomScale
+                    let textRect = cellRect.insetBy(dx: insetX, dy: insetY)
+                    
+                    cgContext.saveGState()
+                    cgContext.translateBy(x: textRect.minX, y: textRect.maxY)
+                    cgContext.scaleBy(x: 1.0, y: -1.0)
+                    
+                    let attrString = ChineseTypesetting.makeAttributedString(
+                        text: cellText,
+                        style: style,
+                        foregroundColor: (textColor ?? NSColor.black).cgColor,
+                        zoomScale: zoomScale
+                    )
+                    
+                    let path = CGPath(rect: CGRect(x: 0, y: 0, width: textRect.width, height: textRect.height), transform: nil)
+                    let framesetter = CTFramesetterCreateWithAttributedString(attrString)
+                    let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
+                    
+                    cgContext.textMatrix = .identity
+                    CTFrameDraw(frame, cgContext)
+                    cgContext.restoreGState()
+                }
+                
+                currentX += cellWidth
+            }
+        }
+        
+        // Draw grid lines
+        cgContext.saveGState()
+        cgContext.setStrokeColor(strokeColor.cgColor)
+        cgContext.setLineWidth(strokeWidth)
+        
+        // Outer border
+        cgContext.stroke(rect)
+        
+        // Horizontal grid lines
+        var currentLineY = rect.maxY
+        for r in 0..<(rowCount - 1) {
+            currentLineY -= CGFloat(rowHeights[r])
+            cgContext.move(to: CGPoint(x: rect.minX, y: currentLineY))
+            cgContext.addLine(to: CGPoint(x: rect.maxX, y: currentLineY))
+            cgContext.strokePath()
+        }
+        
+        // Vertical grid lines
+        var currentLineX = rect.minX
+        for c in 0..<(colCount - 1) {
+            currentLineX += CGFloat(colWidths[c])
+            cgContext.move(to: CGPoint(x: currentLineX, y: rect.minY))
+            cgContext.addLine(to: CGPoint(x: currentLineX, y: rect.maxY))
+            cgContext.strokePath()
+        }
+        
+        cgContext.restoreGState()
+    }
+
     private func drawText(
         _ text: String,
         styleId: String?,
@@ -590,6 +725,7 @@ final class CanvasView: NSView {
         
         cgContext.textMatrix = .identity
         CTFrameDraw(frame, cgContext)
+        ChineseTypesetting.drawKentenDots(for: frame, in: cgContext, layoutDirection: style.layoutDirection, zoomScale: zoomScale)
         cgContext.restoreGState()
     }
 

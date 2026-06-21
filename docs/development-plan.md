@@ -99,8 +99,8 @@
 
 - [x] `qualityMetrics` 接入可视化与历史追踪。
 - [x] 封面/满版图作固定页导出。
-- [ ] 校对批注层（不参与重排的 overlay）。
-- [ ] DOCX 导入。
+- [x] 校对批注层（不参与重排的 overlay）。
+- [ ] DOCX 导入。 — **已排期**（见阶段 E 的 E3 排期决策，D-2，顺序 2）。
 
 ---
 
@@ -137,7 +137,7 @@
 | E2-1 | **图片打包 + 相对重链** | Codex | 把置入图复制进 `Links/` 文件夹、`LinkResourceURI` 改相对路径，使 `.idml` 可移植。**优先级最高**（当前用绝对 `file:` 路径，换机即断链）|
 | E2-2 | **组件背景 / 描边** | Codex | 知识卡片等组件的底色/描边/accent 映射成 InDesign 框架填色描边（当前只导文字）|
 | E2-3 | **避头尾 → 禁则集** | Codex | 中文禁则映射到 InDesign 禁则集（KinsokuTable）|
-| E2-4 | **对开跨页（facing spread）** | Codex | 可选 facing 模式：按 `pageSetup.facingPages` 生成 2 页 spread + 起始页码 Section；较大改动，放后 |
+| E2-4 | **对开跨页（facing spread）** | **Claude** | 可选 facing 模式：按 `pageSetup.facingPages` 生成 2 页 spread + 起始页码 Section；较大改动，放后。**2026-06-21 用户指定改由 Claude 做**（跨 Codex 负责文件 IDMLExporter，须等 Codex 本批 IDMLExporter 改动先合 dev）|
 | E2-5 | **固定美术页 → MasterSpread / 非矩形蒙版** | Codex | 满版图/扉页固定页映射、扇面/八角蒙版（图框 PathGeometry）|
 | E2-6 | **`/usr/bin/zip` → 原生 zip 写入** | Codex | 去掉外部进程依赖，保证 mimetype store-first |
 | E2-7 | **GUI 加 IDML 导出入口** | Codex | `LayoutDApp` 菜单/工具栏增加「导出 IDML…」+ 选项面板 |
@@ -147,6 +147,35 @@
 > 说明：`swift test` 末尾「0 tests in 0 suites」是 **Swift Testing 运行器**（找 `@Test`）的输出，本项目全用 XCTest，实测 **172 个 XCTest 全部执行通过**（`swift test` 完整输出含 "Executed 172 tests, 0 failures"）。relay `run_checks("test")` 仅回显最后一行才造成「0 tests」错觉——**非测试发现 bug，是 run_checks 输出截取问题**，可在 relay 侧改为回显 XCTest 汇总行。
 
 - 验收：一份真实 demo 项目导出的 IDML 在 InDesign 打开后版面与 layoutD 预览一致到「可微调」程度。
+
+### E3. 行内 / 结构特性增强（接力分工，逐项 InDesign 视觉验收）
+
+> 任务级拆解与验收口径见 `.ai/QUEUE.md`（Codex 道 / AG 道）。本表只记排期与状态。
+
+| # | 任务 | 主负责 | 状态 |
+|---|---|---|---|
+| E3-1 | 行内粗/斜体到所有 block | Codex | ✅ 视觉验收过 |
+| E3-2 | 行内格式预览渲染 + 批注层 | AG | ✅ 视觉验收过 |
+| E3-3 / E3-3v | 傍点（着重号）解析 + AppliedComposer 渲染 | Codex/Claude | ✅ 视觉验收过 |
+| E3-4 | 原生表格 `<Table>` | Claude | ✅ 视觉验收过 |
+| E3-7 / E3-7v | 脚注 → 原生 Footnote + 中文豆腐修复 | Codex/Claude | ✅ 视觉验收过 |
+| E3-2b / E3-3p / E3-4p | 竖排斜体 / 傍点 / 表格网格 预览渲染 | AG | 🟡 审过待合（依赖 E3-10p 出图验收） |
+| E3-4b | 表格单元格内行内格式（E3-4 遗留缺口） | Codex | ⬜ 已立项 |
+| E3-10p | 预览验收 harness（让 PNG 能呈现行内特性） | AG | ⬜ 已立项·高优先 |
+
+#### 排期决策（2026-06-21，用户确认）
+
+「锦上添花」批正式纳入开发计划，按以下顺序接力（均 Codex 道，风险低→高）：
+
+| 顺序 | 任务 | 说明 |
+|---|---|---|
+| 1 | **E3-6 目录（TOC）动态化** | 死文字目录 → InDesign 动态 TOC / PageReference |
+| 2 | **D-2 DOCX 导入** | 新增 `DOCXBookImporter.swift`，独立文件不与导出冲突，可并行 |
+| 3 | **E2-5 固定美术页 → MasterSpread / 非矩形蒙版** | 满版图/扉页固定页映射、扇面/八角蒙版 |
+| 4 | **E2-4 对开跨页（facing spread）** — 👤 **Claude 做** | 风险最高（可能打破当前干净分页），放最后单独一棒、做完先验非对开无回归。跨 Codex 负责文件，须等 Codex 本批 IDMLExporter 改动先合 dev |
+
+- **E3-8 token → CMYK 色板：暂缓**（用户 2026-06-21 决定先不做；印前转色本就交 InDesign，非阻塞）。
+- **E3-9 约物挤压 + 基线网格对齐**：维持原排期，未纳入本批。
 
 ---
 

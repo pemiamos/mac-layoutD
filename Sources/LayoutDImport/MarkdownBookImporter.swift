@@ -260,9 +260,12 @@ private struct MarkdownParser {
             .filter { !$0.isEmpty }
 
         if !rows.isEmpty {
-            let text = rows.map { $0.joined(separator: "    ") }.joined(separator: "\n")
+            // 保留结构化行列供 IDML 导出原生 <Table>；每格单独归一化行内 Markdown。
+            // `text` 维持拍平降级（布局/预览暂不识别网格时仍能显示）。
+            let normalizedRows = rows.map { $0.map(normalizeInlineMarkdown) }
+            let text = normalizedRows.map { $0.joined(separator: "    ") }.joined(separator: "\n")
             currentParagraphs.append(
-                Paragraph(kind: .table, text: normalizeInlineMarkdown(text), styleId: StyleID.body.rawValue)
+                Paragraph(kind: .table, text: text, styleId: StyleID.body.rawValue, tableCells: normalizedRows)
             )
         }
 
@@ -806,7 +809,7 @@ private struct MarkdownParser {
         var runs: [InlineRun]
     }
 
-    /// Flattens the supported Markdown delimiters while retaining bold/italic spans.
+    /// Flattens the supported Markdown delimiters while retaining bold/italic/kenten spans.
     /// Code spans remain unstyled and escaped delimiters remain literal.
     private func parseInlineMarkdown(_ text: String) -> ParsedInlineMarkdown {
         let source = replacingMarkdownLinks(in: text)
@@ -851,6 +854,17 @@ private struct MarkdownParser {
             }
 
             if !codeSpan {
+                if remaining.hasPrefix("==") {
+                    let next = source.index(index, offsetBy: 2)
+                    let kind: InlineDelimiterKind = active.contains(.kenten) ? .closing : .opening
+                    if isValidDelimiter("==", at: index, kind: kind),
+                       (active.contains(.kenten) || hasClosingDelimiter("==", after: next)) {
+                        if active.contains(.kenten) { active.remove(.kenten) } else { active.insert(.kenten) }
+                        index = next
+                        continue
+                    }
+                }
+
                 let boldDelimiter = remaining.hasPrefix("**") ? "**" : (remaining.hasPrefix("__") ? "__" : nil)
                 if let delimiter = boldDelimiter {
                     let next = source.index(index, offsetBy: delimiter.count)
@@ -1006,7 +1020,7 @@ private struct MarkdownParser {
         }
 
         let punctuation = CharacterSet.punctuationCharacters.union(
-            CharacterSet(charactersIn: "，。、；：！？（）【】《》「」『』“”‘’、")
+            CharacterSet(charactersIn: "=，。、；：！？（）【】《》「」『』“”‘’、")
         )
         return character.unicodeScalars.allSatisfy { punctuation.contains($0) }
     }
@@ -1075,11 +1089,15 @@ private struct MarkdownParser {
             || values["gutter_mm"] != nil
             || values["baseline_grid_pt"] != nil
             || values["bleed_mm"] != nil
+            || values["layout_direction"] != nil
         guard hasPageSetupValues else {
             return nil
         }
 
         var setup = PageSetup.scienceBookDefault
+        if let direction = values["layout_direction"]?.lowercased() {
+            setup.layoutDirection = (direction == "vertical") ? .vertical : .horizontal
+        }
         if let columns = values["columns"].flatMap(Int.init), columns > 0 {
             setup.columns = min(columns, 4)
         }

@@ -10,7 +10,7 @@ final class LayoutDCoreTests: XCTestCase {
         let text = "Hello World"
         let runs = [
             InlineRun(location: 0, length: 5, emphasis: [.bold]),
-            InlineRun(location: 6, length: 5, emphasis: [.italic])
+            InlineRun(location: 6, length: 5, emphasis: [.italic, .kenten])
         ]
         
         // 1. Test mapRuns to substring
@@ -18,7 +18,7 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(mappedSubstring.count, 1)
         XCTAssertEqual(mappedSubstring[0].location, 0)
         XCTAssertEqual(mappedSubstring[0].length, 5)
-        XCTAssertEqual(mappedSubstring[0].emphasis, [.italic])
+        XCTAssertEqual(mappedSubstring[0].emphasis, [.italic, .kenten])
         
         // 2. Test mapRuns by alignment
         let mappedAligned = InlineRun.mapRuns(runs, from: "Hello World", to: "Hello  World")
@@ -43,6 +43,27 @@ final class LayoutDCoreTests: XCTestCase {
         let font6 = attrString.attribute(NSAttributedString.Key(kCTFontAttributeName as String), at: 6, effectiveRange: &range) as! CTFont
         let matrix = CTFontGetMatrix(font6)
         XCTAssertEqual(matrix.c, CGFloat(tan(12.0 * Double.pi / 180.0)), accuracy: 0.001)
+        XCTAssertEqual(matrix.b, 0.0)
+        
+        // Retrieve kenten attribute at index 6 (should be true)
+        let kenten6 = attrString.attribute(ChineseTypesetting.kentenAttributeName, at: 6, effectiveRange: &range) as? Bool
+        XCTAssertEqual(kenten6, true)
+        
+        // Retrieve kenten attribute at index 0 (should be nil)
+        let kenten0 = attrString.attribute(ChineseTypesetting.kentenAttributeName, at: 0, effectiveRange: &range) as? Bool
+        XCTAssertNil(kenten0)
+        
+        // 4. Test vertical makeAttributedString
+        let verticalStyle = ParagraphStyle.body.with(layoutDirection: .vertical)
+        let verticalAttrString = ChineseTypesetting.makeAttributedString(
+            text: text,
+            style: verticalStyle,
+            inlineRuns: runs
+        )
+        let verticalFont6 = verticalAttrString.attribute(NSAttributedString.Key(kCTFontAttributeName as String), at: 6, effectiveRange: &range) as! CTFont
+        let verticalMatrix = CTFontGetMatrix(verticalFont6)
+        XCTAssertEqual(verticalMatrix.b, CGFloat(tan(12.0 * Double.pi / 180.0)), accuracy: 0.001)
+        XCTAssertEqual(verticalMatrix.c, 0.0)
     }
 
     func testAnnotationsPersistenceAndMapping() throws {
@@ -97,6 +118,35 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(decoded.metadata.title, project.metadata.title)
         XCTAssertEqual(decoded.sections.count, 1)
         XCTAssertEqual(decoded.assets.count, 1)
+    }
+
+    func testTableParsingAndAllocation() throws {
+        let tableText = """
+        结构    类比    主要作用
+        细胞膜    城墙和门禁    控制物质进出
+        线粒体    发电站    提供能量
+        """
+        
+        let tableData = TableLayoutHelper.parseTableText(tableText)
+        XCTAssertEqual(tableData.columnCount, 3)
+        XCTAssertEqual(tableData.rows.count, 3)
+        XCTAssertEqual(tableData.rows[0], ["结构", "类比", "主要作用"])
+        XCTAssertEqual(tableData.rows[1], ["细胞膜", "城墙和门禁", "控制物质进出"])
+        
+        // Test column width allocation
+        let style = ParagraphStyle.body
+        let colWidths = TableLayoutHelper.allocateColumnWidths(
+            tableData: tableData,
+            totalWidth: 300.0,
+            fontName: style.fontName,
+            fontSize: style.fontSize
+        )
+        XCTAssertEqual(colWidths.count, 3)
+        let sumWidths = colWidths.reduce(0, +)
+        XCTAssertEqual(sumWidths, 300.0, accuracy: 0.001)
+        
+        // Assert first column width is less than third column width because of text lengths
+        XCTAssertLessThan(colWidths[0], colWidths[2])
     }
 
     func testProjectMetadataDecodesLegacyFilesWithoutNewBookFields() throws {
