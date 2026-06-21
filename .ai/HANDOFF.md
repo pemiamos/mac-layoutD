@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 11:17 | claude | 进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全
+- **分支**：dev
+- **概述**：进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全绿；主交付 E 阶段已过用户 InDesign 视觉验收的有 E1 全量映射、E2-1/2/3/6/7、E3-1 行内格式、E3-3+E3-3v 傍点、E3-7+E3-7v 脚注、E3-4 表格、E3-2 预览+批注层。待合（用户选 C 暂缓）：AG 三条预览 e3-3p/e3-2b/e3-4p。已排未做：E3-6 TOC、E3-8 CMYK、E3-9 约物挤压/基线网格、E2-4 对开、E2-5 美术页MasterSpread/蒙版、D-2 DOCX。本棒新增队列条目：① Codex 道 E3-4b 表格单元格行内格式（发现 tableStoryXML 把 inlineRuns 写死成空，表格内粗/斜/傍点丢失）；② AG 道 E3-10p 预览验收 harness（PNG demo 模板丢带强调正文段，致傍点/竖排斜体出不了图无法视觉验收，挡住 E3-3p/E3-2b 收尾）；③ 新增「待评估 Backlog」节（索引/参考文献/长表格分页表头重复/图文绕排，需用户拍板）；④ 基础设施补 E0 spike 文档回填。
+- **改动文件**：(未填)
+- **检查**：仅文档改动，无需 build。提交前 get_current_status 确认 dev 无并发未提交改动（仅自身 HANDOFF.md）。911bd07 已推 origin/dev。
+- **下一步**：① E3-10p（预览验收 harness）优先级高——做完傍点/竖排斜体才能走完视觉验收，建议 AG 道优先。② E3-4b 表格内行内格式 Codex 道可接。③ AG 三条预览分支仍待合（用户选 C，等 E3-4 集成落定）。④ 待评估 Backlog 四项需用户决定是否进路线图再排期。⑤ 所有集成动作遵守 AGENTS.md 的 N1/N2/N3（专用临时 worktree）。
+
 ## 2026-06-21 11:08 | claude | 用户选 C：AG 三条预览分支（e3-3p/e3-2b/e3-4p）暂不合，等主仓库并发的 E3-4 集成彻底落定再说——本棒未动任何 feature 分支。另
 - **分支**：dev
 - **概述**：用户选 C：AG 三条预览分支（e3-3p/e3-2b/e3-4p）暂不合，等主仓库并发的 E3-4 集成彻底落定再说——本棒未动任何 feature 分支。另落实并发流程优化：因当天两个 Claude 对话同时用主仓库撞车，补三条铁律 N1/N2/N3 写入 .ai/AGENTS.md 隔离章节并 record_decision，commit 9496bbd 已 push origin/dev。核心：worktree 隔离只防「按 AI」互撞、防不住「同 AI 多对话并发同一副本」；今后集成/审核/试合一律在 git worktree add --detach /tmp/<任务>-wt 的专用临时副本里做（必 test -d 校验创建成功，失败别让命令落回主仓库），同仓库不开两个同-AI 对话否则各带独立 worktree，动手前 get_current_status 探并发。同步更新记忆 shared-git-directory-concurrency-risk（从"已解决"改为"部分解决+残留盲区+N1/N2/N3 对策"）。

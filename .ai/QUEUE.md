@@ -59,7 +59,9 @@
 > 负责文件：`Sources/LayoutDImport/*`、`Sources/LayoutDCore/BookProject.swift`、
 > `Sources/LayoutDExport/IDMLExporter.swift`、`ZIPArchiveWriter.swift`
 >
-> **🔁 本批连续序列（按顺序连做，做完一个自审 PASS 就接下一个，不停下问）：E3-3 → E3-7 → E3-4 → E3-6**。
+> **🔁 本批连续序列（2026-06-21 用户排期，按顺序连做，做完一个自审 PASS 就接下一个，不停下问）：**
+> **E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DOCX 导入 → E2-5 美术页/蒙版 → E2-4 对开跨页（风险最高放最后）**。
+> ⏸ **E3-8 CMYK 暂缓**（用户决定先不做）；E3-9 约物挤压维持原排期，不在本批。
 > 约 1 小时或做到这批做完/撞阻塞为止，收尾写一条汇总 handoff。注意斜体导出已用 `Skew="12"`、
 > 粗体用 `FauxBold="true"`（别用 `FauxItalic` 或 `FontStyle` 字符串，已验证那两个对 CJK 不可见/出粉色替代字形）。
 
@@ -135,7 +137,7 @@
   - 文件：`MarkdownBookImporter.swift`（标题锚点）、`IDMLExporter.swift`（TOC/PageReference）。
   - 验收：改动正文后目录页码在 InDesign 里能"更新目录"刷新，不是手敲数字。
 
-- [ ] **E3-8 token → CMYK 色板**
+- [ ] **E3-8 token → CMYK 色板** ⏸ **暂缓（用户 2026-06-21 决定先不做；印前转色交 InDesign，非阻塞）**
   - 目标：颜色当前导 RGB swatch；增可选项由 token 算 CMYK 值发 `Space="CMYK"` 色板，减少 InDesign 人工转色（不自建色彩管线，只发数值）。
   - 文件：`IDMLExporter.swift`。
   - 验收：导出后色板面板里对应色为 CMYK 模式，数值合理（非简单 RGB→CMYK 近似导致明显偏色）。

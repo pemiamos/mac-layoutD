@@ -24,3 +24,7 @@
 - **决策**：worktree 隔离是「按 AI」不是「按对话」，补三条并发铁律（N1/N2/N3，已写入 .ai/AGENTS.md 隔离章节）：N1 同一仓库不开两个同-AI 对话，必须并发则第二个对话带独立 worktree，禁止两对话共用同一 checkout；N2 集成/审核/试合一律在专用临时 worktree（git worktree add --detach /tmp/...-wt dev，且必 test -d 校验创建成功再 cd，失败别让命令落回主仓库），收尾 remove；N3 动手集成前 get_current_status()+git_status() 探并发，长集成前 record_decision() 占位当软锁。
 - **理由**：2026-06-21 实测吃亏：两个 Claude 对话同时用主仓库 mac-layoutD（一个合 E3-4 到 dev、一个做审核），导致 HEAD 被对方切走、git add -A 误吞对方未提交改动、worktree add 失败后命令误落主仓库误建废弃分支。已有的「三 AI 各持 worktree」隔离防不住「同 AI 多对话并发」这个盲区。N2 的专用临时 worktree 配方能同时根除「两对话撞车」与「命令误落主仓库」两类事故——本次最后改用 detached worktree 后即再未出事。
 
+## 2026-06-21 11:22 | claude
+- **决策**：「锦上添花」批排进开发计划（2026-06-21 用户确认）：E3-6 目录动态化 → D-2 DOCX 导入 → E2-5 美术页MasterSpread/蒙版 → E2-4 对开跨页（风险最高放最后），均 Codex 道按此顺序接力。E3-8 token→CMYK 色板暂缓（先不做，印前转色交 InDesign，非阻塞）。E3-9 约物挤压维持原排期不在本批。
+- **理由**：用户盘点进度后决定把锦上添花层除 CMYK 外全部纳入正式计划。排序按依赖与风险：TOC 自包含先做；DOCX 独立新文件可并行；美术页蒙版中等；对开跨页风险最高（可能打破当前干净分页）放最后单独一棒并先验非对开无回归。CMYK 暂缓因印前本就交 InDesign、非交付阻塞。
+
