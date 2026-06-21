@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 17:54 | claude | 完成 Claude 道 E2-5 非矩形蒙版——已合 dev（merge 404596b，push origin/dev）。maskGeometry 输出八角(
+- **分支**：dev
+- **概述**：完成 Claude 道 E2-5 非矩形蒙版——已合 dev（merge 404596b，push origin/dev）。maskGeometry 输出八角(8点)/扇面(环形扇区弧线近似)PathGeometry，imageItem 走它、串入 frame.maskShape，图片仍放满 rect 被框裁成形；.rect/nil 回退矩形(无回归)。端到端断言：八角8点/矩形4点/扇面≥16点。197 测试 + review 6/0 PASS。桌面 E2-5蒙版验收-0621.idml(八角+扇面各一)待用户 InDesign 复看。固定美术页「不叠主页项」一项判定 N/A：当前 MasterSpread 为空(无页码等元素)、满版图本就出血矩形导出，无可叠之物。注：蒙版经 LayoutPlan/override 驱动(非 markdown)，符合项目"编辑走 LayoutPlan"模型。Claude 道仅剩 E2-4 对开跨页(最高风险)。
+- **改动文件**：(未填)
+- **检查**：dev swift build PASS；197 测试 0 失败；review-idml.sh 6/0；解包确认八角=8点/扇面=34点/矩形=4点。
+- **下一步**：① 用户 InDesign 复看 E2-5蒙版验收-0621.idml：图被裁成八角/扇面。② Claude 道最后一项 E2-4 对开跨页(facing spread)——最高风险(可能打破当前干净分页)，单独一棒、改完务必回归非对开模式无变化，再交用户验收对开效果。③ AG：rebase e3-6p/e2-5p/e2-4p 三条预览(进行中,已自加 git rebase 授权)，完成后 Claude 合。④ 守 N1/N2/N3。
+
 ## 2026-06-21 17:10 | claude | 处理 AG 16:58 交接。核实发现 AG 误解了 rebase 任务:三条预览分支(e3-6p/e2-5p/e2-4p)并未真正变基到最新 dev——bas
 - **分支**：dev
 - **概述**：处理 AG 16:58 交接。核实发现 AG 误解了 rebase 任务:三条预览分支(e3-6p/e2-5p/e2-4p)并未真正变基到最新 dev——base 仍旧、都不含 c5fcfb7(flow harness),handoff 称"e2-4p 已基于最新 dev"不准确(只加了一条 docs commit)。AG 真正干净交付的是新分支 feature/ag-export-options(导出面板,基于最新 dev,含 facingPages/cmykColors 导出设置)。Claude 在 /tmp 隔离 worktree 试合验证:export-options + e2-4p 两条 merge-tree 干净,build+196测试+review-idml 6/0 全 PASS,已合入 dev 并随并发会话(E3-4b)的 push 一起到 origin/dev=9515f9b。剩 e2-5p(仅1处测试文件冲突)/e3-6p(5处渲染代码冲突)仍未真正变基,退回 AG 重整。注:本轮撞上"同一 checkout 两个 Claude 会话并发"——另一会话同时在做 E3-4b 并 push,reflog 交错但结果线性无损,我的两条合并已确认在 dev 历史中。
