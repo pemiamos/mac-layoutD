@@ -91,7 +91,10 @@ public struct IDMLExporter {
                     let styleRef = "ParagraphStyle/\(xmlSafe(style.id))"
                     let vertical = style.layoutDirection == .vertical
                     let component = project.styles.componentStyle(for: frame.kind)
-                    let fillColor = frame.backgroundColorHex ?? component?.resolvedFillColorHex(project: project)
+                    let resolvedFillHex = frame.backgroundColorHex ?? component?.resolvedFillColorHex(project: project)
+                    // 表格底色挪到单元格上（见下方 tableStoryXML），框本身不填色——否则框比
+                    // 表格高时底部会露出一块多余色块。
+                    let fillColor = frame.kind == .table ? nil : resolvedFillHex
                     let strokeColor = frame.strokeColorHex ?? component?.resolvedStrokeColorHex(project: project)
                     let strokeWidth = frame.strokeWidth ?? component?.strokeWidth ?? 0
                     items.append(textFrameItem(self: "uTF\(pi)_\(fi)", story: storySelf,
@@ -112,8 +115,10 @@ public struct IDMLExporter {
                        let paragraphID = frame.sourceParagraphId,
                        let cells = paragraphsByID[paragraphID]?.tableCells,
                        !cells.isEmpty {
+                        let cellFillSwatch = resolvedFillHex.map { ctx.color($0) }
                         storyFiles["Stories/Story_\(storySelf).xml"] = tableStoryXML(
-                            self: storySelf, styleRef: styleRef, cells: cells, frameWidth: frame.rect.width)
+                            self: storySelf, styleRef: styleRef, cells: cells,
+                            frameWidth: frame.rect.width, cellFillSwatch: cellFillSwatch)
                         storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                         storyListIds.append(storySelf)
                         continue
@@ -831,7 +836,7 @@ public struct IDMLExporter {
     /// 再全部 <Row>，最后全部 <Cell>（Cell 不嵌在 Row 里，靠 Name="列:行" 定位）。
     /// 第一行视为表头。列宽按框宽均分；单元格四边给 0.5pt 黑边，使其在 InDesign 里
     /// 一眼是真表格。单元格文字复用 styledCharacterRanges，并与正文一样带 World-Ready 排版器。
-    private func tableStoryXML(self id: String, styleRef: String, cells: [[String]], frameWidth: Double) -> String {
+    private func tableStoryXML(self id: String, styleRef: String, cells: [[String]], frameWidth: Double, cellFillSwatch: String? = nil) -> String {
         let rowCount = cells.count
         let columnCount = cells.map(\.count).max() ?? 0
         guard rowCount > 0, columnCount > 0 else {
@@ -855,14 +860,16 @@ public struct IDMLExporter {
         // 四边 0.5pt 黑边 + 2pt 内边距（与 LayoutEngine.estimatedTableHeight 的 cellInset 一致，
         // 否则估高与 InDesign 实际折行不符会溢流）。
         let border = "TopEdgeStrokeWeight=\"0.5\" BottomEdgeStrokeWeight=\"0.5\" LeftEdgeStrokeWeight=\"0.5\" RightEdgeStrokeWeight=\"0.5\" TopEdgeStrokeColor=\"Color/Black\" BottomEdgeStrokeColor=\"Color/Black\" LeftEdgeStrokeColor=\"Color/Black\" RightEdgeStrokeColor=\"Color/Black\" TopInset=\"2\" BottomInset=\"2\" LeftInset=\"2\" RightInset=\"2\""
+        // 底色挂在单元格（而非整框）上，使色块正好贴合表格。
+        let fillAttr = cellFillSwatch.map { " FillColor=\"\($0)\"" } ?? ""
         var cellsXML: [String] = []
         for r in 0..<rowCount {
             for c in 0..<columnCount {
                 let content = c < cells[r].count ? cells[r][c] : ""
                 let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: [])
                 cellsXML.append("""
-                \t\t\t\t\t<Cell Self="\(tableSelf)Cell\(c)_\(r)" Name="\(c):\(r)" RowSpan="1" ColumnSpan="1" AppliedCellStyle="CellStyle/$ID/[None]" \(border)>
-                \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)">
+                \t\t\t\t\t<Cell Self="\(tableSelf)Cell\(c)_\(r)" Name="\(c):\(r)" RowSpan="1" ColumnSpan="1" AppliedCellStyle="CellStyle/$ID/[None]"\(fillAttr) \(border)>
+                \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)" FirstLineIndent="0" Justification="LeftJustified">
                 \(cellBody)
                 \t\t\t\t\t\t</ParagraphStyleRange>
                 \t\t\t\t\t</Cell>
