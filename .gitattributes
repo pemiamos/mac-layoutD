@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# 只追加的协作日志：用 union 合并，两边内容都保留、永不冲突。
+# 避免各道 `git merge origin/dev` 同步时卡在交接/决策日志的冲突上。
+.ai/HANDOFF.md merge=union
+.ai/DECISIONS.md merge=union

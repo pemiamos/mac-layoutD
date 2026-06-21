@@ -52,6 +52,11 @@ worktree 隔离只防住**三个不同 AI** 互撞，**没防**「同一个 AI �
 6. **不碰禁改文件。** 见 PROJECT_CONTEXT.md 的"绝对不要碰"清单。
    要动架构级的东西，先 `record_decision()` 说明理由。
 7. **检查走白名单。** 用 `run_checks()`，不要自己拼 shell 命令跑测试。
+8. **`.ai/QUEUE.md` 归 Claude 独占维护，各道不要改它（吃过亏的铁律）。**
+   Codex/Antigravity **不再**在 QUEUE.md 里勾 `[x]`/挂 `[~] 认领`——进度只写进 `write_handoff()`（写明做了哪条任务、哪个 commit），由 Claude 据交接更新队列状态。
+   **为什么**：Claude 在 dev 上频繁改 QUEUE.md（排任务/分工），各道也改 → 每次 `git merge origin/dev` 同步必在 QUEUE.md 冲突，而 lane 不擅长解冲突会卡死（2026-06-21 AG 即因此卡住）。
+   交接日志 `HANDOFF.md` 与决策 `DECISIONS.md` 已在 `.gitattributes` 设 `merge=union`（两边自动都保留、永不冲突），放心写。
+   **同步 dev 仍照旧**（开工 `git merge origin/dev`）：只要你不碰 QUEUE.md，合并就是干净的；万一仍遇文档冲突，别自己硬解——`git checkout --theirs .ai/QUEUE.md`（取 dev 权威版）后继续，或写 handoff 让 Claude 处理。
 
 ## 分工
 
