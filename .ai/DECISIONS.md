@@ -36,3 +36,6 @@
 - **决策**：分工再平衡（2026-06-21 用户决定，因 Codex 多次提交不靠谱需反复回修）：① Codex 砍到最少、只留隔离低风险任务——当前仅 D-2 DOCX 导入（全新独立文件，不碰现有导出）；② 原 Codex 的高风险 IDMLExporter 导出任务 E3-4b/E3-6/E2-5 全部改判 Claude 直接做（连同已改判的 E2-4），Claude 串行、各自专用 worktree，顺序 E3-4b→E3-6→E2-5→E2-4；③ AG 升为主力，预览+GUI 全线连续作业，本批序列 E3-10p→E3-6p 目录预览→E2-5p 蒙版预览→E2-4p 对开预览→导出选项面板（②③④为配对 Claude 导出侧的预览追平任务）。
 - **理由**：Codex 代码质量不稳定、回修成本高，故收缩其职责到 blast radius 最小的隔离任务（新文件 DOCX 导入，botch 也不伤现有导出、易回修）；高风险导出收进可靠的 Claude 手里且串行避免同文件冲突；AG 质量可靠且预览/GUI 是其专长，升主力承接最多任务，配对预览让「预览=输出」持续推进。文件边界：Claude=IDMLExporter 导出侧、Codex=新 DOCX 导入文件、AG=LayoutEngine/渲染器/GUI，三方仍不重叠。
 
+## 2026-06-21 | codex | D-2 DOCX 导入采用内置最小 OOXML ZIP 读取器
+- **决策**：`.docx` 读取在 `DOCXBookImporter.swift` 内实现最小 ZIP central-directory reader；支持 stored 与 deflate entry，并用 macOS `Compression` 解压。首版只读取 `word/document.xml`、`word/styles.xml`、`word/numbering.xml`，不调用外部 `unzip`。
+- **理由**：当前 Swift Foundation 环境没有 `Archive` API；引入第三方 ZIP 包或外部进程会扩大依赖面。最小读取器可离线、可测试，且足以完成 D-2 的正文/样式/列表/表格映射。Zip64、加密、图片 media 与其它 OOXML 部件首版明确降级或报错。

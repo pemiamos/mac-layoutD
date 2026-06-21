@@ -176,7 +176,7 @@
   - **验收**：① 含八角/扇面蒙版图框的项目导出，解包 IDML 该图框 `PathGeometry` 点数 = 多边形点数（非 4 角），InDesign 打开图被裁成八角/扇面；② 固定满版页导出后满版图出血到位、页上无多余页码/主页项；③ 普通页**无回归**（分页/版心不变）；④ 补端到端断言（masked 帧 path 点数、固定页 master 应用）；⑤ `scripts/review-idml.sh` 仍 PASS。
   - ⚠️ 解包 IDML 验 PathGeometry 点数，别只单测；固定页改动后**务必回归非固定页**（这是最易翻车处）。
 
-- [ ] **D-2 DOCX 导入**（阶段 D 遗留）
+- [x] **D-2 DOCX 导入** — Codex @ `feature/codex-d2-docx-import`，commit 待提交
   - **目标**：新增 `DOCXBookImporter.swift`，解析 `.docx` → `BookProject` 模型，复用现有段落/行内模型（**不碰** `MarkdownBookImporter.swift`）。
   - **DOCX 是什么**：一个 zip，正文在 `word/document.xml`（OOXML），样式名在 `word/styles.xml`，列表编号在 `word/numbering.xml`。
   - **映射口径**（目标模型已就绪，见 `BookProject.swift`）：

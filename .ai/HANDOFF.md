@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 15:51 | codex | 完成 D-2「DOCX 导入」，待 Claude 复审集成
+- **分支**：`feature/codex-d2-docx-import`
+- **概述**：新增独立 `DOCXBookImporter`，以最小内置 OOXML ZIP 读取器解析 `.docx` 的 `word/document.xml` 和可选 `word/styles.xml`：段落样式映射标题/正文/列表/引用，`w:rPr` 的 `w:b`/`w:i` 映射到 Character 口径的 `inlineRuns`，`w:tbl` 映射为结构化 `tableCells`。支持 stored 与标准 deflate entry；图片/media 首版不导入。`ProjectLoader` 与 GUI 文件选择器均已接受 `.docx`，README 已声明首版能力边界。
+- **改动文件**：`Sources/LayoutDImport/DOCXBookImporter.swift`、`Sources/LayoutDApp/ProjectLoader.swift`、`Sources/LayoutDApp/main.swift`、`Tests/LayoutDImportTests/DOCXBookImporterTests.swift`、`README.md`、`.ai/DECISIONS.md`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
+- **检查**：真实 OOXML fixture 定向测试 PASS（H1、粗/斜 run、列表、表格）；标准 deflate `.docx → layoutD CLI → IDML` 实测 PASS；`scripts/review-idml.sh` PASS（swift build、190 tests、IDML 探针 6/6）。待提交。
+- **下一步**：Claude 复审 importer 的 ZIP 边界和 XML 映射；用户可在 GUI 或 CLI 打开一份真实 Word DOCX，确认首版文本导入效果。嵌入图片、复杂编号样式、修订/批注、Zip64 仍在首版范围外。
+
 ## 2026-06-21 11:32 | claude | 提前展开 Codex 本批全部任务的验收规格，Codex 现可整批自助连续作业。本批顺序：E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DO
 - **分支**：dev
 - **概述**：提前展开 Codex 本批全部任务的验收规格，Codex 现可整批自助连续作业。本批顺序：E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DOCX 导入 → E2-5 美术页/蒙版（均 Codex 道，已逐项写明现状勘查/做法/文件/端到端验收，见 .ai/QUEUE.md）。E2-4 对开跨页改判 Claude（用户指定 Codex 不靠谱），跨 IDMLExporter 文件故 Claude 待 Codex 本批先合 dev 再起手、专用 worktree。E3-8 CMYK 暂缓。关键勘查结论已写进各任务：E3-6 目录引擎已有真页码条目只是被拼成死文字（核心是导出 <TOCStyle> 映射 heading1/2 让 InDesign 可更新目录）；D-2 DOCX 是 OOXML zip，映射口径已列，zip 读取需先 record_decision（别 shell unzip）；E2-5 模型已有 ImageMaskShape{rect,fan,octagon}+maskShape 字段，导出器只写矩形 PathGeometry，拆「非矩形蒙版多边形点(先做)」+「固定页不叠主页项(回归非固定页)」两步。
