@@ -12,6 +12,16 @@ import LayoutDCore
 /// 非矩形蒙版、字体样式名拆分。
 ///
 /// 颜色按 layoutD 的 RGB 管线导出为 RGB 色板；CMYK 分色 / PDF/X 交 InDesign(印前路线 A)。
+public struct IDMLExportOptions: Sendable {
+    public var facingPages: Bool
+    public var cmykColors: Bool
+
+    public init(facingPages: Bool = false, cmykColors: Bool = false) {
+        self.facingPages = facingPages
+        self.cmykColors = cmykColors
+    }
+}
+
 public struct IDMLExporter {
     public init() {}
 
@@ -34,7 +44,12 @@ public struct IDMLExporter {
 
     // MARK: - 入口
 
-    public func export(document: LaidOutDocument, project: BookProject, to url: URL) throws {
+    public func export(
+        document: LaidOutDocument,
+        project: BookProject,
+        to url: URL,
+        options: IDMLExportOptions = IDMLExportOptions()
+    ) throws {
         let pageW = project.pageSetup.pageSize.width
         let pageH = project.pageSetup.pageSize.height
         let pages = document.pages.sorted { $0.number < $1.number }

@@ -1013,10 +1013,15 @@ final class WorkspaceViewController: NSViewController {
             }
 
             do {
+                let options = IDMLExportOptions(
+                    facingPages: settingsState.facingPages,
+                    cmykColors: settingsState.cmykColors
+                )
                 try IDMLExporter().export(
                     document: document,
                     project: self.appState.project,
-                    to: url
+                    to: url,
+                    options: options
                 )
                 self.showExportResult(
                     message: "IDML exported",
@@ -1242,6 +1247,8 @@ class PNGExportSettingsState: ObservableObject {
 
 final class IDMLExportSettingsState: ObservableObject {
     @Published var requireExportReady = false
+    @Published var facingPages = false
+    @Published var cmykColors = false
 }
 
 struct IDMLExportSettingsView: View {
@@ -1250,7 +1257,16 @@ struct IDMLExportSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("IDML 导出选项").font(.headline)
+            
             Toggle("仅在印前检查通过时导出", isOn: $state.requireExportReady)
+                .toggleStyle(.checkbox)
+            
+            Toggle("对开跨页 (Facing Pages) 模式", isOn: $state.facingPages)
+                .toggleStyle(.checkbox)
+            
+            Toggle("CMYK 色板模式", isOn: $state.cmykColors)
+                .toggleStyle(.checkbox)
+            
             Text("置入图片会复制到 IDML 同级的 Links 文件夹，并使用相对链接。")
                 .font(.caption)
                 .foregroundStyle(.secondary)

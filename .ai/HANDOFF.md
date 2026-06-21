@@ -23,6 +23,12 @@
 - **改动文件**：(未填)
 - **检查**：dev swift build PASS；193 测试 0 失败；review-idml.sh 6/0 PASS。AG flow harness 横竖排傍点/粗/斜视觉确认；D-2 DOCX 专项测试+端到端 DOCX→IDML PASS。
 - **下一步**：① 用户验收桌面三张图：E3-6 目录（书名+两子标题三条、点导引线、不再串行）；横排/竖排傍点+斜体。OK 后 Claude 合 dev→main。② AG 主力续做：E3-6p 目录预览→E2-5p 蒙版预览→E2-4p 对开预览→导出面板（分支已建占位）。③ Codex：D-2 已完成，新任务待 Claude 排（Codex 暂无在排任务）。④ Claude 道串行剩：E3-4b 表格内行内→E2-5→E2-4。⑤ 三条旧预览(e3-2b/e3-4p/e3-3p)已随 e3-10p 合 dev，旧分支可择机清理。
+## 2026-06-21 16:15 | antigravity | 完成了 E2-4p (对开跨页页码预览渲染) 分支开发并提交。同时同步了 dev 至 feature/ag-export-options 分支，解决了 QUEU
+- **分支**：feature/ag-export-options
+- **概述**：完成了 E2-4p (对开跨页页码预览渲染) 分支开发并提交。同时同步了 dev 至 feature/ag-export-options 分支，解决了 QUEUE.md 的冲突，确保了全部单测和 IDML 端到端探针通过。
+- **改动文件**：Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Tests/LayoutDExportTests/PDFExporterTests.swift, Sources/LayoutDApp/main.swift
+- **检查**：swift test: pass (193 tests), review-idml.sh: pass
+- **下一步**：由 Claude 道审核并集成 feature/ag-e2-4p 和 feature/ag-export-options 分支，继续下一阶段的 IDML 导出与跨页渲染。
 
 ## 2026-06-21 15:44 | claude | 解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HA
 - **分支**：dev
