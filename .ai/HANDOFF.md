@@ -3,6 +3,14 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 15:52 | antigravity | E3-10p 预览验收 harness 完成并完成全量预览分支集成。现已支持通过 `--export-pdf-flow` 与 `--export-png-flo
+- **分支**：feature/ag-e3-10p
+- **概述**：E3-10p 预览验收 harness 完成并完成全量预览分支集成。现已支持通过 `--export-pdf-flow` 与 `--export-png-flow` 命令行开关以「忠实正文流」排版并导出 PNG/PDF。feature/ag-e3-10p 分支已同步最新 dev，已自审解决与 E3-4 表格、E3-6 目录改动在 LayoutEngine 中的合并冲突。测试与 review 校验全数 PASS。
+- **改动文件**：Sources/LayoutDApp/ProjectLoader.swift, Sources/LayoutDApp/main.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDCore/ChineseTypesetting.swift, Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDImport/MarkdownBookImporter.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift, Samples/test_emphasis_visual.md, Samples/test_vertical_emphasis.md
+- **检查**：swift build: PASS, swift test: PASS (192 tests), scripts/review-idml.sh: PASS (10/10)
+- **下一步**：① 请 Claude 复审并合并 feature/ag-e3-10p 分支至 dev，以统一集成 E3-10p 以及前序的三条预览分支（e3-3p 傍点、e3-2b 竖排、e3-4p 表格）；
+② 邀请用户通过命令行 `--export-png-flow` 导出 Samples 下的测试稿，在桌面端肉眼确认横排/竖排傍点（着重号）与竖排斜体字体的渲染视觉效果。
+
 ## 2026-06-21 15:31 | claude | E3-6 目录：用户 InDesign 截图确认点导引线+页码右对齐已渲染（Claude 的 TabList 修复生效，视觉 PASS）。但发现静态目录只列 H
 - **分支**：dev
 - **概述**：E3-6 目录：用户 InDesign 截图确认点导引线+页码右对齐已渲染（Claude 的 TabList 修复生效，视觉 PASS）。但发现静态目录只列 H1 书名，正文 H2 子标题没进——根因 LayoutEngine 只收集 section 标题(level1)+story.title(level2)，不收正文 .heading(level>=2) 段落。已修：addStory 段落循环里收集 H2+ 进 tableOfContents（挂 tocLevel2），补端到端断言（testTOCCollectsSubheadingsNotJustTopLevel）。导出验证 demo 目录现三条：细胞里的城市(3)/能量从哪里来(3)/为什么图注很重要(4)。191 测试 + review-idml.sh 6/0 PASS。已合 dev（merge b8a4522，push origin/dev），重导 ~/Desktop/E3-6目录验收-0621.idml（含 H2）。注：本次改了 LayoutEngine.swift（AG 负责文件、AG 正做 e3-10p），改动局部（addStory 几行），AG 分支合并时可能小冲突。
