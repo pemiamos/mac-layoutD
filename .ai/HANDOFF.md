@@ -7,7 +7,7 @@
 - **分支**：`feature/codex-d2-docx-import`
 - **概述**：新增独立 `DOCXBookImporter`，以最小内置 OOXML ZIP 读取器解析 `.docx` 的 `word/document.xml` 和可选 `word/styles.xml`：段落样式映射标题/正文/列表/引用，`w:rPr` 的 `w:b`/`w:i` 映射到 Character 口径的 `inlineRuns`，`w:tbl` 映射为结构化 `tableCells`。支持 stored 与标准 deflate entry；图片/media 首版不导入。`ProjectLoader` 与 GUI 文件选择器均已接受 `.docx`，README 已声明首版能力边界。
 - **改动文件**：`Sources/LayoutDImport/DOCXBookImporter.swift`、`Sources/LayoutDApp/ProjectLoader.swift`、`Sources/LayoutDApp/main.swift`、`Tests/LayoutDImportTests/DOCXBookImporterTests.swift`、`README.md`、`.ai/DECISIONS.md`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
-- **检查**：真实 OOXML fixture 定向测试 PASS（H1、粗/斜 run、列表、表格）；标准 deflate `.docx → layoutD CLI → IDML` 实测 PASS；`scripts/review-idml.sh` PASS（swift build、190 tests、IDML 探针 6/6）。待提交。
+- **检查**：提交 `85d7a00 feat(import): add DOCX manuscript importer`；真实 OOXML fixture 定向测试 PASS（H1、粗/斜 run、列表、表格）；标准 deflate `.docx → layoutD CLI → IDML` 实测 PASS；`scripts/review-idml.sh` PASS（swift build、190 tests、IDML 探针 6/6）。
 - **下一步**：Claude 复审 importer 的 ZIP 边界和 XML 映射；用户可在 GUI 或 CLI 打开一份真实 Word DOCX，确认首版文本导入效果。嵌入图片、复杂编号样式、修订/批注、Zip64 仍在首版范围外。
 
 ## 2026-06-21 11:32 | claude | 提前展开 Codex 本批全部任务的验收规格，Codex 现可整批自助连续作业。本批顺序：E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DO
