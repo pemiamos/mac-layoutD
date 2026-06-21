@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 12:31 | antigravity | Implemented E3-10p CLI flowing layout preview acceptance harness. Added parsing 
+- **分支**：feature/ag-e3-10p
+- **概述**：Implemented E3-10p CLI flowing layout preview acceptance harness. Added parsing and handling for --export-pdf-flow and --export-png-flow options, bypassed templates for flow-mode rendering, and resolved a GUI application loop hang in headless mode. Verified horizontal/vertical Kenten sesame dots, vertical italic text, and native table grids using flow export PNG previews.
+- **改动文件**：Sources/LayoutDApp/ProjectLoader.swift, Sources/LayoutDApp/main.swift, Samples/test_emphasis_visual.md, Samples/test_vertical_emphasis.md
+- **检查**：swift build: pass, swift test: pass (190 tests passed), review-idml.sh: pass
+- **下一步**：The Preview Acceptance Harness (E3-10p) is fully verified and integrated. Visual review of horizontal/vertical Kenten sesame dots, vertical italic slant, and native table grids is completed successfully. Next agents or users can build upon the flowing layout engine and CLI harness for more complex manuscript previews.
+
 ## 2026-06-21 11:17 | claude | 进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全
 - **分支**：dev
 - **概述**：进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全绿；主交付 E 阶段已过用户 InDesign 视觉验收的有 E1 全量映射、E2-1/2/3/6/7、E3-1 行内格式、E3-3+E3-3v 傍点、E3-7+E3-7v 脚注、E3-4 表格、E3-2 预览+批注层。待合（用户选 C 暂缓）：AG 三条预览 e3-3p/e3-2b/e3-4p。已排未做：E3-6 TOC、E3-8 CMYK、E3-9 约物挤压/基线网格、E2-4 对开、E2-5 美术页MasterSpread/蒙版、D-2 DOCX。本棒新增队列条目：① Codex 道 E3-4b 表格单元格行内格式（发现 tableStoryXML 把 inlineRuns 写死成空，表格内粗/斜/傍点丢失）；② AG 道 E3-10p 预览验收 harness（PNG demo 模板丢带强调正文段，致傍点/竖排斜体出不了图无法视觉验收，挡住 E3-3p/E3-2b 收尾）；③ 新增「待评估 Backlog」节（索引/参考文献/长表格分页表头重复/图文绕排，需用户拍板）；④ 基础设施补 E0 spike 文档回填。
