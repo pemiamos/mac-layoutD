@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 16:15 | antigravity | 完成了 E2-4p (对开跨页页码预览渲染) 分支开发并提交。同时同步了 dev 至 feature/ag-export-options 分支，解决了 QUEU
+- **分支**：feature/ag-export-options
+- **概述**：完成了 E2-4p (对开跨页页码预览渲染) 分支开发并提交。同时同步了 dev 至 feature/ag-export-options 分支，解决了 QUEUE.md 的冲突，确保了全部单测和 IDML 端到端探针通过。
+- **改动文件**：Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Tests/LayoutDExportTests/PDFExporterTests.swift, Sources/LayoutDApp/main.swift
+- **检查**：swift test: pass (193 tests), review-idml.sh: pass
+- **下一步**：由 Claude 道审核并集成 feature/ag-e2-4p 和 feature/ag-export-options 分支，继续下一阶段的 IDML 导出与跨页渲染。
+
 ## 2026-06-21 15:44 | claude | 解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HA
 - **分支**：dev
 - **概述**：解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HANDOFF.md 冲突、自行解冲突卡死；Claude 在 AG worktree 按 dev 权威版 checkout --theirs 解掉两文档冲突、补完 merge（1d93ba8），AG worktree build PASS、已解套可继续。根因：Claude 在 dev 频繁改 QUEUE.md + 各道也改 QUEUE.md → 每次同步必冲突。根治（commit 32e71e3 push origin/dev）：① .gitattributes 给 .ai/HANDOFF.md + .ai/DECISIONS.md 设 merge=union（append-only 永不冲突）；② AGENTS.md 铁律 8：QUEUE.md 归 Claude 独占，各道不再勾 [x]/挂 [~]，进度只走 write_handoff，Claude 据交接更新；③ 各道遇文档冲突别硬解，checkout --theirs .ai/QUEUE.md。同步更新记忆 codex-antigravity-dual-lane。
