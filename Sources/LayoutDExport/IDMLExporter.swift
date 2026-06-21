@@ -945,10 +945,27 @@ public struct IDMLExporter {
     /// 段落样式/TOCStyle 接管）。AppliedTOCStyle 让 InDesign 的“更新目录”按 heading1/
     /// heading2 重建目录，当前条目仅用于首次打开时的可见版面。
     private func tocStoryXML(self id: String, entries: [TableOfContentsEntry], frameWidth: Double) -> String {
+        // 制表位（右对齐 + 点导引线）必须用嵌套 <Properties><TabList><ListItem>，
+        // 不能用 ParagraphStyleRange 的扁平属性——InDesign 会静默忽略扁平属性，
+        // 导致页码不右对齐、无点导引线（属性在、视觉无）。Position 略减 6pt 留切口边距。
+        let tabPosition = max(frameWidth - 6.0, 0)
+        let tabList = """
+        \t\t\t<Properties>
+        \t\t\t\t<TabList type="list">
+        \t\t\t\t\t<ListItem type="record">
+        \t\t\t\t\t\t<Alignment type="enumeration">RightAlign</Alignment>
+        \t\t\t\t\t\t<AlignmentCharacter type="string">.</AlignmentCharacter>
+        \t\t\t\t\t\t<Leader type="string">.</Leader>
+        \t\t\t\t\t\t<Position type="unit">\(fmt(tabPosition))</Position>
+        \t\t\t\t\t</ListItem>
+        \t\t\t\t</TabList>
+        \t\t\t</Properties>
+        """
         let body = entries.map { entry in
             let style = entry.level <= 1 ? "tocLevel1" : "tocLevel2"
             return """
-            \t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/\(style)" AppliedComposer="\(appliedComposer)" TabStopAlignment="RightAlign" TabStopLeader="." TabStopPosition="\(fmt(frameWidth))">
+            \t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/\(style)" AppliedComposer="\(appliedComposer)">
+            \(tabList)
             \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>\(esc(entry.title))\t\(entry.pageNumber)</Content></CharacterStyleRange>
             \t\t</ParagraphStyleRange>
             """

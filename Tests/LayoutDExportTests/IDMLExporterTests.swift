@@ -161,8 +161,11 @@ final class IDMLExporterTests: XCTestCase {
             .filter { $0.hasPrefix("Stories/Story_") }
             .map { try entry(output, $0) }
         let tocStory = try XCTUnwrap(stories.first { $0.contains("AppliedTOCStyle=\"TOCStyle/layoutD_TOC\"") })
-        XCTAssertTrue(tocStory.contains("TabStopAlignment=\"RightAlign\""))
-        XCTAssertTrue(tocStory.contains("TabStopLeader=\".\""))
+        // 制表位必须是合法的嵌套 <TabList>，而非会被 InDesign 忽略的扁平属性。
+        XCTAssertTrue(tocStory.contains("<TabList type=\"list\">"))
+        XCTAssertTrue(tocStory.contains("<Alignment type=\"enumeration\">RightAlign</Alignment>"))
+        XCTAssertTrue(tocStory.contains("<Leader type=\"string\">.</Leader>"))
+        XCTAssertFalse(tocStory.contains("TabStopAlignment="), "不得用会被 InDesign 忽略的扁平 tab 属性")
         XCTAssertTrue(tocStory.contains("\t"), "目录标题与页码必须由 tab 分隔，而非空格拼接")
         XCTAssertFalse(tocStory.contains("图像不只是正文的附件  3"))
     }
