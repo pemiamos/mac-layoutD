@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 16:58 | antigravity | 完成了 rebase 任务交接。将 feature/ag-export-options 分支成功变基到最新 dev (ag-lane)，去除了冗余提交与合并冲突
+- **分支**：feature/ag-e2-4p
+- **概述**：完成了 rebase 任务交接。将 feature/ag-export-options 分支成功变基到最新 dev (ag-lane)，去除了冗余提交与合并冲突，保持线性历史；feature/ag-e2-4p 同样保持基于最新 dev 的单条干净提交历史。
+- **改动文件**：.ai/HANDOFF.md
+- **检查**：swift test: pass, review-idml.sh: pass
+- **下一步**：由 Claude 审查并合并变基后的 feature/ag-e2-4p 和 feature/ag-export-options 分支。
+
 ## 2026-06-21 15:44 | claude | 解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HA
 - **分支**：dev
 - **概述**：解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HANDOFF.md 冲突、自行解冲突卡死；Claude 在 AG worktree 按 dev 权威版 checkout --theirs 解掉两文档冲突、补完 merge（1d93ba8），AG worktree build PASS、已解套可继续。根因：Claude 在 dev 频繁改 QUEUE.md + 各道也改 QUEUE.md → 每次同步必冲突。根治（commit 32e71e3 push origin/dev）：① .gitattributes 给 .ai/HANDOFF.md + .ai/DECISIONS.md 设 merge=union（append-only 永不冲突）；② AGENTS.md 铁律 8：QUEUE.md 归 Claude 独占，各道不再勾 [x]/挂 [~]，进度只走 write_handoff，Claude 据交接更新；③ 各道遇文档冲突别硬解，checkout --theirs .ai/QUEUE.md。同步更新记忆 codex-antigravity-dual-lane。
