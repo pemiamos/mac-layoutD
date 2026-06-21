@@ -852,7 +852,9 @@ public struct IDMLExporter {
             return "\t\t\t\t\t<Row Self=\"\(tableSelf)Row\(r)\" Name=\"\(r)\" SingleRowHeight=\"\(fmt(rowHeight))\" RowType=\"\(rowType)\"/>"
         }.joined(separator: "\n")
 
-        let border = "TopEdgeStrokeWeight=\"0.5\" BottomEdgeStrokeWeight=\"0.5\" LeftEdgeStrokeWeight=\"0.5\" RightEdgeStrokeWeight=\"0.5\" TopEdgeStrokeColor=\"Color/Black\" BottomEdgeStrokeColor=\"Color/Black\" LeftEdgeStrokeColor=\"Color/Black\" RightEdgeStrokeColor=\"Color/Black\""
+        // 四边 0.5pt 黑边 + 2pt 内边距（与 LayoutEngine.estimatedTableHeight 的 cellInset 一致，
+        // 否则估高与 InDesign 实际折行不符会溢流）。
+        let border = "TopEdgeStrokeWeight=\"0.5\" BottomEdgeStrokeWeight=\"0.5\" LeftEdgeStrokeWeight=\"0.5\" RightEdgeStrokeWeight=\"0.5\" TopEdgeStrokeColor=\"Color/Black\" BottomEdgeStrokeColor=\"Color/Black\" LeftEdgeStrokeColor=\"Color/Black\" RightEdgeStrokeColor=\"Color/Black\" TopInset=\"2\" BottomInset=\"2\" LeftInset=\"2\" RightInset=\"2\""
         var cellsXML: [String] = []
         for r in 0..<rowCount {
             for c in 0..<columnCount {

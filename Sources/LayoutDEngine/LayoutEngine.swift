@@ -228,7 +228,19 @@ private struct LayoutContext {
 
     private mutating func addText(_ text: String, style: ParagraphStyle, kind: PageFrameKind, anchoredSideNoteIds: [UUID] = [], sourceParagraphId: UUID? = nil) {
         let text = normalizedText(text)
-        
+
+        // 原生表格：按网格估高落框，而非用拍平文本测高（否则框太矮，InDesign 里整张表
+        // 溢流、只显示前几行）。导出器据 sourceParagraphId 的 tableCells 输出真 <Table>。
+        if kind == .table,
+           let sourceParagraphId,
+           let paragraph = findParagraph(id: sourceParagraphId),
+           let cells = paragraph.tableCells, !cells.isEmpty {
+            let tableHeight = estimatedTableHeight(cells: cells, style: style)
+            placeTextFrame(text, height: tableHeight, style: style, kind: kind,
+                           spaceBefore: style.spaceBefore, sourceParagraphId: sourceParagraphId)
+            return
+        }
+
         var paragraphRuns: [InlineRun]? = nil
         if let sourceParagraphId = sourceParagraphId,
            let paragraph = findParagraph(id: sourceParagraphId),
@@ -939,6 +951,29 @@ private struct LayoutContext {
             nil
         )
         return max(ceil(size.height), style.lineHeight)
+    }
+
+    /// 表格按网格估高：每行取其各单元格估高的最大值（单元格在等分列宽内自动折行），
+    /// 再对所有行求和。`cellInset` 与 IDML 导出的 Cell inset 保持一致，避免低估折行
+    /// 导致 InDesign 溢流。略偏保守（宁高勿矮）以确保整张表落进文本框。
+    private func estimatedTableHeight(cells: [[String]], style: ParagraphStyle) -> Double {
+        let columnCount = cells.map(\.count).max() ?? 0
+        guard columnCount > 0 else { return style.lineHeight }
+        let cellInset = 2.0
+        let cellWidth = columnWidth / Double(columnCount)
+        let textWidth = max(10, cellWidth - cellInset * 2)
+        let minRowHeight = max(18, style.lineHeight)
+        var total = 0.0
+        for row in cells {
+            var rowHeight = minRowHeight
+            for column in 0..<columnCount {
+                let cellText = column < row.count ? row[column] : ""
+                let height = estimatedTextHeight(text: cellText, style: style, width: textWidth) + cellInset * 2
+                rowHeight = max(rowHeight, height)
+            }
+            total += rowHeight
+        }
+        return total
     }
 
     private func estimatedFootnoteHeight(_ paragraph: Paragraph) -> Double {

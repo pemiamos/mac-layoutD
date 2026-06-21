@@ -156,6 +156,14 @@ final class IDMLExporterTests: XCTestCase {
             sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [table])])]
         )
         let document = LayoutEngine().layout(project: project)
+
+        // 布局须按网格给表格分配足够高度（每行 ≥ 最小行高 18pt），否则 InDesign 里整张表
+        // 溢流、只显示前几行。这条防止回退到「按拍平文本测高」。
+        let tableFrame = document.pages.flatMap(\.frames).first { $0.kind == .table }
+        XCTAssertNotNil(tableFrame, "应生成 .table 帧")
+        XCTAssertGreaterThanOrEqual(tableFrame?.rect.height ?? 0, Double(cells.count) * 18,
+                                    "表格框高度须能容纳所有行")
+
         let output = FileManager.default.temporaryDirectory
             .appendingPathComponent("layoutd-idml-table-\(UUID().uuidString).idml")
         defer { try? FileManager.default.removeItem(at: output) }
