@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 10:25 | antigravity | Implemented E3-3p Kenten (Emphasis Sesame Dots) Preview Rendering in Canvas, PDF
+- **分支**：feature/ag-e3-3p
+- **概述**：Implemented E3-3p Kenten (Emphasis Sesame Dots) Preview Rendering in Canvas, PDF, and PNG exporters.
+- **改动文件**：Sources/LayoutDCore/ChineseTypesetting.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift
+- **检查**：swift build: pass, swift test: pass (188/0), review-idml.sh: pass
+- **下一步**：Wait for Codex to merge E2-4 or E3-8, then proceed to implementation of export options panel. In the meantime, user/Claude can merge feature/ag-e3-3p branch to dev.
+
 ## 2026-06-21 06:51 | claude | 用户指派 Claude 直接做 E3-7v（脚注正文 InDesign 中文豆腐）。已在 feature/codex-codex-e3-7-footnotes 
 - **分支**：dev
 - **概述**：用户指派 Claude 直接做 E3-7v（脚注正文 InDesign 中文豆腐）。已在 feature/codex-codex-e3-7-footnotes 上修复并提交 commit d449077：根因是 footnoteXML 把脚注 ParagraphStyleRange 硬编码成 $ID/[No paragraph style]（无 AppliedFont）+ 无 footnote 段落样式注册，InDesign 退回拉丁默认字体故中文豆腐。修法（仅导出侧）：footnoteXML 改按 caption→body→空样式 优先级引用带 CF_ 复合字体的段落样式（caption 8.5pt/无首行缩进，最像脚注），并把 footnoteStyleRef 一路 thread 进 storyXML→characterStyleRanges→footnoteXML。解包验证脚注现挂 ParagraphStyle/caption（带 CF_caption 复合字体）。补端到端断言：脚注 ParagraphStyleRange 不得为 [No paragraph style]、其引用样式在 Styles.xml 须带 CF_ AppliedFont。已重导样例投桌面 ~/Desktop/layoutD脚注验收-0621-v2.idml（4 连续脚注）。E3-7+E3-7v 仍在 feature 分支未合 dev——合前需 git merge origin/dev reconcile 与 E3-3v 的 storyXML 冲突。
