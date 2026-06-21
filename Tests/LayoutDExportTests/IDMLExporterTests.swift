@@ -257,6 +257,42 @@ final class IDMLExporterTests: XCTestCase {
                        "每个单元格段落须去掉首行缩进")
     }
 
+    func testTableCellInlineFormattingExportsToIDML() throws {
+        // E3-4b：表格单元格内的粗/斜/傍点（tableCellRuns）应导出为 FauxBold/Skew/Kenten，
+        // 而非被写死成空 inlineRuns 丢失。
+        let cells = [["名称", "说明"], ["线粒体", "产能中心"], ["核糖体", "合成蛋白质"], ["膜", "重点结构"]]
+        let runs: [[[InlineRun]]] = [
+            [[], []],                                            // 表头无格式
+            [[], [InlineRun(location: 0, length: 2, emphasis: [.bold])]],   // 产能(粗)中心
+            [[], [InlineRun(location: 2, length: 3, emphasis: [.italic])]], // 合成蛋白质(斜)
+            [[], [InlineRun(location: 0, length: 2, emphasis: [.kenten])]], // 重点(傍点)结构
+        ]
+        let table = Paragraph(
+            kind: .table,
+            text: cells.map { $0.joined(separator: "    ") }.joined(separator: "\n"),
+            styleId: StyleID.body.rawValue,
+            tableCells: cells,
+            tableCellRuns: runs
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "表格行内", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [table])])]
+        )
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-tablecell-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let stories = try zipEntries(output)
+            .filter { $0.hasPrefix("Stories/Story_") }
+            .map { try entry(output, $0) }
+            .joined(separator: "\n")
+        XCTAssertTrue(stories.contains("FauxBold=\"true\""), "单元格粗体应出 FauxBold")
+        XCTAssertTrue(stories.contains("Skew=\"12\""), "单元格斜体应出 Skew")
+        XCTAssertTrue(stories.contains("KentenKind"), "单元格傍点应出 KentenKind")
+    }
+
     func testExportsValidIDMLFromSampleProject() throws {
         let project = BookProject.sample
         let document = LayoutEngine().layout(project: project)

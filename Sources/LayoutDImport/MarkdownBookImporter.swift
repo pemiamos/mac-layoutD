@@ -260,12 +260,17 @@ private struct MarkdownParser {
             .filter { !$0.isEmpty }
 
         if !rows.isEmpty {
-            // 保留结构化行列供 IDML 导出原生 <Table>；每格单独归一化行内 Markdown。
+            // 保留结构化行列供 IDML 导出原生 <Table>；每格解析行内 Markdown，
+            // 同时留下归一化文本（tableCells）与行内格式（tableCellRuns，偏移针对该格文本）。
             // `text` 维持拍平降级（布局/预览暂不识别网格时仍能显示）。
-            let normalizedRows = rows.map { $0.map(normalizeInlineMarkdown) }
+            let parsedRows = rows.map { $0.map(parseInlineMarkdown) }
+            let normalizedRows = parsedRows.map { $0.map(\.text) }
+            let cellRuns = parsedRows.map { $0.map(\.runs) }
             let text = normalizedRows.map { $0.joined(separator: "    ") }.joined(separator: "\n")
+            let hasRuns = cellRuns.contains { $0.contains { !$0.isEmpty } }
             currentParagraphs.append(
-                Paragraph(kind: .table, text: text, styleId: StyleID.body.rawValue, tableCells: normalizedRows)
+                Paragraph(kind: .table, text: text, styleId: StyleID.body.rawValue,
+                          tableCells: normalizedRows, tableCellRuns: hasRuns ? cellRuns : nil)
             )
         }
 
@@ -781,9 +786,11 @@ private struct MarkdownParser {
             trimmedLine.removeLast()
         }
 
+        // 返回原始单元格 Markdown（不在此归一化）；归一化与行内 run 解析由
+        // flushTableBuffer 统一做，以便同时拿到剥离文本与行内格式（粗/斜/傍点）。
         return trimmedLine
             .split(separator: "|", omittingEmptySubsequences: false)
-            .map { normalizeInlineMarkdown(String($0).trimmed) }
+            .map { String($0).trimmed }
     }
 
     private func normalizeInlineMarkdown(_ text: String) -> String {
