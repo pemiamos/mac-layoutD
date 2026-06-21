@@ -58,7 +58,7 @@
 
 > Claude 既做 dev/main 集成与审核，也直接实现高风险/重要的 IDMLExporter 导出任务（用户决定：Codex 不靠谱，这些收 Claude 手里）。
 > 都改 `Sources/LayoutDExport/IDMLExporter.swift`，**串行做、各自专用 worktree+feature 分支**（守 N1/N2/N3），互不并行避免同文件冲突。
-> **顺序（依赖/风险）：~~E3-6 目录动态化~~✅ → ~~E3-4b 表格内行内~~（✅ 已合 fe31069）→ E2-5 美术页/蒙版 → E2-4 对开跨页（风险最高最后）。**
+> **顺序（依赖/风险）：~~E3-6~~✅ → ~~E3-4b~~✅ → ~~E2-5 非矩形蒙版~~（✅ 已合 404596b）→ E2-4 对开跨页（风险最高最后，剩最后一项）。**
 > 任务详情见下方 Codex 道里对应条目（已标「改判 Claude」）与本道 E2-4 条目；E2-4 须等 Codex 的 D-2 与本道前序都稳定后做。
 
 ## Codex 道队列（IDML 导出管线 + 内容模型）
@@ -168,7 +168,7 @@
   - 文件：`IDMLExporter.swift`（⚠️ Codex 负责文件，本项跨道由 Claude 直接做，故须等 Codex 本批先落 dev）。
   - ⚠️ 风险高（可能打破当前"单页 spread 干净分页"），单独一棒、改完先确认非对开模式没有回归，再重点交用户 InDesign 验收对开效果。
 
-- [ ] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版**（可拆两小步，蒙版优先、更独立）— 👤 **改判 Claude**（2026-06-21；固定页回归风险高）。Codex 勿做。
+- [x] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版** — ✅ 已合 dev（404596b）。非矩形蒙版完成：maskGeometry 输出八角(8点)/扇面(环形扇区弧线近似)PathGeometry，图片放满 rect 被裁成形；.rect/nil 回退矩形(无回归)；端到端断言八角8/矩形4/扇面≥16点；桌面 E2-5蒙版验收-0621.idml 待用户 InDesign 复看。固定美术页「不叠主页项」一项 N/A：当前 MasterSpread 为空(无页码等元素)、满版图本就按出血矩形导出，无可叠之物。
   - **现状（Claude 已勘）**：模型已就绪——`ImageMaskShape{rect,fan,octagon}`（`LayoutPlan.swift:114`）+ 帧上 `maskShape` 字段；固定美术页用 `LayoutPlanStrategy.cover/.fullPageImage/.titlePage`（`BookProject.swift:480`）。但导出器**只为矩形写 PathGeometry**（`IDMLExporter.swift:404` 四角点），且文件头注释自承「固定美术页→MasterSpread、非矩形蒙版**暂未覆盖**」。现有 A-Master 是个空主页（`masterSpread()` `IDMLExporter.swift:638`）。
   - **第 1 步·非矩形蒙版（先做，独立）**：帧 `maskShape == .fan/.octagon` 时，把该图框的 `<PathGeometry><GeometryPathType>` 点数组算成对应**多边形**（八角=8 点、扇面=弧近似多段点），InDesign 据此把置入图裁成该形；`rect` 保持现状。注意图片 `<Image>` 仍按原图矩形放，靠图框 path 裁切。
   - **第 2 步·固定美术页**：`cover/fullPageImage/titlePage` 固定页导出时——① 满版图按**出血满版**定位（已知 bleed），② 该页**不要叠加正文主页项/页码**（应用 `[None]` 主页或不挂 A-Master），避免页码/主页元素盖在满版图上；非固定页维持现状不回归。（把共享背景美术放进 MasterSpread 为可选加分，非必须。）
