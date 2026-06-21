@@ -43,6 +43,7 @@ final class LayoutDCoreTests: XCTestCase {
         let font6 = attrString.attribute(NSAttributedString.Key(kCTFontAttributeName as String), at: 6, effectiveRange: &range) as! CTFont
         let matrix = CTFontGetMatrix(font6)
         XCTAssertEqual(matrix.c, CGFloat(tan(12.0 * Double.pi / 180.0)), accuracy: 0.001)
+        XCTAssertEqual(matrix.b, 0.0)
         
         // Retrieve kenten attribute at index 6 (should be true)
         let kenten6 = attrString.attribute(ChineseTypesetting.kentenAttributeName, at: 6, effectiveRange: &range) as? Bool
@@ -51,6 +52,18 @@ final class LayoutDCoreTests: XCTestCase {
         // Retrieve kenten attribute at index 0 (should be nil)
         let kenten0 = attrString.attribute(ChineseTypesetting.kentenAttributeName, at: 0, effectiveRange: &range) as? Bool
         XCTAssertNil(kenten0)
+        
+        // 4. Test vertical makeAttributedString
+        let verticalStyle = ParagraphStyle.body.with(layoutDirection: .vertical)
+        let verticalAttrString = ChineseTypesetting.makeAttributedString(
+            text: text,
+            style: verticalStyle,
+            inlineRuns: runs
+        )
+        let verticalFont6 = verticalAttrString.attribute(NSAttributedString.Key(kCTFontAttributeName as String), at: 6, effectiveRange: &range) as! CTFont
+        let verticalMatrix = CTFontGetMatrix(verticalFont6)
+        XCTAssertEqual(verticalMatrix.b, CGFloat(tan(12.0 * Double.pi / 180.0)), accuracy: 0.001)
+        XCTAssertEqual(verticalMatrix.c, 0.0)
     }
 
     func testAnnotationsPersistenceAndMapping() throws {

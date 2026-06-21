@@ -1089,11 +1089,15 @@ private struct MarkdownParser {
             || values["gutter_mm"] != nil
             || values["baseline_grid_pt"] != nil
             || values["bleed_mm"] != nil
+            || values["layout_direction"] != nil
         guard hasPageSetupValues else {
             return nil
         }
 
         var setup = PageSetup.scienceBookDefault
+        if let direction = values["layout_direction"]?.lowercased() {
+            setup.layoutDirection = (direction == "vertical") ? .vertical : .horizontal
+        }
         if let columns = values["columns"].flatMap(Int.init), columns > 0 {
             setup.columns = min(columns, 4)
         }
