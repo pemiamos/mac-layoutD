@@ -811,42 +811,20 @@ final class CanvasView: NSView {
 
     private func maskPath(in rect: CGRect, shape: ImageMaskShape?) -> NSBezierPath {
         let path = NSBezierPath()
-        guard let shape, shape != .rect else {
+        guard let shape else {
             path.appendRect(rect)
             return path
         }
-        
-        switch shape {
-        case .rect:
+        let points = shape.polygonPoints(in: rect)
+        guard !points.isEmpty else {
             path.appendRect(rect)
-        case .octagon:
-            let delta = min(rect.width, rect.height) * 0.15
-            path.move(to: CGPoint(x: rect.minX + delta, y: rect.minY))
-            path.line(to: CGPoint(x: rect.maxX - delta, y: rect.minY))
-            path.line(to: CGPoint(x: rect.maxX, y: rect.minY + delta))
-            path.line(to: CGPoint(x: rect.maxX, y: rect.maxY - delta))
-            path.line(to: CGPoint(x: rect.maxX - delta, y: rect.maxY))
-            path.line(to: CGPoint(x: rect.minX + delta, y: rect.maxY))
-            path.line(to: CGPoint(x: rect.minX, y: rect.maxY - delta))
-            path.line(to: CGPoint(x: rect.minX, y: rect.minY + delta))
-            path.close()
-        case .fan:
-            let cx = rect.minX + rect.width / 2.0
-            let cy = rect.minY + rect.height * 2.5
-            let R = rect.height * 2.5
-            let r = rect.height * 1.5
-            let theta = asin(rect.width / (2.0 * R))
-            let startAngle = 1.5 * .pi - theta
-            let endAngle = 1.5 * .pi + theta
-            
-            let startDeg = startAngle * 180.0 / .pi
-            let endDeg = endAngle * 180.0 / .pi
-            
-            path.appendArc(withCenter: CGPoint(x: cx, y: cy), radius: R, startAngle: startDeg, endAngle: endDeg, clockwise: false)
-            path.line(to: CGPoint(x: cx + r * cos(endAngle), y: cy + r * sin(endAngle)))
-            path.appendArc(withCenter: CGPoint(x: cx, y: cy), radius: r, startAngle: endDeg, endAngle: startDeg, clockwise: true)
-            path.close()
+            return path
         }
+        path.move(to: points[0])
+        for i in 1..<points.count {
+            path.line(to: points[i])
+        }
+        path.close()
         return path
     }
 
