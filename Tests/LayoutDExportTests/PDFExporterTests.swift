@@ -494,4 +494,62 @@ final class PDFExporterTests: XCTestCase {
         XCTAssertEqual(PDFXVersion.pdfx1a.pdfxStandardName, "PDF/X-1a")
         XCTAssertEqual(PDFXVersion.pdfx3.pdfxStandardName, "PDF/X-3")
     }
+
+    func testFacingPagesPageNumberPositioningInExporters() throws {
+        var project = BookProject(
+            metadata: ProjectMetadata(title: "对开页码位置测试", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "第一章",
+                            paragraphs: [
+                                Paragraph(kind: .body, text: String(repeating: "对开页码测试文字占位符。 ", count: 100), styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+        project.pageSetup.facingPages = true
+        project.pageSetup.margins = PageMargins(top: 20, right: 15, bottom: 20, left: 30)
+        
+        let document = LayoutEngine().layout(project: project)
+        XCTAssertGreaterThan(document.pages.count, 1)
+
+        // 1. PDF Export
+        let pdfURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-pdf-facing-pages-\(UUID().uuidString)")
+            .appendingPathExtension("pdf")
+        defer {
+            try? FileManager.default.removeItem(at: pdfURL)
+        }
+        
+        XCTAssertNoThrow(try PDFExporter().export(
+            document: document,
+            project: project,
+            to: pdfURL
+        ))
+        
+        XCTAssertTrue(FileManager.default.fileExists(atPath: pdfURL.path))
+        
+        // 2. PNG Export
+        let pngDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-png-facing-pages-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: pngDir)
+        }
+        
+        let pngURLs = try PNGExporter().export(
+            document: document,
+            project: project,
+            to: pngDir,
+            scale: 1.0
+        )
+        XCTAssertGreaterThan(pngURLs.count, 0)
+        for url in pngURLs {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        }
+    }
 }

@@ -149,6 +149,55 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertLessThan(colWidths[0], colWidths[2])
     }
 
+    func testImageMaskShapePolygonPoints() throws {
+        let rect = CGRect(x: 10, y: 20, width: 100, height: 200)
+
+        let rectPoints = ImageMaskShape.rect.polygonPoints(in: rect)
+        XCTAssertEqual(rectPoints.count, 4)
+
+        let octagonPoints = ImageMaskShape.octagon.polygonPoints(in: rect)
+        XCTAssertEqual(octagonPoints.count, 8)
+
+        let fanPoints = ImageMaskShape.fan.polygonPoints(in: rect)
+        XCTAssertEqual(fanPoints.count, 34)
+    }
+
+    func testTOCAttributedString() throws {
+        let project = BookProject.sample
+        let entries = [
+            TableOfContentsEntry(level: 1, title: "第一章 细胞的结构", pageNumber: 3),
+            TableOfContentsEntry(level: 2, title: "1.1 细胞膜", pageNumber: 4)
+        ]
+        
+        let attrString = ChineseTypesetting.makeTOCAttributedString(
+            entries: entries,
+            project: project,
+            containerWidth: 300.0,
+            zoomScale: 1.0,
+            foregroundColor: nil
+        )
+        
+        let plainString = attrString.string
+        XCTAssertTrue(plainString.contains("第一章 细胞的结构"))
+        XCTAssertTrue(plainString.contains("1.1 细胞膜"))
+        XCTAssertTrue(plainString.contains("\t"))
+        XCTAssertTrue(plainString.contains("."))
+        
+        let index1 = plainString.range(of: "第一章 细胞的结构")?.lowerBound.utf16Offset(in: plainString) ?? 0
+        var range1 = NSRange()
+        let paragraphStyle1 = attrString.attribute(NSAttributedString.Key(kCTParagraphStyleAttributeName as String), at: index1, effectiveRange: &range1) as! CTParagraphStyle
+        var indent1: CGFloat = -1
+        XCTAssertTrue(CTParagraphStyleGetValueForSpecifier(paragraphStyle1, .firstLineHeadIndent, MemoryLayout<CGFloat>.size, &indent1))
+        XCTAssertEqual(indent1, 0.0)
+        
+        let index2 = plainString.range(of: "1.1 细胞膜")?.lowerBound.utf16Offset(in: plainString) ?? 0
+        var range2 = NSRange()
+        let paragraphStyle2 = attrString.attribute(NSAttributedString.Key(kCTParagraphStyleAttributeName as String), at: index2, effectiveRange: &range2) as! CTParagraphStyle
+        var indent2: CGFloat = -1
+        XCTAssertTrue(CTParagraphStyleGetValueForSpecifier(paragraphStyle2, .firstLineHeadIndent, MemoryLayout<CGFloat>.size, &indent2))
+        XCTAssertEqual(indent2, 12.0)
+    }
+
     func testProjectMetadataDecodesLegacyFilesWithoutNewBookFields() throws {
         let legacyProject = BookProject(metadata: ProjectMetadata(title: "旧项目", author: "layoutD"))
         let encoded = try ProjectFile.encode(legacyProject)
@@ -197,7 +246,7 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertTrue(document.pages[safe: 1]?.frames.contains { $0.content == .text("目录") } == true)
         XCTAssertTrue(document.pages[safe: 1]?.frames.contains { frame in
             if case .text(let text) = frame.content {
-                return text.contains("第一章 重新理解图文排版  3")
+                return text.contains("第一章 重新理解图文排版\t3")
             }
             return false
         } == true)

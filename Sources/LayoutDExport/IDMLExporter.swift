@@ -12,6 +12,16 @@ import LayoutDCore
 /// 非矩形蒙版、字体样式名拆分。
 ///
 /// 颜色按 layoutD 的 RGB 管线导出为 RGB 色板；CMYK 分色 / PDF/X 交 InDesign(印前路线 A)。
+public struct IDMLExportOptions: Sendable {
+    public var facingPages: Bool
+    public var cmykColors: Bool
+
+    public init(facingPages: Bool = false, cmykColors: Bool = false) {
+        self.facingPages = facingPages
+        self.cmykColors = cmykColors
+    }
+}
+
 public struct IDMLExporter {
     public init() {}
 
@@ -34,7 +44,12 @@ public struct IDMLExporter {
 
     // MARK: - 入口
 
-    public func export(document: LaidOutDocument, project: BookProject, to url: URL) throws {
+    public func export(
+        document: LaidOutDocument,
+        project: BookProject,
+        to url: URL,
+        options: IDMLExportOptions = IDMLExportOptions()
+    ) throws {
         let pageW = project.pageSetup.pageSize.width
         let pageH = project.pageSetup.pageSize.height
         let pages = document.pages.sorted { $0.number < $1.number }
@@ -125,6 +140,7 @@ public struct IDMLExporter {
                         let cellFillSwatch = resolvedFillHex.map { ctx.color($0) }
                         storyFiles["Stories/Story_\(storySelf).xml"] = tableStoryXML(
                             self: storySelf, styleRef: styleRef, cells: cells,
+                            cellRuns: paragraphsByID[paragraphID]?.tableCellRuns,
                             frameWidth: frame.rect.width, cellFillSwatch: cellFillSwatch)
                         storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                         storyListIds.append(storySelf)
@@ -179,7 +195,7 @@ public struct IDMLExporter {
                     items.append(imageItem(self: "uRect\(pi)_\(fi)", imageSelf: "uImg\(pi)_\(fi)",
                                            linkSelf: "uLink\(pi)_\(fi)", asset: asset,
                                            packagedFileName: packagedLinks[asset.id]?.fileName,
-                                           rect: frame.rect, pageW: pageW, pageH: pageH))
+                                           rect: frame.rect, maskShape: frame.maskShape, pageW: pageW, pageH: pageH))
                 case .empty:
                     continue
                 }
@@ -430,6 +446,45 @@ public struct IDMLExporter {
         """
     }
 
+    /// 非矩形图框蒙版（E2-5）：把图框路径改成多边形/扇面，图片放满 rect 后被该路径裁切。
+    /// `.rect`/nil 回退到矩形。八角=切四角的 8 点；扇面=向上张开的环形扇区（弧线用多段折线近似）。
+    private func maskGeometry(_ rect: Rect, shape: ImageMaskShape?, pageW: Double, pageH: Double) -> String {
+        let left = rect.x - pageW / 2
+        let top = rect.y - pageH / 2
+        let right = rect.x + rect.width - pageW / 2
+        let bottom = rect.y + rect.height - pageH / 2
+        let w = rect.width, h = rect.height
+        var pts: [(Double, Double)] = []
+        switch shape {
+        case .octagon:
+            let c = min(w, h) * 0.30   // 四角各切掉的边长
+            pts = [(left + c, top), (right - c, top), (right, top + c), (right, bottom - c),
+                   (right - c, bottom), (left + c, bottom), (left, bottom - c), (left, top + c)]
+        case .fan:
+            let cx = (left + right) / 2
+            let half = 35.0 * Double.pi / 180.0           // 扇面半张角
+            let ro = w / (2 * sin(half))                  // 外半径：外弧最宽处贴框宽
+            let cy = top + ro                             // 圆心在框上方外侧，外弧顶贴框顶
+            let ri = max(ro - h, ro * 0.32)               // 内半径：内弧贴框底（过矮则留最小内径）
+            let seg = 16
+            for i in 0...seg {                            // 外弧 左→右
+                let t = -half + 2 * half * Double(i) / Double(seg)
+                pts.append((cx + ro * sin(t), cy - ro * cos(t)))
+            }
+            for i in 0...seg {                            // 内弧 右→左
+                let t = half - 2 * half * Double(i) / Double(seg)
+                pts.append((cx + ri * sin(t), cy - ri * cos(t)))
+            }
+        default:
+            return rectGeometry(rect, pageW: pageW, pageH: pageH)
+        }
+        let body = pts.map { x, y -> String in
+            let a = "\(fmt(x)) \(fmt(y))"
+            return "<PathPointType Anchor=\"\(a)\" LeftDirection=\"\(a)\" RightDirection=\"\(a)\"/>"
+        }.joined()
+        return "<Properties><PathGeometry><GeometryPathType PathOpen=\"false\"><PathPointArray>\(body)</PathPointArray></GeometryPathType></PathGeometry></Properties>"
+    }
+
     // MARK: - 页面项
 
     private func colorRef(_ hex: String?) -> String {
@@ -458,7 +513,7 @@ public struct IDMLExporter {
         """
     }
 
-    private func imageItem(self id: String, imageSelf: String, linkSelf: String, asset: Asset, packagedFileName: String?, rect: Rect, pageW: Double, pageH: Double) -> String {
+    private func imageItem(self id: String, imageSelf: String, linkSelf: String, asset: Asset, packagedFileName: String?, rect: Rect, maskShape: ImageMaskShape? = nil, pageW: Double, pageH: Double) -> String {
         let natW = Double(max(asset.pixelWidth, 1))
         let natH = Double(max(asset.pixelHeight, 1))
         let sx = rect.width / natW, sy = rect.height / natH
@@ -467,7 +522,7 @@ public struct IDMLExporter {
         let uri = packagedFileName.map { "file:Links/\($0)" } ?? "file:missing-\(asset.fileName)"
         return """
         \t\t<Rectangle Self="\(id)" ContentType="GraphicType" StoryTitle="$ID/" ItemTransform="1 0 0 1 0 0">
-        \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH))
+        \t\t\t\(maskGeometry(rect, shape: maskShape, pageW: pageW, pageH: pageH))
         \t\t\t<Image Self="\(imageSelf)" Space="$ID/#Links_RGB" ActualPpi="72 72" EffectivePpi="\(effX) \(effY)" ImageRenderingIntent="UseColorSettings" Visible="true" ItemTransform="\(fmt(sx)) 0 0 \(fmt(sy)) \(fmt(left)) \(fmt(top))">
         \t\t\t\t<Properties>
         \t\t\t\t\t<Profile type="string">$ID/Embedded</Profile>
@@ -876,7 +931,7 @@ public struct IDMLExporter {
     /// 再全部 <Row>，最后全部 <Cell>（Cell 不嵌在 Row 里，靠 Name="列:行" 定位）。
     /// 第一行视为表头。列宽按框宽均分；单元格四边给 0.5pt 黑边，使其在 InDesign 里
     /// 一眼是真表格。单元格文字复用 styledCharacterRanges，并与正文一样带 World-Ready 排版器。
-    private func tableStoryXML(self id: String, styleRef: String, cells: [[String]], frameWidth: Double, cellFillSwatch: String? = nil) -> String {
+    private func tableStoryXML(self id: String, styleRef: String, cells: [[String]], cellRuns: [[[InlineRun]]]? = nil, frameWidth: Double, cellFillSwatch: String? = nil) -> String {
         let rowCount = cells.count
         let columnCount = cells.map(\.count).max() ?? 0
         guard rowCount > 0, columnCount > 0 else {
@@ -906,7 +961,9 @@ public struct IDMLExporter {
         for r in 0..<rowCount {
             for c in 0..<columnCount {
                 let content = c < cells[r].count ? cells[r][c] : ""
-                let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: [])
+                // 该格的行内格式（粗/斜/傍点），偏移针对该格文本；缺则空（纯文字）。
+                let runs: [InlineRun] = (cellRuns.flatMap { r < $0.count && c < $0[r].count ? $0[r][c] : nil }) ?? []
+                let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: runs)
                 cellsXML.append("""
                 \t\t\t\t\t<Cell Self="\(tableSelf)Cell\(c)_\(r)" Name="\(c):\(r)" RowSpan="1" ColumnSpan="1" AppliedCellStyle="CellStyle/$ID/[None]"\(fillAttr) \(border)>
                 \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)" FirstLineIndent="0" Justification="LeftJustified">

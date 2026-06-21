@@ -257,6 +257,75 @@ final class IDMLExporterTests: XCTestCase {
                        "每个单元格段落须去掉首行缩进")
     }
 
+    func testTableCellInlineFormattingExportsToIDML() throws {
+        // E3-4b：表格单元格内的粗/斜/傍点（tableCellRuns）应导出为 FauxBold/Skew/Kenten，
+        // 而非被写死成空 inlineRuns 丢失。
+        let cells = [["名称", "说明"], ["线粒体", "产能中心"], ["核糖体", "合成蛋白质"], ["膜", "重点结构"]]
+        let runs: [[[InlineRun]]] = [
+            [[], []],                                            // 表头无格式
+            [[], [InlineRun(location: 0, length: 2, emphasis: [.bold])]],   // 产能(粗)中心
+            [[], [InlineRun(location: 2, length: 3, emphasis: [.italic])]], // 合成蛋白质(斜)
+            [[], [InlineRun(location: 0, length: 2, emphasis: [.kenten])]], // 重点(傍点)结构
+        ]
+        let table = Paragraph(
+            kind: .table,
+            text: cells.map { $0.joined(separator: "    ") }.joined(separator: "\n"),
+            styleId: StyleID.body.rawValue,
+            tableCells: cells,
+            tableCellRuns: runs
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "表格行内", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [table])])]
+        )
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-tablecell-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let stories = try zipEntries(output)
+            .filter { $0.hasPrefix("Stories/Story_") }
+            .map { try entry(output, $0) }
+            .joined(separator: "\n")
+        XCTAssertTrue(stories.contains("FauxBold=\"true\""), "单元格粗体应出 FauxBold")
+        XCTAssertTrue(stories.contains("Skew=\"12\""), "单元格斜体应出 Skew")
+        XCTAssertTrue(stories.contains("KentenKind"), "单元格傍点应出 KentenKind")
+    }
+
+    func testNonRectangularImageMaskExportsPolygonGeometry() throws {
+        // E2-5：maskShape=.octagon/.fan 的图框须输出多边形 PathGeometry（非 4 角矩形），
+        // 让 InDesign 把置入图裁成对应形状；图片仍放满 rect。
+        func imageFramePointCount(_ shape: ImageMaskShape) throws -> Int {
+            var project = BookProject.sample
+            let assetId = UUID()
+            project.assets.append(Asset(id: assetId, fileName: "art.png", role: .decorative,
+                                        pixelWidth: 800, pixelHeight: 600))
+            let plan = LayoutPlan(target: .page(3), strategy: .fullPageImage, blocks: [
+                LayoutPlanBlock(kind: .image, role: "art",
+                                frame: Rect(x: 0.1, y: 0.1, width: 0.6, height: 0.6),
+                                contentReference: .asset(assetId), maskShape: shape)
+            ])
+            project.safeAppliedLayoutPlans[3] = plan
+            let document = LayoutEngine().layout(project: project)
+            let output = FileManager.default.temporaryDirectory
+                .appendingPathComponent("layoutd-idml-mask-\(UUID().uuidString).idml")
+            defer { try? FileManager.default.removeItem(at: output) }
+            try IDMLExporter().export(document: document, project: project, to: output)
+            let spread = try XCTUnwrap(try zipEntries(output)
+                .filter { $0.hasPrefix("Spreads/Spread_") }
+                .map { try entry(output, $0) }
+                .first { $0.contains("ContentType=\"GraphicType\"") }, "应有含图的 spread")
+            // 图框路径点在 GraphicType Rectangle 开标签与 <Image 之间。
+            let afterRect = spread.components(separatedBy: "ContentType=\"GraphicType\"")[1]
+            let frameGeom = afterRect.components(separatedBy: "<Image").first ?? ""
+            return frameGeom.components(separatedBy: "<PathPointType").count - 1
+        }
+        XCTAssertEqual(try imageFramePointCount(.octagon), 8, "八角图框应 8 个路径点")
+        XCTAssertEqual(try imageFramePointCount(.rect), 4, "矩形图框仍 4 个路径点（无回归）")
+        XCTAssertGreaterThanOrEqual(try imageFramePointCount(.fan), 16, "扇面图框应多段弧近似（≥16 点）")
+    }
+
     func testExportsValidIDMLFromSampleProject() throws {
         let project = BookProject.sample
         let document = LayoutEngine().layout(project: project)

@@ -300,6 +300,11 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
     /// understand grids; IDML export uses this to emit a native `<Table>`. The first
     /// row is treated as the header. Optional & additive — old files decode as nil.
     public var tableCells: [[String]]?
+    /// Optional per-cell inline formatting, index-aligned with `tableCells`
+    /// (outer = rows, middle = cells, inner = runs whose offsets are into that
+    /// cell's `tableCells` text). Lets IDML export keep bold/italic/kenten inside
+    /// table cells. Optional & additive — old files decode as nil (cells render plain).
+    public var tableCellRuns: [[[InlineRun]]]?
 
     public init(
         id: UUID = UUID(),
@@ -310,7 +315,8 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
         anchoredFootnoteIds: [UUID]? = nil,
         anchoredSideNoteIds: [UUID]? = nil,
         inlineRuns: [InlineRun]? = nil,
-        tableCells: [[String]]? = nil
+        tableCells: [[String]]? = nil,
+        tableCellRuns: [[[InlineRun]]]? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -321,6 +327,7 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
         self.anchoredSideNoteIds = anchoredSideNoteIds
         self.inlineRuns = inlineRuns
         self.tableCells = tableCells
+        self.tableCellRuns = tableCellRuns
     }
 
     public var safeAnchoredFootnoteIds: [UUID] {
