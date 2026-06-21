@@ -204,19 +204,19 @@
 > 主题：**让预览（Canvas/PDF/PNG）追平 IDML 输出**——本阶段 AG 的核心价值是「InDesign 打开后版面与 layoutD 预览一致」。
 > ⚠️ **每项都从最新 dev 起新分支 `feature/ag-<task>`**，别叠旧分支。斜体已在 dev 用 12° `Skew` 矩阵渲染（与 IDML `Skew="12"` 同算法），别改回 FauxItalic。
 
-- [~] **E3-2b 竖排（直排）下行内格式预览验收 + 修正** — ✅ AG 实现 `feature/ag-e3-2b`(f988dd2)、Claude 审过，**待合 dev**（用户选 C 暂缓）。竖排斜体改用 b=tan12° 切变（横笔倾斜竖笔不动）。AG 不必重做。
+- [x] **E3-2b 竖排（直排）下行内格式预览验收 + 修正** — ✅ 已合 dev（随 e3-10p merge `c5fcfb7`），竖排斜体视觉验收过。竖排斜体改用 b=tan12° 切变（横笔倾斜竖笔不动）。AG 不必重做。
   - 背景：E3-2 已把 `inlineRuns` 透传进 `addFlowingVerticalText`，但**斜体用的是横排 12° 水平切变矩阵**，竖排里直接照搬很可能方向错（竖排字应沿竖向基线倾斜，不是横向歪）。粗体在竖排是否真加重也需肉眼确认。
   - 目标：竖排模式下 `makeAttributedString` 的粗体/斜体在 Canvas/PDF/PNG 渲染正确——粗体明显加重、斜体沿竖排方向合理倾斜，且**不破坏竖排行序/分行/禁则**。
   - 文件：`ChineseTypesetting.swift`（竖排分支的 trait/skew 矩阵）、`LayoutEngine.swift`、三处渲染器。
   - 验收：竖排测试稿（含粗/斜词的引文）导 PNG，目标词字重/倾斜正确、竖排列序不乱；补端到端断言（竖排 + run 分段）；`scripts/review-idml.sh` PASS。修好后 Claude 出 PNG 交用户肉眼验。
 
-- [~] **E3-4p 原生表格预览渲染**（配对 Codex E3-4 IDML 原生表格） — ✅ AG 实现 `feature/ag-e3-4p`(4f091fc)、Claude 审过+视觉验收过（表格网格出图 PASS），**待合 dev**（用户选 C 暂缓；合时与 dev 的 E3-4 在 LayoutEngine 有冲突，解法已记交接）。AG 不必重做。
+- [x] **E3-4p 原生表格预览渲染**（配对 Codex E3-4 IDML 原生表格） — ✅ AG 实现 `feature/ag-e3-4p`(4f091fc)、已合 dev（随 e3-10p merge `c5fcfb7`），表格网格视觉验收过。AG 不必重做。
   - 背景：表格组件当前在预览里基本当文字画；Codex 那边要升级成 IDML 原生 `<Table>`。预览侧也要画成真表格才能「预览=输出」。
   - 目标：table 组件在 Canvas/PDF/PNG 渲染为真实网格——行列线、单元格底色、内边距、按列宽分配，文字落在单元格内。
   - 文件：`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`LayoutEngine.swift`（如需表格测量/分页）。
   - 验收：demo 里的表格导 PNG 是带边框的真网格（非裸文字流），列对齐、底色正确；单测断言表格 frame 产出行列结构；`scripts/review-idml.sh` PASS。
 
-- [~] **E3-3p 傍点（Kenten 着重号）预览渲染** — ✅ AG 实现 `feature/ag-e3-3p`(ce26883)、Claude 审过，**待合 dev**（用户选 C 暂缓）。用自定义属性 LayoutDKenten 标记 run + drawKentenDots 画点（横排字下/竖排字右）。视觉验收待 E3-10p harness 出图。AG 不必重做。
+- [x] **E3-3p 傍点（Kenten 着重号）预览渲染** — ✅ AG 实现 `feature/ag-e3-3p`(ce26883)、已合 dev（随 e3-10p merge `c5fcfb7`），傍点经 flow harness 横竖排视觉验收过。AG 不必重做。
   - 背景：Codex E3-3 让 `==着重==` 落地为 `InlineEmphasis.kenten` → IDML `KentenKind`。预览侧需在着重字**旁/上画着重点（芝麻点）**，否则预览看不出傍点。
   - 目标：Canvas/PDF/PNG 对 `.kenten` run 的每个字符绘制着重号（横排在字下/字右、竖排在字右侧，对标 InDesign 默认 KentenSesameDot 位置）。
   - 文件：`ChineseTypesetting.swift` 或三处渲染器的字形装饰逻辑。
@@ -232,7 +232,7 @@
   - 文件：`AppState.swift`（新状态）、`CanvasView.swift`（叠加渲染）、可能新文件 `AnnotationLayer.swift`。
   - 验收：能在画布上加批注标记、保存随项目持久化、不参与自动重排/不被导出带进 IDML 正文。
 
-- [ ] **E3-10p 预览验收 harness（让 PNG 能呈现行内特性，优先级高——当前挡住傍点/竖排斜体验收）**
+- [x] **E3-10p 预览验收 harness** — ✅ AG 实现 `feature/ag-e3-10p`(c056f88)、Claude 审过+视觉验收过，已合 dev（merge `c5fcfb7`）。新增 `--export-png-flow`/`--export-pdf-flow` 忠实正文流导出；横排+竖排实测傍点(芝麻点)、粗体、斜体全部肉眼可见（图见桌面 预览验收-横排傍点强调/竖排傍点斜体-0621.png）。一并集成了 e3-2b/e3-4p/e3-3p 三条旧预览分支。193 测试 + review 6/0 PASS。
   - 背景：`--export-png` 走的是固定 demo/brochure 模板，**每页只落一个正文段且会丢弃带强调（粗/斜/傍点）的正文段**——导致傍点（E3-3p）与竖排斜体（E3-2b）的预览渲染**无法出图给用户视觉验收**（2026-06-21 实测：表格能出、这两个出不来）。这不是渲染功能坏，是导图路径喂不进内容。
   - 目标：提供一条「忠实正文流」的预览导出——把任意 Markdown 稿件的正文段（含 inlineRuns 的粗/斜/傍点、竖排）真正落版到 PNG/PDF，而非套固定模板丢段。可以是新 CLI 开关（如 `--export-png-flow`）或修 demo 模板的正文 frame 让其连续承载全部正文段。
   - 文件：`Sources/LayoutDApp/main.swift`（CLI/导出路径）、`PNGExporter.swift`/`PDFExporter.swift`、`LayoutEngine.swift`（如需正文连续成帧）。
