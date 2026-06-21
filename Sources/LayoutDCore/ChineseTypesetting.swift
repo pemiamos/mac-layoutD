@@ -5,6 +5,7 @@ public enum ChineseTypesetting {
     public static let openingPunctuation = Set<Character>("（【〔《〈「『“‘")
     public static let closingPunctuation = Set<Character>("）】〕》〉」』”’")
     public static let middleEndingPunctuation = Set<Character>("，。、；：！？")
+    public static let kentenAttributeName = NSAttributedString.Key("LayoutDKenten")
 
     public static func makeAttributedString(
         text: String,
@@ -110,6 +111,10 @@ public enum ChineseTypesetting {
                     let safeLength = max(0, min(runRange.length, stringLength - safeLocation))
                     let safeRange = NSRange(location: safeLocation, length: safeLength)
                     guard safeRange.length > 0 else { continue }
+                    
+                    if run.emphasis.contains(.kenten) {
+                        attrString.addAttribute(ChineseTypesetting.kentenAttributeName, value: true, range: safeRange)
+                    }
                     
                     attrString.enumerateAttribute(NSAttributedString.Key(kCTFontAttributeName as String), in: safeRange, options: []) { value, range, stop in
                         guard let fontVal = value else { return }
@@ -301,5 +306,92 @@ public enum ChineseTypesetting {
         }
         
         return lines
+    }
+
+    public static func drawKentenDots(
+        for frame: CTFrame,
+        in context: CGContext,
+        layoutDirection: LayoutDirection?,
+        zoomScale: CGFloat
+    ) {
+        let path = CTFrameGetPath(frame)
+        let rect = path.boundingBox
+        let origin = rect.origin
+        
+        let lines = CTFrameGetLines(frame) as! [CTLine]
+        let count = lines.count
+        guard count > 0 else { return }
+        
+        var lineOrigins = [CGPoint](repeating: .zero, count: count)
+        CTFrameGetLineOrigins(frame, CFRange(location: 0, length: 0), &lineOrigins)
+        
+        context.saveGState()
+        
+        for i in 0..<count {
+            let line = lines[i]
+            let lineOrigin = lineOrigins[i]
+            
+            let runs = CTLineGetGlyphRuns(line) as! [CTRun]
+            for run in runs {
+                let attributes = CTRunGetAttributes(run) as! [NSAttributedString.Key: Any]
+                guard attributes[kentenAttributeName] != nil else { continue }
+                
+                let glyphCount = CTRunGetGlyphCount(run)
+                guard glyphCount > 0 else { continue }
+                
+                guard let fontVal = attributes[NSAttributedString.Key(kCTFontAttributeName as String)] else { continue }
+                let font = fontVal as! CTFont
+                let fontSize = CTFontGetSize(font)
+                
+                let foregroundColor: CGColor
+                if let colorVal = attributes[NSAttributedString.Key(kCTForegroundColorAttributeName as String)] {
+                    foregroundColor = (colorVal as! CGColor)
+                } else {
+                    foregroundColor = CGColor(gray: 0, alpha: 1)
+                }
+                
+                var positions = [CGPoint](repeating: .zero, count: glyphCount)
+                CTRunGetPositions(run, CFRange(location: 0, length: 0), &positions)
+                
+                var glyphAdvances = [CGSize](repeating: .zero, count: glyphCount)
+                CTRunGetAdvances(run, CFRange(location: 0, length: 0), &glyphAdvances)
+                
+                let descent = CTFontGetDescent(font)
+                
+                let dotRadius = fontSize * 0.12
+                let gap = fontSize * 0.12
+                
+                context.setFillColor(foregroundColor)
+                
+                for g in 0..<glyphCount {
+                    let pos = positions[g]
+                    let advance = glyphAdvances[g]
+                    let glyphWidth = advance.width
+                    
+                    var dotCenter: CGPoint
+                    if layoutDirection == .vertical {
+                        // Vertical: to the right of the character
+                        let x = origin.x + lineOrigin.x + pos.x + fontSize / 2 + dotRadius + gap
+                        let y = origin.y + lineOrigin.y + pos.y
+                        dotCenter = CGPoint(x: x, y: y)
+                    } else {
+                        // Horizontal: under the character
+                        let x = origin.x + lineOrigin.x + pos.x + glyphWidth / 2
+                        let y = origin.y + lineOrigin.y + pos.y - descent - gap - dotRadius
+                        dotCenter = CGPoint(x: x, y: y)
+                    }
+                    
+                    let dotRect = CGRect(
+                        x: dotCenter.x - dotRadius,
+                        y: dotCenter.y - dotRadius,
+                        width: dotRadius * 2,
+                        height: dotRadius * 2
+                    )
+                    context.fillEllipse(in: dotRect)
+                }
+            }
+        }
+        
+        context.restoreGState()
     }
 }

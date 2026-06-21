@@ -590,6 +590,7 @@ final class CanvasView: NSView {
         
         cgContext.textMatrix = .identity
         CTFrameDraw(frame, cgContext)
+        ChineseTypesetting.drawKentenDots(for: frame, in: cgContext, layoutDirection: style.layoutDirection, zoomScale: zoomScale)
         cgContext.restoreGState()
     }
 

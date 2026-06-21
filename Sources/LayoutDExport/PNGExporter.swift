@@ -305,6 +305,7 @@ public struct PNGExporter {
             frameAttrs as CFDictionary?
         )
         CTFrameDraw(frame, context)
+        ChineseTypesetting.drawKentenDots(for: frame, in: context, layoutDirection: style.layoutDirection, zoomScale: 1.0)
     }
 
     private func drawAsset(assetId: UUID, isLeftHalf: Bool?, project: BookProject, in rect: CGRect, context: CGContext, maskShape: ImageMaskShape?) {

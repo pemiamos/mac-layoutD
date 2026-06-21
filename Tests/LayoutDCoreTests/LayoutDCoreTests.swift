@@ -10,7 +10,7 @@ final class LayoutDCoreTests: XCTestCase {
         let text = "Hello World"
         let runs = [
             InlineRun(location: 0, length: 5, emphasis: [.bold]),
-            InlineRun(location: 6, length: 5, emphasis: [.italic])
+            InlineRun(location: 6, length: 5, emphasis: [.italic, .kenten])
         ]
         
         // 1. Test mapRuns to substring
@@ -18,7 +18,7 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(mappedSubstring.count, 1)
         XCTAssertEqual(mappedSubstring[0].location, 0)
         XCTAssertEqual(mappedSubstring[0].length, 5)
-        XCTAssertEqual(mappedSubstring[0].emphasis, [.italic])
+        XCTAssertEqual(mappedSubstring[0].emphasis, [.italic, .kenten])
         
         // 2. Test mapRuns by alignment
         let mappedAligned = InlineRun.mapRuns(runs, from: "Hello World", to: "Hello  World")
@@ -43,6 +43,14 @@ final class LayoutDCoreTests: XCTestCase {
         let font6 = attrString.attribute(NSAttributedString.Key(kCTFontAttributeName as String), at: 6, effectiveRange: &range) as! CTFont
         let matrix = CTFontGetMatrix(font6)
         XCTAssertEqual(matrix.c, CGFloat(tan(12.0 * Double.pi / 180.0)), accuracy: 0.001)
+        
+        // Retrieve kenten attribute at index 6 (should be true)
+        let kenten6 = attrString.attribute(ChineseTypesetting.kentenAttributeName, at: 6, effectiveRange: &range) as? Bool
+        XCTAssertEqual(kenten6, true)
+        
+        // Retrieve kenten attribute at index 0 (should be nil)
+        let kenten0 = attrString.attribute(ChineseTypesetting.kentenAttributeName, at: 0, effectiveRange: &range) as? Bool
+        XCTAssertNil(kenten0)
     }
 
     func testAnnotationsPersistenceAndMapping() throws {
