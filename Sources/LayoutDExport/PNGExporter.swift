@@ -408,7 +408,30 @@ public struct PNGExporter {
         }
         let pageSize = project.pageSetup.pageSize
         let text = "\(number)"
-        let rect = CGRect(x: pageSize.width / 2 - 12, y: pageSize.height - 28, width: 24, height: 14)
+        
+        let style = project.styles.paragraphStyle(id: StyleID.caption.rawValue)
+        let font = NSFont(name: style.fontName, size: CGFloat(style.fontSize)) ?? NSFont.systemFont(ofSize: CGFloat(style.fontSize))
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        let size = (text as NSString).size(withAttributes: attributes)
+        
+        let x: CGFloat
+        let setup = project.pageSetup
+        if setup.facingPages {
+            if number % 2 == 0 {
+                x = CGFloat(pageLeftMargin(for: number, project: project))
+            } else {
+                x = CGFloat(pageSize.width) - CGFloat(pageRightMargin(for: number, project: project)) - size.width
+            }
+        } else {
+            x = CGFloat(pageSize.width) / 2 - size.width / 2
+        }
+
+        let rect = CGRect(
+            x: x,
+            y: CGFloat(pageSize.height) - 28,
+            width: size.width + 2,
+            height: size.height + 2
+        )
         drawText(text, styleId: StyleID.caption.rawValue, project: project, in: rect, context: context)
     }
 

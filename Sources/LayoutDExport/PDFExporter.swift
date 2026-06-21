@@ -655,8 +655,21 @@ public struct PDFExporter {
             .foregroundColor: NSColor.gray
         ]
         let size = text.size(withAttributes: attributes)
+        
+        let x: CGFloat
+        let setup = project.pageSetup
+        if setup.facingPages {
+            if number % 2 == 0 {
+                x = CGFloat(pageLeftMargin(for: number, project: project))
+            } else {
+                x = CGFloat(pageSize.width) - CGFloat(pageRightMargin(for: number, project: project)) - size.width
+            }
+        } else {
+            x = CGFloat(pageSize.width) / 2 - size.width / 2
+        }
+
         let rect = CGRect(
-            x: CGFloat(pageSize.width) / 2 - size.width / 2,
+            x: x,
             y: 22,
             width: size.width + 2,
             height: size.height + 2
