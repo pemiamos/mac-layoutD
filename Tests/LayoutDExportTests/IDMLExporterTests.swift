@@ -141,6 +141,54 @@ final class IDMLExporterTests: XCTestCase {
         )
     }
 
+    func testExportsTableParagraphAsNativeIDMLTable() throws {
+        // E3-4：带结构化行列的 .table 段应导出为原生 <Table>/<Column>/<Row>/<Cell>，
+        // 而非拍平成「4 空格拼接」的裸文字。（importer 保留行列的断言见 LayoutDImport 测试。）
+        let cells = [["名称", "功能"], ["线粒体", "产能"], ["核糖体", "合成蛋白质"]]
+        let table = Paragraph(
+            kind: .table,
+            text: cells.map { $0.joined(separator: "    ") }.joined(separator: "\n"),
+            styleId: StyleID.body.rawValue,
+            tableCells: cells
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "表格", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [table])])]
+        )
+        let document = LayoutEngine().layout(project: project)
+
+        // 布局须按网格给表格分配足够高度（每行 ≥ 最小行高 18pt），否则 InDesign 里整张表
+        // 溢流、只显示前几行。这条防止回退到「按拍平文本测高」。
+        let tableFrame = document.pages.flatMap(\.frames).first { $0.kind == .table }
+        XCTAssertNotNil(tableFrame, "应生成 .table 帧")
+        XCTAssertGreaterThanOrEqual(tableFrame?.rect.height ?? 0, Double(cells.count) * 18,
+                                    "表格框高度须能容纳所有行")
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-table-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let stories = try zipEntries(output)
+            .filter { $0.hasPrefix("Stories/Story_") }
+            .map { try entry(output, $0) }
+            .joined(separator: "\n")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Table )").count, 1, "应输出 1 个原生 Table")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Column )").count, 2, "2 列")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Row )").count, 3, "3 行（含表头）")
+        XCTAssertEqual(matches(in: stories, pattern: "(<Cell )").count, 6, "2×3=6 单元格")
+        XCTAssertTrue(stories.contains("HeaderRowCount=\"1\""), "首行应为表头")
+        for cell in ["名称", "功能", "线粒体", "产能", "核糖体", "合成蛋白质"] {
+            XCTAssertTrue(stories.contains("<Content>\(cell)</Content>"), "单元格 \(cell) 应归位到 Cell 内")
+        }
+        XCTAssertFalse(stories.contains("名称    功能"), "不得残留 4 空格拍平的裸文字")
+        // 单元格须左对齐且去掉正文首行缩进，否则窄列里文字被推到右边、参差不齐。
+        XCTAssertEqual(matches(in: stories, pattern: "(Justification=\"LeftJustified\")").count, 6,
+                       "每个单元格段落须左对齐")
+        XCTAssertEqual(matches(in: stories, pattern: "(FirstLineIndent=\"0\")").count, 6,
+                       "每个单元格段落须去掉首行缩进")
+    }
+
     func testExportsValidIDMLFromSampleProject() throws {
         let project = BookProject.sample
         let document = LayoutEngine().layout(project: project)

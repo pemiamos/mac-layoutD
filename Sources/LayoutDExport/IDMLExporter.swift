@@ -91,7 +91,10 @@ public struct IDMLExporter {
                     let styleRef = "ParagraphStyle/\(xmlSafe(style.id))"
                     let vertical = style.layoutDirection == .vertical
                     let component = project.styles.componentStyle(for: frame.kind)
-                    let fillColor = frame.backgroundColorHex ?? component?.resolvedFillColorHex(project: project)
+                    let resolvedFillHex = frame.backgroundColorHex ?? component?.resolvedFillColorHex(project: project)
+                    // 表格底色挪到单元格上（见下方 tableStoryXML），框本身不填色——否则框比
+                    // 表格高时底部会露出一块多余色块。
+                    let fillColor = frame.kind == .table ? nil : resolvedFillHex
                     let strokeColor = frame.strokeColorHex ?? component?.resolvedStrokeColorHex(project: project)
                     let strokeWidth = frame.strokeWidth ?? component?.strokeWidth ?? 0
                     items.append(textFrameItem(self: "uTF\(pi)_\(fi)", story: storySelf,
@@ -105,6 +108,20 @@ public struct IDMLExporter {
                                               width: min(accentWidth, frame.rect.width), height: frame.rect.height)
                         items.append(colorRectangleItem(self: "uAccent\(pi)_\(fi)", rect: accentRect,
                                                         fillColor: accentColor, pageW: pageW, pageH: pageH))
+                    }
+                    // 原生表格：源段是 .table 且带结构化行列时，Story 内输出 InDesign
+                    // <Table>（真行列/可调宽），而非把拍平文本当普通段落画。
+                    if frame.kind == .table,
+                       let paragraphID = frame.sourceParagraphId,
+                       let cells = paragraphsByID[paragraphID]?.tableCells,
+                       !cells.isEmpty {
+                        let cellFillSwatch = resolvedFillHex.map { ctx.color($0) }
+                        storyFiles["Stories/Story_\(storySelf).xml"] = tableStoryXML(
+                            self: storySelf, styleRef: styleRef, cells: cells,
+                            frameWidth: frame.rect.width, cellFillSwatch: cellFillSwatch)
+                        storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
+                        storyListIds.append(storySelf)
+                        continue
                     }
                     let frameInlineRuns: [InlineRun]?
                     if let paragraphID = frame.sourceParagraphId,
@@ -812,6 +829,75 @@ public struct IDMLExporter {
         \(body)
         \t\t\t\t</ParagraphStyleRange>
         \t\t\t</Footnote>
+        """
+    }
+
+    /// 原生 IDML 表格 Story。InDesign 的 <Table> 子元素顺序固定：先全部 <Column>，
+    /// 再全部 <Row>，最后全部 <Cell>（Cell 不嵌在 Row 里，靠 Name="列:行" 定位）。
+    /// 第一行视为表头。列宽按框宽均分；单元格四边给 0.5pt 黑边，使其在 InDesign 里
+    /// 一眼是真表格。单元格文字复用 styledCharacterRanges，并与正文一样带 World-Ready 排版器。
+    private func tableStoryXML(self id: String, styleRef: String, cells: [[String]], frameWidth: Double, cellFillSwatch: String? = nil) -> String {
+        let rowCount = cells.count
+        let columnCount = cells.map(\.count).max() ?? 0
+        guard rowCount > 0, columnCount > 0 else {
+            return storyXML(self: id, styleRef: styleRef, vertical: false, text: "")
+        }
+        let headerRowCount = 1
+        let bodyRowCount = rowCount - headerRowCount
+        let columnWidth = frameWidth > 0 ? frameWidth / Double(columnCount) : 80
+        let rowHeight = 18.0
+        let tableSelf = "\(id)_tbl"
+
+        let columns = (0..<columnCount).map { c in
+            "\t\t\t\t\t<Column Self=\"\(tableSelf)Col\(c)\" Name=\"\(c)\" SingleColumnWidth=\"\(fmt(columnWidth))\"/>"
+        }.joined(separator: "\n")
+
+        let rows = (0..<rowCount).map { r in
+            let rowType = r < headerRowCount ? "HeaderRow" : "BodyRow"
+            return "\t\t\t\t\t<Row Self=\"\(tableSelf)Row\(r)\" Name=\"\(r)\" SingleRowHeight=\"\(fmt(rowHeight))\" RowType=\"\(rowType)\"/>"
+        }.joined(separator: "\n")
+
+        // 四边 0.5pt 黑边 + 2pt 内边距（与 LayoutEngine.estimatedTableHeight 的 cellInset 一致，
+        // 否则估高与 InDesign 实际折行不符会溢流）。
+        let border = "TopEdgeStrokeWeight=\"0.5\" BottomEdgeStrokeWeight=\"0.5\" LeftEdgeStrokeWeight=\"0.5\" RightEdgeStrokeWeight=\"0.5\" TopEdgeStrokeColor=\"Color/Black\" BottomEdgeStrokeColor=\"Color/Black\" LeftEdgeStrokeColor=\"Color/Black\" RightEdgeStrokeColor=\"Color/Black\" TopInset=\"2\" BottomInset=\"2\" LeftInset=\"2\" RightInset=\"2\""
+        // 底色挂在单元格（而非整框）上，使色块正好贴合表格。
+        let fillAttr = cellFillSwatch.map { " FillColor=\"\($0)\"" } ?? ""
+        var cellsXML: [String] = []
+        for r in 0..<rowCount {
+            for c in 0..<columnCount {
+                let content = c < cells[r].count ? cells[r][c] : ""
+                let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: [])
+                cellsXML.append("""
+                \t\t\t\t\t<Cell Self="\(tableSelf)Cell\(c)_\(r)" Name="\(c):\(r)" RowSpan="1" ColumnSpan="1" AppliedCellStyle="CellStyle/$ID/[None]"\(fillAttr) \(border)>
+                \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)" FirstLineIndent="0" Justification="LeftJustified">
+                \(cellBody)
+                \t\t\t\t\t\t</ParagraphStyleRange>
+                \t\t\t\t\t</Cell>
+                """)
+            }
+        }
+
+        let table = """
+        \t\t\t\t<Table Self="\(tableSelf)" AppliedTableStyle="TableStyle/$ID/[No table style]" HeaderRowCount="\(headerRowCount)" FooterRowCount="0" BodyRowCount="\(bodyRowCount)" ColumnCount="\(columnCount)">
+        \(columns)
+        \(rows)
+        \(cellsXML.joined(separator: "\n"))
+        \t\t\t\t</Table>
+        """
+
+        return """
+        \(header)
+        <idPkg:Story \(pkgNS) DOMVersion="\(dom)">
+        \t<Story Self="\(id)" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+        \t\t<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+        \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)">
+        \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]">
+        \(table)
+        \t\t\t\t<Content></Content>
+        \t\t\t</CharacterStyleRange>
+        \t\t</ParagraphStyleRange>
+        \t</Story>
+        </idPkg:Story>
         """
     }
 
