@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 11:08 | claude | 用户选 C：AG 三条预览分支（e3-3p/e3-2b/e3-4p）暂不合，等主仓库并发的 E3-4 集成彻底落定再说——本棒未动任何 feature 分支。另
+- **分支**：dev
+- **概述**：用户选 C：AG 三条预览分支（e3-3p/e3-2b/e3-4p）暂不合，等主仓库并发的 E3-4 集成彻底落定再说——本棒未动任何 feature 分支。另落实并发流程优化：因当天两个 Claude 对话同时用主仓库撞车，补三条铁律 N1/N2/N3 写入 .ai/AGENTS.md 隔离章节并 record_decision，commit 9496bbd 已 push origin/dev。核心：worktree 隔离只防「按 AI」互撞、防不住「同 AI 多对话并发同一副本」；今后集成/审核/试合一律在 git worktree add --detach /tmp/<任务>-wt 的专用临时副本里做（必 test -d 校验创建成功，失败别让命令落回主仓库），同仓库不开两个同-AI 对话否则各带独立 worktree，动手前 get_current_status 探并发。同步更新记忆 shared-git-directory-concurrency-risk（从"已解决"改为"部分解决+残留盲区+N1/N2/N3 对策"）。
+- **改动文件**：(未填)
+- **检查**：仅文档/规则改动，无需 build。提交前 get_current_status 确认 dev 上无并发未提交改动（仅自身 HANDOFF.md）。9496bbd 已推 origin/dev。
+- **下一步**：① AG 三条预览分支待合（用户选 C 暂缓）——待 E3-4 集成定后，按上一条交接记录的解法合：e3-3p 干净 → e3-2b 解 Tests/LayoutDCoreTests.swift 加性断言 → e3-4p 解 LayoutEngine.swift（normalizedText isTable 签名 + 保留 estimatedTableHeight 早返回块）。务必在专用临时 worktree 里做（N2）。② 表格预览已视觉 PASS；傍点+竖排斜体走 PNG demo 模板呈现不出，需用户在 app GUI 看或另开任务修 brochure 模板正文流。③ 今后所有集成动作遵守 N1/N2/N3。
+
 ## 2026-06-21 10:58 | claude | 【更新前一条交接】复审 AG 三条预览分支 + 视觉尝试。期间 dev 已被并发会话推进到 c139836（E3-4 原生表格 ae82104 已合 dev，标
 - **分支**：dev
 - **概述**：【更新前一条交接】复审 AG 三条预览分支 + 视觉尝试。期间 dev 已被并发会话推进到 c139836（E3-4 原生表格 ae82104 已合 dev，标注用户视觉 PASS）。在 detached worktree(off c139836) 把三条全合实测：e3-3p 干净；e3-2b 仅 Tests/LayoutDCoreTests.swift 加性断言冲突（两块都留）；e3-4p 与 E3-4 在 LayoutEngine.swift 真冲突——已正确解：保留 dev 的「表格按 estimatedTableHeight 估高早返回」块 + 采用 e3-4p 的 normalizedText(text, isTable: kind == .table) 新签名（isTable 时只 trim 不折叠空格）。合后 swift build PASS。视觉：导 PNG 仅表格网格预览成功露出（青表头+黑网格，图已放桌面 预览验收-表格网格-0621.png）；傍点 drawKentenDots 与竖排斜体在 PNG demo 模板里露不出——demo/brochure 模板每页只落一个正文段且丢弃带强调段落（与上一棒同墙）。两者目前仅靠单测锁定（kenten 属性命中 + 竖排 b=tan12°/c=0）。⚠️ 复盘：本棒两次误操作均已完整撤销无损——①在 feature/claude-e3-4-table 上误合 e3-3p 已 reset 回 c2d8583 并保住未提交 IDMLExporter 改动（后被并发会话提交为 ac7a0e8）；②worktree add 失败致命令误落主仓库 dev、误建废弃分支 tmp/png-int 已删，dev 未受影响。

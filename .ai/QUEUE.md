@@ -124,6 +124,12 @@
   - 验收：①`printf '| 名称 | 功能 |\n| --- | --- |\n| 线粒体 | 产能 |\n| 核糖体 | 合成蛋白质 |\n'` 导出后**解包 grep `<Table` / `<Cell`** 确认是原生表格（不是一段裸文字），列数=2、行数=3（含表头）；②补端到端断言（Table/Cell 元素数、单元格文本归位、无「4 空格拼接」残留）；③`scripts/review-idml.sh` 仍 PASS；④用户在 InDesign 打开确认是可选列、可调宽的真表格。
   - ⚠️ 端到端验收必须解包 IDML grep `<Table`/`<Cell`，别只靠单测——本项目踩过「单测绿但功能坏」的坑。
 
+- [ ] **E3-4b 表格单元格内行内格式**（E3-4 遗留缺口，优先级中高）
+  - 背景：E3-4 原生表格已落地，但 `IDMLExporter.tableStoryXML` 逐格调 `styledCharacterRanges(for: content, globalStart: 0, inlineRuns: [])` —— **inlineRuns 写死成空**，即表格单元格里的粗体/斜体/傍点（`**`/`*`/`==`）目前全部丢失，只出纯文字。
+  - 目标：表格单元格继承行内格式。需链路：① 模型 `Paragraph.tableCells` 从 `[[String]]` 升级为可携带 per-cell inlineRuns（如 `[[TableCell]]`，TableCell={text, inlineRuns?}），旧文件 decode 兼容；② 导入 `flushTableBuffer` 每格解析 `inlineRuns`（复用 `normalizeInlineMarkdown` 的 run 提取）；③ 导出 `tableStoryXML` 把该格 inlineRuns 传进 `styledCharacterRanges`。
+  - 文件：`BookProject.swift`、`MarkdownBookImporter.swift`、`IDMLExporter.swift`。
+  - 验收：`printf '| 名称 | 说明 |\n| --- | --- |\n| 线粒体 | **产能**中心 |\n| 核糖体 | 合成*蛋白质* |\n'` 导出解包，单元格内 `**产能**`→FauxBold、`*蛋白质*`→Skew，无残留 `*`；补端到端断言；`scripts/review-idml.sh` PASS；用户 InDesign 肉眼确认表格内粗斜体可见。
+
 - [ ] **E3-6 目录（TOC）动态化**
   - 目标：当前目录是死文字；改为 InDesign 动态 TOC（或至少正确的 TOC 段落样式 + PageReference）。
   - 文件：`MarkdownBookImporter.swift`（标题锚点）、`IDMLExporter.swift`（TOC/PageReference）。
@@ -194,6 +200,12 @@
   - 文件：`AppState.swift`（新状态）、`CanvasView.swift`（叠加渲染）、可能新文件 `AnnotationLayer.swift`。
   - 验收：能在画布上加批注标记、保存随项目持久化、不参与自动重排/不被导出带进 IDML 正文。
 
+- [ ] **E3-10p 预览验收 harness（让 PNG 能呈现行内特性，优先级高——当前挡住傍点/竖排斜体验收）**
+  - 背景：`--export-png` 走的是固定 demo/brochure 模板，**每页只落一个正文段且会丢弃带强调（粗/斜/傍点）的正文段**——导致傍点（E3-3p）与竖排斜体（E3-2b）的预览渲染**无法出图给用户视觉验收**（2026-06-21 实测：表格能出、这两个出不来）。这不是渲染功能坏，是导图路径喂不进内容。
+  - 目标：提供一条「忠实正文流」的预览导出——把任意 Markdown 稿件的正文段（含 inlineRuns 的粗/斜/傍点、竖排）真正落版到 PNG/PDF，而非套固定模板丢段。可以是新 CLI 开关（如 `--export-png-flow`）或修 demo 模板的正文 frame 让其连续承载全部正文段。
+  - 文件：`Sources/LayoutDApp/main.swift`（CLI/导出路径）、`PNGExporter.swift`/`PDFExporter.swift`、`LayoutEngine.swift`（如需正文连续成帧）。
+  - 验收：含 `==着重==`、`**粗**`、`*斜*`、竖排段的测试稿导 PNG，**逐项都能在图里肉眼看到**（傍点出点、粗体加重、斜体倾斜、竖排倾斜方向正确）；`scripts/review-idml.sh` PASS。这条做完，E3-3p / E3-2b 才能真正走完视觉验收。
+
 - [ ] **导出选项面板跟进**（待 Codex 的 E2-4 / E3-8 任一项落地后联动，非阻塞可先设计）
   - 目标：「导出 IDML…」面板加开关：对开跨页模式、CMYK 色板模式。
   - 文件：`ToolbarView.swift` 或导出选项相关 View。
@@ -201,8 +213,19 @@
 
 ---
 
+## 待评估 Backlog（需用户拍板是否进路线图，先不排期）
+
+> 这些是图书排版常见但 layoutD 尚未列入需求的功能。是否做、何时做由用户决定；
+> 列在此避免遗忘。每项落到正式队列前由 Claude 补「目标/文件/验收」。
+
+- [ ] **索引（Index）**：术语→页码索引页生成（InDesign 有原生 Index 机制，可对标）。
+- [ ] **参考文献 / 引文样式**：文末参考文献列表 + 文中引用标记的样式化。
+- [ ] **长表格分页 + 表头跨页重复**：超过一页的表格自动续页、每页重复表头（依赖 E3-4 表格基础）。
+- [ ] **图表跨页 / 图文绕排进阶**：满版图跨对开、图片文字绕排（当前为矩形成帧）。
+
 ## 基础设施待办（Claude/用户）
 
 - [ ] 真正 CI（GitHub Actions 跑 `scripts/review-idml.sh`），把审核从「人工记得跑」变成 push 即跑。
 - [ ] IDML 官方 RNG schema 校验 + golden-file 回归基线，补强 `review-idml.sh`。
 - [ ] relay `run_checks("test")` 末行误显「0 tests」，改回显 XCTest 汇总行。
+- [ ] **文档同步**：`docs/development-plan.md` 的 E0 spike 仍标 `[ ]`，实际已被 E1 取代吸收——回填标注（E1 已在 InDesign 人工终验通过）。
