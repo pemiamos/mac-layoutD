@@ -125,6 +125,7 @@ public struct IDMLExporter {
                         let cellFillSwatch = resolvedFillHex.map { ctx.color($0) }
                         storyFiles["Stories/Story_\(storySelf).xml"] = tableStoryXML(
                             self: storySelf, styleRef: styleRef, cells: cells,
+                            cellRuns: paragraphsByID[paragraphID]?.tableCellRuns,
                             frameWidth: frame.rect.width, cellFillSwatch: cellFillSwatch)
                         storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                         storyListIds.append(storySelf)
@@ -876,7 +877,7 @@ public struct IDMLExporter {
     /// 再全部 <Row>，最后全部 <Cell>（Cell 不嵌在 Row 里，靠 Name="列:行" 定位）。
     /// 第一行视为表头。列宽按框宽均分；单元格四边给 0.5pt 黑边，使其在 InDesign 里
     /// 一眼是真表格。单元格文字复用 styledCharacterRanges，并与正文一样带 World-Ready 排版器。
-    private func tableStoryXML(self id: String, styleRef: String, cells: [[String]], frameWidth: Double, cellFillSwatch: String? = nil) -> String {
+    private func tableStoryXML(self id: String, styleRef: String, cells: [[String]], cellRuns: [[[InlineRun]]]? = nil, frameWidth: Double, cellFillSwatch: String? = nil) -> String {
         let rowCount = cells.count
         let columnCount = cells.map(\.count).max() ?? 0
         guard rowCount > 0, columnCount > 0 else {
@@ -906,7 +907,9 @@ public struct IDMLExporter {
         for r in 0..<rowCount {
             for c in 0..<columnCount {
                 let content = c < cells[r].count ? cells[r][c] : ""
-                let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: [])
+                // 该格的行内格式（粗/斜/傍点），偏移针对该格文本；缺则空（纯文字）。
+                let runs: [InlineRun] = (cellRuns.flatMap { r < $0.count && c < $0[r].count ? $0[r][c] : nil }) ?? []
+                let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: runs)
                 cellsXML.append("""
                 \t\t\t\t\t<Cell Self="\(tableSelf)Cell\(c)_\(r)" Name="\(c):\(r)" RowSpan="1" ColumnSpan="1" AppliedCellStyle="CellStyle/$ID/[None]"\(fillAttr) \(border)>
                 \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)" FirstLineIndent="0" Justification="LeftJustified">

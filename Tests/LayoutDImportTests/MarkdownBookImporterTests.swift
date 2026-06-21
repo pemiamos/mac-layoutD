@@ -811,6 +811,32 @@ final class MarkdownBookImporterTests: XCTestCase {
         ])
     }
 
+    func testTableCellsPreserveInlineFormatting() {
+        // E3-4b：单元格内的粗/斜应解析进 tableCellRuns（偏移针对该格剥离后文本），
+        // tableCells 仍为剥离文本。
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 表格行内
+
+            | 名称 | 说明 |
+            | --- | --- |
+            | 线粒体 | **产能**中心 |
+            | 核糖体 | 合成*蛋白质* |
+            """
+        )
+        let table = project.sections[0].stories[0].paragraphs.first { $0.kind == .table }
+        XCTAssertEqual(table?.tableCells?[1], ["线粒体", "产能中心"])  // markdown 已剥离
+        let runs = table?.tableCellRuns
+        XCTAssertNotNil(runs, "含粗/斜的表格应填充 tableCellRuns")
+        // 「**产能**中心」→ 粗体覆盖前两个字符
+        XCTAssertEqual(runs?[1][1].first?.emphasis, [.bold])
+        XCTAssertEqual(runs?[1][1].first?.location, 0)
+        XCTAssertEqual(runs?[1][1].first?.length, 2)
+        // 「合成*蛋白质*」→ 斜体覆盖后三个字符
+        XCTAssertEqual(runs?[2][1].first?.emphasis, [.italic])
+        XCTAssertEqual(runs?[2][1].first?.location, 2)
+    }
+
     func testImportsSpreadImageMetadata() {
         let project = MarkdownBookImporter().importDocument(
             markdown: """
