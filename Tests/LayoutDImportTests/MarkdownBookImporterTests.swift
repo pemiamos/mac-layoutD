@@ -803,6 +803,12 @@ final class MarkdownBookImporterTests: XCTestCase {
 
         XCTAssertEqual(table?.styleId, StyleID.body.rawValue)
         XCTAssertEqual(table?.text, "指标    数值\n细胞数量    约 37 万亿\n平均直径    10 微米")
+        // E3-4：结构化行列须保留供原生 IDML <Table> 导出，不再只剩拍平文本。
+        XCTAssertEqual(table?.tableCells, [
+            ["指标", "数值"],
+            ["细胞数量", "约 37 万亿"],
+            ["平均直径", "10 微米"],
+        ])
     }
 
     func testImportsSpreadImageMetadata() {

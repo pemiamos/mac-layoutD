@@ -295,6 +295,11 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
     /// Optional character-level formatting. Offsets are measured in Swift `Character`s
     /// within `text`, keeping the flattened string as the backwards-compatible truth.
     public var inlineRuns: [InlineRun]?
+    /// Structured table content for `kind == .table`: outer array = rows, inner = cells.
+    /// `text` keeps a flattened fallback (cells joined) for layout/preview that don't
+    /// understand grids; IDML export uses this to emit a native `<Table>`. The first
+    /// row is treated as the header. Optional & additive — old files decode as nil.
+    public var tableCells: [[String]]?
 
     public init(
         id: UUID = UUID(),
@@ -304,7 +309,8 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
         anchoredAssetIds: [UUID] = [],
         anchoredFootnoteIds: [UUID]? = nil,
         anchoredSideNoteIds: [UUID]? = nil,
-        inlineRuns: [InlineRun]? = nil
+        inlineRuns: [InlineRun]? = nil,
+        tableCells: [[String]]? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -314,6 +320,7 @@ public struct Paragraph: Codable, Equatable, Sendable, Identifiable {
         self.anchoredFootnoteIds = anchoredFootnoteIds
         self.anchoredSideNoteIds = anchoredSideNoteIds
         self.inlineRuns = inlineRuns
+        self.tableCells = tableCells
     }
 
     public var safeAnchoredFootnoteIds: [UUID] {

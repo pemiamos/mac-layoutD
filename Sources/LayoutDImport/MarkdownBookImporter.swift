@@ -260,9 +260,12 @@ private struct MarkdownParser {
             .filter { !$0.isEmpty }
 
         if !rows.isEmpty {
-            let text = rows.map { $0.joined(separator: "    ") }.joined(separator: "\n")
+            // 保留结构化行列供 IDML 导出原生 <Table>；每格单独归一化行内 Markdown。
+            // `text` 维持拍平降级（布局/预览暂不识别网格时仍能显示）。
+            let normalizedRows = rows.map { $0.map(normalizeInlineMarkdown) }
+            let text = normalizedRows.map { $0.joined(separator: "    ") }.joined(separator: "\n")
             currentParagraphs.append(
-                Paragraph(kind: .table, text: normalizeInlineMarkdown(text), styleId: StyleID.body.rawValue)
+                Paragraph(kind: .table, text: text, styleId: StyleID.body.rawValue, tableCells: normalizedRows)
             )
         }
 
