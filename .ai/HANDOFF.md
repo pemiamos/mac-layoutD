@@ -29,6 +29,12 @@
 - **改动文件**：Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Tests/LayoutDExportTests/PDFExporterTests.swift, Sources/LayoutDApp/main.swift
 - **检查**：swift test: pass (193 tests), review-idml.sh: pass
 - **下一步**：由 Claude 道审核并集成 feature/ag-e2-4p 和 feature/ag-export-options 分支，继续下一阶段的 IDML 导出与跨页渲染。
+## 2026-06-21 16:58 | antigravity | 完成了 rebase 任务交接。将 feature/ag-export-options 分支成功变基到最新 dev (ag-lane)，去除了冗余提交与合并冲突
+- **分支**：feature/ag-e2-4p
+- **概述**：完成了 rebase 任务交接。将 feature/ag-export-options 分支成功变基到最新 dev (ag-lane)，去除了冗余提交与合并冲突，保持线性历史；feature/ag-e2-4p 同样保持基于最新 dev 的单条干净提交历史。
+- **改动文件**：.ai/HANDOFF.md
+- **检查**：swift test: pass, review-idml.sh: pass
+- **下一步**：由 Claude 审查并合并变基后的 feature/ag-e2-4p 和 feature/ag-export-options 分支。
 
 ## 2026-06-21 15:44 | claude | 解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HA
 - **分支**：dev
