@@ -36,3 +36,7 @@
 - **决策**：分工再平衡（2026-06-21 用户决定，因 Codex 多次提交不靠谱需反复回修）：① Codex 砍到最少、只留隔离低风险任务——当前仅 D-2 DOCX 导入（全新独立文件，不碰现有导出）；② 原 Codex 的高风险 IDMLExporter 导出任务 E3-4b/E3-6/E2-5 全部改判 Claude 直接做（连同已改判的 E2-4），Claude 串行、各自专用 worktree，顺序 E3-4b→E3-6→E2-5→E2-4；③ AG 升为主力，预览+GUI 全线连续作业，本批序列 E3-10p→E3-6p 目录预览→E2-5p 蒙版预览→E2-4p 对开预览→导出选项面板（②③④为配对 Claude 导出侧的预览追平任务）。
 - **理由**：Codex 代码质量不稳定、回修成本高，故收缩其职责到 blast radius 最小的隔离任务（新文件 DOCX 导入，botch 也不伤现有导出、易回修）；高风险导出收进可靠的 Claude 手里且串行避免同文件冲突；AG 质量可靠且预览/GUI 是其专长，升主力承接最多任务，配对预览让「预览=输出」持续推进。文件边界：Claude=IDMLExporter 导出侧、Codex=新 DOCX 导入文件、AG=LayoutEngine/渲染器/GUI，三方仍不重叠。
 
+## 2026-06-21 15:43 | claude
+- **决策**：根治文档冲突卡死：① .ai/HANDOFF.md 与 .ai/DECISIONS.md 在 .gitattributes 设 merge=union（append-only 日志两边自动保留、永不冲突）；② .ai/QUEUE.md 归 Claude 独占维护，Codex/Antigravity 不再编辑它（不勾 [x]、不挂 [~]），进度只写进 write_handoff，由 Claude 据交接更新队列；③ 各道同步 dev 仍跑 git merge origin/dev，不碰 QUEUE.md 即干净；万一仍冲突，git checkout --theirs .ai/QUEUE.md 取 dev 权威版后继续，别硬解。已写入 .ai/AGENTS.md 铁律 8。
+- **理由**：2026-06-21 AG 开工 git merge origin/dev 时在 QUEUE.md/HANDOFF.md 撞冲突、自行解冲突卡死（界面停在 Working）。根因：Claude 在 dev 频繁改 QUEUE.md 排任务，各道也改 QUEUE.md 勾完成 → 每次同步必冲突，而 lane AI 不擅长解冲突。union 解决 append-only 日志；QUEUE 由单一所有者（Claude）维护消除冲突源。
+

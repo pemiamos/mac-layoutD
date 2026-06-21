@@ -3,6 +3,20 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 15:31 | claude | E3-6 目录：用户 InDesign 截图确认点导引线+页码右对齐已渲染（Claude 的 TabList 修复生效，视觉 PASS）。但发现静态目录只列 H
+- **分支**：dev
+- **概述**：E3-6 目录：用户 InDesign 截图确认点导引线+页码右对齐已渲染（Claude 的 TabList 修复生效，视觉 PASS）。但发现静态目录只列 H1 书名，正文 H2 子标题没进——根因 LayoutEngine 只收集 section 标题(level1)+story.title(level2)，不收正文 .heading(level>=2) 段落。已修：addStory 段落循环里收集 H2+ 进 tableOfContents（挂 tocLevel2），补端到端断言（testTOCCollectsSubheadingsNotJustTopLevel）。导出验证 demo 目录现三条：细胞里的城市(3)/能量从哪里来(3)/为什么图注很重要(4)。191 测试 + review-idml.sh 6/0 PASS。已合 dev（merge b8a4522，push origin/dev），重导 ~/Desktop/E3-6目录验收-0621.idml（含 H2）。注：本次改了 LayoutEngine.swift（AG 负责文件、AG 正做 e3-10p），改动局部（addStory 几行），AG 分支合并时可能小冲突。
+- **改动文件**：(未填)
+- **检查**：dev swift build PASS；191 测试 0 失败；review-idml.sh 6/0 PASS；解包确认目录 story 含 H1+2×H2 三条目、H2 挂 tocLevel2、合法嵌套 TabList。
+- **下一步**：① 用户在 InDesign 复看 ~/Desktop/E3-6目录验收-0621.idml：目录应有书名+两个二级标题三条、各带点导引线右对齐页码；OK 后 Claude 合 dev→main。② Claude 道剩余串行：E3-4b→E2-5→E2-4。③ AG 进行中 E3-10p（注意其 LayoutEngine 改动与本次 addStory 改动合并时对账）、Codex 进行中 D-2。④ 守 N1/N2/N3。
+
+## 2026-06-21 12:01 | claude | 审核并合并 Codex 的 E3-6 目录动态化——已合 dev（merge dd2c49b，docs commit 413aca0，push origin/d
+- **分支**：dev
+- **概述**：审核并合并 Codex 的 E3-6 目录动态化——已合 dev（merge dd2c49b，docs commit 413aca0，push origin/dev）。Codex `feature/codex-e3-6-toc`(748c60c) 本体正确：输出 <TOCStyle>+heading1/2→tocLevel1/2 映射、结构化目录条目、目录 story 挂 AppliedTOCStyle。Claude 接手修一处保真坑（这本是 Claude 任务）：tocStoryXML 的右对齐+点导引线写成 ParagraphStyleRange 扁平属性(TabStopAlignment/Leader/Position)，InDesign 会静默忽略→改为合法嵌套 <Properties><TabList><ListItem>(Alignment/AlignmentCharacter/Leader/Position)；测试同步改断言新 TabList 形态+反断言不得有扁平属性。190 测试 + review-idml.sh 6/0 PASS。已导验收样例 ~/Desktop/E3-6目录验收-0621.idml。过程踩坑：合并前 .ai/HANDOFF.md 未提交挡住 merge，清理后重合成功。另注：AG 已自行开工 feature/ag-e3-10p（E3-10p 预览harness）、Codex 已开工 feature/codex-d2-docx-import（D-2），新分工生效。
+- **改动文件**：(未填)
+- **检查**：dev 上 swift build PASS；合并源分支 190 测试 0 失败、review-idml.sh 6/0 PASS。导出 IDML 已解包确认目录 story 为合法嵌套 TabList(RightAlign+Leader=.)。
+- **下一步**：① 用户在 InDesign 打开 ~/Desktop/E3-6目录验收-0621.idml 肉眼验收：目录页码右对齐+点导引线连续、Layout→更新目录能按标题样式重建。⚠️ 制表位是「属性在视觉无」高发区，若不出导引线再排查 TabList 字段。② 验收 OK 后 Claude 合 dev→main。③ Claude 道剩余串行：E3-4b→E2-5→E2-4。④ AG 进行中 E3-10p、Codex 进行中 D-2，攒出分支后 Claude 批量审。⑤ 守 N1/N2/N3。
+
 ## 2026-06-21 11:32 | claude | 提前展开 Codex 本批全部任务的验收规格，Codex 现可整批自助连续作业。本批顺序：E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DO
 - **分支**：dev
 - **概述**：提前展开 Codex 本批全部任务的验收规格，Codex 现可整批自助连续作业。本批顺序：E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DOCX 导入 → E2-5 美术页/蒙版（均 Codex 道，已逐项写明现状勘查/做法/文件/端到端验收，见 .ai/QUEUE.md）。E2-4 对开跨页改判 Claude（用户指定 Codex 不靠谱），跨 IDMLExporter 文件故 Claude 待 Codex 本批先合 dev 再起手、专用 worktree。E3-8 CMYK 暂缓。关键勘查结论已写进各任务：E3-6 目录引擎已有真页码条目只是被拼成死文字（核心是导出 <TOCStyle> 映射 heading1/2 让 InDesign 可更新目录）；D-2 DOCX 是 OOXML zip，映射口径已列，zip 读取需先 record_decision（别 shell unzip）；E2-5 模型已有 ImageMaskShape{rect,fan,octagon}+maskShape 字段，导出器只写矩形 PathGeometry，拆「非矩形蒙版多边形点(先做)」+「固定页不叠主页项(回归非固定页)」两步。

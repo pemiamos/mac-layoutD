@@ -170,6 +170,45 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertFalse(tocStory.contains("图像不只是正文的附件  3"))
     }
 
+    func testTOCCollectsSubheadingsNotJustTopLevel() throws {
+        // 正文里的二级标题也应进静态目录（否则只剩书名级 H1，需在 InDesign 手动更新目录才补全）。
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "目录层级测试", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(
+                            title: "",
+                            paragraphs: [
+                                Paragraph(kind: .heading(level: 1), text: "第一章", styleId: StyleID.heading1.rawValue),
+                                Paragraph(kind: .body, text: "引言段落。", styleId: StyleID.body.rawValue),
+                                Paragraph(kind: .heading(level: 2), text: "一级能量", styleId: StyleID.heading2.rawValue),
+                                Paragraph(kind: .body, text: "正文一。", styleId: StyleID.body.rawValue),
+                                Paragraph(kind: .heading(level: 2), text: "二级图注", styleId: StyleID.heading2.rawValue),
+                                Paragraph(kind: .body, text: "正文二。", styleId: StyleID.body.rawValue)
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-toc2-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let tocStory = try XCTUnwrap(try zipEntries(output)
+            .filter { $0.hasPrefix("Stories/Story_") }
+            .map { try entry(output, $0) }
+            .first { $0.contains("AppliedTOCStyle=\"TOCStyle/layoutD_TOC\"") })
+        // 两个二级标题都要在目录里，且挂二级目录样式 tocLevel2。
+        XCTAssertTrue(tocStory.contains("一级能量"), "二级标题 1 应进目录")
+        XCTAssertTrue(tocStory.contains("二级图注"), "二级标题 2 应进目录")
+        XCTAssertTrue(tocStory.contains("ParagraphStyle/tocLevel2"), "子标题应使用二级目录样式")
+    }
+
     func testExportsTableParagraphAsNativeIDMLTable() throws {
         // E3-4：带结构化行列的 .table 段应导出为原生 <Table>/<Column>/<Row>/<Cell>，
         // 而非拍平成「4 空格拼接」的裸文字。（importer 保留行列的断言见 LayoutDImport 测试。）
