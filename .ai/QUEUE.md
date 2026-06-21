@@ -58,7 +58,7 @@
 
 > Claude 既做 dev/main 集成与审核，也直接实现高风险/重要的 IDMLExporter 导出任务（用户决定：Codex 不靠谱，这些收 Claude 手里）。
 > 都改 `Sources/LayoutDExport/IDMLExporter.swift`，**串行做、各自专用 worktree+feature 分支**（守 N1/N2/N3），互不并行避免同文件冲突。
-> **顺序（依赖/风险）：E3-4b 表格内行内 → E3-6 目录动态化 → E2-5 美术页/蒙版 → E2-4 对开跨页（风险最高最后）。**
+> **顺序（依赖/风险）：~~E3-6 目录动态化~~（✅ 已合 dd2c49b，Codex 实现+Claude 修制表位）→ E3-4b 表格内行内 → E2-5 美术页/蒙版 → E2-4 对开跨页（风险最高最后）。**
 > 任务详情见下方 Codex 道里对应条目（已标「改判 Claude」）与本道 E2-4 条目；E2-4 须等 Codex 的 D-2 与本道前序都稳定后做。
 
 ## Codex 道队列（IDML 导出管线 + 内容模型）
@@ -142,7 +142,7 @@
   - 文件：`BookProject.swift`、`MarkdownBookImporter.swift`、`IDMLExporter.swift`。
   - 验收：`printf '| 名称 | 说明 |\n| --- | --- |\n| 线粒体 | **产能**中心 |\n| 核糖体 | 合成*蛋白质* |\n'` 导出解包，单元格内 `**产能**`→FauxBold、`*蛋白质*`→Skew，无残留 `*`；补端到端断言；`scripts/review-idml.sh` PASS；用户 InDesign 肉眼确认表格内粗斜体可见。
 
-- [ ] **E3-6 目录（TOC）动态化** — 👤 **改判 Claude**（2026-06-21；TOCStyle 较绕、回归风险高）。Codex 勿做。
+- [x] **E3-6 目录（TOC）动态化** — ✅ 已合 dev（merge `dd2c49b`）。Codex 实现 `feature/codex-e3-6-toc`(748c60c)：TOCStyle + heading1/2 映射 + 结构化目录条目，本体正确；Claude 接手修一处保真坑（`feature/claude-e3-6-toc` 9568de3）：制表位原写成 ParagraphStyleRange 扁平属性会被 InDesign 忽略，改为合法嵌套 `<Properties><TabList>`（右对齐+点导引线）。190 测试 + review-idml.sh PASS。**待用户 InDesign 肉眼验收**：① 目录页码右对齐、点导引线连续；② Layout→更新目录 能按标题样式重建。⚠️ 制表位渲染是「属性在视觉无」高发区，务必人看。
   - **现状（Claude 已勘）**：`LayoutEngine` 排版时已收集带**真实页码**的目录条目（`tableOfContents: [TableOfContentsEntry(level,title,pageNumber)]`，`LayoutEngine.swift:131/138`），但在 `LayoutEngine.swift:1141` 被拼成纯文本行（`"标题  3"`）放进 `.tableOfContents` 页 → 导出到 IDML 就是**死文字**，正文页码一变目录不会跟。导出侧 TOC story 现在 `AppliedTOCStyle="n"`（`IDMLExporter.swift:891` 一带）。
   - **目标**：让目录在 InDesign 里能用「Layout → 更新目录」重新生成/刷新页码，而非手敲数字；且排版专业（点导引线 + 页码右对齐）。
   - **做法（两层，至少做到第 1 层即算过；第 2 层加分）**：
