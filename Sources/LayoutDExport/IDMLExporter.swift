@@ -961,12 +961,16 @@ public struct IDMLExporter {
         \t\t\t\t</TabList>
         \t\t\t</Properties>
         """
-        let body = entries.map { entry in
+        // 一个 story 里多段并存时，IDML 必须有显式段落分隔符（<Content> 内的字面换行
+        // U+000A，InDesign 读作段落回车）；否则多个 ParagraphStyleRange 会被并成一段、
+        // 各条目录的 tab/页码串行到同一段里（实测 InDesign 现象）。末条不加，避免空段。
+        let body = entries.enumerated().map { index, entry in
             let style = entry.level <= 1 ? "tocLevel1" : "tocLevel2"
+            let paragraphBreak = index < entries.count - 1 ? "\n" : ""
             return """
             \t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/\(style)" AppliedComposer="\(appliedComposer)">
             \(tabList)
-            \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>\(esc(entry.title))\t\(entry.pageNumber)</Content></CharacterStyleRange>
+            \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>\(esc(entry.title))\t\(entry.pageNumber)\(paragraphBreak)</Content></CharacterStyleRange>
             \t\t</ParagraphStyleRange>
             """
         }.joined(separator: "\n")
