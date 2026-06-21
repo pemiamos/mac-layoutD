@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 public struct LayoutPlan: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
@@ -239,3 +240,53 @@ public enum ScreenMode: String, CaseIterable, Sendable {
         }
     }
 }
+
+extension ImageMaskShape {
+    public func polygonPoints(in rect: CGRect) -> [CGPoint] {
+        switch self {
+        case .rect:
+            return [
+                CGPoint(x: rect.minX, y: rect.minY),
+                CGPoint(x: rect.maxX, y: rect.minY),
+                CGPoint(x: rect.maxX, y: rect.maxY),
+                CGPoint(x: rect.minX, y: rect.maxY)
+            ]
+        case .octagon:
+            let delta = min(rect.width, rect.height) * 0.15
+            return [
+                CGPoint(x: rect.minX + delta, y: rect.minY),
+                CGPoint(x: rect.maxX - delta, y: rect.minY),
+                CGPoint(x: rect.maxX, y: rect.minY + delta),
+                CGPoint(x: rect.maxX, y: rect.maxY - delta),
+                CGPoint(x: rect.maxX - delta, y: rect.maxY),
+                CGPoint(x: rect.minX + delta, y: rect.maxY),
+                CGPoint(x: rect.minX, y: rect.maxY - delta),
+                CGPoint(x: rect.minX, y: rect.minY + delta)
+            ]
+        case .fan:
+            let cx = rect.minX + rect.width / 2.0
+            let cy = rect.minY + rect.height * 2.5
+            let R = rect.height * 2.5
+            let r = rect.height * 1.5
+            let theta = asin(rect.width / (2.0 * R))
+            let startAngle = 1.5 * .pi - theta
+            let endAngle = 1.5 * .pi + theta
+            
+            var points: [CGPoint] = []
+            let segments = 16
+            
+            for i in 0...segments {
+                let angle = startAngle + (endAngle - startAngle) * Double(i) / Double(segments)
+                points.append(CGPoint(x: cx + R * cos(angle), y: cy + R * sin(angle)))
+            }
+            
+            for i in stride(from: segments, through: 0, by: -1) {
+                let angle = startAngle + (endAngle - startAngle) * Double(i) / Double(segments)
+                points.append(CGPoint(x: cx + r * cos(angle), y: cy + r * sin(angle)))
+            }
+            
+            return points
+        }
+    }
+}
+

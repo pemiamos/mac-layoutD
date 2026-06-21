@@ -149,6 +149,19 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertLessThan(colWidths[0], colWidths[2])
     }
 
+    func testImageMaskShapePolygonPoints() throws {
+        let rect = CGRect(x: 10, y: 20, width: 100, height: 200)
+        
+        let rectPoints = ImageMaskShape.rect.polygonPoints(in: rect)
+        XCTAssertEqual(rectPoints.count, 4)
+        
+        let octagonPoints = ImageMaskShape.octagon.polygonPoints(in: rect)
+        XCTAssertEqual(octagonPoints.count, 8)
+        
+        let fanPoints = ImageMaskShape.fan.polygonPoints(in: rect)
+        XCTAssertEqual(fanPoints.count, 34)
+    }
+
     func testProjectMetadataDecodesLegacyFilesWithoutNewBookFields() throws {
         let legacyProject = BookProject(metadata: ProjectMetadata(title: "旧项目", author: "layoutD"))
         let encoded = try ProjectFile.encode(legacyProject)

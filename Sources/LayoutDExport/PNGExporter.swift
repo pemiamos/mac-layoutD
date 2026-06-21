@@ -683,39 +683,20 @@ public struct PNGExporter {
 
     private func maskPath(in rect: CGRect, shape: ImageMaskShape?) -> CGPath {
         let path = CGMutablePath()
-        guard let shape, shape != .rect else {
+        guard let shape else {
             path.addRect(rect)
             return path
         }
-        
-        switch shape {
-        case .rect:
+        let points = shape.polygonPoints(in: rect)
+        guard !points.isEmpty else {
             path.addRect(rect)
-        case .octagon:
-            let delta = min(rect.width, rect.height) * 0.15
-            path.move(to: CGPoint(x: rect.minX + delta, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX - delta, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + delta))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - delta))
-            path.addLine(to: CGPoint(x: rect.maxX - delta, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX + delta, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - delta))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + delta))
-            path.closeSubpath()
-        case .fan:
-            let cx = rect.minX + rect.width / 2.0
-            let cy = rect.minY + rect.height * 2.5
-            let R = rect.height * 2.5
-            let r = rect.height * 1.5
-            let theta = asin(rect.width / (2.0 * R))
-            let startAngle = 1.5 * .pi - theta
-            let endAngle = 1.5 * .pi + theta
-            
-            path.addArc(center: CGPoint(x: cx, y: cy), radius: R, startAngle: startAngle, endAngle: endAngle, clockwise: false)
-            path.addLine(to: CGPoint(x: cx + r * cos(endAngle), y: cy + r * sin(endAngle)))
-            path.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: endAngle, endAngle: startAngle, clockwise: true)
-            path.closeSubpath()
+            return path
         }
+        path.move(to: points[0])
+        for i in 1..<points.count {
+            path.addLine(to: points[i])
+        }
+        path.closeSubpath()
         return path
     }
 }
