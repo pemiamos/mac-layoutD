@@ -159,15 +159,25 @@
   - 文件：`IDMLExporter.swift`（⚠️ Codex 负责文件，本项跨道由 Claude 直接做，故须等 Codex 本批先落 dev）。
   - ⚠️ 风险高（可能打破当前"单页 spread 干净分页"），单独一棒、改完先确认非对开模式没有回归，再重点交用户 InDesign 验收对开效果。
 
-- [ ] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版**
-  - 目标：满版图/扉页固定页映射成 MasterSpread；扇面/八角图框用 PathGeometry 蒙版。
-  - 文件：`IDMLExporter.swift`。
-  - 验收：固定页导出后版心位置/满版图正确；非矩形蒙版图框在 InDesign 里裁切正确。
+- [ ] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版**（可拆两小步，蒙版优先、更独立）
+  - **现状（Claude 已勘）**：模型已就绪——`ImageMaskShape{rect,fan,octagon}`（`LayoutPlan.swift:114`）+ 帧上 `maskShape` 字段；固定美术页用 `LayoutPlanStrategy.cover/.fullPageImage/.titlePage`（`BookProject.swift:480`）。但导出器**只为矩形写 PathGeometry**（`IDMLExporter.swift:404` 四角点），且文件头注释自承「固定美术页→MasterSpread、非矩形蒙版**暂未覆盖**」。现有 A-Master 是个空主页（`masterSpread()` `IDMLExporter.swift:638`）。
+  - **第 1 步·非矩形蒙版（先做，独立）**：帧 `maskShape == .fan/.octagon` 时，把该图框的 `<PathGeometry><GeometryPathType>` 点数组算成对应**多边形**（八角=8 点、扇面=弧近似多段点），InDesign 据此把置入图裁成该形；`rect` 保持现状。注意图片 `<Image>` 仍按原图矩形放，靠图框 path 裁切。
+  - **第 2 步·固定美术页**：`cover/fullPageImage/titlePage` 固定页导出时——① 满版图按**出血满版**定位（已知 bleed），② 该页**不要叠加正文主页项/页码**（应用 `[None]` 主页或不挂 A-Master），避免页码/主页元素盖在满版图上；非固定页维持现状不回归。（把共享背景美术放进 MasterSpread 为可选加分，非必须。）
+  - **文件**：`Sources/LayoutDExport/IDMLExporter.swift`。
+  - **验收**：① 含八角/扇面蒙版图框的项目导出，解包 IDML 该图框 `PathGeometry` 点数 = 多边形点数（非 4 角），InDesign 打开图被裁成八角/扇面；② 固定满版页导出后满版图出血到位、页上无多余页码/主页项；③ 普通页**无回归**（分页/版心不变）；④ 补端到端断言（masked 帧 path 点数、固定页 master 应用）；⑤ `scripts/review-idml.sh` 仍 PASS。
+  - ⚠️ 解包 IDML 验 PathGeometry 点数，别只单测；固定页改动后**务必回归非固定页**（这是最易翻车处）。
 
 - [ ] **D-2 DOCX 导入**（阶段 D 遗留）
-  - 目标：新增 `DOCXBookImporter.swift`，解析 DOCX → `BookProject` 模型（复用 Markdown 导入已有的段落/样式映射思路）。
-  - 文件：新文件 `Sources/LayoutDImport/DOCXBookImporter.swift`（不碰 `MarkdownBookImporter.swift`，避免和上面几项排队冲突）。
-  - 验收：一份结构良好的 DOCX 能导入并正确分段、保留基本粗斜体。
+  - **目标**：新增 `DOCXBookImporter.swift`，解析 `.docx` → `BookProject` 模型，复用现有段落/行内模型（**不碰** `MarkdownBookImporter.swift`）。
+  - **DOCX 是什么**：一个 zip，正文在 `word/document.xml`（OOXML），样式名在 `word/styles.xml`，列表编号在 `word/numbering.xml`。
+  - **映射口径**（目标模型已就绪，见 `BookProject.swift`）：
+    - `w:p`（段落）→ `Paragraph`；按 `w:pStyle` 段落样式名映射 `ParagraphKind`：`Heading 1/2/3`→`.heading(level:)`、`Normal/正文`→`.body`、`List Paragraph`→`.listItem`、`Quote/引用`→`.quote`、表格 `w:tbl`→`.table`（行列存进 `tableCells`，与 E3-4/E3-4b 同结构）。
+    - `w:r`（run）的 `w:rPr` 里 `w:b`→`InlineEmphasis.bold`、`w:i`→`.italic`，合成 `InlineRun`（offset 按 `Character` 计，与 Markdown 导入同口径）。`kenten` 无 Word 对应，跳过。
+    - 图片 `w:drawing`/`a:blip` → 先可降级（记一条 TODO 占位，不阻塞首版）。
+  - **依赖决策**：Foundation 无原生 unzip。**先 `record_decision()`** 决定 zip 读取方案（候选：最小自写 zip 读取器 / 复用某现有解压；项目已为**写**入有 `ZIPArchiveWriter`，**读**需新增）。别直接 shell `unzip`（项目在去外部进程依赖）。
+  - **文件**：新文件 `Sources/LayoutDImport/DOCXBookImporter.swift`（+ 可能一个 zip 读取小工具）。放 `Samples/` 一份测试 `.docx`。
+  - **验收**：① 一份结构良好的 `.docx`（含 H1/H2、粗斜体、列表、一张表）导入后：段落数与 kind 正确、粗/斜体保留为 `inlineRuns`、列表/表格归位；补端到端断言（解析后 Paragraph 数组的 kind 序列 + 某段 inlineRuns 命中 bold/italic）；② 导入的项目再 `--export-idml` 导出，`scripts/review-idml.sh` 仍 PASS（证明 DOCX→模型→IDML 全链路通）。
+  - ⚠️ 端到端用真 `.docx` 跑，别只单测构造模型——本项目踩过「单测绿但功能坏」的坑。
 
 ---
 
