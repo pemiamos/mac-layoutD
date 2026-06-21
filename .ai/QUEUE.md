@@ -110,7 +110,7 @@
   - **验收**：①补端到端断言——解包后脚注 `<Footnote>` 内的 `<ParagraphStyleRange AppliedParagraphStyle=...>` 必须指向带 `CF_` 字体的样式、**不得**是 `$ID/[No paragraph style]`；②`scripts/review-idml.sh` 仍 PASS；③Claude 复审后重导样例投桌面，用户在 InDesign 肉眼确认脚注中文正常显示（无豆腐）。
   - ⚠️ 与 dev 的 E3-3v(composer 改 `storyXML` ParagraphStyleRange 行) 同文件，**合 dev 前** `git merge origin/dev` 同步并 reconcile（E3-7v 改了 storyXML 签名+正文调用处，E3-3v 改了同函数的 ParagraphStyleRange 行，会冲突需人工合）。
 
-- [~] **E3-4 原生表格 Table** — Claude 直接做 @ `feature/claude-e3-4-table` commit `00f9c3c`（代码已落，**待用户 InDesign 视觉验收** `~/Desktop/layoutD表格验收-0621.idml` 后合 dev）。原生 `<Table>` 是首次输出的新 IDML 元素，按惯例先视觉确认再合。
+- [x] **E3-4 原生表格 Table** — Claude 实现，已合 dev（merge `ae82104`）。**用户 InDesign 视觉验收 PASS**（真表格、可选格、左对齐、底色贴合、无溢流）。链路：Paragraph.tableCells 结构化行列 → 导入保留 → LayoutEngine 网格估高 → 导出原生 `<Table>/<Column>/<Row>/<Cell>`（首行表头、列宽均分、0.5pt 边框、单元格左对齐去缩进、底色挂单元格）。迭代踩坑留档：①首版框按拍平文本测高→整表溢流，改 estimatedTableHeight 网格估高修复；②单元格继承正文 FirstLineIndent=21 显得右对齐，改 FirstLineIndent=0+LeftJustified；③整框填色露底部色块，改挂单元格 FillColor。
   - 目标：table 从「拍平成纯文字导」升级为 IDML 原生 `<Table>/<Row>/<Column>/<Cell>`（行列/边框/底色），InDesign 里是真表格、可调列宽。
   - **起手提示（Claude 已勘，先 `git merge origin/dev` 拿 E3-7 合并后的 IDMLExporter，已变）**：
     - ⚠️ **当前是有损的**：`MarkdownBookImporter.flushTableBuffer()`（`MarkdownBookImporter.swift:252`）其实**已经算出了结构化 `rows: [[String]]`**，却又用 `rows.map{ $0.joined(separator:"    ") }.joined(separator:"\n")` **拍平成一个纯文本字符串**塞进 `Paragraph(kind: .table, text:…)`。模型里**没有行列维度**——导出侧拿不到结构，只能当文字画。
