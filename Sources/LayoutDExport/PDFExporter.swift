@@ -546,6 +546,7 @@ public struct PDFExporter {
         context.saveGState()
         context.textMatrix = .identity
         CTFrameDraw(frame, context)
+        ChineseTypesetting.drawKentenDots(for: frame, in: context, layoutDirection: style.layoutDirection, zoomScale: 1.0)
         context.restoreGState()
     }
 
