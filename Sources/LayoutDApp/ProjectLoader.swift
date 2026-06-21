@@ -27,6 +27,8 @@ struct LoadedProject {
     var exportPackageURL: URL?
     var exportIDMLURL: URL?
     var pdfxVersion: PDFXVersion
+    var exportPDFFlowURL: URL?
+    var exportPNGFlowDirectoryURL: URL?
 }
 
 struct ProjectLoader {
@@ -68,7 +70,9 @@ struct ProjectLoader {
                 loadError: loadError,
                 exportPackageURL: options.exportPackagePath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 exportIDMLURL: options.exportIDMLPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                pdfxVersion: options.pdfxVersion
+                pdfxVersion: options.pdfxVersion,
+                exportPDFFlowURL: options.exportPDFFlowPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
             )
         }
 
@@ -104,7 +108,9 @@ struct ProjectLoader {
                 loadError: nil,
                 exportPackageURL: options.exportPackagePath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 exportIDMLURL: options.exportIDMLPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                pdfxVersion: options.pdfxVersion
+                pdfxVersion: options.pdfxVersion,
+                exportPDFFlowURL: options.exportPDFFlowPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
             )
         } catch {
             var project = BookProject.sample
@@ -154,7 +160,9 @@ struct ProjectLoader {
                 loadError: error.localizedDescription,
                 exportPackageURL: options.exportPackagePath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 exportIDMLURL: options.exportIDMLPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                pdfxVersion: options.pdfxVersion
+                pdfxVersion: options.pdfxVersion,
+                exportPDFFlowURL: options.exportPDFFlowPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
             )
         }
     }
@@ -380,6 +388,8 @@ private struct CommandLineOptions {
     var exportPackagePath: String?
     var exportIDMLPath: String?
     var pdfxVersion: PDFXVersion = .none
+    var exportPDFFlowPath: String?
+    var exportPNGFlowDirectoryPath: String?
 
     init(arguments: [String]) {
         var positionalArguments: [String] = []
@@ -429,6 +439,18 @@ private struct CommandLineOptions {
             if argument == "--help" || argument == "-h" {
                 showHelp = true
                 index += 1
+                continue
+            }
+
+            if argument == "--export-pdf-flow", index + 1 < arguments.count {
+                exportPDFFlowPath = arguments[index + 1]
+                index += 2
+                continue
+            }
+
+            if argument == "--export-png-flow", index + 1 < arguments.count {
+                exportPNGFlowDirectoryPath = arguments[index + 1]
+                index += 2
                 continue
             }
 
