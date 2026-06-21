@@ -7,7 +7,7 @@
 - **分支**：`feature/codex-e3-6-toc`
 - **概述**：目录页正文 frame 现携带结构化 `TableOfContentsEntry` 元数据（标题、层级、真实页码），预览继续使用原有文本；IDMLExporter 根据结构化条目生成独立 TOC 段落、`tocLevel1`/`tocLevel2` 样式、右对齐 tab + 点导引，并输出 `TOCStyle/layoutD_TOC`，把 `heading1`/`heading2` 映射为对应目录样式。目录 Story 引用该 TOCStyle，供 InDesign「更新目录」重建。
 - **改动文件**：`Sources/LayoutDCore/LaidOutPage.swift`、`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDExport/IDMLExporter.swift`、`Tests/LayoutDExportTests/IDMLExporterTests.swift`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
-- **检查**：新增 `IDMLExporterTests.testExportsStructuredDynamicTOCWithTabLeaders` PASS（TOCStyle、heading 映射、TOC 段落样式、tab + 点导引）；`scripts/review-idml.sh` PASS（swift build、190 tests、IDML 探针 6/6）。待提交。
+- **检查**：提交 `748c60c feat(export): add dynamic IDML table of contents`；新增 `IDMLExporterTests.testExportsStructuredDynamicTOCWithTabLeaders` PASS（TOCStyle、heading 映射、TOC 段落样式、tab + 点导引）；`scripts/review-idml.sh` PASS（swift build、190 tests、IDML 探针 6/6）。
 - **下一步**：Claude 复审后在 InDesign 中文版打开样例执行「Layout → 更新目录」，确认标题及页码能重建。Codex 后续可接 E3-4b（表格单元格行内格式）。
 
 ## 2026-06-21 11:17 | claude | 进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全

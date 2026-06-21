@@ -133,7 +133,7 @@
   - 文件：`BookProject.swift`、`MarkdownBookImporter.swift`、`IDMLExporter.swift`。
   - 验收：`printf '| 名称 | 说明 |\n| --- | --- |\n| 线粒体 | **产能**中心 |\n| 核糖体 | 合成*蛋白质* |\n'` 导出解包，单元格内 `**产能**`→FauxBold、`*蛋白质*`→Skew，无残留 `*`；补端到端断言；`scripts/review-idml.sh` PASS；用户 InDesign 肉眼确认表格内粗斜体可见。
 
-- [x] **E3-6 目录（TOC）动态化** — Codex @ `feature/codex-e3-6-toc`，commit 待提交
+- [x] **E3-6 目录（TOC）动态化** — Codex @ `feature/codex-e3-6-toc`，commit `748c60c`
   - **现状（Claude 已勘）**：`LayoutEngine` 排版时已收集带**真实页码**的目录条目（`tableOfContents: [TableOfContentsEntry(level,title,pageNumber)]`，`LayoutEngine.swift:131/138`），但在 `LayoutEngine.swift:1141` 被拼成纯文本行（`"标题  3"`）放进 `.tableOfContents` 页 → 导出到 IDML 就是**死文字**，正文页码一变目录不会跟。导出侧 TOC story 现在 `AppliedTOCStyle="n"`（`IDMLExporter.swift:891` 一带）。
   - **目标**：让目录在 InDesign 里能用「Layout → 更新目录」重新生成/刷新页码，而非手敲数字；且排版专业（点导引线 + 页码右对齐）。
   - **做法（两层，至少做到第 1 层即算过；第 2 层加分）**：
