@@ -1172,7 +1172,7 @@ private struct LayoutContext {
             ? "暂无章节"
             : entries.map { entry in
                 let indent = entry.level > 1 ? "    " : ""
-                return "\(indent)\(entry.title)  \(entry.pageNumber)"
+                return "\(indent)\(entry.title)\t\(entry.pageNumber)"
             }.joined(separator: "\n")
 
         return LaidOutPage(
