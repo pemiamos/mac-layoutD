@@ -1179,7 +1179,8 @@ private struct LayoutContext {
                     kind: .text,
                     rect: Rect(x: leftMargin, y: margins.top + 72, width: contentWidth, height: 420),
                     styleId: StyleID.body.rawValue,
-                    content: .text(body)
+                    content: .text(body),
+                    tableOfContentsEntries: entries
                 )
             ]
         )
@@ -1594,11 +1595,6 @@ private extension LayoutPlan {
     }
 }
 
-private struct TableOfContentsEntry: Equatable {
-    var level: Int
-    var title: String
-    var pageNumber: Int
-}
 
 
 

@@ -54,17 +54,26 @@
 
 ---
 
+## Claude 道（直接实现 + 集成；2026-06-21 起接管高风险导出）
+
+> Claude 既做 dev/main 集成与审核，也直接实现高风险/重要的 IDMLExporter 导出任务（用户决定：Codex 不靠谱，这些收 Claude 手里）。
+> 都改 `Sources/LayoutDExport/IDMLExporter.swift`，**串行做、各自专用 worktree+feature 分支**（守 N1/N2/N3），互不并行避免同文件冲突。
+> **顺序（依赖/风险）：~~E3-6 目录动态化~~（✅ 已合 dd2c49b，Codex 实现+Claude 修制表位）→ E3-4b 表格内行内 → E2-5 美术页/蒙版 → E2-4 对开跨页（风险最高最后）。**
+> 任务详情见下方 Codex 道里对应条目（已标「改判 Claude」）与本道 E2-4 条目；E2-4 须等 Codex 的 D-2 与本道前序都稳定后做。
+
 ## Codex 道队列（IDML 导出管线 + 内容模型）
 
 > 负责文件：`Sources/LayoutDImport/*`、`Sources/LayoutDCore/BookProject.swift`、
 > `Sources/LayoutDExport/IDMLExporter.swift`、`ZIPArchiveWriter.swift`
 >
-> **🔁 本批连续序列（2026-06-21 用户排期，按顺序连做，做完一个自审 PASS 就接下一个，不停下问）：**
-> **E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DOCX 导入 → E2-5 美术页/蒙版**。
-> ⚠️ **E2-4 对开跨页改由 Claude 做**（用户 2026-06-21 决定），不在 Codex 序列里——但它和上面几项同改 `IDMLExporter.swift`，Claude 会等本批这几项先合进 dev 再起手，避免同文件并行冲突。
-> ⏸ **E3-8 CMYK 暂缓**（用户决定先不做）；E3-9 约物挤压维持原排期，不在本批。
-> 约 1 小时或做到这批做完/撞阻塞为止，收尾写一条汇总 handoff。注意斜体导出已用 `Skew="12"`、
-> 粗体用 `FauxBold="true"`（别用 `FauxItalic` 或 `FontStyle` 字符串，已验证那两个对 CJK 不可见/出粉色替代字形）。
+> **⚖️ 2026-06-21 分工调整（用户决定）**：Codex 多次提交不靠谱、需反复回修，**改为少排、只留隔离低风险任务**；
+> 高风险/重要的 IDMLExporter 导出任务（E3-4b/E3-6/E2-5/E2-4）**全部改判 Claude 直接做**（见下方「Claude 道」）。
+> AG 升为主力。
+>
+> **🔁 Codex 当前序列（就这一项，做完写 handoff 等审）：D-2 DOCX 导入**（全新独立文件 `DOCXBookImporter.swift`，不碰现有导出/IDMLExporter，blast radius 最小）。
+> 下面 E3-4b/E3-6/E2-5 虽列在本道，但**已改判 Claude**（各条已标），Codex **不要做**。
+> ⏸ **E3-8 CMYK 暂缓**；E3-9 约物挤压维持原排期。
+> 注意斜体导出已用 `Skew="12"`、粗体用 `FauxBold="true"`（别用 `FauxItalic`/`FontStyle`，对 CJK 不可见/出粉色替代字形）。
 
 - [x] **E3-1 行内格式补全到所有 block** — Codex @ `feature/codex-inline-blocks`, commit `8201059`
   - 目标：当前只普通正文段落持久化 inlineRuns；扩到标题/列表/引用/callout。先抽一个统一的 `Paragraph` 构造 helper，再让所有 Markdown block 分支走它。
@@ -127,13 +136,13 @@
   - 验收：①`printf '| 名称 | 功能 |\n| --- | --- |\n| 线粒体 | 产能 |\n| 核糖体 | 合成蛋白质 |\n'` 导出后**解包 grep `<Table` / `<Cell`** 确认是原生表格（不是一段裸文字），列数=2、行数=3（含表头）；②补端到端断言（Table/Cell 元素数、单元格文本归位、无「4 空格拼接」残留）；③`scripts/review-idml.sh` 仍 PASS；④用户在 InDesign 打开确认是可选列、可调宽的真表格。
   - ⚠️ 端到端验收必须解包 IDML grep `<Table`/`<Cell`，别只靠单测——本项目踩过「单测绿但功能坏」的坑。
 
-- [ ] **E3-4b 表格单元格内行内格式**（E3-4 遗留缺口，优先级中高）
+- [ ] **E3-4b 表格单元格内行内格式**（E3-4 遗留缺口，优先级中高）— 👤 **改判 Claude**（2026-06-21；E3-4 本就 Claude 做，续做自然）。Codex 勿做。
   - 背景：E3-4 原生表格已落地，但 `IDMLExporter.tableStoryXML` 逐格调 `styledCharacterRanges(for: content, globalStart: 0, inlineRuns: [])` —— **inlineRuns 写死成空**，即表格单元格里的粗体/斜体/傍点（`**`/`*`/`==`）目前全部丢失，只出纯文字。
   - 目标：表格单元格继承行内格式。需链路：① 模型 `Paragraph.tableCells` 从 `[[String]]` 升级为可携带 per-cell inlineRuns（如 `[[TableCell]]`，TableCell={text, inlineRuns?}），旧文件 decode 兼容；② 导入 `flushTableBuffer` 每格解析 `inlineRuns`（复用 `normalizeInlineMarkdown` 的 run 提取）；③ 导出 `tableStoryXML` 把该格 inlineRuns 传进 `styledCharacterRanges`。
   - 文件：`BookProject.swift`、`MarkdownBookImporter.swift`、`IDMLExporter.swift`。
   - 验收：`printf '| 名称 | 说明 |\n| --- | --- |\n| 线粒体 | **产能**中心 |\n| 核糖体 | 合成*蛋白质* |\n'` 导出解包，单元格内 `**产能**`→FauxBold、`*蛋白质*`→Skew，无残留 `*`；补端到端断言；`scripts/review-idml.sh` PASS；用户 InDesign 肉眼确认表格内粗斜体可见。
 
-- [ ] **E3-6 目录（TOC）动态化**
+- [x] **E3-6 目录（TOC）动态化** — ✅ 已合 dev（merge `dd2c49b`）。Codex 实现 `feature/codex-e3-6-toc`(748c60c)：TOCStyle + heading1/2 映射 + 结构化目录条目，本体正确；Claude 接手修一处保真坑（`feature/claude-e3-6-toc` 9568de3）：制表位原写成 ParagraphStyleRange 扁平属性会被 InDesign 忽略，改为合法嵌套 `<Properties><TabList>`（右对齐+点导引线）。190 测试 + review-idml.sh PASS。**待用户 InDesign 肉眼验收**：① 目录页码右对齐、点导引线连续；② Layout→更新目录 能按标题样式重建。⚠️ 制表位渲染是「属性在视觉无」高发区，务必人看。
   - **现状（Claude 已勘）**：`LayoutEngine` 排版时已收集带**真实页码**的目录条目（`tableOfContents: [TableOfContentsEntry(level,title,pageNumber)]`，`LayoutEngine.swift:131/138`），但在 `LayoutEngine.swift:1141` 被拼成纯文本行（`"标题  3"`）放进 `.tableOfContents` 页 → 导出到 IDML 就是**死文字**，正文页码一变目录不会跟。导出侧 TOC story 现在 `AppliedTOCStyle="n"`（`IDMLExporter.swift:891` 一带）。
   - **目标**：让目录在 InDesign 里能用「Layout → 更新目录」重新生成/刷新页码，而非手敲数字；且排版专业（点导引线 + 页码右对齐）。
   - **做法（两层，至少做到第 1 层即算过；第 2 层加分）**：
@@ -159,7 +168,7 @@
   - 文件：`IDMLExporter.swift`（⚠️ Codex 负责文件，本项跨道由 Claude 直接做，故须等 Codex 本批先落 dev）。
   - ⚠️ 风险高（可能打破当前"单页 spread 干净分页"），单独一棒、改完先确认非对开模式没有回归，再重点交用户 InDesign 验收对开效果。
 
-- [ ] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版**（可拆两小步，蒙版优先、更独立）
+- [ ] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版**（可拆两小步，蒙版优先、更独立）— 👤 **改判 Claude**（2026-06-21；固定页回归风险高）。Codex 勿做。
   - **现状（Claude 已勘）**：模型已就绪——`ImageMaskShape{rect,fan,octagon}`（`LayoutPlan.swift:114`）+ 帧上 `maskShape` 字段；固定美术页用 `LayoutPlanStrategy.cover/.fullPageImage/.titlePage`（`BookProject.swift:480`）。但导出器**只为矩形写 PathGeometry**（`IDMLExporter.swift:404` 四角点），且文件头注释自承「固定美术页→MasterSpread、非矩形蒙版**暂未覆盖**」。现有 A-Master 是个空主页（`masterSpread()` `IDMLExporter.swift:638`）。
   - **第 1 步·非矩形蒙版（先做，独立）**：帧 `maskShape == .fan/.octagon` 时，把该图框的 `<PathGeometry><GeometryPathType>` 点数组算成对应**多边形**（八角=8 点、扇面=弧近似多段点），InDesign 据此把置入图裁成该形；`rect` 保持现状。注意图片 `<Image>` 仍按原图矩形放，靠图框 path 裁切。
   - **第 2 步·固定美术页**：`cover/fullPageImage/titlePage` 固定页导出时——① 满版图按**出血满版**定位（已知 bleed），② 该页**不要叠加正文主页项/页码**（应用 `[None]` 主页或不挂 A-Master），避免页码/主页元素盖在满版图上；非固定页维持现状不回归。（把共享背景美术放进 MasterSpread 为可选加分，非必须。）
@@ -186,24 +195,28 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDExport/PDFExporter.swift`、
 > `PNGExporter.swift`、`Sources/LayoutDApp/*`
 >
-> **🔁 本批连续序列（按顺序连做，做完一个自审 PASS 就接下一个，不停下问）：E3-2b 竖排行内 → E3-4p 表格预览 →（待 Codex E3-3 合 dev 后）E3-3p 傍点预览**。
-> 约 1 小时或做到这批做完/撞阻塞为止，收尾写一条汇总 handoff。
+> **⭐ 2026-06-21 起 AG 为主力**（用户决定：Codex 不靠谱、少排；AG 多排、连续作业）。预览+GUI 全线都在 AG。
+> **✅ 上一批（E3-2b/E3-4p/E3-3p 预览）AG 已实现、Claude 审过，待合 dev（用户选 C 暂缓，Claude 合）。AG 不必重做。**
+> **🔁 AG 本批连续序列（按顺序连做，做完一个自审 PASS 接下一个，不停下问）：**
+> **① E3-10p 预览验收 harness（高优先）→ ② E3-6p 目录预览（配 E3-6）→ ③ E2-5p 非矩形蒙版预览（配 E2-5）→ ④ E2-4p 对开跨页预览（配 E2-4）→ ⑤ 导出选项面板**。
+> 配对预览（②③④）做「预览追平 IDML」：Claude 在导出侧做 E3-6/E2-5/E2-4，AG 在预览侧画出对应效果。即使对应导出项还没合 dev，预览侧也可独立先做（按同一视觉规格）。
+> 约 1 小时或做完本批/撞阻塞为止，收尾写一条汇总 handoff。
 > 主题：**让预览（Canvas/PDF/PNG）追平 IDML 输出**——本阶段 AG 的核心价值是「InDesign 打开后版面与 layoutD 预览一致」。
 > ⚠️ **每项都从最新 dev 起新分支 `feature/ag-<task>`**，别叠旧分支。斜体已在 dev 用 12° `Skew` 矩阵渲染（与 IDML `Skew="12"` 同算法），别改回 FauxItalic。
 
-- [x] **E3-2b 竖排（直排）下行内格式预览验收 + 修正** — Antigravity @ feature/ag-e3-2b, commit f988dd2
+- [~] **E3-2b 竖排（直排）下行内格式预览验收 + 修正** — ✅ AG 实现 `feature/ag-e3-2b`(f988dd2)、Claude 审过，**待合 dev**（用户选 C 暂缓）。竖排斜体改用 b=tan12° 切变（横笔倾斜竖笔不动）。AG 不必重做。
   - 背景：E3-2 已把 `inlineRuns` 透传进 `addFlowingVerticalText`，但**斜体用的是横排 12° 水平切变矩阵**，竖排里直接照搬很可能方向错（竖排字应沿竖向基线倾斜，不是横向歪）。粗体在竖排是否真加重也需肉眼确认。
   - 目标：竖排模式下 `makeAttributedString` 的粗体/斜体在 Canvas/PDF/PNG 渲染正确——粗体明显加重、斜体沿竖排方向合理倾斜，且**不破坏竖排行序/分行/禁则**。
   - 文件：`ChineseTypesetting.swift`（竖排分支的 trait/skew 矩阵）、`LayoutEngine.swift`、三处渲染器。
   - 验收：竖排测试稿（含粗/斜词的引文）导 PNG，目标词字重/倾斜正确、竖排列序不乱；补端到端断言（竖排 + run 分段）；`scripts/review-idml.sh` PASS。修好后 Claude 出 PNG 交用户肉眼验。
 
-- [x] **E3-4p 原生表格预览渲染**（配对 Codex E3-4 IDML 原生表格） — Antigravity @ feature/ag-e3-4p, commit 4f091fc
+- [~] **E3-4p 原生表格预览渲染**（配对 Codex E3-4 IDML 原生表格） — ✅ AG 实现 `feature/ag-e3-4p`(4f091fc)、Claude 审过+视觉验收过（表格网格出图 PASS），**待合 dev**（用户选 C 暂缓；合时与 dev 的 E3-4 在 LayoutEngine 有冲突，解法已记交接）。AG 不必重做。
   - 背景：表格组件当前在预览里基本当文字画；Codex 那边要升级成 IDML 原生 `<Table>`。预览侧也要画成真表格才能「预览=输出」。
   - 目标：table 组件在 Canvas/PDF/PNG 渲染为真实网格——行列线、单元格底色、内边距、按列宽分配，文字落在单元格内。
   - 文件：`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`LayoutEngine.swift`（如需表格测量/分页）。
   - 验收：demo 里的表格导 PNG 是带边框的真网格（非裸文字流），列对齐、底色正确；单测断言表格 frame 产出行列结构；`scripts/review-idml.sh` PASS。
 
-- [x] **E3-3p 傍点（Kenten 着重号）预览渲染** — Antigravity @ feature/ag-e3-3p, commit ce26883
+- [~] **E3-3p 傍点（Kenten 着重号）预览渲染** — ✅ AG 实现 `feature/ag-e3-3p`(ce26883)、Claude 审过，**待合 dev**（用户选 C 暂缓）。用自定义属性 LayoutDKenten 标记 run + drawKentenDots 画点（横排字下/竖排字右）。视觉验收待 E3-10p harness 出图。AG 不必重做。
   - 背景：Codex E3-3 让 `==着重==` 落地为 `InlineEmphasis.kenten` → IDML `KentenKind`。预览侧需在着重字**旁/上画着重点（芝麻点）**，否则预览看不出傍点。
   - 目标：Canvas/PDF/PNG 对 `.kenten` run 的每个字符绘制着重号（横排在字下/字右、竖排在字右侧，对标 InDesign 默认 KentenSesameDot 位置）。
   - 文件：`ChineseTypesetting.swift` 或三处渲染器的字形装饰逻辑。
@@ -225,8 +238,27 @@
   - 文件：`Sources/LayoutDApp/main.swift`（CLI/导出路径）、`PNGExporter.swift`/`PDFExporter.swift`、`LayoutEngine.swift`（如需正文连续成帧）。
   - 验收：含 `==着重==`、`**粗**`、`*斜*`、竖排段的测试稿导 PNG，**逐项都能在图里肉眼看到**（傍点出点、粗体加重、斜体倾斜、竖排倾斜方向正确）；`scripts/review-idml.sh` PASS。这条做完，E3-3p / E3-2b 才能真正走完视觉验收。
 
-- [ ] **导出选项面板跟进**（待 Codex 的 E2-4 / E3-8 任一项落地后联动，非阻塞可先设计）
-  - 目标：「导出 IDML…」面板加开关：对开跨页模式、CMYK 色板模式。
+- [ ] **E3-6p 目录（TOC）预览渲染**（配对 Claude E3-6 动态目录）
+  - 背景：Claude 在导出侧把目录做成结构化段落（标题 + tab 点导引线 + 右对齐页码）和动态 `<TOCStyle>`。预览侧（Canvas/PDF/PNG）当前目录基本是裸文字行，需追平。
+  - 目标：预览里目录条目按层级缩进、标题与页码间画**点导引线（dot leader）**、页码右对齐贴版心右边；与导出版式一致。
+  - 文件：`LayoutEngine.swift`（目录条目成帧/制表位）、`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
+  - 验收：含多级标题的稿件导 PNG，目录页点导引线连续、页码右对齐、层级缩进正确；单测断言目录条目带 tab/leader 结构；`scripts/review-idml.sh` PASS。
+
+- [ ] **E2-5p 非矩形蒙版预览渲染**（配对 Claude E2-5 扇面/八角蒙版）
+  - 背景：模型已有 `ImageMaskShape{rect,fan,octagon}`（`LayoutPlan.swift:114`）+ 帧 `maskShape`；Claude 在导出侧让图框按多边形 PathGeometry 裁切。预览侧需把图也裁成同形状，否则预览≠输出。
+  - 目标：Canvas/PDF/PNG 对 `maskShape == .fan/.octagon` 的图框，用对应多边形路径裁剪置入图（八角 8 点、扇面弧近似），`rect` 维持现状。
+  - 文件：`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`、必要时 `LayoutEngine.swift`/`ChineseTypesetting.swift` 旁的图形工具。
+  - 验收：含八角/扇面蒙版的图导 PNG，图被裁成对应形状（非矩形）；与导出 PathGeometry 同一套点算法（预览↔导出对齐，参考斜体 12° 同算法做法）；单测断言裁剪路径点数；`scripts/review-idml.sh` PASS。
+
+- [ ] **E2-4p 对开跨页预览渲染**（配对 Claude E2-4 facing spread）
+  - 背景：Claude 在导出侧做对开跨页（2 页 spread + 起始页码 Section）。预览侧当前按单页排，需能按对开模式预览（左右页并排、订口在内侧、页码外侧）。
+  - 目标：`pageSetup.facingPages` 开启时，Canvas/PDF/PNG 按对开展示——奇偶页版心镜像（订口/切口边距对调）、跨页并排预览。
+  - 文件：`LayoutEngine.swift`（对开版心/分页方向）、`CanvasView.swift`（并排展示）、`PDFExporter.swift`、`PNGExporter.swift`。
+  - ⚠️ 与 E2-4 同属高风险（动版心/分页），改完务必回归非对开模式无变化。
+  - 验收：对开稿件导 PNG，左右页版心镜像正确、页码在外侧；关闭对开时与现状一致（向后兼容）；单测断言对开版心镜像；`scripts/review-idml.sh` PASS。
+
+- [ ] **导出选项面板跟进**（依赖变动：E3-8 CMYK 已暂缓、E2-4 对开改 Claude 做——本项**待 E2-4 落 dev 后**再接「对开跨页」开关；非阻塞可先把面板骨架设计好）
+  - 目标：「导出 IDML…」面板加开关：对开跨页模式（待 E2-4）；CMYK 色板模式（E3-8 暂缓，先留位不接线）。
   - 文件：`ToolbarView.swift` 或导出选项相关 View。
   - 验收：开关能正确传参到 `IDMLExporter`，关闭时行为与当前一致（向后兼容）。
 
