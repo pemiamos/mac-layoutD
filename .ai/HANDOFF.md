@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 15:44 | claude | 解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HA
+- **分支**：dev
+- **概述**：解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HANDOFF.md 冲突、自行解冲突卡死；Claude 在 AG worktree 按 dev 权威版 checkout --theirs 解掉两文档冲突、补完 merge（1d93ba8），AG worktree build PASS、已解套可继续。根因：Claude 在 dev 频繁改 QUEUE.md + 各道也改 QUEUE.md → 每次同步必冲突。根治（commit 32e71e3 push origin/dev）：① .gitattributes 给 .ai/HANDOFF.md + .ai/DECISIONS.md 设 merge=union（append-only 永不冲突）；② AGENTS.md 铁律 8：QUEUE.md 归 Claude 独占，各道不再勾 [x]/挂 [~]，进度只走 write_handoff，Claude 据交接更新；③ 各道遇文档冲突别硬解，checkout --theirs .ai/QUEUE.md。同步更新记忆 codex-antigravity-dual-lane。
+- **改动文件**：(未填)
+- **检查**：AG worktree swift build PASS（e3-10p + dev 的 E3-6 合并后可编译）。dev commit 32e71e3 已 push。
+- **下一步**：① AG 可继续 E3-10p（界面若仍显示 Working 让其停一下/重开，工作区已干净）。② 今后各道：同步 dev 不碰 QUEUE.md→无冲突；进度写 handoff，Claude 更新队列。③ 待办不变：E3-6 等用户 InDesign 复看三条目录后合 main；Claude 道 E3-4b→E2-5→E2-4；Codex D-2 进行中。④ 注意 AG 的 e3-10p 分支已含 dev 的 E3-6（含我对 LayoutEngine addStory 的 H2 收集改动），后续合 AG 分支时 LayoutEngine 已对账过。
+
 ## 2026-06-21 15:31 | claude | E3-6 目录：用户 InDesign 截图确认点导引线+页码右对齐已渲染（Claude 的 TabList 修复生效，视觉 PASS）。但发现静态目录只列 H
 - **分支**：dev
 - **概述**：E3-6 目录：用户 InDesign 截图确认点导引线+页码右对齐已渲染（Claude 的 TabList 修复生效，视觉 PASS）。但发现静态目录只列 H1 书名，正文 H2 子标题没进——根因 LayoutEngine 只收集 section 标题(level1)+story.title(level2)，不收正文 .heading(level>=2) 段落。已修：addStory 段落循环里收集 H2+ 进 tableOfContents（挂 tocLevel2），补端到端断言（testTOCCollectsSubheadingsNotJustTopLevel）。导出验证 demo 目录现三条：细胞里的城市(3)/能量从哪里来(3)/为什么图注很重要(4)。191 测试 + review-idml.sh 6/0 PASS。已合 dev（merge b8a4522，push origin/dev），重导 ~/Desktop/E3-6目录验收-0621.idml（含 H2）。注：本次改了 LayoutEngine.swift（AG 负责文件、AG 正做 e3-10p），改动局部（addStory 几行），AG 分支合并时可能小冲突。
