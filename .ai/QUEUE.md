@@ -197,7 +197,7 @@
   - 文件：`ChineseTypesetting.swift`（竖排分支的 trait/skew 矩阵）、`LayoutEngine.swift`、三处渲染器。
   - 验收：竖排测试稿（含粗/斜词的引文）导 PNG，目标词字重/倾斜正确、竖排列序不乱；补端到端断言（竖排 + run 分段）；`scripts/review-idml.sh` PASS。修好后 Claude 出 PNG 交用户肉眼验。
 
-- [ ] **E3-4p 原生表格预览渲染**（配对 Codex E3-4 IDML 原生表格）
+- [x] **E3-4p 原生表格预览渲染**（配对 Codex E3-4 IDML 原生表格） — Antigravity @ feature/ag-e3-4p, commit 4f091fc
   - 背景：表格组件当前在预览里基本当文字画；Codex 那边要升级成 IDML 原生 `<Table>`。预览侧也要画成真表格才能「预览=输出」。
   - 目标：table 组件在 Canvas/PDF/PNG 渲染为真实网格——行列线、单元格底色、内边距、按列宽分配，文字落在单元格内。
   - 文件：`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`LayoutEngine.swift`（如需表格测量/分页）。
