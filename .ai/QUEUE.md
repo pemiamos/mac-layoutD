@@ -94,7 +94,7 @@
   - **修复验收**：上面 4 种嵌套写法导出后，A=粗+傍点、B=粗+傍点、C=斜+傍点、D=斜+傍点，**均无字面 `*` 残留、无 emphasis 渗染到相邻 plain 文字**；补这 4 个端到端断言；`scripts/review-idml.sh` 仍 PASS。修好后用户再在 InDesign 肉眼确认傍点显示。
   - ✅ 嵌套解析 bug 已修（`dfd6ac8`），但见下方 **E3-3v**：傍点视觉首次人工验收**没出点**。
 
-- [~] **E3-3v 傍点在 InDesign 实际渲染（视觉退回）** — Claude 直接改 @ dev commit `8ce89a8`（代码已落，待用户视觉复验）
+- [x] **E3-3v 傍点在 InDesign 实际渲染** — ⏹ **不再投入（用户 2026-06-21 决定：图书项目一般不用着重号，需要时在 InDesign 手动加）。** `KentenKind` 属性仍写进 IDML（保留作者意图）、layoutD 预览仍画点；但「InDesign 端是否自动出点」不再花精力（反复踩的"属性在视觉无"高发坑、罕用、回报低）。表格内傍点（E3-4b）同理不追。下方为历史勘查记录，留档。
   - ❌ **退回原因（2026-06-21 用户 InDesign 首次肉眼验收 `~/Desktop/layoutD傍点嵌套验收-0621.idml`）**：粗体/斜体都正常（C/D、内质网、高尔基体可见倾斜），但**着重号（傍点/芝麻点）整页一个都没画出来**——含纯傍点对照「重点内容」也无点。即 `KentenKind="KentenSesameDot"` 属性写进了 Story XML（解包可见），InDesign 却完全不渲染。这是「属性在、视觉无」的同类坑（参考当年 FontStyle→FauxBold）。
   - **根因方向（Claude 已勘，强线索待 Codex 验证）**：导出的 `<ParagraphStyleRange>` **从不写 `AppliedComposer`**（`IDMLExporter.swift:675` 只有 `AppliedParagraphStyle`）。**Kenten/着重号是 CJK 排版特性，InDesign 仅在段落使用 World-Ready / 日文段落排版器时才绘制**；默认拉丁 composer 下 `KentenKind` 被静默忽略 → 中英文都不出点，与现象吻合。
   - 文件：`IDMLExporter.swift`（段落/样式输出）、可能 `Styles.xml` 段落样式定义。

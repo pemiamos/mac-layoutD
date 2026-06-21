@@ -43,3 +43,7 @@
 ## 2026-06-21 | codex | D-2 DOCX 导入采用内置最小 OOXML ZIP 读取器
 - **决策**：`.docx` 读取在 `DOCXBookImporter.swift` 内实现最小 ZIP central-directory reader；支持 stored 与 deflate entry，并用 macOS `Compression` 解压。首版只读取 `word/document.xml`、`word/styles.xml`、`word/numbering.xml`，不调用外部 `unzip`。
 - **理由**：当前 Swift Foundation 环境没有 `Archive` API；引入第三方 ZIP 包或外部进程会扩大依赖面。最小读取器可离线、可测试，且足以完成 D-2 的正文/样式/列表/表格映射。Zip64、加密、图片 media 与其它 OOXML 部件首版明确降级或报错。
+## 2026-06-21 17:28 | claude
+- **决策**：不再追求着重号(傍点/Kenten)在 InDesign 的渲染——用户图书项目一般不用着重号,需要时在 InDesign 手动加。E3-3v(傍点 InDesign 渲染)就此停止投入(KentenKind 属性仍写进 IDML 保留作者意图、layoutD 预览仍画点,但不再为"InDesign 端是否出点"花精力);表格内傍点同理。表格内粗体也不死磕(一键手动)。确立通用原则:是否为某保真坑较真,看 (该特性在真实图书里的使用频率) ×(在 InDesign 手动改的成本会不会随书规模放大)——常用且改起来不 scale 的才在 layoutD 导出端弄对;罕用或一键可改的留给 InDesign 最后顺手做(InDesign 本就是最终真理源)。
+- **理由**：2026-06-21 用户明确:图书项目一般不用着重号。layoutD 定位是灌版引擎、InDesign 是最终精调真理源,故不值得为罕用特性的 InDesign 端渲染死磕(那是反复踩的"属性在视觉无"高发坑,投入大回报小)。把有限精力放在常用且手动改不 scale 的特性上(竖排/复合字体/脚注/表格结构/动态目录等已做)。
+
