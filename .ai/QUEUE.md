@@ -197,15 +197,15 @@
 >
 > **⭐ 2026-06-21 起 AG 为主力**（用户决定：Codex 不靠谱、少排；AG 多排、连续作业）。预览+GUI 全线都在 AG。
 > **✅ 上一批（E3-2b/E3-4p/E3-3p 预览）AG 已实现、Claude 审过，待合 dev（用户选 C 暂缓，Claude 合）。AG 不必重做。**
-> **🔁 AG 当前最高优先：把三条预览分支 rebase 到最新 dev（它们做得对、但 base 太旧需重整）。**
-> Claude 审核结论（2026-06-21）：`feature/ag-e3-6p`(4862e1a 目录预览) / `feature/ag-e2-5p`(2e0b0a8 蒙版预览) / `feature/ag-e2-4p`(3f7a986 对开页码) 三条**代码本体都对、各带测试**，但都从 e3-10p 合 dev **之前**切出（落后 ~24 提交、不含 e3-10p 的 flow harness 与 e3-4p 的 drawTable），直接合冲突面大（CanvasView/ChineseTypesetting/PDF/PNGExporter）。
-> **请 AG 逐条重整（你懂自己这套渲染、能在 IDE 肉眼复验，比 Claude 盲合稳）**：
->   1. 从**最新 dev** 起新分支（如 `feature/ag-e3-6p-v2`），`git cherry-pick 4862e1a`（或重新实现该 delta），解冲突——**冲突基本是加性**：保留 dev 已有的 `drawTable`/flow-harness/`drawKentenDots` 等，叠加你的 TOC 预览函数与 `drawText` 的 `tableOfContentsEntries` 参数/分支；
->   2. 同样处理 e2-5p（蒙版 polygonPoints）、e2-4p（对开页码）；
->   3. 每条 `bash scripts/review-idml.sh` PASS + 用 `--export-png-flow` 重导样例肉眼确认（目录点导引线/蒙版裁形/对开页码），写 handoff 列出新分支名与 commit，由 Claude 合 dev。
-> 旧的 `feature/ag-e3-6p/e2-5p/e2-4p` 重整后即弃用。
-> **教训**：每个新任务都从**最新 dev** 起分支，别一次性把多条分支都从同一旧 dev 切出（这次就是这么撞的）。
-> **rebase 完成后再做：⑤ 导出选项面板**（依赖 E2-4 落 dev，可先做面板骨架）。
+> **🔁 进度更新（2026-06-21 17:10 Claude）**：AG 16:58 交接称已 rebase，**核实后实际只对 export-options 成立**——
+>   - ✅ `feature/ag-export-options`（导出面板：facingPages/cmykColors 设置）基于最新 dev、merge-tree 干净，已合 dev（merge `16c12c3`），见下方「导出选项面板」条。
+>   - ✅ `feature/ag-e2-4p`（对开页码预览）merge-tree 干净（内容不撞），已合 dev（merge `9497663`），见下方 E2-4p 条。注：AG 并未真把它变基，只加了一条 docs commit，但内容恰好不冲突，Claude 隔离 worktree 验 build+196测试+review 6/0 后合入。
+>   - ❌ `feature/ag-e2-5p`（蒙版预览，仍 1 处测试文件冲突）/ `feature/ag-e3-6p`（目录预览，仍 5 处渲染代码冲突）**AG 并未真正变基**（base 仍旧、不含 c5fcfb7），退回重做。
+> **请 AG 真正重整 e2-5p / e3-6p（不是加 docs commit，是把 feat 本体迁到新 base）**：
+>   1. 从**最新 dev**（`9515f9b` 或更新）起新分支（如 `feature/ag-e3-6p-v2`），`git cherry-pick` 对应 feat commit（4862e1a 目录 / 2e0b0a8 蒙版）或重新实现该 delta，解冲突——**冲突基本是加性**：保留 dev 已有的 `drawTable`/flow-harness/`drawKentenDots` 等，叠加你的 TOC/蒙版预览函数；
+>   2. 每条 `bash scripts/review-idml.sh` PASS + 用 `--export-png-flow` 重导样例肉眼确认（目录点导引线 / 蒙版裁形），写 handoff 列出新分支名与 commit，由 Claude 合 dev。
+> 旧的 `feature/ag-e3-6p/e2-5p` 重整后即弃用；`feature/ag-e2-4p`/`feature/ag-export-options` 已合可删。
+> **教训**：每个新任务都从**最新 dev** 起分支；「rebase」是迁 feat 本体、不是在旧分支上补 docs commit。
 > 配对预览做「预览追平 IDML」：Claude 在导出侧做 E3-6（已合）/E2-5/E2-4，AG 在预览侧画对应效果。
 > 约 1 小时或做完/撞阻塞为止，收尾写一条汇总 handoff。
 > 主题：**让预览（Canvas/PDF/PNG）追平 IDML 输出**——本阶段 AG 的核心价值是「InDesign 打开后版面与 layoutD 预览一致」。
@@ -257,14 +257,14 @@
   - 文件：`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`、必要时 `LayoutEngine.swift`/`ChineseTypesetting.swift` 旁的图形工具。
   - 验收：含八角/扇面蒙版的图导 PNG，图被裁成对应形状（非矩形）；与导出 PathGeometry 同一套点算法（预览↔导出对齐，参考斜体 12° 同算法做法）；单测断言裁剪路径点数；`scripts/review-idml.sh` PASS。
 
-- [ ] **E2-4p 对开跨页预览渲染**（配对 Claude E2-4 facing spread）
+- [x] **E2-4p 对开跨页预览渲染**（配对 Claude E2-4 facing spread） — ✅ AG `feature/ag-e2-4p`(3f7a986 对开页码 PDF/PNG 定位)，已合 dev（merge `9497663`，2026-06-21 17:10 Claude）。build+196测试+review-idml 6/0 PASS。⚠️ 仅做了页码定位部分，「左右页并排预览/版心镜像」未做；且属渲染代码，待用户/AG InDesign 或 PNG 肉眼复验定位效果。
   - 背景：Claude 在导出侧做对开跨页（2 页 spread + 起始页码 Section）。预览侧当前按单页排，需能按对开模式预览（左右页并排、订口在内侧、页码外侧）。
   - 目标：`pageSetup.facingPages` 开启时，Canvas/PDF/PNG 按对开展示——奇偶页版心镜像（订口/切口边距对调）、跨页并排预览。
   - 文件：`LayoutEngine.swift`（对开版心/分页方向）、`CanvasView.swift`（并排展示）、`PDFExporter.swift`、`PNGExporter.swift`。
   - ⚠️ 与 E2-4 同属高风险（动版心/分页），改完务必回归非对开模式无变化。
   - 验收：对开稿件导 PNG，左右页版心镜像正确、页码在外侧；关闭对开时与现状一致（向后兼容）；单测断言对开版心镜像；`scripts/review-idml.sh` PASS。
 
-- [ ] **导出选项面板跟进**（依赖变动：E3-8 CMYK 已暂缓、E2-4 对开改 Claude 做——本项**待 E2-4 落 dev 后**再接「对开跨页」开关；非阻塞可先把面板骨架设计好）
+- [x] **导出选项面板跟进** — ✅ AG `feature/ag-export-options`(d4c647c facingPages/cmykColors 导出设置)，已合 dev（merge `16c12c3`，2026-06-21 17:10 Claude）。build+196测试+review-idml 6/0 PASS。改动 `main.swift`+`IDMLExporter.swift`。待用户在 GUI 验面板开关实际生效。
   - 目标：「导出 IDML…」面板加开关：对开跨页模式（待 E2-4）；CMYK 色板模式（E3-8 暂缓，先留位不接线）。
   - 文件：`ToolbarView.swift` 或导出选项相关 View。
   - 验收：开关能正确传参到 `IDMLExporter`，关闭时行为与当前一致（向后兼容）。

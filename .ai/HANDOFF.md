@@ -3,6 +3,20 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 17:10 | claude | 处理 AG 16:58 交接。核实发现 AG 误解了 rebase 任务:三条预览分支(e3-6p/e2-5p/e2-4p)并未真正变基到最新 dev——bas
+- **分支**：dev
+- **概述**：处理 AG 16:58 交接。核实发现 AG 误解了 rebase 任务:三条预览分支(e3-6p/e2-5p/e2-4p)并未真正变基到最新 dev——base 仍旧、都不含 c5fcfb7(flow harness),handoff 称"e2-4p 已基于最新 dev"不准确(只加了一条 docs commit)。AG 真正干净交付的是新分支 feature/ag-export-options(导出面板,基于最新 dev,含 facingPages/cmykColors 导出设置)。Claude 在 /tmp 隔离 worktree 试合验证:export-options + e2-4p 两条 merge-tree 干净,build+196测试+review-idml 6/0 全 PASS,已合入 dev 并随并发会话(E3-4b)的 push 一起到 origin/dev=9515f9b。剩 e2-5p(仅1处测试文件冲突)/e3-6p(5处渲染代码冲突)仍未真正变基,退回 AG 重整。注:本轮撞上"同一 checkout 两个 Claude 会话并发"——另一会话同时在做 E3-4b 并 push,reflog 交错但结果线性无损,我的两条合并已确认在 dev 历史中。
+- **改动文件**：Sources/LayoutDApp/main.swift, Sources/LayoutDExport/IDMLExporter.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Tests/LayoutDExportTests/PDFExporterTests.swift (经 merge ag-export-options + ag-e2-4p)
+- **检查**：dev(9515f9b) swift build PASS; swift test 196/0; scripts/review-idml.sh 6/0 PASS。export-options + e2-4p 已合 dev 并 push origin/dev。e2-5p/e3-6p merge-tree 仍冲突未合。
+- **下一步**：① AG:真正把 e2-5p(蒙版预览)/e3-6p(目录预览)从最新 dev(9515f9b)起新分支重整——不是加 docs commit,是 cherry-pick feat 本体到新 base、加性解 CanvasView/ChineseTypesetting/PDF/PNGExporter/测试文件冲突,--export-png-flow 肉眼复验后写 handoff。② 用户:InDesign 复看桌面 E3-4b 表格行内样例 + 可顺带验 e2-4p 对开页码位置。③ Claude 道续 E2-5→E2-4(若 AG 的预览先落地则对账)。④ 并发警示:当前有第二个 Claude 会话在同一 checkout 操作,后续 git 写操作务必 pull-before-push、守 N1/N2/N3。
+
+## 2026-06-21 17:08 | claude | 完成 Claude 道 E3-4b 表格单元格内行内格式——已合 dev（merge fe31069，push origin/dev）。E3-4 遗留缺口：ta
+- **分支**：dev
+- **概述**：完成 Claude 道 E3-4b 表格单元格内行内格式——已合 dev（merge fe31069，push origin/dev）。E3-4 遗留缺口：tableStoryXML 把单元格 inlineRuns 写死成空，表格内粗/斜/傍点全丢。修复：① 模型 Paragraph 加并行可选字段 tableCellRuns:[[[InlineRun]]]（与 tableCells 索引对齐、旧档 nil，最小爆炸半径、不动现有读者/测试）；② 根因发现——导入的 tableCells 拆分函数本身就调 normalizeInlineMarkdown 提前剥离了 markdown，改为返回原始 Markdown、由 flushTableBuffer 用 parseInlineMarkdown 同时产出剥离文本(tableCells)+行内格式(tableCellRuns)；③ 导出 tableStoryXML 接 cellRuns 每格传对应 runs。端到端：单元格 **粗**/*斜*/==傍点== 导出 FauxBold/Skew/KentenKind 全命中，补导入+导出两侧断言。195 测试 + review-idml.sh 6/0 PASS。桌面 ~/Desktop/E3-4b表格行内验收-0621.idml 待用户 InDesign 复看。另：本轮还审了 AG 三条预览分支(e3-6p/e2-5p/e2-4p)=代码对但 base 太旧(predate e3-10p)，已交接 AG rebase（AG 已自加 git rebase 授权，在做）。
+- **改动文件**：(未填)
+- **检查**：dev swift build PASS；195 测试 0 失败；review-idml.sh 6/0；解包确认单元格 FauxBold/Skew/KentenKind 命中。
+- **下一步**：① 用户 InDesign 复看 E3-4b 表格行内样例（单元格内粗/斜可见、傍点逐字带点）。② Claude 道续：E2-5 美术页/蒙版 → E2-4 对开跨页（E2-4 待 Codex/前序 IDMLExporter 稳定，目前已稳）。③ AG：rebase e3-6p/e2-5p/e2-4p 到最新 dev（进行中），完成后 Claude 合。④ Codex：D-2 已完成，暂无在排任务。⑤ 守 N1/N2/N3。
+
 ## 2026-06-21 16:46 | claude | 审核 AG 三条新预览分支 + 交接 rebase 任务。结论：feature/ag-e3-6p(4862e1a 目录预览)/e2-5p(2e0b0a8 蒙版预
 - **分支**：dev
 - **概述**：审核 AG 三条新预览分支 + 交接 rebase 任务。结论：feature/ag-e3-6p(4862e1a 目录预览)/e2-5p(2e0b0a8 蒙版预览)/e2-4p(3f7a986 对开页码) 代码本体都对、各带测试，但都从 e3-10p 合 dev 之前(merge-base 32e71e3,落后24提交,不含 c5fcfb7)切出，直接合与 e3-10p flow harness + e3-4p drawTable 在 CanvasView/ChineseTypesetting/PDF/PNGExporter 大面积冲突(冲突基本加性但~15-20块,跨无头难视觉验证的渲染代码)。决定退给 AG 重整(AG 懂自己渲染+能 IDE 肉眼复验,比 Claude 盲合稳)——已在 QUEUE.md AG 道写明：从最新 dev 起新分支 cherry-pick 各 feat commit、加性解冲突(保留 dev 的 drawTable/flow-harness/drawKentenDots + 叠加 TOC/蒙版/对开 additions)、--export-png-flow 复验、写 handoff 由 Claude 合。教训：每新任务从最新 dev 起分支,别一次性多分支切自同一旧 dev。Claude 接下来做自己的 E3-4b 表格内行内格式。
