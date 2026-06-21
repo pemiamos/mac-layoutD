@@ -32,3 +32,7 @@
 - **决策**：E2-4 对开跨页改由 Claude 直接做（用户 2026-06-21 指定，不再由 Codex 做）。因 E2-4 改 IDMLExporter.swift（Codex 负责文件），跨道协议：Claude 须等 Codex 本批 IDMLExporter 改动（E3-4b/E3-6/E2-5）先合进 dev 再起手，在专用 worktree+feature 分支上做（守 N2），避免同文件两道并行冲突。E3-6 已展开为两层验收：1) 结构化目录段落（tab+点导引线，专属 TOC 段落样式）；2) 输出 <TOCStyle> 资源映射 heading1/heading2 让 InDesign「更新目录」可重建。
 - **理由**：用户判断 Codex 在高风险任务上不靠谱，对开跨页风险最高（可能打破当前干净分页），交 Claude 直接做更稳。代价是 Claude 要碰 Codex 负责文件 IDMLExporter，故用「等本批先合 dev + 专用 worktree」的时序隔离规避冲突——E2-4 本就排最后，时序天然吻合。
 
+## 2026-06-21 11:40 | claude
+- **决策**：分工再平衡（2026-06-21 用户决定，因 Codex 多次提交不靠谱需反复回修）：① Codex 砍到最少、只留隔离低风险任务——当前仅 D-2 DOCX 导入（全新独立文件，不碰现有导出）；② 原 Codex 的高风险 IDMLExporter 导出任务 E3-4b/E3-6/E2-5 全部改判 Claude 直接做（连同已改判的 E2-4），Claude 串行、各自专用 worktree，顺序 E3-4b→E3-6→E2-5→E2-4；③ AG 升为主力，预览+GUI 全线连续作业，本批序列 E3-10p→E3-6p 目录预览→E2-5p 蒙版预览→E2-4p 对开预览→导出选项面板（②③④为配对 Claude 导出侧的预览追平任务）。
+- **理由**：Codex 代码质量不稳定、回修成本高，故收缩其职责到 blast radius 最小的隔离任务（新文件 DOCX 导入，botch 也不伤现有导出、易回修）；高风险导出收进可靠的 Claude 手里且串行避免同文件冲突；AG 质量可靠且预览/GUI 是其专长，升主力承接最多任务，配对预览让「预览=输出」持续推进。文件边界：Claude=IDMLExporter 导出侧、Codex=新 DOCX 导入文件、AG=LayoutEngine/渲染器/GUI，三方仍不重叠。
+
