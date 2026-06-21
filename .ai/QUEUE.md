@@ -60,7 +60,8 @@
 > `Sources/LayoutDExport/IDMLExporter.swift`、`ZIPArchiveWriter.swift`
 >
 > **🔁 本批连续序列（2026-06-21 用户排期，按顺序连做，做完一个自审 PASS 就接下一个，不停下问）：**
-> **E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DOCX 导入 → E2-5 美术页/蒙版 → E2-4 对开跨页（风险最高放最后）**。
+> **E3-4b 表格内行内格式 → E3-6 目录动态化 → D-2 DOCX 导入 → E2-5 美术页/蒙版**。
+> ⚠️ **E2-4 对开跨页改由 Claude 做**（用户 2026-06-21 决定），不在 Codex 序列里——但它和上面几项同改 `IDMLExporter.swift`，Claude 会等本批这几项先合进 dev 再起手，避免同文件并行冲突。
 > ⏸ **E3-8 CMYK 暂缓**（用户决定先不做）；E3-9 约物挤压维持原排期，不在本批。
 > 约 1 小时或做到这批做完/撞阻塞为止，收尾写一条汇总 handoff。注意斜体导出已用 `Skew="12"`、
 > 粗体用 `FauxBold="true"`（别用 `FauxItalic` 或 `FontStyle` 字符串，已验证那两个对 CJK 不可见/出粉色替代字形）。
@@ -133,9 +134,14 @@
   - 验收：`printf '| 名称 | 说明 |\n| --- | --- |\n| 线粒体 | **产能**中心 |\n| 核糖体 | 合成*蛋白质* |\n'` 导出解包，单元格内 `**产能**`→FauxBold、`*蛋白质*`→Skew，无残留 `*`；补端到端断言；`scripts/review-idml.sh` PASS；用户 InDesign 肉眼确认表格内粗斜体可见。
 
 - [ ] **E3-6 目录（TOC）动态化**
-  - 目标：当前目录是死文字；改为 InDesign 动态 TOC（或至少正确的 TOC 段落样式 + PageReference）。
-  - 文件：`MarkdownBookImporter.swift`（标题锚点）、`IDMLExporter.swift`（TOC/PageReference）。
-  - 验收：改动正文后目录页码在 InDesign 里能"更新目录"刷新，不是手敲数字。
+  - **现状（Claude 已勘）**：`LayoutEngine` 排版时已收集带**真实页码**的目录条目（`tableOfContents: [TableOfContentsEntry(level,title,pageNumber)]`，`LayoutEngine.swift:131/138`），但在 `LayoutEngine.swift:1141` 被拼成纯文本行（`"标题  3"`）放进 `.tableOfContents` 页 → 导出到 IDML 就是**死文字**，正文页码一变目录不会跟。导出侧 TOC story 现在 `AppliedTOCStyle="n"`（`IDMLExporter.swift:891` 一带）。
+  - **目标**：让目录在 InDesign 里能用「Layout → 更新目录」重新生成/刷新页码，而非手敲数字；且排版专业（点导引线 + 页码右对齐）。
+  - **做法（两层，至少做到第 1 层即算过；第 2 层加分）**：
+    1. **结构化目录段落**：目录每条作为独立 `<ParagraphStyleRange>` 段落，标题与页码间用**右对齐 tab + 点导引线（dot leader）**，而非空格拼接；目录条目段落引用专属 TOC 段落样式（可基于现有 `heading2`/`caption` 派生 `tocLevel1`/`tocLevel2`，须真在 Styles.xml 生成）。正文标题已用命名样式 `heading1`/`heading2`（TOCStyle 要靠它们定位）。
+    2. **真·动态 TOCStyle**：在 IDML `Resources` 里输出 `<TOCStyle Self="..." Name="目录">`，含 `<TOCStyleEntry>` 把 `ParagraphStyle/heading1`→tocLevel1、`heading2`→tocLevel2 映射（设置页码位置=条目后、含 tab 导引、是否带超链接）；目录 story/frame 的 `AppliedTOCStyle` 指向它。这样用户在 InDesign「更新目录」即按标题样式重建。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`（TOCStyle 资源 + 目录 story 输出 + TOC 段落样式）；如需 `LayoutEngine.swift` 暴露结构化条目（level/title/page）给导出侧而非只给拼好的文本，可加只读访问，但**别动**现有预览拼字逻辑（AG 预览仍用它）。
+  - **验收**：① 解包导出的 IDML，grep 到 `<TOCStyle` 且其 `<TOCStyleEntry>` 引用了 `heading1`/`heading2`；目录条目是结构化段落（带 tab/点导引），**无「标题+空格+数字」裸拼**；② 在 **InDesign 中文版** 打开 → Layout → 更新目录，目录按当前正文标题与页码重建（用户肉眼验收，这关人看）；③ 补端到端断言（TOCStyle 元素存在 + 条目段落样式正确 + 页码非硬编码空格拼接）；④ `scripts/review-idml.sh` 仍 PASS。
+  - ⚠️ 端到端必须解包 IDML 验证 `<TOCStyle`/段落结构，别只靠单测——本项目踩过「单测绿但功能坏」的坑。
 
 - [ ] **E3-8 token → CMYK 色板** ⏸ **暂缓（用户 2026-06-21 决定先不做；印前转色交 InDesign，非阻塞）**
   - 目标：颜色当前导 RGB swatch；增可选项由 token 算 CMYK 值发 `Space="CMYK"` 色板，减少 InDesign 人工转色（不自建色彩管线，只发数值）。
@@ -147,9 +153,10 @@
   - 文件：`IDMLExporter.swift`。
   - 验收：含中文标点的段落导出后，InDesign 里标点挤压效果与 layoutD 预览基本一致；启用基线网格对齐的段落确实贴线。
 
-- [ ] **E2-4 对开跨页（facing spread）**
+- [ ] **E2-4 对开跨页（facing spread）** — 👤 **认领固定：Claude**（用户 2026-06-21 指定，不由 Codex 做）
+  - ⏳ **时序前提**：本批 Codex 的 IDMLExporter 改动（E3-4b/E3-6/E2-5）先合进 dev，Claude 再起手——同文件并行会撞（守 N2：专用 worktree + feature 分支）。
   - 目标：按 `pageSetup.facingPages` 生成 2 页 spread + 起始页码 Section。
-  - 文件：`IDMLExporter.swift`。
+  - 文件：`IDMLExporter.swift`（⚠️ Codex 负责文件，本项跨道由 Claude 直接做，故须等 Codex 本批先落 dev）。
   - ⚠️ 风险高（可能打破当前"单页 spread 干净分页"），单独一棒、改完先确认非对开模式没有回归，再重点交用户 InDesign 验收对开效果。
 
 - [ ] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版**

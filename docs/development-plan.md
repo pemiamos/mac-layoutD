@@ -137,7 +137,7 @@
 | E2-1 | **图片打包 + 相对重链** | Codex | 把置入图复制进 `Links/` 文件夹、`LinkResourceURI` 改相对路径，使 `.idml` 可移植。**优先级最高**（当前用绝对 `file:` 路径，换机即断链）|
 | E2-2 | **组件背景 / 描边** | Codex | 知识卡片等组件的底色/描边/accent 映射成 InDesign 框架填色描边（当前只导文字）|
 | E2-3 | **避头尾 → 禁则集** | Codex | 中文禁则映射到 InDesign 禁则集（KinsokuTable）|
-| E2-4 | **对开跨页（facing spread）** | Codex | 可选 facing 模式：按 `pageSetup.facingPages` 生成 2 页 spread + 起始页码 Section；较大改动，放后 |
+| E2-4 | **对开跨页（facing spread）** | **Claude** | 可选 facing 模式：按 `pageSetup.facingPages` 生成 2 页 spread + 起始页码 Section；较大改动，放后。**2026-06-21 用户指定改由 Claude 做**（跨 Codex 负责文件 IDMLExporter，须等 Codex 本批 IDMLExporter 改动先合 dev）|
 | E2-5 | **固定美术页 → MasterSpread / 非矩形蒙版** | Codex | 满版图/扉页固定页映射、扇面/八角蒙版（图框 PathGeometry）|
 | E2-6 | **`/usr/bin/zip` → 原生 zip 写入** | Codex | 去掉外部进程依赖，保证 mimetype store-first |
 | E2-7 | **GUI 加 IDML 导出入口** | Codex | `LayoutDApp` 菜单/工具栏增加「导出 IDML…」+ 选项面板 |
@@ -172,7 +172,7 @@
 | 1 | **E3-6 目录（TOC）动态化** | 死文字目录 → InDesign 动态 TOC / PageReference |
 | 2 | **D-2 DOCX 导入** | 新增 `DOCXBookImporter.swift`，独立文件不与导出冲突，可并行 |
 | 3 | **E2-5 固定美术页 → MasterSpread / 非矩形蒙版** | 满版图/扉页固定页映射、扇面/八角蒙版 |
-| 4 | **E2-4 对开跨页（facing spread）** | 风险最高（可能打破当前干净分页），放最后单独一棒、做完先验非对开无回归 |
+| 4 | **E2-4 对开跨页（facing spread）** — 👤 **Claude 做** | 风险最高（可能打破当前干净分页），放最后单独一棒、做完先验非对开无回归。跨 Codex 负责文件，须等 Codex 本批 IDMLExporter 改动先合 dev |
 
 - **E3-8 token → CMYK 色板：暂缓**（用户 2026-06-21 决定先不做；印前转色本就交 InDesign，非阻塞）。
 - **E3-9 约物挤压 + 基线网格对齐**：维持原排期，未纳入本批。
