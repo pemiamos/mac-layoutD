@@ -403,6 +403,156 @@ public enum ChineseTypesetting {
         
         context.restoreGState()
     }
+
+    public static func makeTOCAttributedString(
+        entries: [TableOfContentsEntry],
+        project: BookProject,
+        containerWidth: Double,
+        zoomScale: Double = 1.0,
+        foregroundColor: CGColor? = nil
+    ) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        
+        let tocLevel1Base = project.styles.paragraphStyle(id: StyleID.heading2.rawValue)
+        let tocLevel2Base = project.styles.paragraphStyle(id: StyleID.caption.rawValue)
+        
+        var tocLevel1Style = tocLevel1Base
+        tocLevel1Style.id = "tocLevel1"
+        tocLevel1Style.displayName = "目录一级"
+        tocLevel1Style.firstLineIndent = 0
+        tocLevel1Style.spaceBefore = 0
+        tocLevel1Style.spaceAfter = 2
+        
+        var tocLevel2Style = tocLevel2Base
+        tocLevel2Style.id = "tocLevel2"
+        tocLevel2Style.displayName = "目录二级"
+        tocLevel2Style.firstLineIndent = 12
+        tocLevel2Style.spaceBefore = 0
+        tocLevel2Style.spaceAfter = 2
+
+        for (index, entry) in entries.enumerated() {
+            let entryStyle = entry.level <= 1 ? tocLevel1Style : tocLevel2Style
+            
+            let baseFontSize = entryStyle.fontSize * zoomScale
+            let baseFont = CTFontCreateWithName(entryStyle.fontName as CFString, CGFloat(baseFontSize), nil)
+            
+            var minH = CGFloat(entryStyle.lineHeight) * CGFloat(zoomScale)
+            var maxH = CGFloat(entryStyle.lineHeight) * CGFloat(zoomScale)
+            var indent = CGFloat(entryStyle.firstLineIndent) * CGFloat(zoomScale)
+            var lbm = CTLineBreakMode.byWordWrapping
+            
+            let tabLocation = CGFloat(containerWidth - 6.0 * zoomScale)
+            let tab = CTTextTabCreate(.right, Double(tabLocation), nil)
+            var tabList: CFArray = [tab] as CFArray
+            
+            let paragraphStyle = withUnsafePointer(to: &minH) { minHPointer in
+                withUnsafePointer(to: &maxH) { maxHPointer in
+                    withUnsafePointer(to: &indent) { indentPointer in
+                        withUnsafePointer(to: &lbm) { lbmPointer in
+                            withUnsafePointer(to: &tabList) { tabListPointer in
+                                let settings = [
+                                    CTParagraphStyleSetting(spec: .minimumLineHeight, valueSize: MemoryLayout<CGFloat>.size, value: minHPointer),
+                                    CTParagraphStyleSetting(spec: .maximumLineHeight, valueSize: MemoryLayout<CGFloat>.size, value: maxHPointer),
+                                    CTParagraphStyleSetting(spec: .firstLineHeadIndent, valueSize: MemoryLayout<CGFloat>.size, value: indentPointer),
+                                    CTParagraphStyleSetting(spec: .lineBreakMode, valueSize: MemoryLayout<CTLineBreakMode>.size, value: lbmPointer),
+                                    CTParagraphStyleSetting(spec: .tabStops, valueSize: MemoryLayout<CFArray>.size, value: tabListPointer)
+                                ]
+                                return CTParagraphStyleCreate(settings, settings.count)
+                            }
+                        }
+                    }
+                }
+            }
+            
+            var attributes: [NSAttributedString.Key: Any] = [
+                NSAttributedString.Key(kCTFontAttributeName as String): baseFont,
+                NSAttributedString.Key(kCTParagraphStyleAttributeName as String): paragraphStyle
+            ]
+            
+            if let foregroundColor = foregroundColor {
+                attributes[NSAttributedString.Key(kCTForegroundColorAttributeName as String)] = foregroundColor
+            }
+            
+            let titleAttr = ChineseTypesetting.makeAttributedString(
+                text: entry.title,
+                style: entryStyle,
+                foregroundColor: foregroundColor,
+                zoomScale: zoomScale
+            )
+            
+            let pageAttr = ChineseTypesetting.makeAttributedString(
+                text: String(entry.pageNumber),
+                style: entryStyle,
+                foregroundColor: foregroundColor,
+                zoomScale: zoomScale
+            )
+            
+            let dotAttr = ChineseTypesetting.makeAttributedString(
+                text: ".",
+                style: entryStyle,
+                foregroundColor: foregroundColor,
+                zoomScale: zoomScale
+            )
+            
+            let titleLine = CTLineCreateWithAttributedString(titleAttr)
+            let titleWidth = Double(CTLineGetTypographicBounds(titleLine, nil, nil, nil))
+            
+            let pageLine = CTLineCreateWithAttributedString(pageAttr)
+            let pageWidth = Double(CTLineGetTypographicBounds(pageLine, nil, nil, nil))
+            
+            let dotLine = CTLineCreateWithAttributedString(dotAttr)
+            let dotWidth = Double(CTLineGetTypographicBounds(dotLine, nil, nil, nil))
+            
+            let extraSpacing = 16.0 * zoomScale
+            let dotsWidth = containerWidth - Double(indent) - titleWidth - pageWidth - extraSpacing
+            
+            let dotCount = (dotsWidth > 0 && dotWidth > 0) ? Int(dotsWidth / dotWidth) : 0
+            let dotsStr = String(repeating: ".", count: dotCount)
+            
+            let lineText = "\(entry.title) \(dotsStr)\t\(entry.pageNumber)" + (index < entries.count - 1 ? "\n" : "")
+            let lineAttrString = NSMutableAttributedString(string: lineText, attributes: attributes)
+            
+            if !lineText.isEmpty {
+                var runs: [(NSRange, CompositeFontMapping)] = []
+                var currentMapping: CompositeFontMapping? = nil
+                var runStart = lineText.startIndex
+                
+                for idx in lineText.indices {
+                    let char = lineText[idx]
+                    let mapping = entryStyle.fontMapping(for: char)
+                    if let cur = currentMapping, cur == mapping {
+                        // Continue run
+                    } else {
+                        if let cur = currentMapping {
+                            let nsRange = NSRange(runStart..<idx, in: lineText)
+                            runs.append((nsRange, cur))
+                        }
+                        runStart = idx
+                        currentMapping = mapping
+                    }
+                }
+                if let cur = currentMapping {
+                    let nsRange = NSRange(runStart..<lineText.endIndex, in: lineText)
+                    runs.append((nsRange, cur))
+                }
+                
+                for (nsRange, mapping) in runs {
+                    let fs = entryStyle.fontSize * mapping.sizeMultiplier * zoomScale
+                    let font = CTFontCreateWithName(mapping.fontName as CFString, CGFloat(fs), nil)
+                    lineAttrString.addAttribute(NSAttributedString.Key(kCTFontAttributeName as String), value: font, range: nsRange)
+                    
+                    if mapping.baselineOffset != 0 {
+                        let scaledOffset = mapping.baselineOffset * zoomScale
+                        lineAttrString.addAttribute(NSAttributedString.Key(kCTBaselineOffsetAttributeName as String), value: scaledOffset as CFNumber, range: nsRange)
+                    }
+                }
+            }
+            
+            result.append(lineAttrString)
+        }
+        
+        return result
+    }
 }
 
 public struct TableLayoutHelper {

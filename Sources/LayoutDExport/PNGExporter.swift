@@ -203,11 +203,12 @@ public struct PNGExporter {
                         in: textRect,
                         context: context,
                         textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project),
-                        sourceParagraphId: frame.sourceParagraphId
+                        sourceParagraphId: frame.sourceParagraphId,
+                        tableOfContentsEntries: frame.tableOfContentsEntries
                     )
                 }
             } else {
-                drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context, textColorHex: frame.textColorHex, sourceParagraphId: frame.sourceParagraphId)
+                drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context, textColorHex: frame.textColorHex, sourceParagraphId: frame.sourceParagraphId, tableOfContentsEntries: frame.tableOfContentsEntries)
             }
         case .asset(let assetId):
             drawAsset(assetId: assetId, isLeftHalf: nil, project: project, in: rect, context: context, maskShape: frame.maskShape)
@@ -383,7 +384,7 @@ public struct PNGExporter {
         context.restoreGState()
     }
 
-    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind = .text, project: BookProject, in rect: CGRect, context: CGContext, textColorHex: String? = nil, sourceParagraphId: UUID? = nil) {
+    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind = .text, project: BookProject, in rect: CGRect, context: CGContext, textColorHex: String? = nil, sourceParagraphId: UUID? = nil, tableOfContentsEntries: [TableOfContentsEntry]? = nil) {
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -424,19 +425,30 @@ public struct PNGExporter {
             textColor = NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).cgColor
         }
 
-        var mappedRuns: [InlineRun]? = nil
-        if let sourceParagraphId = sourceParagraphId,
-           let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
-           let runs = paragraph.inlineRuns {
-            mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
-        }
+        let attributedString: NSAttributedString
+        if let entries = tableOfContentsEntries, !entries.isEmpty {
+            attributedString = ChineseTypesetting.makeTOCAttributedString(
+                entries: entries,
+                project: project,
+                containerWidth: Double(rect.width),
+                zoomScale: 1.0,
+                foregroundColor: textColor
+            )
+        } else {
+            var mappedRuns: [InlineRun]? = nil
+            if let sourceParagraphId = sourceParagraphId,
+               let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+               let runs = paragraph.inlineRuns {
+                mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
+            }
 
-        let attributedString = ChineseTypesetting.makeAttributedString(
-            text: text,
-            style: style,
-            foregroundColor: textColor,
-            inlineRuns: mappedRuns
-        )
+            attributedString = ChineseTypesetting.makeAttributedString(
+                text: text,
+                style: style,
+                foregroundColor: textColor,
+                inlineRuns: mappedRuns
+            )
+        }
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
         path.addRect(rect)
@@ -706,39 +718,20 @@ public struct PNGExporter {
 
     private func maskPath(in rect: CGRect, shape: ImageMaskShape?) -> CGPath {
         let path = CGMutablePath()
-        guard let shape, shape != .rect else {
+        guard let shape else {
             path.addRect(rect)
             return path
         }
-        
-        switch shape {
-        case .rect:
+        let points = shape.polygonPoints(in: rect)
+        guard !points.isEmpty else {
             path.addRect(rect)
-        case .octagon:
-            let delta = min(rect.width, rect.height) * 0.15
-            path.move(to: CGPoint(x: rect.minX + delta, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX - delta, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + delta))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - delta))
-            path.addLine(to: CGPoint(x: rect.maxX - delta, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX + delta, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - delta))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + delta))
-            path.closeSubpath()
-        case .fan:
-            let cx = rect.minX + rect.width / 2.0
-            let cy = rect.minY + rect.height * 2.5
-            let R = rect.height * 2.5
-            let r = rect.height * 1.5
-            let theta = asin(rect.width / (2.0 * R))
-            let startAngle = 1.5 * .pi - theta
-            let endAngle = 1.5 * .pi + theta
-            
-            path.addArc(center: CGPoint(x: cx, y: cy), radius: R, startAngle: startAngle, endAngle: endAngle, clockwise: false)
-            path.addLine(to: CGPoint(x: cx + r * cos(endAngle), y: cy + r * sin(endAngle)))
-            path.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: endAngle, endAngle: startAngle, clockwise: true)
-            path.closeSubpath()
+            return path
         }
+        path.move(to: points[0])
+        for i in 1..<points.count {
+            path.addLine(to: points[i])
+        }
+        path.closeSubpath()
         return path
     }
 }
