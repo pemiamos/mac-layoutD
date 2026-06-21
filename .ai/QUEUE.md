@@ -58,7 +58,7 @@
 
 > Claude 既做 dev/main 集成与审核，也直接实现高风险/重要的 IDMLExporter 导出任务（用户决定：Codex 不靠谱，这些收 Claude 手里）。
 > 都改 `Sources/LayoutDExport/IDMLExporter.swift`，**串行做、各自专用 worktree+feature 分支**（守 N1/N2/N3），互不并行避免同文件冲突。
-> **顺序（依赖/风险）：~~E3-6 目录动态化~~（✅ 已合 dd2c49b，Codex 实现+Claude 修制表位）→ E3-4b 表格内行内 → E2-5 美术页/蒙版 → E2-4 对开跨页（风险最高最后）。**
+> **顺序（依赖/风险）：~~E3-6 目录动态化~~✅ → ~~E3-4b 表格内行内~~（✅ 已合 fe31069）→ E2-5 美术页/蒙版 → E2-4 对开跨页（风险最高最后）。**
 > 任务详情见下方 Codex 道里对应条目（已标「改判 Claude」）与本道 E2-4 条目；E2-4 须等 Codex 的 D-2 与本道前序都稳定后做。
 
 ## Codex 道队列（IDML 导出管线 + 内容模型）
@@ -136,7 +136,7 @@
   - 验收：①`printf '| 名称 | 功能 |\n| --- | --- |\n| 线粒体 | 产能 |\n| 核糖体 | 合成蛋白质 |\n'` 导出后**解包 grep `<Table` / `<Cell`** 确认是原生表格（不是一段裸文字），列数=2、行数=3（含表头）；②补端到端断言（Table/Cell 元素数、单元格文本归位、无「4 空格拼接」残留）；③`scripts/review-idml.sh` 仍 PASS；④用户在 InDesign 打开确认是可选列、可调宽的真表格。
   - ⚠️ 端到端验收必须解包 IDML grep `<Table`/`<Cell`，别只靠单测——本项目踩过「单测绿但功能坏」的坑。
 
-- [ ] **E3-4b 表格单元格内行内格式**（E3-4 遗留缺口，优先级中高）— 👤 **改判 Claude**（2026-06-21；E3-4 本就 Claude 做，续做自然）。Codex 勿做。
+- [x] **E3-4b 表格单元格内行内格式** — ✅ 已合 dev（fe31069）。Paragraph 加 tableCellRuns(并行可选字段,与 tableCells 索引对齐,旧档 nil)；导入拆分函数返回原始 Markdown、flushTableBuffer 用 parseInlineMarkdown 同产文本+runs；导出 tableStoryXML 每格传 runs。单元格粗/斜/傍点导出 FauxBold/Skew/Kenten,195测试+review 6/0。桌面 E3-4b表格行内验收-0621.idml 待用户 InDesign 复看。
   - 背景：E3-4 原生表格已落地，但 `IDMLExporter.tableStoryXML` 逐格调 `styledCharacterRanges(for: content, globalStart: 0, inlineRuns: [])` —— **inlineRuns 写死成空**，即表格单元格里的粗体/斜体/傍点（`**`/`*`/`==`）目前全部丢失，只出纯文字。
   - 目标：表格单元格继承行内格式。需链路：① 模型 `Paragraph.tableCells` 从 `[[String]]` 升级为可携带 per-cell inlineRuns（如 `[[TableCell]]`，TableCell={text, inlineRuns?}），旧文件 decode 兼容；② 导入 `flushTableBuffer` 每格解析 `inlineRuns`（复用 `normalizeInlineMarkdown` 的 run 提取）；③ 导出 `tableStoryXML` 把该格 inlineRuns 传进 `styledCharacterRanges`。
   - 文件：`BookProject.swift`、`MarkdownBookImporter.swift`、`IDMLExporter.swift`。
