@@ -3,6 +3,20 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 16:27 | claude | 用户视觉验收 PASS（桌面 E3-6 目录 IDML + 横排/竖排傍点斜体两张 flow PNG），已合 dev→main 并 push（main merg
+- **分支**：dev
+- **概述**：用户视觉验收 PASS（桌面 E3-6 目录 IDML + 横排/竖排傍点斜体两张 flow PNG），已合 dev→main 并 push（main merge 69ba11c：E3-6 目录动态化 + E3-10p 预览harness + 三预览(竖排斜体/表格/傍点) + D-2 DOCX 导入）。补全 AG 授权白名单（git pull/remote/git_diff_summary 已在；补回 get_agents_guide/get_decisions/record_decision/git rm/touch）。另应用户要求生成项目回顾 PDF 到 ~/Desktop/layoutD项目回顾报告-0621.pdf（5页：思路调整时间线、目标进度、代码统计19475行源码+6130测试/55文件/193测试/134提交/7天、Token 量级估算[诚实标注未统一计量]、预期完成[主交付主体85-90%, 核心可交付候选≈6月底]）。
+- **改动文件**：(未填)
+- **检查**：main swift build PASS；69ba11c 已 push origin/main。dev=main 已同步。PDF 5 页中文正常。
+- **下一步**：① Claude 道继续串行：E3-4b 表格内行内 → E2-5 美术页/蒙版 → E2-4 对开跨页。② AG 主力续做配对预览：E3-6p→E2-5p→E2-4p→导出面板。③ 旧预览分支(feature/ag-e3-2b/-e3-3p/-e3-4p/-e3-10p、feature/codex-* 已合的)可择机清理。④ 守 N1/N2/N3；QUEUE 归 Claude 维护，各道进度走 handoff。
+
+## 2026-06-21 16:12 | claude | 批量审核+合并 AG/Codex 两条交付，并修了 E3-6 目录两个视觉 bug。① E3-6 目录用户 InDesign 实测：点导引线+右对齐渲染对了，但
+- **分支**：dev
+- **概述**：批量审核+合并 AG/Codex 两条交付，并修了 E3-6 目录两个视觉 bug。① E3-6 目录用户 InDesign 实测：点导引线+右对齐渲染对了，但发现两 bug——多条目录串成一段（缺段落分隔符，已修：Content 加字面 U+000A，merge 484e566）+ 静态只列 H1（已修：addStory 收集 H2+，merge b8a4522）。② Codex D-2 DOCX 导入（feature/codex-d2-docx-import）：内置最小 OOXML ZIP 读取器(stored+deflate/Compression,不调外部 unzip)+XMLParser 映射段落/run/表格，代码干净无强解包，192测试+review 6/0 PASS，已合 dev（bbb3e3d）。③ AG E3-10p（feature/ag-e3-10p）：--export-png-flow/--export-pdf-flow 忠实正文流导出，横排+竖排实测傍点(芝麻点)/粗体/斜体全部肉眼可见（竖排斜体方向也对），一并集成 e3-2b/e3-4p/e3-3p 三条旧预览，193测试+review 6/0 PASS，已合 dev（c5fcfb7）。三条旧预览随之标为已合+视觉验收过。两张 flow 验收图已放桌面。
+- **改动文件**：(未填)
+- **检查**：dev swift build PASS；193 测试 0 失败；review-idml.sh 6/0 PASS。AG flow harness 横竖排傍点/粗/斜视觉确认；D-2 DOCX 专项测试+端到端 DOCX→IDML PASS。
+- **下一步**：① 用户验收桌面三张图：E3-6 目录（书名+两子标题三条、点导引线、不再串行）；横排/竖排傍点+斜体。OK 后 Claude 合 dev→main。② AG 主力续做：E3-6p 目录预览→E2-5p 蒙版预览→E2-4p 对开预览→导出面板（分支已建占位）。③ Codex：D-2 已完成，新任务待 Claude 排（Codex 暂无在排任务）。④ Claude 道串行剩：E3-4b 表格内行内→E2-5→E2-4。⑤ 三条旧预览(e3-2b/e3-4p/e3-3p)已随 e3-10p 合 dev，旧分支可择机清理。
+
 ## 2026-06-21 15:44 | claude | 解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HA
 - **分支**：dev
 - **概述**：解救 AG 卡死 + 根治文档冲突。AG 在 feature/ag-e3-10p 跑 git merge origin/dev 同步时撞 QUEUE.md/HANDOFF.md 冲突、自行解冲突卡死；Claude 在 AG worktree 按 dev 权威版 checkout --theirs 解掉两文档冲突、补完 merge（1d93ba8），AG worktree build PASS、已解套可继续。根因：Claude 在 dev 频繁改 QUEUE.md + 各道也改 QUEUE.md → 每次同步必冲突。根治（commit 32e71e3 push origin/dev）：① .gitattributes 给 .ai/HANDOFF.md + .ai/DECISIONS.md 设 merge=union（append-only 永不冲突）；② AGENTS.md 铁律 8：QUEUE.md 归 Claude 独占，各道不再勾 [x]/挂 [~]，进度只走 write_handoff，Claude 据交接更新；③ 各道遇文档冲突别硬解，checkout --theirs .ai/QUEUE.md。同步更新记忆 codex-antigravity-dual-lane。

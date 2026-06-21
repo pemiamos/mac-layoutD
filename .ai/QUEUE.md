@@ -197,10 +197,17 @@
 >
 > **⭐ 2026-06-21 起 AG 为主力**（用户决定：Codex 不靠谱、少排；AG 多排、连续作业）。预览+GUI 全线都在 AG。
 > **✅ 上一批（E3-2b/E3-4p/E3-3p 预览）AG 已实现、Claude 审过，待合 dev（用户选 C 暂缓，Claude 合）。AG 不必重做。**
-> **🔁 AG 本批连续序列（按顺序连做，做完一个自审 PASS 接下一个，不停下问）：**
-> **① E3-10p 预览验收 harness（高优先）→ ② E3-6p 目录预览（配 E3-6）→ ③ E2-5p 非矩形蒙版预览（配 E2-5）→ ④ E2-4p 对开跨页预览（配 E2-4）→ ⑤ 导出选项面板**。
-> 配对预览（②③④）做「预览追平 IDML」：Claude 在导出侧做 E3-6/E2-5/E2-4，AG 在预览侧画出对应效果。即使对应导出项还没合 dev，预览侧也可独立先做（按同一视觉规格）。
-> 约 1 小时或做完本批/撞阻塞为止，收尾写一条汇总 handoff。
+> **🔁 AG 当前最高优先：把三条预览分支 rebase 到最新 dev（它们做得对、但 base 太旧需重整）。**
+> Claude 审核结论（2026-06-21）：`feature/ag-e3-6p`(4862e1a 目录预览) / `feature/ag-e2-5p`(2e0b0a8 蒙版预览) / `feature/ag-e2-4p`(3f7a986 对开页码) 三条**代码本体都对、各带测试**，但都从 e3-10p 合 dev **之前**切出（落后 ~24 提交、不含 e3-10p 的 flow harness 与 e3-4p 的 drawTable），直接合冲突面大（CanvasView/ChineseTypesetting/PDF/PNGExporter）。
+> **请 AG 逐条重整（你懂自己这套渲染、能在 IDE 肉眼复验，比 Claude 盲合稳）**：
+>   1. 从**最新 dev** 起新分支（如 `feature/ag-e3-6p-v2`），`git cherry-pick 4862e1a`（或重新实现该 delta），解冲突——**冲突基本是加性**：保留 dev 已有的 `drawTable`/flow-harness/`drawKentenDots` 等，叠加你的 TOC 预览函数与 `drawText` 的 `tableOfContentsEntries` 参数/分支；
+>   2. 同样处理 e2-5p（蒙版 polygonPoints）、e2-4p（对开页码）；
+>   3. 每条 `bash scripts/review-idml.sh` PASS + 用 `--export-png-flow` 重导样例肉眼确认（目录点导引线/蒙版裁形/对开页码），写 handoff 列出新分支名与 commit，由 Claude 合 dev。
+> 旧的 `feature/ag-e3-6p/e2-5p/e2-4p` 重整后即弃用。
+> **教训**：每个新任务都从**最新 dev** 起分支，别一次性把多条分支都从同一旧 dev 切出（这次就是这么撞的）。
+> **rebase 完成后再做：⑤ 导出选项面板**（依赖 E2-4 落 dev，可先做面板骨架）。
+> 配对预览做「预览追平 IDML」：Claude 在导出侧做 E3-6（已合）/E2-5/E2-4，AG 在预览侧画对应效果。
+> 约 1 小时或做完/撞阻塞为止，收尾写一条汇总 handoff。
 > 主题：**让预览（Canvas/PDF/PNG）追平 IDML 输出**——本阶段 AG 的核心价值是「InDesign 打开后版面与 layoutD 预览一致」。
 > ⚠️ **每项都从最新 dev 起新分支 `feature/ag-<task>`**，别叠旧分支。斜体已在 dev 用 12° `Skew` 矩阵渲染（与 IDML `Skew="12"` 同算法），别改回 FauxItalic。
 
