@@ -169,7 +169,7 @@
   - 文件：`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`LayoutEngine.swift`（如需表格测量/分页）。
   - 验收：demo 里的表格导 PNG 是带边框的真网格（非裸文字流），列对齐、底色正确；单测断言表格 frame 产出行列结构；`scripts/review-idml.sh` PASS。
 
-- [ ] **E3-3p 傍点（Kenten 着重号）预览渲染**　⚠️ **依赖：待 Codex E3-3 合进 dev 后再做**（当前 E3-3 退回修复中）
+- [x] **E3-3p 傍点（Kenten 着重号）预览渲染** — Antigravity @ feature/ag-e3-3p, commit ce26883
   - 背景：Codex E3-3 让 `==着重==` 落地为 `InlineEmphasis.kenten` → IDML `KentenKind`。预览侧需在着重字**旁/上画着重点（芝麻点）**，否则预览看不出傍点。
   - 目标：Canvas/PDF/PNG 对 `.kenten` run 的每个字符绘制着重号（横排在字下/字右、竖排在字右侧，对标 InDesign 默认 KentenSesameDot 位置）。
   - 文件：`ChineseTypesetting.swift` 或三处渲染器的字形装饰逻辑。
