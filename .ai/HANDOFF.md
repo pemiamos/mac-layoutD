@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 10:58 | claude | 【更新前一条交接】复审 AG 三条预览分支 + 视觉尝试。期间 dev 已被并发会话推进到 c139836（E3-4 原生表格 ae82104 已合 dev，标
+- **分支**：dev
+- **概述**：【更新前一条交接】复审 AG 三条预览分支 + 视觉尝试。期间 dev 已被并发会话推进到 c139836（E3-4 原生表格 ae82104 已合 dev，标注用户视觉 PASS）。在 detached worktree(off c139836) 把三条全合实测：e3-3p 干净；e3-2b 仅 Tests/LayoutDCoreTests.swift 加性断言冲突（两块都留）；e3-4p 与 E3-4 在 LayoutEngine.swift 真冲突——已正确解：保留 dev 的「表格按 estimatedTableHeight 估高早返回」块 + 采用 e3-4p 的 normalizedText(text, isTable: kind == .table) 新签名（isTable 时只 trim 不折叠空格）。合后 swift build PASS。视觉：导 PNG 仅表格网格预览成功露出（青表头+黑网格，图已放桌面 预览验收-表格网格-0621.png）；傍点 drawKentenDots 与竖排斜体在 PNG demo 模板里露不出——demo/brochure 模板每页只落一个正文段且丢弃带强调段落（与上一棒同墙）。两者目前仅靠单测锁定（kenten 属性命中 + 竖排 b=tan12°/c=0）。⚠️ 复盘：本棒两次误操作均已完整撤销无损——①在 feature/claude-e3-4-table 上误合 e3-3p 已 reset 回 c2d8583 并保住未提交 IDMLExporter 改动（后被并发会话提交为 ac7a0e8）；②worktree add 失败致命令误落主仓库 dev、误建废弃分支 tmp/png-int 已删，dev 未受影响。
+- **改动文件**：(未填)
+- **检查**：detached worktree(off dev c139836) 三条全合：swift build PASS。冲突 2 处均已解（test 加性断言；LayoutEngine 表格估高 vs normalizedText 签名）。PNG 视觉：表格网格 PASS；傍点/竖排斜体 demo 模板无法呈现（非功能问题）。
+- **下一步**：① 合并顺序与冲突解法（已验证可直接照搬）：e3-3p（干净）→ e3-2b（解 Tests/LayoutDCoreTests.swift：matrix.b==0 + kenten 两断言 + 竖排 b=tan12°/c=0 三块全留）→ e3-4p（解 LayoutEngine.swift addText：用 normalizedText(text, isTable: kind == .table) 赋值 + 保留 dev 的 estimatedTableHeight 表格早返回块）。② 表格预览已视觉 PASS 可合；傍点+竖排斜体无法走 PNG 验收——需用户在 app GUI(Canvas) 肉眼看，或专门做预览验收 harness（demo brochure 模板会丢带强调正文段，建议另开任务修该模板的正文流）。③ e3-2b 还给 importer 加了 layout_direction frontmatter 开关，合后可验竖排。④ 注意主仓库现处 dev 且可能有并发会话——动手前先 get_current_status 确认无人占用。
+
 ## 2026-06-21 06:51 | claude | 用户指派 Claude 直接做 E3-7v（脚注正文 InDesign 中文豆腐）。已在 feature/codex-codex-e3-7-footnotes 
 - **分支**：dev
 - **概述**：用户指派 Claude 直接做 E3-7v（脚注正文 InDesign 中文豆腐）。已在 feature/codex-codex-e3-7-footnotes 上修复并提交 commit d449077：根因是 footnoteXML 把脚注 ParagraphStyleRange 硬编码成 $ID/[No paragraph style]（无 AppliedFont）+ 无 footnote 段落样式注册，InDesign 退回拉丁默认字体故中文豆腐。修法（仅导出侧）：footnoteXML 改按 caption→body→空样式 优先级引用带 CF_ 复合字体的段落样式（caption 8.5pt/无首行缩进，最像脚注），并把 footnoteStyleRef 一路 thread 进 storyXML→characterStyleRanges→footnoteXML。解包验证脚注现挂 ParagraphStyle/caption（带 CF_caption 复合字体）。补端到端断言：脚注 ParagraphStyleRange 不得为 [No paragraph style]、其引用样式在 Styles.xml 须带 CF_ AppliedFont。已重导样例投桌面 ~/Desktop/layoutD脚注验收-0621-v2.idml（4 连续脚注）。E3-7+E3-7v 仍在 feature 分支未合 dev——合前需 git merge origin/dev reconcile 与 E3-3v 的 storyXML 冲突。

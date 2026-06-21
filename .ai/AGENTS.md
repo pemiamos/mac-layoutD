@@ -18,6 +18,22 @@
 - **铁律：只在自己的副本目录里跑 git。** 别 `cd` 到别人的副本，更别 `cd` 到主仓库去 commit。relay 的 `RELAY_PROJECT_ROOT` 已分别锁到各自副本，`run_checks()` / `git_status()` 都在你自己的副本上跑。
 - **开工先同步**：在自己的停靠分支上 `git fetch && git merge origin/dev`（或 rebase）拿到最新的 dev（含最新交接日志与代码），再 `git checkout -b feature/<你>-<任务>` 开新分支干活。
 
+### ⚠️ 并发盲区：隔离是「按 AI」，不是「按对话」（2026-06-21 补，吃过亏）
+
+worktree 隔离只防住**三个不同 AI** 互撞，**没防**「同一个 AI 同时开两个对话、都在同一个工作副本里干活」。
+典型事故：两个 Claude 对话同时用主仓库 `mac-layoutD`，一个在合 E3-4 到 dev、另一个在做审核 → 同副本同分支、HEAD 被对方切走、`git add -A` 误吞对方未提交改动、`worktree add` 失败后命令误落主仓库。补两条铁律堵死：
+
+- **N1｜同一仓库不开两个同 AI 对话。** 若必须并发（如一个对话集成、另一个审查），**第二个对话必须带自己独立的 worktree**，不许两个对话共用同一个工作副本 checkout。
+- **N2｜集成/审核/试合一律在「专用临时 worktree」里做，绝不在共享主仓库 checkout 上直接动手。** 配方：
+  ```bash
+  git worktree add --detach /tmp/<任务>-wt dev   # 从 dev 起一份独立副本
+  test -d /tmp/<任务>-wt || exit 1               # 必校验创建成功，失败别让命令落回主仓库
+  cd /tmp/<任务>-wt && ...试合/build/导图...
+  git worktree remove --force /tmp/<任务>-wt      # 收尾删除
+  ```
+  这一条同时根除「两对话撞车」与「命令误落主仓库」两类事故。
+- **N3｜动手集成前先探并发。** `get_current_status()` + `git_status()` 看一眼：dev 上若有别人未提交改动或 HEAD 不在预期处，停手问清楚。开始长集成前在 relay 里 `record_decision()` 占位（"我正在集成 dev，勿动"）当软锁。
+
 ## 铁律（违反即视为出错）
 
 1. **干活只在自己的副本里。** 见上方「工作副本隔离」。Codex 在 `…-codex`、Antigravity 在 `…-ag`、Claude 在主仓库。
