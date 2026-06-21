@@ -141,6 +141,32 @@ final class IDMLExporterTests: XCTestCase {
         )
     }
 
+    func testExportsStructuredDynamicTOCWithTabLeaders() throws {
+        let project = BookProject.sample
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-toc-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let styles = try entry(output, "Resources/Styles.xml")
+        XCTAssertTrue(styles.contains("<TOCStyle Self=\"TOCStyle/layoutD_TOC\""))
+        XCTAssertTrue(styles.contains("AppliedParagraphStyle=\"ParagraphStyle/heading1\""))
+        XCTAssertTrue(styles.contains("AppliedParagraphStyle=\"ParagraphStyle/heading2\""))
+        XCTAssertTrue(styles.contains("TOCEntryStyle=\"ParagraphStyle/tocLevel1\""))
+        XCTAssertTrue(styles.contains("TOCEntryStyle=\"ParagraphStyle/tocLevel2\""))
+
+        let stories = try zipEntries(output)
+            .filter { $0.hasPrefix("Stories/Story_") }
+            .map { try entry(output, $0) }
+        let tocStory = try XCTUnwrap(stories.first { $0.contains("AppliedTOCStyle=\"TOCStyle/layoutD_TOC\"") })
+        XCTAssertTrue(tocStory.contains("TabStopAlignment=\"RightAlign\""))
+        XCTAssertTrue(tocStory.contains("TabStopLeader=\".\""))
+        XCTAssertTrue(tocStory.contains("\t"), "目录标题与页码必须由 tab 分隔，而非空格拼接")
+        XCTAssertFalse(tocStory.contains("图像不只是正文的附件  3"))
+    }
+
     func testExportsTableParagraphAsNativeIDMLTable() throws {
         // E3-4：带结构化行列的 .table 段应导出为原生 <Table>/<Column>/<Row>/<Cell>，
         // 而非拍平成「4 空格拼接」的裸文字。（importer 保留行列的断言见 LayoutDImport 测试。）
@@ -352,7 +378,9 @@ final class IDMLExporterTests: XCTestCase {
         let styles = try entry(output, "Resources/Styles.xml")
         for style in project.styles.paragraphStyles {
             let styleID = NSRegularExpression.escapedPattern(for: style.id)
-            let pattern = "(<ParagraphStyle[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?</ParagraphStyle>)"
+            // `\s` guards against matching `<ParagraphStyleRange>` (or a future
+            // style-like element) while inspecting the concrete style definition.
+            let pattern = "(<ParagraphStyle\\s+[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?</ParagraphStyle>)"
             XCTAssertEqual(matches(in: styles, pattern: pattern).count, 1,
                            "段落样式 \(style.id) 未绑定 layoutD 禁则集")
         }

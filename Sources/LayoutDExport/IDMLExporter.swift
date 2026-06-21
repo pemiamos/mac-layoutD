@@ -47,10 +47,17 @@ public struct IDMLExporter {
         )
 
         var ctx = BuildContext(project: project)
+        let includesTOC = pages.contains { page in
+            page.frames.contains { !($0.tableOfContentsEntries ?? []).isEmpty }
+        }
 
         // 先扫一遍：注册颜色、字体、复合字体、段落样式所需资源。
         for style in project.styles.paragraphStyles {
             ctx.registerParagraphStyle(style)
+        }
+        if includesTOC {
+            ctx.registerParagraphStyle(tocParagraphStyle(base: ctx.resolvedStyle(id: StyleID.heading2.rawValue), id: "tocLevel1", name: "目录一级"))
+            ctx.registerParagraphStyle(tocParagraphStyle(base: ctx.resolvedStyle(id: StyleID.caption.rawValue), id: "tocLevel2", name: "目录二级", indent: 12))
         }
         // 各页 frame 的颜色覆盖也要登记成色板。
         for page in pages {
@@ -123,6 +130,16 @@ public struct IDMLExporter {
                         storyListIds.append(storySelf)
                         continue
                     }
+                    if let entries = frame.tableOfContentsEntries, !entries.isEmpty {
+                        storyFiles["Stories/Story_\(storySelf).xml"] = tocStoryXML(
+                            self: storySelf,
+                            entries: entries,
+                            frameWidth: frame.rect.width
+                        )
+                        storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
+                        storyListIds.append(storySelf)
+                        continue
+                    }
                     let frameInlineRuns: [InlineRun]?
                     if let paragraphID = frame.sourceParagraphId,
                        let paragraph = paragraphsByID[paragraphID] {
@@ -181,7 +198,7 @@ public struct IDMLExporter {
             "META-INF/metadata.xml": metadata(),
             "Resources/Graphic.xml": graphic(ctx: ctx),
             "Resources/Fonts.xml": fonts(ctx: ctx),
-            "Resources/Styles.xml": styles(ctx: ctx),
+            "Resources/Styles.xml": styles(ctx: ctx, includesTOC: includesTOC),
             "Resources/Preferences.xml": preferences(pageW: pageW, pageH: pageH, pageCount: pages.count),
             "XML/Tags.xml": tags(),
             "XML/BackingStory.xml": backingStory(),
@@ -351,7 +368,13 @@ public struct IDMLExporter {
         }
 
         mutating func registerParagraphStyle(_ style: ParagraphStyle) {
-            let resolved = project.styles.paragraphStyle(id: style.id)
+            // Project styles are token-resolved by ID. Export-only styles (TOC levels)
+            // are already derived from a resolved base and do not exist in the project
+            // library; resolving those by ID would silently fall back to `.body`.
+            guard !paragraphStyles.contains(where: { $0.id == style.id }) else { return }
+            let resolved = project.styles.paragraphStyles.contains(where: { $0.id == style.id })
+                ? project.styles.paragraphStyle(id: style.id)
+                : style
             paragraphStyles.append(resolved)
             _ = color(project.resolvedColorHex(resolved.colorToken) ?? "#000000")
             if let cf = resolved.compositeFont, !cf.isEmpty {
@@ -564,7 +587,17 @@ public struct IDMLExporter {
         """
     }
 
-    private func styles(ctx: BuildContext) -> String {
+    private func tocParagraphStyle(base: ParagraphStyle, id: String, name: String, indent: Double = 0) -> ParagraphStyle {
+        var style = base
+        style.id = id
+        style.displayName = name
+        style.firstLineIndent = indent
+        style.spaceBefore = 0
+        style.spaceAfter = 2
+        return style
+    }
+
+    private func styles(ctx: BuildContext, includesTOC: Bool) -> String {
         var paras = ""
         for style in ctx.paragraphStyles {
             let colorHex = ctx.project.resolvedColorHex(style.colorToken) ?? "#000000"
@@ -586,6 +619,12 @@ public struct IDMLExporter {
             \t\t</ParagraphStyle>\n
             """
         }
+        let tocStyle = includesTOC ? """
+        \t\t<TOCStyle Self="TOCStyle/layoutD_TOC" Name="目录" IncludeBookDocuments="false" CreateBookmarks="true" ReplaceExisting="true">
+        \t\t\t<TOCStyleEntry Self="TOCStyleEntry/layoutD_TOC_heading1" AppliedParagraphStyle="ParagraphStyle/heading1" TOCEntryStyle="ParagraphStyle/tocLevel1" IncludePageNumber="true" PageNumberPosition="AfterEntry"/>
+        \t\t\t<TOCStyleEntry Self="TOCStyleEntry/layoutD_TOC_heading2" AppliedParagraphStyle="ParagraphStyle/heading2" TOCEntryStyle="ParagraphStyle/tocLevel2" IncludePageNumber="true" PageNumberPosition="AfterEntry"/>
+        \t\t</TOCStyle>
+        """ : ""
         return """
         \(header)
         <idPkg:Styles \(pkgNS) DOMVersion="\(dom)">
@@ -595,6 +634,7 @@ public struct IDMLExporter {
         \t<RootParagraphStyleGroup Self="u_rpsg">
         \t\t<ParagraphStyle Self="ParagraphStyle/$ID/[No paragraph style]" Imported="false" Name="$ID/[No paragraph style]"/>
         \(paras)\t</RootParagraphStyleGroup>
+        \(tocStyle)
         \t<RootCellStyleGroup Self="u_rcellsg"><CellStyle Self="CellStyle/$ID/[None]" Name="$ID/[None]"/></RootCellStyleGroup>
         \t<RootTableStyleGroup Self="u_rtsg"><TableStyle Self="TableStyle/$ID/[No table style]" Name="$ID/[No table style]"/></RootTableStyleGroup>
         \t<RootObjectStyleGroup Self="u_rosg"><ObjectStyle Self="ObjectStyle/$ID/[None]" Name="$ID/[None]"/></RootObjectStyleGroup>
@@ -896,6 +936,29 @@ public struct IDMLExporter {
         \t\t\t\t<Content></Content>
         \t\t\t</CharacterStyleRange>
         \t\t</ParagraphStyleRange>
+        \t</Story>
+        </idPkg:Story>
+        """
+    }
+
+    /// 目录 Story：每条是独立段落，标题和页码之间是右对齐 tab（点导引线由对应 TOC
+    /// 段落样式/TOCStyle 接管）。AppliedTOCStyle 让 InDesign 的“更新目录”按 heading1/
+    /// heading2 重建目录，当前条目仅用于首次打开时的可见版面。
+    private func tocStoryXML(self id: String, entries: [TableOfContentsEntry], frameWidth: Double) -> String {
+        let body = entries.map { entry in
+            let style = entry.level <= 1 ? "tocLevel1" : "tocLevel2"
+            return """
+            \t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/\(style)" AppliedComposer="\(appliedComposer)" TabStopAlignment="RightAlign" TabStopLeader="." TabStopPosition="\(fmt(frameWidth))">
+            \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>\(esc(entry.title))\t\(entry.pageNumber)</Content></CharacterStyleRange>
+            \t\t</ParagraphStyleRange>
+            """
+        }.joined(separator: "\n")
+        return """
+        \(header)
+        <idPkg:Story \(pkgNS) DOMVersion="\(dom)">
+        \t<Story Self="\(id)" AppliedTOCStyle="TOCStyle/layoutD_TOC" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+        \t\t<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+        \(body)
         \t</Story>
         </idPkg:Story>
         """

@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 11:36 | codex | 完成 E3-6「目录（TOC）动态化」，待 Claude 复审与 InDesign 人工验收
+- **分支**：`feature/codex-e3-6-toc`
+- **概述**：目录页正文 frame 现携带结构化 `TableOfContentsEntry` 元数据（标题、层级、真实页码），预览继续使用原有文本；IDMLExporter 根据结构化条目生成独立 TOC 段落、`tocLevel1`/`tocLevel2` 样式、右对齐 tab + 点导引，并输出 `TOCStyle/layoutD_TOC`，把 `heading1`/`heading2` 映射为对应目录样式。目录 Story 引用该 TOCStyle，供 InDesign「更新目录」重建。
+- **改动文件**：`Sources/LayoutDCore/LaidOutPage.swift`、`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDExport/IDMLExporter.swift`、`Tests/LayoutDExportTests/IDMLExporterTests.swift`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
+- **检查**：新增 `IDMLExporterTests.testExportsStructuredDynamicTOCWithTabLeaders` PASS（TOCStyle、heading 映射、TOC 段落样式、tab + 点导引）；`scripts/review-idml.sh` PASS（swift build、190 tests、IDML 探针 6/6）。待提交。
+- **下一步**：Claude 复审后在 InDesign 中文版打开样例执行「Layout → 更新目录」，确认标题及页码能重建。Codex 后续可接 E3-4b（表格单元格行内格式）。
+
 ## 2026-06-21 11:17 | claude | 进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全
 - **分支**：dev
 - **概述**：进度盘点 + 把缺口/新需求整理进 .ai/QUEUE.md（commit 911bd07，已 push origin/dev）。盘点结论：地基阶段 A–D 全绿；主交付 E 阶段已过用户 InDesign 视觉验收的有 E1 全量映射、E2-1/2/3/6/7、E3-1 行内格式、E3-3+E3-3v 傍点、E3-7+E3-7v 脚注、E3-4 表格、E3-2 预览+批注层。待合（用户选 C 暂缓）：AG 三条预览 e3-3p/e3-2b/e3-4p。已排未做：E3-6 TOC、E3-8 CMYK、E3-9 约物挤压/基线网格、E2-4 对开、E2-5 美术页MasterSpread/蒙版、D-2 DOCX。本棒新增队列条目：① Codex 道 E3-4b 表格单元格行内格式（发现 tableStoryXML 把 inlineRuns 写死成空，表格内粗/斜/傍点丢失）；② AG 道 E3-10p 预览验收 harness（PNG demo 模板丢带强调正文段，致傍点/竖排斜体出不了图无法视觉验收，挡住 E3-3p/E3-2b 收尾）；③ 新增「待评估 Backlog」节（索引/参考文献/长表格分页表头重复/图文绕排，需用户拍板）；④ 基础设施补 E0 spike 文档回填。

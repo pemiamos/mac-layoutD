@@ -24,6 +24,20 @@ public struct LaidOutPage: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+/// 目录页的结构化条目。预览层仍可使用拍平后的文本绘制，但导出层借此保留标题层级和
+/// 页码，生成可由 InDesign 更新的 TOC，而不是反向解析显示字符串。
+public struct TableOfContentsEntry: Codable, Equatable, Sendable {
+    public var level: Int
+    public var title: String
+    public var pageNumber: Int
+
+    public init(level: Int, title: String, pageNumber: Int) {
+        self.level = level
+        self.title = title
+        self.pageNumber = pageNumber
+    }
+}
+
 public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
     public var kind: PageFrameKind
@@ -36,6 +50,9 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
     public var textColorHex: String?
     public var sourceParagraphId: UUID?
     public var maskShape: ImageMaskShape?
+    /// Present only on the body frame of the generated contents page. Optional for
+    /// backwards compatibility with existing saved layout documents.
+    public var tableOfContentsEntries: [TableOfContentsEntry]?
 
     public init(
         id: UUID = UUID(),
@@ -48,7 +65,8 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
         strokeWidth: Double? = nil,
         textColorHex: String? = nil,
         sourceParagraphId: UUID? = nil,
-        maskShape: ImageMaskShape? = nil
+        maskShape: ImageMaskShape? = nil,
+        tableOfContentsEntries: [TableOfContentsEntry]? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -61,6 +79,7 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
         self.textColorHex = textColorHex
         self.sourceParagraphId = sourceParagraphId
         self.maskShape = maskShape
+        self.tableOfContentsEntries = tableOfContentsEntries
     }
 }
 
