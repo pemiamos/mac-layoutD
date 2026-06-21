@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-21 16:46 | claude | 审核 AG 三条新预览分支 + 交接 rebase 任务。结论：feature/ag-e3-6p(4862e1a 目录预览)/e2-5p(2e0b0a8 蒙版预
+- **分支**：dev
+- **概述**：审核 AG 三条新预览分支 + 交接 rebase 任务。结论：feature/ag-e3-6p(4862e1a 目录预览)/e2-5p(2e0b0a8 蒙版预览)/e2-4p(3f7a986 对开页码) 代码本体都对、各带测试，但都从 e3-10p 合 dev 之前(merge-base 32e71e3,落后24提交,不含 c5fcfb7)切出，直接合与 e3-10p flow harness + e3-4p drawTable 在 CanvasView/ChineseTypesetting/PDF/PNGExporter 大面积冲突(冲突基本加性但~15-20块,跨无头难视觉验证的渲染代码)。决定退给 AG 重整(AG 懂自己渲染+能 IDE 肉眼复验,比 Claude 盲合稳)——已在 QUEUE.md AG 道写明：从最新 dev 起新分支 cherry-pick 各 feat commit、加性解冲突(保留 dev 的 drawTable/flow-harness/drawKentenDots + 叠加 TOC/蒙版/对开 additions)、--export-png-flow 复验、写 handoff 由 Claude 合。教训：每新任务从最新 dev 起分支,别一次性多分支切自同一旧 dev。Claude 接下来做自己的 E3-4b 表格内行内格式。
+- **改动文件**：(未填)
+- **检查**：仅文档。三条 AG 预览分支试合确认冲突点(CanvasView/ChineseTypesetting/PDF/PNGExporter)，未合入。
+- **下一步**：① AG：按 QUEUE.md 把 e3-6p/e2-5p/e2-4p 从最新 dev 重整(新分支-v2)，复验后写 handoff，Claude 合。② Claude：开始 E3-4b 表格单元格内行内格式(模型 tableCells 携带 inlineRuns→导入→IDMLExporter.tableStoryXML 传 inlineRuns，现写死成空)，专用 worktree。③ 之后 Claude 续 E2-5→E2-4。④ 守 N1/N2/N3。
+
 ## 2026-06-21 16:27 | claude | 用户视觉验收 PASS（桌面 E3-6 目录 IDML + 横排/竖排傍点斜体两张 flow PNG），已合 dev→main 并 push（main merg
 - **分支**：dev
 - **概述**：用户视觉验收 PASS（桌面 E3-6 目录 IDML + 横排/竖排傍点斜体两张 flow PNG），已合 dev→main 并 push（main merge 69ba11c：E3-6 目录动态化 + E3-10p 预览harness + 三预览(竖排斜体/表格/傍点) + D-2 DOCX 导入）。补全 AG 授权白名单（git pull/remote/git_diff_summary 已在；补回 get_agents_guide/get_decisions/record_decision/git rm/touch）。另应用户要求生成项目回顾 PDF 到 ~/Desktop/layoutD项目回顾报告-0621.pdf（5页：思路调整时间线、目标进度、代码统计19475行源码+6130测试/55文件/193测试/134提交/7天、Token 量级估算[诚实标注未统一计量]、预期完成[主交付主体85-90%, 核心可交付候选≈6月底]）。
