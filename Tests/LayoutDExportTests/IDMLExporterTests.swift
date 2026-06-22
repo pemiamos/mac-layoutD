@@ -326,6 +326,42 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(try imageFramePointCount(.fan), 16, "扇面图框应多段弧近似（≥16 点）")
     }
 
+    func testFacingPagesSpreadImposition() throws {
+        // E2-4：facingPages 开 → FacingPages=true + 首页单独成 spread、其后每 2 页一 spread；
+        //        关 → FacingPages=false + 每页独占 spread（无回归）。
+        let project = BookProject.sample
+        let document = LayoutEngine().layout(project: project)
+        func export(_ facing: Bool) throws -> (prefs: String, spreads: [String]) {
+            let output = FileManager.default.temporaryDirectory
+                .appendingPathComponent("layoutd-idml-facing-\(facing)-\(UUID().uuidString).idml")
+            defer { try? FileManager.default.removeItem(at: output) }
+            try IDMLExporter().export(document: document, project: project, to: output,
+                                      options: IDMLExportOptions(facingPages: facing))
+            let prefs = try entry(output, "Resources/Preferences.xml")
+            let spreads = try zipEntries(output)
+                .filter { $0.hasPrefix("Spreads/Spread_") }.sorted()
+                .map { try entry(output, $0) }
+            return (prefs, spreads)
+        }
+        func pageCount(_ spread: String) -> Int { matches(in: spread, pattern: "(<Page )").count }
+
+        // 关：无回归——FacingPages=false，每个 spread 恰 1 页。
+        let off = try export(false)
+        XCTAssertTrue(off.prefs.contains("FacingPages=\"false\""))
+        XCTAssertTrue(off.spreads.allSatisfy { pageCount($0) == 1 }, "非对开每 spread 应恰 1 页")
+
+        // 开：FacingPages=true；首页 spread 1 页，存在 2 页 spread。
+        let on = try export(true)
+        XCTAssertTrue(on.prefs.contains("FacingPages=\"true\""))
+        XCTAssertEqual(pageCount(on.spreads[0]), 1, "首页应单独成 spread（recto）")
+        XCTAssertTrue(on.spreads.contains { pageCount($0) == 2 }, "应存在 2 页对开 spread")
+        // verso 页框在书脊左（ItemTransform x = -pageW）。
+        let twoPageSpread = try XCTUnwrap(on.spreads.first { pageCount($0) == 2 })
+        let pageW = project.pageSetup.pageSize.width
+        XCTAssertTrue(twoPageSpread.contains("ItemTransform=\"1 0 0 1 \(String(format: "%.3f", -pageW)) "),
+                      "verso 页框应在书脊左侧 x=-pageW")
+    }
+
     func testExportsValidIDMLFromSampleProject() throws {
         let project = BookProject.sample
         let document = LayoutEngine().layout(project: project)
