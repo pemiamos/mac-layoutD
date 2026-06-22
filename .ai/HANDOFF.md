@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-22 08:04 | claude | 完成 E2-4 对开跨页——Claude 道全部任务收官。先把上一批已验收的合 main（merge 558b53e：E3-6p/E2-5p 预览+E3-4b+
+- **分支**：dev
+- **概述**：完成 E2-4 对开跨页——Claude 道全部任务收官。先把上一批已验收的合 main（merge 558b53e：E3-6p/E2-5p 预览+E3-4b+E2-5蒙版+AG export-options）。E2-4：facingPages 开关(IDMLExportOptions/CLI 新增 --idml-facing,默认关)；几何函数加 dx(默认0)每页内容按侧偏移(recto +pageW/2/verso -pageW/2)，页循环按对开分组(首页 recto 单独成 spread,其后每2页 verso左+recto右),spreadXML 支持多页(PageCount/BindingLocation),Preferences FacingPages 随开关。最高风险=回归:已逐字节验证 facing 关时 Spreads/Preferences 与 dev 完全一致(仅 Fonts.xml 差异,经两次 dev 自比证实是既有非确定性,与 E2-4 无关)。facing 开实测:首页1页 spread+2页 spread,verso 页框 x=-pageW/recto x=0,FacingPages=true。200测试+review 6/0 PASS。已合 dev(02900eb,未合 main)。桌面 E2-4对开跨页验收-0621.idml 待用户 InDesign 复看。
+- **改动文件**：(未填)
+- **检查**：dev swift build PASS；200 测试 0 失败；review-idml.sh 6/0；facing 关 Spreads/Preferences 逐字节=dev(无回归)；facing 开 spread imposition 结构正确。main 558b53e build PASS 已推。
+- **下一步**：① 用户 InDesign 复看 ~/Desktop/E2-4对开跨页验收-0621.idml：对开跨页左右页镜像、首页单独、订口在内。OK 后 Claude 合 dev→main。② Claude 道全部完成(E3-6/E3-4b/E2-5/E2-4)。后续 Claude 仅集成+审 AG。③ AG：导出选项面板已合;预览侧配对齐;可排新活或进 backlog(索引/参考文献等待用户拍板)。④ Codex 空闲。⑤ 隐患记录:Fonts.xml 导出非确定性(每次运行字体顺序/内容可能变),将来做 golden-file 回归前需先消除。⑥ 守 N1/N2/N3。
+
 ## 2026-06-21 18:16 | claude | 合并 AG 17:36 交接的两条「真变基」预览分支。这次 AG 做对了:feature/ag-e2-5p(7f486ab 蒙版预览 polygonPoints
 - **分支**：dev
 - **概述**：合并 AG 17:36 交接的两条「真变基」预览分支。这次 AG 做对了:feature/ag-e2-5p(7f486ab 蒙版预览 polygonPoints)/feature/ag-e3-6p(d234d22 目录预览 makeTOCAttributedString 点导引线+制表位+层级缩进) 都真正从最新 dev 起、含 c5fcfb7、AG 已 --export-png-flow 肉眼复验。注意:两条 base 是 71c1c4b(含 flow harness 但落后当前 dev ~10 提交),merge-tree 0 文本冲突但需防语义破坏——Claude 在 /tmp 隔离 worktree 顺序合两条,e3-6p 撞测试文件加性冲突(testImageMaskShapePolygonPoints vs testTOCAttributedString,两独立测试都保留)已手解,build+199测试+review-idml 6/0 全 PASS 后才合 dev。两条预览侧(E3-6p/E2-5p)至此完成,与各自导出侧(E3-6/E2-5)配对齐。已合 dev(merge dad96a5)并 push origin/dev=dad96a5。踩坑:push 前误用 git pull --rebase(本地已=origin+我的merge),它重放我的 merge 导致 d234d22 冲突半截 rebase,已 git rebase --abort 恢复——dev ref 未受影响、push 成功、结果正确。教训:本地已是 origin 基础+自己 merge、只为 push 时直接 push 或 pull --ff-only,别 pull --rebase。另:feature/ag-inline-preview 是远古废分支(base 无 c5fcfb7、diff -3203 行会删 DOCXImporter/大半 IDMLExporter),勿合,建议删。
