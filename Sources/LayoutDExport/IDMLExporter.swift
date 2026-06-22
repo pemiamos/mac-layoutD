@@ -95,8 +95,16 @@ public struct IDMLExporter {
         var storyFiles: [String: String] = [:]
         var storyListIds: [String] = []
 
+        let facing = options.facingPages
+        // 对开：首页(pi=0, recto 右)单独成 spread，其后每 2 页一 spread(verso 左 + recto 右)。
+        // 每页内容按所在侧水平偏移 dx；非对开时 dx=0、每页独占一个 spread（现状不变）。
+        var spreadBuilds: [[(pageSelf: String, pageName: String, transformX: Double, items: [String])]] = []
         for (pi, page) in pages.enumerated() {
-            let spreadSelf = "uSpread\(pi)"
+            let recto = pi % 2 == 0
+            let dx = facing ? (recto ? pageW / 2 : -pageW / 2) : 0
+            // 页框 ItemTransform 的 x（绝对）：非对开居中于书脊(-pageW/2)；
+            // 对开 recto 右(0, 框[0,pageW])、verso 左(-pageW, 框[-pageW,0])。
+            let pageTransformX = facing ? (recto ? 0 : -pageW) : -pageW / 2
             var items: [String] = []
 
             for (fi, frame) in page.frames.enumerated() {
@@ -122,14 +130,14 @@ public struct IDMLExporter {
                     items.append(textFrameItem(self: "uTF\(pi)_\(fi)", story: storySelf,
                                                rect: frame.rect, fillColor: fillColor,
                                                strokeColor: strokeColor, strokeWidth: strokeWidth,
-                                               pageW: pageW, pageH: pageH))
+                                               pageW: pageW, pageH: pageH, dx: dx))
                     // Accent 必须位于有底色的文本框之上，否则会被框架填色遮住。
                     if let accentColor = component?.resolvedAccentColorHex(project: project),
                        let accentWidth = component?.accentWidth, accentWidth > 0 {
                         let accentRect = Rect(x: frame.rect.x, y: frame.rect.y,
                                               width: min(accentWidth, frame.rect.width), height: frame.rect.height)
                         items.append(colorRectangleItem(self: "uAccent\(pi)_\(fi)", rect: accentRect,
-                                                        fillColor: accentColor, pageW: pageW, pageH: pageH))
+                                                        fillColor: accentColor, pageW: pageW, pageH: pageH, dx: dx))
                     }
                     // 原生表格：源段是 .table 且带结构化行列时，Story 内输出 InDesign
                     // <Table>（真行列/可调宽），而非把拍平文本当普通段落画。
@@ -195,15 +203,22 @@ public struct IDMLExporter {
                     items.append(imageItem(self: "uRect\(pi)_\(fi)", imageSelf: "uImg\(pi)_\(fi)",
                                            linkSelf: "uLink\(pi)_\(fi)", asset: asset,
                                            packagedFileName: packagedLinks[asset.id]?.fileName,
-                                           rect: frame.rect, maskShape: frame.maskShape, pageW: pageW, pageH: pageH))
+                                           rect: frame.rect, maskShape: frame.maskShape, pageW: pageW, pageH: pageH, dx: dx))
                 case .empty:
                     continue
                 }
             }
 
+            let pageBuild = (pageSelf: "uPage\(pi)", pageName: "\(page.number)", transformX: pageTransformX, items: items)
+            let si = facing ? (pi + 1) / 2 : pi
+            if si >= spreadBuilds.count { spreadBuilds.append([]) }
+            spreadBuilds[si].append(pageBuild)
+        }
+        for (si, spreadPages) in spreadBuilds.enumerated() {
+            let spreadSelf = "uSpread\(si)"
             spreadFiles["Spreads/Spread_\(spreadSelf).xml"] =
-                spreadXML(self: spreadSelf, pageSelf: "uPage\(pi)", pageName: "\(page.number)",
-                          spreadY: Double(pi) * pageH * 1.235, pageW: pageW, pageH: pageH, items: items)
+                spreadXML(self: spreadSelf, spreadY: Double(si) * pageH * 1.235,
+                          pageW: pageW, pageH: pageH, pages: spreadPages)
             spreadRefs.append("\t<idPkg:Spread src=\"Spreads/Spread_\(spreadSelf).xml\"/>")
         }
 
@@ -215,7 +230,7 @@ public struct IDMLExporter {
             "Resources/Graphic.xml": graphic(ctx: ctx),
             "Resources/Fonts.xml": fonts(ctx: ctx),
             "Resources/Styles.xml": styles(ctx: ctx, includesTOC: includesTOC),
-            "Resources/Preferences.xml": preferences(pageW: pageW, pageH: pageH, pageCount: pages.count),
+            "Resources/Preferences.xml": preferences(pageW: pageW, pageH: pageH, pageCount: pages.count, facing: facing),
             "XML/Tags.xml": tags(),
             "XML/BackingStory.xml": backingStory(),
             "MasterSpreads/MasterSpread_uMasterA.xml": masterSpread(pageW: pageW, pageH: pageH),
@@ -430,10 +445,10 @@ public struct IDMLExporter {
     // MARK: - 几何
 
     /// frame.rect(页内左上原点、y 向下）→ 单页 spread 坐标(原点在页中心）。
-    private func rectGeometry(_ rect: Rect, pageW: Double, pageH: Double) -> String {
-        let left = rect.x - pageW / 2
+    private func rectGeometry(_ rect: Rect, pageW: Double, pageH: Double, dx: Double = 0) -> String {
+        let left = rect.x - pageW / 2 + dx
         let top = rect.y - pageH / 2
-        let right = rect.x + rect.width - pageW / 2
+        let right = rect.x + rect.width - pageW / 2 + dx
         let bottom = rect.y + rect.height - pageH / 2
         func p(_ x: Double, _ y: Double) -> String {
             let a = "\(fmt(x)) \(fmt(y))"
@@ -448,10 +463,10 @@ public struct IDMLExporter {
 
     /// 非矩形图框蒙版（E2-5）：把图框路径改成多边形/扇面，图片放满 rect 后被该路径裁切。
     /// `.rect`/nil 回退到矩形。八角=切四角的 8 点；扇面=向上张开的环形扇区（弧线用多段折线近似）。
-    private func maskGeometry(_ rect: Rect, shape: ImageMaskShape?, pageW: Double, pageH: Double) -> String {
-        let left = rect.x - pageW / 2
+    private func maskGeometry(_ rect: Rect, shape: ImageMaskShape?, pageW: Double, pageH: Double, dx: Double = 0) -> String {
+        let left = rect.x - pageW / 2 + dx
         let top = rect.y - pageH / 2
-        let right = rect.x + rect.width - pageW / 2
+        let right = rect.x + rect.width - pageW / 2 + dx
         let bottom = rect.y + rect.height - pageH / 2
         let w = rect.width, h = rect.height
         var pts: [(Double, Double)] = []
@@ -476,7 +491,7 @@ public struct IDMLExporter {
                 pts.append((cx + ri * sin(t), cy - ri * cos(t)))
             }
         default:
-            return rectGeometry(rect, pageW: pageW, pageH: pageH)
+            return rectGeometry(rect, pageW: pageW, pageH: pageH, dx: dx)
         }
         let body = pts.map { x, y -> String in
             let a = "\(fmt(x)) \(fmt(y))"
@@ -495,34 +510,34 @@ public struct IDMLExporter {
 
     private func textFrameItem(self id: String, story: String, rect: Rect,
                                fillColor: String?, strokeColor: String?, strokeWidth: Double,
-                               pageW: Double, pageH: Double) -> String {
+                               pageW: Double, pageH: Double, dx: Double = 0) -> String {
         """
         \t\t<TextFrame Self="\(id)" ParentStory="\(story)" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="\(colorRef(fillColor))" StrokeColor="\(colorRef(strokeColor))" StrokeWeight="\(fmt(max(strokeWidth, 0)))" ItemTransform="1 0 0 1 0 0">
-        \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH))
+        \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH, dx: dx))
         \t\t\t<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
         \t\t</TextFrame>
         """
     }
 
     private func colorRectangleItem(self id: String, rect: Rect, fillColor: String,
-                                    pageW: Double, pageH: Double) -> String {
+                                    pageW: Double, pageH: Double, dx: Double = 0) -> String {
         """
         \t\t<Rectangle Self="\(id)" ContentType="Unassigned" FillColor="\(colorRef(fillColor))" StrokeColor="Swatch/None" StrokeWeight="0" ItemTransform="1 0 0 1 0 0">
-        \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH))
+        \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH, dx: dx))
         \t\t</Rectangle>
         """
     }
 
-    private func imageItem(self id: String, imageSelf: String, linkSelf: String, asset: Asset, packagedFileName: String?, rect: Rect, maskShape: ImageMaskShape? = nil, pageW: Double, pageH: Double) -> String {
+    private func imageItem(self id: String, imageSelf: String, linkSelf: String, asset: Asset, packagedFileName: String?, rect: Rect, maskShape: ImageMaskShape? = nil, pageW: Double, pageH: Double, dx: Double = 0) -> String {
         let natW = Double(max(asset.pixelWidth, 1))
         let natH = Double(max(asset.pixelHeight, 1))
         let sx = rect.width / natW, sy = rect.height / natH
         let effX = Int((72.0 / max(sx, 0.0001)).rounded()), effY = Int((72.0 / max(sy, 0.0001)).rounded())
-        let left = rect.x - pageW / 2, top = rect.y - pageH / 2
+        let left = rect.x - pageW / 2 + dx, top = rect.y - pageH / 2
         let uri = packagedFileName.map { "file:Links/\($0)" } ?? "file:missing-\(asset.fileName)"
         return """
         \t\t<Rectangle Self="\(id)" ContentType="GraphicType" StoryTitle="$ID/" ItemTransform="1 0 0 1 0 0">
-        \t\t\t\(maskGeometry(rect, shape: maskShape, pageW: pageW, pageH: pageH))
+        \t\t\t\(maskGeometry(rect, shape: maskShape, pageW: pageW, pageH: pageH, dx: dx))
         \t\t\t<Image Self="\(imageSelf)" Space="$ID/#Links_RGB" ActualPpi="72 72" EffectivePpi="\(effX) \(effY)" ImageRenderingIntent="UseColorSettings" Visible="true" ItemTransform="\(fmt(sx)) 0 0 \(fmt(sy)) \(fmt(left)) \(fmt(top))">
         \t\t\t\t<Properties>
         \t\t\t\t\t<Profile type="string">$ID/Embedded</Profile>
@@ -697,14 +712,15 @@ public struct IDMLExporter {
         """
     }
 
-    private func preferences(pageW: Double, pageH: Double, pageCount: Int) -> String {
+    private func preferences(pageW: Double, pageH: Double, pageCount: Int, facing: Bool) -> String {
         // 逐字段对齐 InDesign 自身导出的「非对开」IDML。关键:PagesPerDocument 是
         // “新建文档默认页数”偏好(InDesign 恒写 1),不是实际页数——填成实际页数会让
         // InDesign 误判、插空白页。实际页数由 spread 数量决定。
+        // FacingPages 随导出选项切换：对开时 true（页框已按 verso 左/recto 右放好）。
         """
         \(header)
         <idPkg:Preferences \(pkgNS) DOMVersion="\(dom)">
-        \t<DocumentPreference PageHeight="\(fmt(pageH))" PageWidth="\(fmt(pageW))" PagesPerDocument="1" FacingPages="false" DocumentBleedTopOffset="0" DocumentBleedBottomOffset="0" DocumentBleedInsideOrLeftOffset="0" DocumentBleedOutsideOrRightOffset="0" DocumentBleedUniformSize="true" SlugTopOffset="0" SlugBottomOffset="0" SlugInsideOrLeftOffset="0" SlugRightOrOutsideOffset="0" DocumentSlugUniformSize="false" PreserveLayoutWhenShuffling="true" AllowPageShuffle="true" OverprintBlack="true" PageBinding="LeftToRight" ColumnDirection="Horizontal" SpreadHiddenVisibility="false" Intent="PrintIntent" CreatePrimaryTextFrame="false" ColumnGuideLocked="true" MasterTextFrame="false" SnippetImportUsesOriginalLocation="false"/>
+        \t<DocumentPreference PageHeight="\(fmt(pageH))" PageWidth="\(fmt(pageW))" PagesPerDocument="1" FacingPages="\(facing)" DocumentBleedTopOffset="0" DocumentBleedBottomOffset="0" DocumentBleedInsideOrLeftOffset="0" DocumentBleedOutsideOrRightOffset="0" DocumentBleedUniformSize="true" SlugTopOffset="0" SlugBottomOffset="0" SlugInsideOrLeftOffset="0" SlugRightOrOutsideOffset="0" DocumentSlugUniformSize="false" PreserveLayoutWhenShuffling="true" AllowPageShuffle="true" OverprintBlack="true" PageBinding="LeftToRight" ColumnDirection="Horizontal" SpreadHiddenVisibility="false" Intent="PrintIntent" CreatePrimaryTextFrame="false" ColumnGuideLocked="true" MasterTextFrame="false" SnippetImportUsesOriginalLocation="false"/>
         \t<ViewPreference HorizontalMeasurementUnits="Points" VerticalMeasurementUnits="Points" RulerOrigin="PageOrigin"/>
         </idPkg:Preferences>
         """
@@ -741,15 +757,23 @@ public struct IDMLExporter {
         """
     }
 
-    private func spreadXML(self id: String, pageSelf: String, pageName: String, spreadY: Double, pageW: Double, pageH: Double, items: [String]) -> String {
+    private func spreadXML(self id: String, spreadY: Double, pageW: Double, pageH: Double,
+                           pages: [(pageSelf: String, pageName: String, transformX: Double, items: [String])]) -> String {
         // 每个 spread 在粘贴板上纵向错开(spreadY)，对齐 InDesign 自身做法；
         // 全部叠在原点会让 InDesign 重新分页、插空白页。
-        """
+        // 非对开：1 页/spread，transformX=0（页框居中于书脊原点，与历史一致）。
+        // 对开：2 页/spread（verso transformX=-pageW 左、recto transformX=0 右），BindingLocation=1。
+        let pageElements = pages.map { p in
+            "\t\t<Page Self=\"\(p.pageSelf)\" Name=\"\(p.pageName)\" AppliedMaster=\"uMasterA\" MasterPageTransform=\"1 0 0 1 0 0\" GeometricBounds=\"0 0 \(fmt(pageH)) \(fmt(pageW))\" ItemTransform=\"1 0 0 1 \(fmt(p.transformX)) \(fmt(-pageH / 2))\" LayoutRule=\"UseMaster\" OverrideList=\"\"/>"
+        }.joined(separator: "\n")
+        let allItems = pages.flatMap(\.items).joined(separator: "\n")
+        let bindingLocation = pages.count > 1 ? 1 : 0
+        return """
         \(header)
         <idPkg:Spread \(pkgNS) DOMVersion="\(dom)">
-        \t<Spread Self="\(id)" PageTransitionType="None" PageTransitionDirection="NotApplicable" PageTransitionDuration="Medium" ShowMasterItems="true" PageCount="1" BindingLocation="0" SpreadHidden="false" AllowPageShuffle="true" ItemTransform="1 0 0 1 0 \(fmt(spreadY))" FlattenerOverride="Default">
-        \t\t<Page Self="\(pageSelf)" Name="\(pageName)" AppliedMaster="uMasterA" MasterPageTransform="1 0 0 1 0 0" GeometricBounds="0 0 \(fmt(pageH)) \(fmt(pageW))" ItemTransform="1 0 0 1 \(fmt(-pageW/2)) \(fmt(-pageH/2))" LayoutRule="UseMaster" OverrideList=""/>
-        \(items.joined(separator: "\n"))
+        \t<Spread Self="\(id)" PageTransitionType="None" PageTransitionDirection="NotApplicable" PageTransitionDuration="Medium" ShowMasterItems="true" PageCount="\(pages.count)" BindingLocation="\(bindingLocation)" SpreadHidden="false" AllowPageShuffle="true" ItemTransform="1 0 0 1 0 \(fmt(spreadY))" FlattenerOverride="Default">
+        \(pageElements)
+        \(allItems)
         \t</Spread>
         </idPkg:Spread>
         """

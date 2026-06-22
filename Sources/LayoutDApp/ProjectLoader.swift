@@ -29,6 +29,7 @@ struct LoadedProject {
     var pdfxVersion: PDFXVersion
     var exportPDFFlowURL: URL?
     var exportPNGFlowDirectoryURL: URL?
+    var exportIDMLFacing: Bool = false
 }
 
 struct ProjectLoader {
@@ -72,7 +73,8 @@ struct ProjectLoader {
                 exportIDMLURL: options.exportIDMLPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 pdfxVersion: options.pdfxVersion,
                 exportPDFFlowURL: options.exportPDFFlowPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
+                exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportIDMLFacing: options.idmlFacing
             )
         }
 
@@ -110,7 +112,8 @@ struct ProjectLoader {
                 exportIDMLURL: options.exportIDMLPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 pdfxVersion: options.pdfxVersion,
                 exportPDFFlowURL: options.exportPDFFlowPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
+                exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportIDMLFacing: options.idmlFacing
             )
         } catch {
             var project = BookProject.sample
@@ -162,7 +165,8 @@ struct ProjectLoader {
                 exportIDMLURL: options.exportIDMLPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 pdfxVersion: options.pdfxVersion,
                 exportPDFFlowURL: options.exportPDFFlowPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
+                exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                exportIDMLFacing: options.idmlFacing
             )
         }
     }
@@ -391,6 +395,7 @@ private struct CommandLineOptions {
     var assetDirectoryPath: String?
     var exportPackagePath: String?
     var exportIDMLPath: String?
+    var idmlFacing: Bool = false
     var pdfxVersion: PDFXVersion = .none
     var exportPDFFlowPath: String?
     var exportPNGFlowDirectoryPath: String?
@@ -535,6 +540,12 @@ private struct CommandLineOptions {
             if argument == "--export-idml", index + 1 < arguments.count {
                 exportIDMLPath = arguments[index + 1]
                 index += 2
+                continue
+            }
+
+            if argument == "--idml-facing" {
+                idmlFacing = true
+                index += 1
                 continue
             }
 
