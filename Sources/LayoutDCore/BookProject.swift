@@ -1,5 +1,34 @@
 import Foundation
 
+public enum ContentRole: Sendable {
+    case heading1, heading2, heading3, introduction, introductionEnglish, pullQuote, bibliography
+    public static func tag(in text: String) -> ContentRole? {
+        // 标签可能是斜杠合写（"一级标题/章名"）或单独形式（"章名"），按斜杠拆开后任一段命中即可。
+        let raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = raw.split(separator: "/").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let keys = parts.isEmpty ? [raw] : parts
+        for key in keys {
+            switch key {
+            case "一级标题", "章名": return .heading1
+            case "二级标题", "节名": return .heading2
+            case "三级标题", "文章名": return .heading3
+            case "开节概述": return .introduction
+            case "开节概述英文": return .introductionEnglish
+            case "抽言": return .pullQuote
+            case "参考文献": return .bibliography
+            default: continue
+            }
+        }
+        return nil
+    }
+    public static func shouldDiscard(_ text: String) -> Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("可视化信息：") }
+    public var styleID: String { switch self { case .heading1: return StyleID.heading1.rawValue; case .heading2: return StyleID.heading2.rawValue; case .heading3: return StyleID.heading3.rawValue; case .introduction: return StyleID.introduction.rawValue; case .introductionEnglish: return StyleID.introductionEnglish.rawValue; case .pullQuote: return StyleID.pullQuote.rawValue; case .bibliography: return StyleID.bibliography.rawValue } }
+    public var paragraphKind: ParagraphKind { switch self { case .heading1: return .heading(level: 1); case .heading2: return .heading(level: 2); case .heading3: return .heading(level: 3); default: return .body } }
+    /// 单段角色（标题/抽言）只作用于标签后紧邻的一段，之后复位为正文；
+    /// 跨段角色（概述/英文概述/参考文献）持续到下一个标签。
+    public var isSingleParagraph: Bool { switch self { case .heading1, .heading2, .heading3, .pullQuote: return true; case .introduction, .introductionEnglish, .bibliography: return false } }
+}
+
 public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     public static let currentSchemaVersion = 1
 

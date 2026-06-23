@@ -3,6 +3,20 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-23 23:14 | claude | 真实书稿端到端试跑(layoutD村落.docx,科普书一章)启动,逮到 3 个真痛点并立项。① DOCX 内嵌图不导入(assets:0)→IMP-2(用户已
+- **分支**：dev
+- **概述**：真实书稿端到端试跑(layoutD村落.docx,科普书一章)启动,逮到 3 个真痛点并立项。① DOCX 内嵌图不导入(assets:0)→IMP-2(用户已交接 Codex,进行中,等审)。② 核心发现:书稿用"角色标签"约定(章名/节名/文章名/开节概述/开节概述英文/抽言),通用导入读不懂→标签当正文画、角色塌成两档。用户拍板:这是 layoutD 结构化书籍工程的核心能力,要做→IMP-3 角色标签结构化导入(规格已写全,排 IMP-2 之后)。③ 用户三决策已定:可视化信息段丢弃不印、参考文献小字悬挂缩进、英文概述用 Georgia(可后改)。字体:正文方正兰亭细黑/标题黑体-简/抽言江城律动宋,本机均已装(Claude 已核)。完整勘查见 docs/pilot-findings.md + real-book-pilot-runbook.md。
+- **改动文件**：docs/pilot-findings.md(新,痛点表+角色清单+默认样式+决策), docs/real-book-pilot-runbook.md(新,试跑手册), .ai/QUEUE.md(立 IMP-2/IMP-3,当前序列), .ai/DECISIONS.md(B3/B4 移出等)。无功能代码改动。
+- **检查**：无代码改动(纯文档+试跑诊断)。dev 已推 9c901ef;main 仍 216/0(未引入代码)。试跑用默认样式实测:docx 导入 8 页 OK、assets:0(图丢)、标题 heading2/3/4 能识别。
+- **下一步**：【Codex 当前序列】① IMP-2 DOCX 内嵌图导入(进行中,Claude 待审)→ ② IMP-3 角色标签结构化导入(layoutD 核心,规格见 QUEUE/pilot-findings,Claude 严审)→ ③ IMP-1 多段 frontmatter 止血。【Claude】IMP-2 交回即审(验收:assets:3+图框落 31/53/72 段位+Links 含 3 图);IMP-3 交回严审(标签不外漏+角色样式+江城律动宋抽言+Georgia 英文+可视化信息丢弃+参考文献悬挂)。IMP-2+IMP-3 都合 dev 后,Claude 重跑试跑出预览给用户看真实效果(配齐三款字体)。【AG】B1 图文绕排进行中(Backlog 仅剩这一项)。守 N1/N2/N3。
+
+## 2026-06-23 22:26 | claude | 用户请求「review 项目 + 更新全部文档」。通读全部 md 文档并核对代码/git 真实状态,修正 4 处漂移并对齐:①README——Current S
+- **分支**：dev
+- **概述**：用户请求「review 项目 + 更新全部文档」。通读全部 md 文档并核对代码/git 真实状态,修正 4 处漂移并对齐:①README——Current Status 完全没提 IDML 主交付路线(停在早期 PDF-MVP),已补 IDML→InDesign 路线说明、LayoutDExport 改 IDML(主)+PDF/PNG/预检、加 File→Export IDML 菜单与 --export-idml CLI、去掉 Verification 硬编码「124 tests」(与「不固定数字」自相矛盾);②architecture——修订日期、实现概览补 IDML bullet、阶段D标✅全完、阶段E由「spike 先证伪」未来式改为「已落地经 InDesign 验收」、去硬编码124;③development-plan——表头日期→0623、E2 表补状态列(核实代码确认 E2-1~7 全✅,主 IDML 路径用原生 ZIPArchiveWriter);④PROJECT_CONTEXT——LayoutDExport 改 IDML(主)、底部 spike 未来式→已验证通过。DECISIONS/HANDOFF(append-only 日志)、QUEUE(Claude 实时维护已最新)、AGENTS(稳定铁律)未动。
+- **改动文件**：README.md, docs/architecture.md, docs/development-plan.md, .ai/PROJECT_CONTEXT.md（均纯文档,无功能代码改动）
+- **检查**：纯文档无需 build/test。一致性 grep：无残留硬编码「124」、无残留「PDF 导出边界/PDF export boundary」。git：dev d799c2d → main 6705339(Merge,--no-ff),均已 push origin,main⊇dev。本轮含前一提交 e9f3859(E3-2b/4p 状态修正)。
+- **下一步**：①文档已全面对齐当前状态,可作为新对话/新 AI 的准确基线。②真实工程缺口仍是:E3-4b(表格单元格内行内格式·Codex 已立项)、E1b③ IDML-RNG lint(可选增量)、E3-9 约物挤压+基线网格(未排未认领,按文件归属应走 Codex 道 IDMLExporter)。③暂缓:E3-8 CMYK。④移出:傍点(着重号)、B2/B3/B4。⑤进行中:Codex IMP-1 frontmatter 止血、AG B1 图文绕排。⑥守 N1/N2/N3。
+
 ## 2026-06-23 22:04 | claude | 用户请求「推进合并 E3-2b/E3-4p」——核查发现这两条预览(竖排斜体/表格网格)实际早已合入：随 e3-10p 合并提交 c5fcfb7 进 dev 且
 - **分支**：dev
 - **概述**：用户请求「推进合并 E3-2b/E3-4p」——核查发现这两条预览(竖排斜体/表格网格)实际早已合入：随 e3-10p 合并提交 c5fcfb7 进 dev 且已同步 main，QUEUE.md 也标 [x] 视觉验收过。无工程合并待办。真正缺口是 docs/development-plan.md 计划表状态过时(仍写「🟡 审过待合」)，与 QUEUE/实际不符。已修正为「✅ 已合 dev/main」并同步 main。

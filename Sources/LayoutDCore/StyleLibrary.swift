@@ -4,6 +4,7 @@ public enum StyleID: String, Codable, Sendable {
     case body
     case heading1
     case heading2
+    case heading3, introduction, introductionEnglish, pullQuote, bibliography
     case caption
     case callout
 }
@@ -71,6 +72,7 @@ public struct StyleLibrary: Codable, Equatable, Sendable {
                 spaceBefore: "paragraph.heading2.spaceBefore",
                 spaceAfter: "paragraph.heading2.spaceAfter"
             ),
+            .heading3, .introduction, .introductionEnglish, .pullQuote, .bibliography,
             .body.withScalarTokens(
                 fontSize: "paragraph.body.fontSize",
                 lineHeight: "paragraph.body.lineHeight",
@@ -336,6 +338,12 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
             .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
         ]
     )
+
+    public static let heading3 = ParagraphStyle(id: StyleID.heading3.rawValue, displayName: "三级标题", fontName: "Heiti SC", fontSize: 16, lineHeight: 23, firstLineIndent: 0, spaceBefore: 10, spaceAfter: 7)
+    public static let introduction = ParagraphStyle(id: StyleID.introduction.rawValue, displayName: "开节概述", fontName: "方正兰亭细黑简体", fontSize: 11, lineHeight: 17.6, firstLineIndent: 0, spaceBefore: 4, spaceAfter: 8)
+    public static let introductionEnglish = ParagraphStyle(id: StyleID.introductionEnglish.rawValue, displayName: "开节概述英文", fontName: "Georgia", fontSize: 10, lineHeight: 16, firstLineIndent: 0, spaceBefore: 0, spaceAfter: 8)
+    public static let pullQuote = ParagraphStyle(id: StyleID.pullQuote.rawValue, displayName: "抽言", fontName: "JiangChengLvDongSong", fontSize: 15, lineHeight: 23, firstLineIndent: 0, spaceBefore: 10, spaceAfter: 10)
+    public static let bibliography = ParagraphStyle(id: StyleID.bibliography.rawValue, displayName: "参考文献", fontName: "方正兰亭细黑简体", fontSize: 8.5, lineHeight: 13, firstLineIndent: -14, spaceBefore: 0, spaceAfter: 2)
 
     public static let caption = ParagraphStyle(
         id: StyleID.caption.rawValue,

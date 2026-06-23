@@ -49,11 +49,26 @@ public struct DOCXBookImporter {
                                  styleId: StyleID.body.rawValue, tableCells: cells)
             }
         }
+        let roleMappedParagraphs = applyContentRoles(to: paragraphs)
         let title = fallbackTitle ?? url.deletingPathExtension().lastPathComponent
         return BookProject(
             metadata: ProjectMetadata(title: title.isEmpty ? "未命名 DOCX 书稿" : title, author: defaultAuthor),
-            sections: [BookSection(title: title.isEmpty ? "正文" : title, stories: [Story(title: "正文", paragraphs: paragraphs)])]
+            sections: [BookSection(title: title.isEmpty ? "正文" : title, stories: [Story(title: "正文", paragraphs: roleMappedParagraphs)])]
         )
+    }
+
+    private func applyContentRoles(to paragraphs: [Paragraph]) -> [Paragraph] {
+        var result: [Paragraph] = []; var pending: ContentRole?
+        for var paragraph in paragraphs {
+            if let role = ContentRole.tag(in: paragraph.text) { pending = role; continue }
+            if ContentRole.shouldDiscard(paragraph.text) { continue }
+            if let role = pending {
+                paragraph.kind = role.paragraphKind; paragraph.styleId = role.styleID
+                if role.isSingleParagraph { pending = nil }   // 标题/抽言只管这一段
+            }
+            result.append(paragraph)
+        }
+        return result
     }
 
     private func kind(for paragraph: DOCXParagraph, styleNames: [String: String]) -> ParagraphKind {
