@@ -3,6 +3,20 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-23 15:02 | claude | 三项 InDesign 验收闭环 + 多段 frontmatter 定调。用户 2026-06-23 InDesign 肉眼验收通过:E3-6 动态目录(页码右
+- **分支**：dev
+- **概述**：三项 InDesign 验收闭环 + 多段 frontmatter 定调。用户 2026-06-23 InDesign 肉眼验收通过:E3-6 动态目录(页码右对齐+点导引线+层级)、E2-4 对开跨页、E2-5 非矩形蒙版。多段 frontmatter:用户决定不支持文档内横竖混排,IMP-1 范围锁定为纯止血(消费掉漏成正文的 ---key:value--- 块、title 作 section 标题、layout_direction 静默忽略),不做分段切方向。已记决策、更新 plan/QUEUE,合 main(1643323)。
+- **改动文件**：.ai/DECISIONS.md(不混排决策+三项验收), .ai/QUEUE.md(IMP-1 锁定只止血/E3-6/E2-5 标验收通过), docs/development-plan.md(E2 注三项验收✅)。无功能代码改动。
+- **检查**：合并已推送:dev b710b98 → main 1643323;main..dev=0 完全同步。无新代码(纯文档/状态)。
+- **下一步**：①【Codex】领 IMP-1 多段 frontmatter 止血(范围已锁死:只止血、不做分段方向,验收口径见 QUEUE)。②【Codex】D-2 DOCX(85d7a00)待 Claude 集成审核。③【AG】B1 图文绕排进行中 → B2 长表格分页。④【Claude 后续保真增量】第③层 IDML-RNG lint(vendor app.generateIDMLSchema 的 RNG);断言闸加 CoreText 字形覆盖;真 CI(GitHub Actions 跑 review-idml.sh)。⑤主交付 IDML 路线核心特性(全量映射/复合字体/竖排/图链/表格/脚注/目录/对开/蒙版/排版器)均已 InDesign 验收,路线成熟;Backlog(索引/参考文献)待展开。⑥守 N1/N2/N3。
+
+## 2026-06-23 14:51 | claude | 收尾批次:① CJK 修复合 main(用户授权)——dev→main merge 9558c67,含排版器修复/脚注/粗斜体/着重号中文化/断言闸,main 
+- **分支**：dev
+- **概述**：收尾批次:① CJK 修复合 main(用户授权)——dev→main merge 9558c67,含排版器修复/脚注/粗斜体/着重号中文化/断言闸,main 与 dev 现完全同步。② 生成两份 0623 验收样例到桌面供用户 InDesign 复看(动态目录/对开跨页,均含最新排版器修复)。③ 多段 frontmatter bug 已勘根因并立成 Codex 任务 IMP-1。④ 开发文档同步。
+- **改动文件**：docs/development-plan.md(E0 spike 标取代/D-2 标已实现/新增 E1b CJK 保真三层/E2 注 0623 样例), .ai/QUEUE.md(立 IMP-1 多段 frontmatter + 当前序列 + infra 勾掉), .ai/DECISIONS.md/.ai/HANDOFF.md(relay 日志)。无新功能代码改动(纯集成+文档)。
+- **检查**：dev→main 合并已推送(9558c67);main..dev=0 完全同步;dev 仍 216/0 PASS。两份样例已校验(目录有 TOCStyle;对开 FacingPages=true + 首页单页+2页 spread)。
+- **下一步**：①【用户·InDesign 复看】~/Desktop/验收1-动态目录-0623.idml(页码右对齐+点导引线、Layout→更新目录)、~/Desktop/验收3-对开跨页-0623.idml(首页单独+左右镜像+订口在内)。OK 即这两项验收闭环。②【非矩形蒙版 E2-5 复看】无 CLI 路径(Markdown 无蒙版语法、maskShape 只能 GUI 设);几何已有端到端单测。若要 InDesign 视觉复看,需在 GUI 里给图设扇面/八角蒙版后导出——可让 Claude 用 computer-use 代操作,或用户自做。③【Codex】领 IMP-1(多段 frontmatter 漏成正文):已写根因+最小修复规格+验收;含一个产品决策(多段头是否支持分段竖排)待用户拍板,Codex 本批只止血不漏脏文字。④【Codex】D-2 DOCX(85d7a00)待 Claude 集成审核。⑤后续:第③层 IDML-RNG lint;断言闸加 CoreText 字形覆盖;真 CI。⑥守 N1/N2/N3。
+
 ## 2026-06-23 14:41 | claude | [交接 AG] dev 已推进到 38ab3af（本会话只动了 CJK 排版器 + 着重号 + 文档，未碰预览/GUI 层，对 AG 现役任务无影响）。关键变化
 - **分支**：dev
 - **概述**：[交接 AG] dev 已推进到 38ab3af（本会话只动了 CJK 排版器 + 着重号 + 文档，未碰预览/GUI 层，对 AG 现役任务无影响）。关键变化两条:① 着重号(傍点)已移出开发计划、停止投入——AG 不必再碰任何傍点预览(E3-3p 早已完成且现已 descope);② CJK 排版器修复(Composer=HL Composer J)是导出侧改动,不影响预览渲染。AG 按连续作业模式继续自助接力,无需等用户确认。
