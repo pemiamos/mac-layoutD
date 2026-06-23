@@ -3,6 +3,34 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-24 00:21 | claude | 用户三项需求落地(2026-06-24)。ask1:正文换方正兰亭细黑简体(CF_body 解析 FZLanTingHeiS-L-GB)、一二三级标题换黑体-简
+- **分支**：dev
+- **概述**：用户三项需求落地(2026-06-24)。ask1:正文换方正兰亭细黑简体(CF_body 解析 FZLanTingHeiS-L-GB)、一二三级标题换黑体-简 Heiti SC Medium(STHeitiSC-Medium);注意 Heiti SC 无 Regular 字重必带 Medium。ask2:合规闸门(planValidationFailures 字体检查)从手写白名单改为动态查本机已装字体——LayoutEngine.installedFontNames 用 CTFontCollection 收集全部名字形态(family/显示名/PostScript/本地化中文),isFontInstalled 支持家族+字重;任何已装字体自动通过,根除"新字体未进白名单→计划被拒→分页崩"整类隐患。ask3:IMP-2 DOCX 内嵌图导入改派 AG(Codex 近期少用)。另:上一轮修了三级标题黑体粉色豆腐(Heiti SC 字重根因)。真实书稿端到端:正文方正兰亭细黑/标题黑体全解析正确无 Helvetica 回退;218/0 PASS。
+- **改动文件**：Sources/LayoutDCore/StyleLibrary.swift(body→方正兰亭细黑,heading1/2/3→Heiti SC Medium), Sources/LayoutDEngine/LayoutEngine.swift(approvedFonts→动态 installedFontNames/isFontInstalled), Tests/LayoutDAppTests/AppStateTests.swift(Comic Sans→不存在字体测拒绝/正文字体断言更新), .ai/QUEUE.md(IMP-2 改派 AG)。
+- **检查**：swift test 218/0 PASS。真实书稿 layoutD村落.docx 导出验证:CF_body 汉字槽=FZLanTingHeiS-L-GB(方正兰亭细黑)、CF_heading1/2/3=Heiti SC(STHeitiSC-Medium 黑体),无 Helvetica 回退。commit dd2f834(豆腐修)→8c3a132(字体+动态闸门)→67a14ce(IMP-2 改派),push dev。未合 main(待用户验收)。
+- **下一步**：①【用户验收】~/Desktop/验收-村落-角色样式-0623.idml(InDesign 看:正文方正兰亭细黑、一二三级标题黑体、三级标题不再粉块) + ~/Desktop/村落预览/8页。OK 后 Claude 合 main。②【AG 新任务】IMP-2 DOCX 内嵌图导入(规格见 QUEUE,跨进 DOCXBookImporter.swift,用户已授权 AG 做)。③【Codex】仅剩 IMP-1 多段 frontmatter 止血,近期少用。④【遗留增量】断言闸第③层加 CoreText 字形覆盖检查(自动逮"字重不存在→Helvetica 回退"这类豆腐,见 idml-font-name-needs-valid-weight)。守 N1/N2/N3。
+
+## 2026-06-23 23:59 | claude | IMP-3 角色标签结构化导入:Claude 接手 Codex 初版,审出并修 4 个真 bug,合 dev(4507e65)。Codex 初版问题:①角色 p
+- **分支**：dev
+- **概述**：IMP-3 角色标签结构化导入:Claude 接手 Codex 初版,审出并修 4 个真 bug,合 dev(4507e65)。Codex 初版问题:①角色 pending 从不复位→标签后所有正文被套该样式(不只抽言);②概述/参考文献字体名凭猜写 FZLTTHK--GBK1-0(实为苹果兰亭黑,非方正兰亭细黑)→改方正兰亭细黑简体;③新字体未进 LayoutEngine.approvedFonts 合规白名单→样式合规失败→应用计划被拒→样例分页位移+pages[2]越界崩溃(根因,加白名单修);④真实书稿标题标签是"一级标题/章名"斜杠合写,tag()只认单词→标题标签全漏成正文+英文概述过度蔓延(9→2),tag()改按/拆分。另撤回 Codex 对 AppStateTests 的动态找页改动(会匹配目录页同名标题,原硬编码第3页才对)。真实书稿 layoutD村落.docx 端到端验证全通过;218/0 PASS。
+- **改动文件**：Sources/LayoutDCore/BookProject.swift(ContentRole: isSingleParagraph + 斜杠 tag), StyleLibrary.swift(新角色样式+正确字体,body/h1/h2 维持默认), LayoutDEngine/LayoutEngine.swift(approvedFonts+=方正兰亭细黑简体/JiangChengLvDongSong), DOCXBookImporter.swift+MarkdownBookImporter.swift(角色解析+单段复位), Tests/LayoutDImportTests/DOCXBookImporterTests.swift(修期望+斜杠回归测试)。
+- **检查**：swift test 218/0 PASS。真实书稿导入:章名1/节名1/文章名3/概述1/英文概述2/抽言3/参考文献13/正文19,标签零漏出;IDML 命名段落样式直通 InDesign,抽言江城律动宋/概述方正兰亭细黑/英文Georgia 字体接对。合 dev 4507e65→77f2fc2,push。未合 main(待用户验收)。
+- **下一步**：①【Codex 重要】丢弃自己 worktree 里 IMP-3 未提交改动(git checkout/restore),已被 Claude 版取代;Codex 剩 IMP-2 DOCX 内嵌图(图仍未导入,assets:0)、IMP-1 多段 frontmatter。②【用户验收】~/Desktop/验收-村落-角色样式-0623.idml(InDesign 看命名段落样式+抽言/概述字体) + ~/Desktop/村落预览/*.png(8页)。③【遗留·Claude 下一步】正文=方正兰亭细黑/一二级标题=黑体 尚未落地(改全局默认 body/h1/h2 会牵动一批硬编码分页的 demo 测试)。建议走"导入书用 house 字体、demo 默认不动"的干净路子,避免destabilize。④验收 OK 后合 main。守 N1/N2/N3。
+
+## 2026-06-23 23:14 | claude | 真实书稿端到端试跑(layoutD村落.docx,科普书一章)启动,逮到 3 个真痛点并立项。① DOCX 内嵌图不导入(assets:0)→IMP-2(用户已
+- **分支**：dev
+- **概述**：真实书稿端到端试跑(layoutD村落.docx,科普书一章)启动,逮到 3 个真痛点并立项。① DOCX 内嵌图不导入(assets:0)→IMP-2(用户已交接 Codex,进行中,等审)。② 核心发现:书稿用"角色标签"约定(章名/节名/文章名/开节概述/开节概述英文/抽言),通用导入读不懂→标签当正文画、角色塌成两档。用户拍板:这是 layoutD 结构化书籍工程的核心能力,要做→IMP-3 角色标签结构化导入(规格已写全,排 IMP-2 之后)。③ 用户三决策已定:可视化信息段丢弃不印、参考文献小字悬挂缩进、英文概述用 Georgia(可后改)。字体:正文方正兰亭细黑/标题黑体-简/抽言江城律动宋,本机均已装(Claude 已核)。完整勘查见 docs/pilot-findings.md + real-book-pilot-runbook.md。
+- **改动文件**：docs/pilot-findings.md(新,痛点表+角色清单+默认样式+决策), docs/real-book-pilot-runbook.md(新,试跑手册), .ai/QUEUE.md(立 IMP-2/IMP-3,当前序列), .ai/DECISIONS.md(B3/B4 移出等)。无功能代码改动。
+- **检查**：无代码改动(纯文档+试跑诊断)。dev 已推 9c901ef;main 仍 216/0(未引入代码)。试跑用默认样式实测:docx 导入 8 页 OK、assets:0(图丢)、标题 heading2/3/4 能识别。
+- **下一步**：【Codex 当前序列】① IMP-2 DOCX 内嵌图导入(进行中,Claude 待审)→ ② IMP-3 角色标签结构化导入(layoutD 核心,规格见 QUEUE/pilot-findings,Claude 严审)→ ③ IMP-1 多段 frontmatter 止血。【Claude】IMP-2 交回即审(验收:assets:3+图框落 31/53/72 段位+Links 含 3 图);IMP-3 交回严审(标签不外漏+角色样式+江城律动宋抽言+Georgia 英文+可视化信息丢弃+参考文献悬挂)。IMP-2+IMP-3 都合 dev 后,Claude 重跑试跑出预览给用户看真实效果(配齐三款字体)。【AG】B1 图文绕排进行中(Backlog 仅剩这一项)。守 N1/N2/N3。
+
+## 2026-06-23 22:26 | claude | 用户请求「review 项目 + 更新全部文档」。通读全部 md 文档并核对代码/git 真实状态,修正 4 处漂移并对齐:①README——Current S
+- **分支**：dev
+- **概述**：用户请求「review 项目 + 更新全部文档」。通读全部 md 文档并核对代码/git 真实状态,修正 4 处漂移并对齐:①README——Current Status 完全没提 IDML 主交付路线(停在早期 PDF-MVP),已补 IDML→InDesign 路线说明、LayoutDExport 改 IDML(主)+PDF/PNG/预检、加 File→Export IDML 菜单与 --export-idml CLI、去掉 Verification 硬编码「124 tests」(与「不固定数字」自相矛盾);②architecture——修订日期、实现概览补 IDML bullet、阶段D标✅全完、阶段E由「spike 先证伪」未来式改为「已落地经 InDesign 验收」、去硬编码124;③development-plan——表头日期→0623、E2 表补状态列(核实代码确认 E2-1~7 全✅,主 IDML 路径用原生 ZIPArchiveWriter);④PROJECT_CONTEXT——LayoutDExport 改 IDML(主)、底部 spike 未来式→已验证通过。DECISIONS/HANDOFF(append-only 日志)、QUEUE(Claude 实时维护已最新)、AGENTS(稳定铁律)未动。
+- **改动文件**：README.md, docs/architecture.md, docs/development-plan.md, .ai/PROJECT_CONTEXT.md（均纯文档,无功能代码改动）
+- **检查**：纯文档无需 build/test。一致性 grep：无残留硬编码「124」、无残留「PDF 导出边界/PDF export boundary」。git：dev d799c2d → main 6705339(Merge,--no-ff),均已 push origin,main⊇dev。本轮含前一提交 e9f3859(E3-2b/4p 状态修正)。
+- **下一步**：①文档已全面对齐当前状态,可作为新对话/新 AI 的准确基线。②真实工程缺口仍是:E3-4b(表格单元格内行内格式·Codex 已立项)、E1b③ IDML-RNG lint(可选增量)、E3-9 约物挤压+基线网格(未排未认领,按文件归属应走 Codex 道 IDMLExporter)。③暂缓:E3-8 CMYK。④移出:傍点(着重号)、B2/B3/B4。⑤进行中:Codex IMP-1 frontmatter 止血、AG B1 图文绕排。⑥守 N1/N2/N3。
+
 ## 2026-06-23 22:04 | claude | 用户请求「推进合并 E3-2b/E3-4p」——核查发现这两条预览(竖排斜体/表格网格)实际早已合入：随 e3-10p 合并提交 c5fcfb7 进 dev 且
 - **分支**：dev
 - **概述**：用户请求「推进合并 E3-2b/E3-4p」——核查发现这两条预览(竖排斜体/表格网格)实际早已合入：随 e3-10p 合并提交 c5fcfb7 进 dev 且已同步 main，QUEUE.md 也标 [x] 视觉验收过。无工程合并待办。真正缺口是 docs/development-plan.md 计划表状态过时(仍写「🟡 审过待合」)，与 QUEUE/实际不符。已修正为「✅ 已合 dev/main」并同步 main。

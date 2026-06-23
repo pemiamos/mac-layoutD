@@ -445,7 +445,7 @@ final class AppStateTests: XCTestCase {
         
         // Chinese mapping should fallback or remain default
         let chineseMapping = updatedStyle.fontMapping(for: "中")
-        XCTAssertEqual(chineseMapping.fontName, "Songti SC")
+        XCTAssertEqual(chineseMapping.fontName, "方正兰亭细黑简体")   // 正文 CJK 字体（用户书稿）
         
         // 3. Verify makeAttributedString produces multiple font runs
         let text = "Hello 世界 123"
@@ -463,7 +463,7 @@ final class AppStateTests: XCTestCase {
                 if range.location == 0 { // Hello (latin)
                     XCTAssertTrue(name.contains("Georgia") || name.contains("Times"), "Expected Georgia/Times but got \(name)")
                 } else if range.location == 6 { // 世界 (chinese)
-                    XCTAssertTrue(name.contains("Songti") || name.contains("PingFang"), "Expected Songti/PingFang but got \(name)")
+                    XCTAssertTrue(name.contains("FZL") || name.contains("Lanting"), "Expected 方正兰亭细黑(FZL...) but got \(name)")
                 }
             }
             count += 1
@@ -476,7 +476,7 @@ final class AppStateTests: XCTestCase {
         var project = BookProject.sample
         var styles = project.styles.paragraphStyles
         if let idx = styles.firstIndex(where: { $0.id == StyleID.body.rawValue }) {
-            styles[idx].fontName = "Comic Sans MS"
+            styles[idx].fontName = "完全不存在的字体XYZ"   // 未安装→应被合规闸门拒
         }
         project.styles.paragraphStyles = styles
         
@@ -498,7 +498,7 @@ final class AppStateTests: XCTestCase {
         let docWithBadFont = LayoutEngine().layout(project: project)
         let badFontIssues = docWithBadFont.issues.filter { $0.message.contains("版式计划无效") }
         XCTAssertFalse(badFontIssues.isEmpty, "Should reject plan with unapproved font")
-        XCTAssertTrue(badFontIssues.first?.message.contains("非批准字体") == true)
+        XCTAssertTrue(badFontIssues.first?.message.contains("未安装字体") == true)
 
         // 2. Test Compliance Gate - Component Roles
         var project2 = BookProject.sample

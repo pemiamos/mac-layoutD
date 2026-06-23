@@ -50,6 +50,7 @@ private struct MarkdownParser {
     private var sideNoteBuffer: [String] = []
     private var nextFootnoteNumber = 1
     private var footnoteMap: [String: Int] = [:]
+    private var pendingContentRole: ContentRole?
 
     init(markdown: String, assetCatalog: AssetCatalog, defaultAuthor: String, fallbackTitle: String) {
         self.markdown = markdown
@@ -92,6 +93,16 @@ private struct MarkdownParser {
             }
 
             if line.isEmpty {
+                flushAllBuffers()
+                continue
+            }
+
+            if let role = ContentRole.tag(in: line) {
+                flushAllBuffers()
+                pendingContentRole = role
+                continue
+            }
+            if ContentRole.shouldDiscard(line) {
                 flushAllBuffers()
                 continue
             }
@@ -225,13 +236,9 @@ private struct MarkdownParser {
         guard !paragraphBuffer.isEmpty else {
             return
         }
-        currentParagraphs.append(
-            makeParagraph(
-                kind: .body,
-                markdown: paragraphBuffer.joined(separator: " "),
-                styleId: StyleID.body.rawValue
-            )
-        )
+        let role = pendingContentRole
+        currentParagraphs.append(makeParagraph(kind: role?.paragraphKind ?? .body, markdown: paragraphBuffer.joined(separator: " "), styleId: role?.styleID ?? StyleID.body.rawValue))
+        if role?.isSingleParagraph == true { pendingContentRole = nil }   // 标题/抽言只管这一段
         paragraphBuffer.removeAll(keepingCapacity: true)
     }
 

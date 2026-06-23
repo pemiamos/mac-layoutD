@@ -4,6 +4,7 @@ public enum StyleID: String, Codable, Sendable {
     case body
     case heading1
     case heading2
+    case heading3, introduction, introductionEnglish, pullQuote, bibliography
     case caption
     case callout
 }
@@ -71,6 +72,7 @@ public struct StyleLibrary: Codable, Equatable, Sendable {
                 spaceBefore: "paragraph.heading2.spaceBefore",
                 spaceAfter: "paragraph.heading2.spaceAfter"
             ),
+            .heading3, .introduction, .introductionEnglish, .pullQuote, .bibliography,
             .body.withScalarTokens(
                 fontSize: "paragraph.body.fontSize",
                 lineHeight: "paragraph.body.lineHeight",
@@ -292,14 +294,14 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public static let body = ParagraphStyle(
         id: StyleID.body.rawValue,
         displayName: "正文",
-        fontName: "Songti SC",
+        fontName: "方正兰亭细黑简体",
         fontSize: 10.5,
         lineHeight: 16,
         firstLineIndent: 21,
         spaceBefore: 0,
         spaceAfter: 4,
         compositeFont: [
-            .chinese: CompositeFontMapping(fontName: "Songti SC", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .chinese: CompositeFontMapping(fontName: "方正兰亭细黑简体", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .latin: CompositeFontMapping(fontName: "Georgia", sizeMultiplier: 1.05, baselineOffset: 0.0),
             .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
         ]
@@ -308,14 +310,14 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public static let heading1 = ParagraphStyle(
         id: StyleID.heading1.rawValue,
         displayName: "一级标题",
-        fontName: "PingFang SC Semibold",
+        fontName: "Heiti SC Medium",
         fontSize: 22,
         lineHeight: 30,
         firstLineIndent: 0,
         spaceBefore: 18,
         spaceAfter: 14,
         compositeFont: [
-            .chinese: CompositeFontMapping(fontName: "PingFang SC Semibold", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .chinese: CompositeFontMapping(fontName: "Heiti SC Medium", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .latin: CompositeFontMapping(fontName: "Helvetica Neue", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
         ]
@@ -324,18 +326,31 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public static let heading2 = ParagraphStyle(
         id: StyleID.heading2.rawValue,
         displayName: "二级标题",
-        fontName: "PingFang SC Semibold",
+        fontName: "Heiti SC Medium",
         fontSize: 15,
         lineHeight: 22,
         firstLineIndent: 0,
         spaceBefore: 12,
         spaceAfter: 8,
         compositeFont: [
-            .chinese: CompositeFontMapping(fontName: "PingFang SC Semibold", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .chinese: CompositeFontMapping(fontName: "Heiti SC Medium", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .latin: CompositeFontMapping(fontName: "Helvetica Neue", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
         ]
     )
+
+    // CJK 用「黑体-简」。注意必须带真实存在的字重：Heiti SC 只有 Light/Medium，没有 Regular，
+    // 写裸名 "Heiti SC" 会按 family+Regular 查不到→CoreText 回退 Helvetica→InDesign 粉色豆腐。
+    // 故用 "Heiti SC Medium"（中黑，适合标题）。与 heading1/2 一致走复合字体。
+    public static let heading3 = ParagraphStyle(id: StyleID.heading3.rawValue, displayName: "三级标题", fontName: "Heiti SC Medium", fontSize: 16, lineHeight: 23, firstLineIndent: 0, spaceBefore: 10, spaceAfter: 7, compositeFont: [
+        .chinese: CompositeFontMapping(fontName: "Heiti SC Medium", sizeMultiplier: 1.0, baselineOffset: 0.0),
+        .latin: CompositeFontMapping(fontName: "Helvetica Neue", sizeMultiplier: 1.0, baselineOffset: 0.0),
+        .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
+    ])
+    public static let introduction = ParagraphStyle(id: StyleID.introduction.rawValue, displayName: "开节概述", fontName: "方正兰亭细黑简体", fontSize: 11, lineHeight: 17.6, firstLineIndent: 0, spaceBefore: 4, spaceAfter: 8)
+    public static let introductionEnglish = ParagraphStyle(id: StyleID.introductionEnglish.rawValue, displayName: "开节概述英文", fontName: "Georgia", fontSize: 10, lineHeight: 16, firstLineIndent: 0, spaceBefore: 0, spaceAfter: 8)
+    public static let pullQuote = ParagraphStyle(id: StyleID.pullQuote.rawValue, displayName: "抽言", fontName: "JiangChengLvDongSong", fontSize: 15, lineHeight: 23, firstLineIndent: 0, spaceBefore: 10, spaceAfter: 10)
+    public static let bibliography = ParagraphStyle(id: StyleID.bibliography.rawValue, displayName: "参考文献", fontName: "方正兰亭细黑简体", fontSize: 8.5, lineHeight: 13, firstLineIndent: -14, spaceBefore: 0, spaceAfter: 2)
 
     public static let caption = ParagraphStyle(
         id: StyleID.caption.rawValue,
