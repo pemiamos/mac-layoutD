@@ -1816,6 +1816,52 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertFalse(imageFrames.isEmpty)
         XCTAssertEqual(imageFrames[0].maskShape, .fan)
     }
+
+    func testTextWrapOverlapExclusions() {
+        var project = BookProject.sample
+        let assetId = project.assets.first?.id ?? UUID()
+        
+        let imageBlock = LayoutPlanBlock(
+            kind: .image,
+            role: "hero",
+            frame: Rect(x: 0.0, y: 0.1, width: 0.5, height: 0.2),
+            contentReference: .asset(assetId)
+        )
+        
+        let textBlock = LayoutPlanBlock(
+            kind: .text,
+            role: "body",
+            frame: Rect(x: 0.0, y: 0.1, width: 1.0, height: 0.3),
+            contentReference: .generated("这是一个用来测试图文绕排重叠区域计算的非常长的中文段落。通过这个段落，我们能验证在布局阶段，当文字框与图片框在同一个页面上存在重叠区域时，排版引擎是否能够正确识别到该重叠，并计算出正确的排除矩形（exclusionRects）然后传递给渲染端。")
+        )
+        
+        let plan = LayoutPlan(
+            target: .page(3),
+            strategy: .balanced,
+            blocks: [imageBlock, textBlock]
+        )
+        
+        project.safeAppliedLayoutPlans = [3: plan]
+        
+        let document = LayoutEngine().layout(project: project)
+        
+        XCTAssertTrue(document.pages.count >= 3)
+        let page3 = document.pages[2]
+        
+        let textFrames = page3.frames.filter { $0.kind == .text }
+        XCTAssertFalse(textFrames.isEmpty)
+        
+        let textFrame = textFrames[0]
+        XCTAssertNotNil(textFrame.exclusionRects)
+        XCTAssertEqual(textFrame.exclusionRects?.count, 1)
+        
+        if let exclusion = textFrame.exclusionRects?[safe: 0] {
+            XCTAssertEqual(exclusion.x, 0.0, accuracy: 0.01)
+            XCTAssertEqual(exclusion.y, 73.701, accuracy: 0.01)
+            XCTAssertEqual(exclusion.width, 262.205, accuracy: 0.01)
+            XCTAssertEqual(exclusion.height, 147.402, accuracy: 0.01)
+        }
+    }
 }
 
 private struct StaticPlanProvider: LayoutPlanProvider {

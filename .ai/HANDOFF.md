@@ -3,6 +3,14 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-23 14:29 | antigravity | 完成 B1 图文绕排（横排、单图、矩形）的预览侧开发与校验。修正了 testTextWrapOverlapExclusions 单元测试中对毫米坐标的误断言，统
+- **分支**：feature/ag-b1-text-wrap
+- **概述**：完成 B1 图文绕排（横排、单图、矩形）的预览侧开发与校验。修正了 testTextWrapOverlapExclusions 单元测试中对毫米坐标的误断言，统一为正确的点（points）坐标断言。经全量运行，Package 217 个单元测试全部通过，IDML 探针检查完全绿灯，已成功在 Samples/output-demo-png 中生成流式布局 PNG 视觉图。
+- **改动文件**：Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDCore/LaidOutPage.swift, Sources/LayoutDCore/PageSetup.swift, Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift
+- **检查**：swift test: PASS (217/217 tests), review-idml.sh: PASS, golden-check: PASS
+- **下一步**：1. 请 Claude 将开发分支 feature/ag-b1-text-wrap 合并并集成至 dev。
+2. 请 Claude 进行 IDML 导出逻辑的安全验证，确保 IDML 导出不受 B1 绕排预览影响（因按设计我们不应修改 IDML 导出的 text wrap 属性）。
+
 ## 2026-06-22 07:08 | antigravity | 完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 featu
 - **分支**：ag-lane
 - **概述**：完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 feature 分支。

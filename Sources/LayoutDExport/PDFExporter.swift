@@ -444,7 +444,9 @@ public struct PDFExporter {
                         context: context,
                         textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project),
                         sourceParagraphId: frame.sourceParagraphId,
-                        tableOfContentsEntries: frame.tableOfContentsEntries
+                        tableOfContentsEntries: frame.tableOfContentsEntries,
+                        exclusionRects: frame.exclusionRects,
+                        pageHeight: pageHeight
                     )
                 }
             } else {
@@ -458,7 +460,9 @@ public struct PDFExporter {
                     context: context,
                     textColorHex: frame.textColorHex,
                     sourceParagraphId: frame.sourceParagraphId,
-                    tableOfContentsEntries: frame.tableOfContentsEntries
+                    tableOfContentsEntries: frame.tableOfContentsEntries,
+                    exclusionRects: frame.exclusionRects,
+                    pageHeight: pageHeight
                 )
             }
         case .asset, .spreadAsset:
@@ -633,7 +637,19 @@ public struct PDFExporter {
         context.restoreGState()
     }
 
-    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind, project: BookProject, rect: CGRect, context: CGContext, textColorHex: String? = nil, sourceParagraphId: UUID? = nil, tableOfContentsEntries: [TableOfContentsEntry]? = nil) {
+    private func drawText(
+        _ text: String,
+        styleId: String?,
+        kind: PageFrameKind,
+        project: BookProject,
+        rect: CGRect,
+        context: CGContext,
+        textColorHex: String? = nil,
+        sourceParagraphId: UUID? = nil,
+        tableOfContentsEntries: [TableOfContentsEntry]? = nil,
+        exclusionRects: [Rect]? = nil,
+        pageHeight: CGFloat = 0
+    ) {
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -701,12 +717,32 @@ public struct PDFExporter {
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
         path.addRect(rect)
-        let frameAttrs: [CFString: Any]?
+        
+        var frameAttrs: [CFString: Any] = [:]
         if style.layoutDirection == .vertical {
-            frameAttrs = [kCTFrameProgressionAttributeName: CTFrameProgression.rightToLeft.rawValue as CFNumber]
-        } else {
-            frameAttrs = nil
+            frameAttrs[kCTFrameProgressionAttributeName] = CTFrameProgression.rightToLeft.rawValue as CFNumber
         }
+        
+        if let exclusionRects = exclusionRects, !exclusionRects.isEmpty, pageHeight > 0 {
+            var exclusionPaths: [CGPath] = []
+            for img in exclusionRects {
+                let pdfImageRect = CGRect(
+                    x: img.x,
+                    y: Double(pageHeight) - (img.y + img.height),
+                    width: img.width,
+                    height: img.height
+                )
+                let overlap = rect.intersection(pdfImageRect)
+                guard overlap.width > 0 && overlap.height > 0 else { continue }
+                
+                exclusionPaths.append(CGPath(rect: overlap, transform: nil))
+            }
+            if !exclusionPaths.isEmpty {
+                let clippingPaths = exclusionPaths.map { [kCTFramePathClippingPathAttributeName: $0] }
+                frameAttrs[kCTFrameClippingPathsAttributeName] = clippingPaths
+            }
+        }
+        
         let frame = CTFramesetterCreateFrame(
             framesetter,
             CFRange(location: 0, length: attributedString.length),
