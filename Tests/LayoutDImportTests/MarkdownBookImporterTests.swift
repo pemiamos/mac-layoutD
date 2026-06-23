@@ -3,6 +3,61 @@ import LayoutDImport
 import XCTest
 
 final class MarkdownBookImporterTests: XCTestCase {
+    func testConsumesSubsequentFrontMatterAndUsesTitleAsSectionBoundary() throws {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            ---
+            title: 第一章
+            author: 测试作者
+            ---
+
+            # 横排内容
+
+            第一段正文。
+
+            ---
+            title: 第二章
+            layout_direction: vertical
+            columns: 1
+            ---
+
+            第二段正文。
+            """
+        )
+
+        XCTAssertEqual(project.metadata.title, "第一章")
+        XCTAssertEqual(project.sections.map(\.title), ["横排内容", "第二章"])
+
+        let importedText = project.sections
+            .flatMap { $0.stories }
+            .flatMap(\.paragraphs)
+            .map(\.text)
+            .joined(separator: "\n")
+        XCTAssertEqual(importedText, "第一段正文。\n第二段正文。")
+        XCTAssertFalse(importedText.contains("title:"))
+        XCTAssertFalse(importedText.contains("layout_direction:"))
+        XCTAssertFalse(importedText.contains("columns:"))
+    }
+
+    func testKeepsNonMetadataDraftSeparatorsInExistingFlow() {
+        let project = MarkdownBookImporter().importDocument(
+            markdown: """
+            # 草稿
+
+            正文前半段。
+
+            ---
+
+            这不是元数据。
+            """
+        )
+
+        let bodyTexts = project.sections[0].stories[0].paragraphs
+            .filter { $0.kind == .body }
+            .map(\.text)
+        XCTAssertEqual(bodyTexts, ["正文前半段。", "这不是元数据。"])
+    }
+
     func testPreservesBoldItalicAndNestedInlineRuns() throws {
         let project = MarkdownBookImporter().importDocument(
             markdown: """

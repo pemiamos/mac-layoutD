@@ -3,6 +3,32 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-23 15:06 | codex | IMP-1 多段 frontmatter 止血完成，待 Claude 集成审核
+- **分支**：`feature/codex-imp1-frontmatter`
+- **概述**：后续位于段/章边界、内容完整为 `key: value` 的 `--- ... ---` 块现在会在 Markdown 导入前被消费，不再作为正文输出；其中 `title` 转为一级标题并交给既有解析器创建新 section。`layout_direction`、`columns` 等后续元数据静默忽略，未实现分段横竖混排。普通草稿分隔线及非元数据块保持原行为。
+- **改动文件**：`Sources/LayoutDImport/MarkdownBookImporter.swift`、`Tests/LayoutDImportTests/MarkdownBookImporterTests.swift`。
+- **检查**：`swift test --filter MarkdownBookImporterTests` 35/0 PASS；`bash scripts/review-idml.sh` PASS（全量 218/0；IDML 探针 6/0）。代码提交：`ac903f3 fix(import): consume subsequent frontmatter blocks`。
+- **下一步**：Claude 在专用临时 worktree 审核并合入 dev；重点复核 `Samples/test_emphasis_visual.md` 的导出 Story 不含 `title:`/`layout_direction:`/`columns:`，且第二段标题成为独立 section。D-2 (`85d7a00`) 仍待集成审核。
+## 2026-06-24 00:40 | antigravity | 完成了动态 CoreText 字体与字重存在性校验逻辑，防范字重不存在导致 CoreText/InDesign 偷偷回退到 Helvetica 的豆腐现象。已在 IDMLInvariants 增加了 checkFontWeights() 校验，并补充了测试用例。
+- **分支**：feature/ag-invariants-font-weight
+- **概述**：完成了动态 CoreText 字体与字重存在性校验逻辑，防范字重不存在导致 CoreText/InDesign 偷偷回退到 Helvetica 的豆腐现象。已在 IDMLInvariants 增加了 checkFontWeights() 校验，并补充了测试用例。
+- **改动文件**：Sources/LayoutDExport/IDMLInvariants.swift, Tests/LayoutDExportTests/IDMLInvariantsTests.swift
+- **检查**：swift test: 222/222 PASS, review-idml.sh: 6/6 PASS
+- **下一步**：1. 审核并集成分支 feature/ag-invariants-font-weight 至 dev 分支；2. 确认该字体字重检查规则对其他复杂物理字体的有效拦截性。
+
+## 2026-06-22 07:08 | antigravity | 完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 featu
+- **分支**：ag-lane
+- **概述**：完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 feature 分支。
+- **改动文件**：(无，仅做分支同步与本地废弃分支清理)
+- **检查**：swift build: pass, swift test: pass (194 tests)
+- **下一步**：① 用户或 Claude 进行已合并功能的 IDML 导出与跨页渲染的视觉终验；② 供 Claude 继续推进 E2-4 对开跨页任务；③ Codex 待命或继续根据后续需求调整。
+## 2026-06-24 00:33 | claude | [派 AG·IMP-2] 用户 2026-06-24 验收通过 IMP-3 + 字体落地,已合 main(6f1ded2)。IMP-2 DOCX 内嵌图导入改派
+- **分支**：dev
+- **概述**：[派 AG·IMP-2] 用户 2026-06-24 验收通过 IMP-3 + 字体落地,已合 main(6f1ded2)。IMP-2 DOCX 内嵌图导入改派 AG。现状:真实书稿 layoutD村落.docx 文字/角色/字体全部导入正确,唯独 3 张内嵌图没进来(DOCXBookImporter 跳过内嵌图,assets:0)。这是真实书稿试跑剩下的最后一块。
+- **改动文件**：(交接说明)
+- **检查**：main/dev 同步(6f1ded2);218/0 PASS。
+- **下一步**：【AG·IMP-2 DOCX 内嵌图导入】规格全文见 .ai/QUEUE.md IMP-2 条。要点:① 解析 word/_rels/document.xml.rels 把 rId→media 文件(实测 rId4→image1/rId5→image2/rId6→image3);② 正文 word/document.xml 里图以 <w:drawing>…<a:blip r:embed="rId"/>…<wp:extent cx cy/> 内联在某 <w:p>,该段位置即图位置(实测第 31/53/72 段),cx/cy 单位 EMU(914400/英寸);③ 从 docx zip 抽 media 字节落资产 + 在该段插图片 PageFrame。验收:导入 layoutD村落.docx 后 assets:3、3 图框落对应段位、--export-png-flow 出图、--export-idml 的 Links/ 含 3 图、补端到端断言、review-idml.sh PASS。⚠️ 跨进 DOCXBookImporter.swift(原 Codex 道,用户已授权 AG);这是导入器加图,不是渲染层。抠好的 3 图在 ~/Desktop/pilot-村落-图片/ 可参考。做完写 handoff,Claude 审。AG 另:B1 图文绕排若未完先收尾。守 N1/N2/N3。
+
 ## 2026-06-24 00:21 | claude | 用户三项需求落地(2026-06-24)。ask1:正文换方正兰亭细黑简体(CF_body 解析 FZLanTingHeiS-L-GB)、一二三级标题换黑体-简
 - **分支**：dev
 - **概述**：用户三项需求落地(2026-06-24)。ask1:正文换方正兰亭细黑简体(CF_body 解析 FZLanTingHeiS-L-GB)、一二三级标题换黑体-简 Heiti SC Medium(STHeitiSC-Medium);注意 Heiti SC 无 Regular 字重必带 Medium。ask2:合规闸门(planValidationFailures 字体检查)从手写白名单改为动态查本机已装字体——LayoutEngine.installedFontNames 用 CTFontCollection 收集全部名字形态(family/显示名/PostScript/本地化中文),isFontInstalled 支持家族+字重;任何已装字体自动通过,根除"新字体未进白名单→计划被拒→分页崩"整类隐患。ask3:IMP-2 DOCX 内嵌图导入改派 AG(Codex 近期少用)。另:上一轮修了三级标题黑体粉色豆腐(Heiti SC 字重根因)。真实书稿端到端:正文方正兰亭细黑/标题黑体全解析正确无 Helvetica 回退;218/0 PASS。
@@ -17,6 +43,12 @@
 - **检查**：swift test 218/0 PASS。真实书稿导入:章名1/节名1/文章名3/概述1/英文概述2/抽言3/参考文献13/正文19,标签零漏出;IDML 命名段落样式直通 InDesign,抽言江城律动宋/概述方正兰亭细黑/英文Georgia 字体接对。合 dev 4507e65→77f2fc2,push。未合 main(待用户验收)。
 - **下一步**：①【Codex 重要】丢弃自己 worktree 里 IMP-3 未提交改动(git checkout/restore),已被 Claude 版取代;Codex 剩 IMP-2 DOCX 内嵌图(图仍未导入,assets:0)、IMP-1 多段 frontmatter。②【用户验收】~/Desktop/验收-村落-角色样式-0623.idml(InDesign 看命名段落样式+抽言/概述字体) + ~/Desktop/村落预览/*.png(8页)。③【遗留·Claude 下一步】正文=方正兰亭细黑/一二级标题=黑体 尚未落地(改全局默认 body/h1/h2 会牵动一批硬编码分页的 demo 测试)。建议走"导入书用 house 字体、demo 默认不动"的干净路子,避免destabilize。④验收 OK 后合 main。守 N1/N2/N3。
 
+## 2026-06-22 07:08 | antigravity | 完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 featu
+- **分支**：ag-lane
+- **概述**：完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 feature 分支。
+- **改动文件**：(无，仅做分支同步与本地废弃分支清理)
+- **检查**：swift build: pass, swift test: pass (194 tests)
+- **下一步**：① 用户或 Claude 进行已合并功能的 IDML 导出与跨页渲染的视觉终验；② 供 Claude 继续推进 E2-4 对开跨页任务；③ Codex 待命或继续根据后续需求调整。
 ## 2026-06-23 23:14 | claude | 真实书稿端到端试跑(layoutD村落.docx,科普书一章)启动,逮到 3 个真痛点并立项。① DOCX 内嵌图不导入(assets:0)→IMP-2(用户已
 - **分支**：dev
 - **概述**：真实书稿端到端试跑(layoutD村落.docx,科普书一章)启动,逮到 3 个真痛点并立项。① DOCX 内嵌图不导入(assets:0)→IMP-2(用户已交接 Codex,进行中,等审)。② 核心发现:书稿用"角色标签"约定(章名/节名/文章名/开节概述/开节概述英文/抽言),通用导入读不懂→标签当正文画、角色塌成两档。用户拍板:这是 layoutD 结构化书籍工程的核心能力,要做→IMP-3 角色标签结构化导入(规格已写全,排 IMP-2 之后)。③ 用户三决策已定:可视化信息段丢弃不印、参考文献小字悬挂缩进、英文概述用 Georgia(可后改)。字体:正文方正兰亭细黑/标题黑体-简/抽言江城律动宋,本机均已装(Claude 已核)。完整勘查见 docs/pilot-findings.md + real-book-pilot-runbook.md。
