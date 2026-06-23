@@ -39,9 +39,9 @@ final class IDMLExporterTests: XCTestCase {
 
         let story = try entry(output, "Stories/Story_uStory0_0.xml")
         XCTAssertTrue(story.contains("FauxBold=\"true\"><Content>ATP</Content>"), "自动插入的中西文空格不应破坏 run 对齐")
-        XCTAssertTrue(story.contains("KentenKind=\"KentenSesameDot\" KentenAlignment=\"AlignKentenCenter\" KentenPosition=\"AboveRight\"><Content>着重</Content>"))
+        XCTAssertTrue(story.contains("KentenKind=\"KentenBlackCircle\" KentenPlacement=\"-1\" KentenPosition=\"BelowLeft\"><Content>着重</Content>"))
         XCTAssertTrue(story.contains("Skew=\"12\"><Content>斜体</Content>"))
-        XCTAssertTrue(story.contains("FauxBold=\"true\" Skew=\"12\" KentenKind=\"KentenSesameDot\" KentenAlignment=\"AlignKentenCenter\" KentenPosition=\"AboveRight\"><Content>粗斜</Content>"))
+        XCTAssertTrue(story.contains("FauxBold=\"true\" Skew=\"12\" KentenKind=\"KentenBlackCircle\" KentenPlacement=\"-1\" KentenPosition=\"BelowLeft\"><Content>粗斜</Content>"))
         XCTAssertEqual(matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count, 2)
     }
 
@@ -76,16 +76,27 @@ final class IDMLExporterTests: XCTestCase {
         try IDMLExporter().export(document: document, project: project, to: output)
 
         let story = try entry(output, "Stories/Story_uStory0_0.xml")
-        XCTAssertEqual(matches(in: story, pattern: "(FauxBold=\\\"true\\\" KentenKind=\\\"KentenSesameDot\\\"[^>]*><Content>[AB]</Content>)").count, 2)
-        XCTAssertEqual(matches(in: story, pattern: "(Skew=\\\"12\\\" KentenKind=\\\"KentenSesameDot\\\"[^>]*><Content>[CD]</Content>)").count, 2)
+        // 着重号按中文习惯：KentenBlackCircle(实心黑圆点) + BelowLeft(字下方)，对齐真·InDesign golden。
+        XCTAssertEqual(matches(in: story, pattern: "(FauxBold=\\\"true\\\" KentenKind=\\\"KentenBlackCircle\\\"[^>]*><Content>[AB]</Content>)").count, 2)
+        XCTAssertEqual(matches(in: story, pattern: "(Skew=\\\"12\\\" KentenKind=\\\"KentenBlackCircle\\\"[^>]*><Content>[CD]</Content>)").count, 2)
         XCTAssertFalse(story.contains("Skew=\"12\"><Content>二</Content>"))
         XCTAssertFalse(story.contains("FauxBold=\"true\"><Content>三</Content>"))
-        // 着重号只在 CJK 段落排版器下渲染：每个 ParagraphStyleRange 必须带 World-Ready 排版器，
-        // 否则 InDesign 静默忽略 KentenKind（属性在但视觉无点）。
-        XCTAssertEqual(
-            matches(in: story, pattern: "(<ParagraphStyleRange\\b[^>]*\\bAppliedComposer=\\\"\\$ID/HL Composer Optyca\\\")").count,
-            matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count
+        // 着重号只在 CJK/World-Ready 段落排版器下渲染。经真·InDesign 2026 存盘比对：排版器真值
+        // 是 Composer="HL Composer J"（挂在段落样式定义上），而非 Story 段落内联 AppliedComposer
+        // （InDesign 无此属性、会被忽略）。故 Story 不应再含 AppliedComposer；样式应带 Composer。
+        XCTAssertFalse(story.contains("AppliedComposer"))
+        let styles = try entry(output, "Resources/Styles.xml")
+        XCTAssertTrue(
+            styles.contains("Self=\"ParagraphStyle/body\"") && styles.contains("Composer=\"HL Composer J\""),
+            "body 段落样式应带 World-Ready 排版器 Composer=\"HL Composer J\""
         )
+        // 不变量断言闸应放行（着重号已配 World-Ready 样式）。
+        // 反证：若把样式排版器换成拉丁 Optyca，闸门必须报 kenten-needs-world-ready-composer。
+        let goodFiles = ["Resources/Styles.xml": styles, "Stories/Story_uStory0_0.xml": story]
+        XCTAssertTrue(IDMLInvariants.check(files: goodFiles).isEmpty)
+        let latinStyles = styles.replacingOccurrences(of: "Composer=\"HL Composer J\"", with: "Composer=\"HL Composer Optyca\"")
+        let badFiles = ["Resources/Styles.xml": latinStyles, "Stories/Story_uStory0_0.xml": story]
+        XCTAssertEqual(Set(IDMLInvariants.check(files: badFiles).map(\.rule)), ["kenten-needs-world-ready-composer"])
     }
 
     func testExportsAnchoredFootnoteAsNativeIDMLWithoutDuplicatePageFooter() throws {

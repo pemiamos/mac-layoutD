@@ -23,9 +23,11 @@ public struct IDMLInvariantViolation: Equatable, CustomStringConvertible {
 }
 
 public enum IDMLInvariants {
-    /// World-Ready / 日文段落排版器白名单。着重号、避头尾等 CJK 特性只在这些排版器下渲染；
-    /// 默认拉丁排版器（`$ID/HL Composer`）会静默忽略 `KentenKind`。
-    static let worldReadyComposerTokens = ["Optyca", "Composer J", "Japanese"]
+    /// CJK / World-Ready 段落排版器白名单。着重号、避头尾等 CJK 特性只在这些排版器下渲染。
+    /// 经真·InDesign 2026 存盘比对：CJK 排版器真值是 `HL Composer J`（含 "Composer J"）；
+    /// `HL Composer Optyca` 其实是**拉丁**段落排版器，故不在白名单。排版器真值挂在段落样式
+    /// 定义（Styles.xml）与文档 `<TextDefault>`（Preferences.xml）上，不在 Story 段落内联。
+    static let worldReadyComposerTokens = ["Composer J", "Japanese"]
 
     static let noParagraphStyle = "ParagraphStyle/$ID/[No paragraph style]"
 
@@ -33,19 +35,50 @@ public enum IDMLInvariants {
     /// 纯函数、确定性、无外部依赖——可单测、不引入构建脆性。
     public static func check(files: [String: String]) -> [IDMLInvariantViolation] {
         var violations: [IDMLInvariantViolation] = []
+        // 排版器真值挂在段落样式上：先解析出哪些样式是 World-Ready，供 Story 解析时跨部件查。
+        let worldReadyStyles = worldReadyParagraphStyles(files: files)
         for (part, xml) in files.sorted(by: { $0.key < $1.key }) {
             if part.hasPrefix("Stories/") || part == "XML/BackingStory.xml" {
-                violations += checkStory(part: part, xml: xml)
+                violations += checkStory(part: part, xml: xml, worldReadyStyles: worldReadyStyles)
             }
         }
         violations += checkFontReferences(files: files)
         return violations
     }
 
+    // MARK: - 排版器解析（跨部件：Styles.xml + Preferences TextDefault）
+
+    /// 解析 Styles.xml 的每个 `<ParagraphStyle>`，结合 Preferences 的 `<TextDefault Composer=...>`
+    /// 文档默认，算出哪些段落样式（按 Self 引用，如 `ParagraphStyle/body`）是 World-Ready。
+    /// 样式自带 `Composer` 时以自身为准；没带则继承文档默认。
+    static func worldReadyParagraphStyles(files: [String: String]) -> Set<String> {
+        let docDefaultWorldReady: Bool = {
+            guard let prefs = files["Resources/Preferences.xml"],
+                  let textDefault = matches(of: "<TextDefault\\b[^>]*>", in: prefs, group: 0).first,
+                  let composer = matches(of: "\\bComposer=\"([^\"]*)\"", in: textDefault, group: 1).first
+            else { return false }
+            return isWorldReadyComposer(composer)
+        }()
+
+        guard let styles = files["Resources/Styles.xml"] else { return [] }
+        var result = Set<String>()
+        for tag in matches(of: "<ParagraphStyle\\b[^>]*", in: styles, group: 0) {
+            guard let self_ = matches(of: "\\bSelf=\"([^\"]*)\"", in: tag, group: 1).first else { continue }
+            let ownComposer = matches(of: "\\bComposer=\"([^\"]*)\"", in: tag, group: 1).first
+            let worldReady = ownComposer.map(isWorldReadyComposer) ?? docDefaultWorldReady
+            if worldReady { result.insert(self_) }
+        }
+        return result
+    }
+
+    static func isWorldReadyComposer(_ composer: String) -> Bool {
+        worldReadyComposerTokens.contains { composer.contains($0) }
+    }
+
     // MARK: - Story 级断言（KentenKind / 脚注豆腐 / CJK 粗斜体）
 
-    private static func checkStory(part: String, xml: String) -> [IDMLInvariantViolation] {
-        let walker = StoryInvariantWalker(part: part)
+    private static func checkStory(part: String, xml: String, worldReadyStyles: Set<String>) -> [IDMLInvariantViolation] {
+        let walker = StoryInvariantWalker(part: part, worldReadyStyles: worldReadyStyles)
         let parser = XMLParser(data: Data(xml.utf8))
         parser.shouldProcessNamespaces = false
         parser.delegate = walker
@@ -129,20 +162,26 @@ private final class StoryInvariantWalker: NSObject, XMLParserDelegate {
     }
 
     let part: String
+    let worldReadyStyles: Set<String>
     var violations: [IDMLInvariantViolation] = []
     private var psrStack: [PSRFrame] = []
     private var footnoteDepth = 0
     private var currentCSRContent: String?      // 非 nil 表示正在 CharacterStyleRange 内
     private var currentCSRFontStyle: String?
 
-    init(part: String) { self.part = part }
+    init(part: String, worldReadyStyles: Set<String>) {
+        self.part = part
+        self.worldReadyStyles = worldReadyStyles
+    }
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
                 qualifiedName qName: String?, attributes attrs: [String: String]) {
         switch elementName {
         case "ParagraphStyleRange":
+            // 真值属性名是 Composer（旧代码错用 AppliedComposer，InDesign 会忽略）。
+            // 段落内联通常没有；排版器主要由 AppliedParagraphStyle 解析（见 worldReadyStyles）。
             psrStack.append(PSRFrame(
-                composer: attrs["AppliedComposer"],
+                composer: attrs["Composer"],
                 paragraphStyle: attrs["AppliedParagraphStyle"],
                 inFootnote: footnoteDepth > 0
             ))
@@ -151,15 +190,19 @@ private final class StoryInvariantWalker: NSObject, XMLParserDelegate {
         case "CharacterStyleRange":
             currentCSRContent = ""
             currentCSRFontStyle = attrs["FontStyle"]
-            // 规则①：着重号必须配 World-Ready 排版器，否则 KentenKind 被静默忽略。
+            // 规则①：着重号必须配 CJK/World-Ready 排版器，否则 KentenKind 被静默忽略。
+            // 排版器真值挂在段落样式上：段落自带 Composer 时以其为准；否则看所引样式是否 WR。
             if let kenten = attrs["KentenKind"], !isNoneKenten(kenten) {
-                let composer = psrStack.last?.composer
-                if !isWorldReady(composer) {
+                let frame = psrStack.last
+                let ownComposerWR = frame?.composer.map(IDMLInvariants.isWorldReadyComposer) ?? false
+                let styleWR = frame?.paragraphStyle.map(worldReadyStyles.contains) ?? false
+                if !ownComposerWR && !styleWR {
                     violations.append(IDMLInvariantViolation(
                         part: part,
                         rule: "kenten-needs-world-ready-composer",
-                        detail: "CharacterStyleRange 带 KentenKind=\"\(kenten)\"，但所在段落 AppliedComposer="
-                            + "\(composer.map { "\"\($0)\"" } ?? "缺失")，非 World-Ready 排版器→着重号不渲染。"
+                        detail: "CharacterStyleRange 带 KentenKind=\"\(kenten)\"，但所在段落样式 "
+                            + "\(frame?.paragraphStyle.map { "\"\($0)\"" } ?? "?") 的排版器非 World-Ready"
+                            + "（需段落样式 Composer=\"HL Composer J\" 或文档 TextDefault）→着重号不渲染。"
                     ))
                 }
             }
@@ -209,11 +252,6 @@ private final class StoryInvariantWalker: NSObject, XMLParserDelegate {
         default:
             break
         }
-    }
-
-    private func isWorldReady(_ composer: String?) -> Bool {
-        guard let c = composer else { return false }
-        return IDMLInvariants.worldReadyComposerTokens.contains { c.contains($0) }
     }
 
     private func isNoneKenten(_ v: String) -> Bool {

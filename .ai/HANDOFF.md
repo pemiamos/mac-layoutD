@@ -3,6 +3,41 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-23 14:41 | claude | [交接 AG] dev 已推进到 38ab3af（本会话只动了 CJK 排版器 + 着重号 + 文档，未碰预览/GUI 层，对 AG 现役任务无影响）。关键变化
+- **分支**：dev
+- **概述**：[交接 AG] dev 已推进到 38ab3af（本会话只动了 CJK 排版器 + 着重号 + 文档，未碰预览/GUI 层，对 AG 现役任务无影响）。关键变化两条:① 着重号(傍点)已移出开发计划、停止投入——AG 不必再碰任何傍点预览(E3-3p 早已完成且现已 descope);② CJK 排版器修复(Composer=HL Composer J)是导出侧改动,不影响预览渲染。AG 按连续作业模式继续自助接力,无需等用户确认。
+- **改动文件**：(交接说明,无新代码改动需 AG 处理)
+- **检查**：dev 216/0 PASS;dev 领先 main 7 提交(本会话排版器/着重号,待用户验收后合 main)。
+- **下一步**：【AG 现役·继续】B1 图文绕排（text wrap）预览——LayoutEngine + 渲染器侧(ChineseTypesetting 带洞 CGPath 绕排,三处渲染一致),范围只做横排/单图/矩形绕排;不碰 IDMLExporter(TextWrapPreference 是配对 Claude 任务)。验收:--export-png-flow 导出正文绕图 + 单测断言绕排行宽收窄 + review-idml.sh PASS。做完写 handoff 列分支/commit 交 Claude 审。【AG 下一项】B2 长表格分页 + 表头跨页重复(LayoutEngine 表格续页/重复表头)。【铁律】每个新任务从最新 dev 起新分支(git merge origin/dev 先同步)、在自己 worktree(…-ag)、只提交到 feature/ag-*、不碰 dev/main、不必 push(共享 .git Claude 直接看得到)。守 N1/N2/N3。
+
+## 2026-06-23 14:38 | claude | 着重号(傍点/Kenten)按用户指示移出开发计划、停止投入(用户 2026-06-23 重申:图书项目不使用着重号)。已记决策、更新 development-
+- **分支**：dev
+- **概述**：着重号(傍点/Kenten)按用户指示移出开发计划、停止投入(用户 2026-06-23 重申:图书项目不使用着重号)。已记决策、更新 development-plan(E3-3/E3-3v/E3-3p 标记移出+说明)。关键:已合入代码不回滚——① CJK 排版器 Composer="HL Composer J"(dev e2a78be)是通用 CJK 排版基础设施(影响避头尾/断行,非着重号专属),保留;② 着重号 emit + 断言闸 rule①(dev 63a9a5c)仅稿件出现 ==着重== 时触发、无害,留存。回滚反而是额外投入+风险,违背"不再投入",故仅从路线图除名。
+- **改动文件**：docs/development-plan.md(E3-3/E3-3v/E3-3p 移出标记+保留说明), .ai/DECISIONS.md(经 record_decision 追加 2026-06-23 决策)
+- **检查**：无代码改动(仅文档);提交 3e33021,合 dev(merge 38ab3af)并 push origin dev。dev 仍为之前的 216/0 PASS 状态(未引入新代码)。
+- **下一步**：①【着重号收尾】不再需要用户在 InDesign 验收着重号。桌面遗留的着重号验收 idml(着重号验收-排版器修复-0623/着重号验收-中文圆点-0623)可由用户自行删除。②【仍待用户拍板·与着重号无关】排版器修复(e2a78be)+脚注/粗斜体等既有 CJK 修复是否合 main:这些不依赖着重号,排版器修复对一切 CJK 断行有益,建议照常推进 main(用户之前对脚注/复合字体/竖排已验收过)。③【已知旧 bug,待用户决定是否立项】MarkdownBookImporter 只解析首个 YAML frontmatter,多段文档第二个 --- 块被当正文。④后续保真增量(与着重号无关):第②层 oracle 做成 Swift diff CLI;第③层 IDML-RNG lint;断言闸加 CoreText 字形覆盖。⑤守 N1/N2/N3。
+
+## 2026-06-23 14:33 | claude | 着重号视觉对齐中文习惯(第②层 oracle 第二轮)。排版器修复后用户 InDesign 复看:着重号从"整页不出"恢复显示(确认 Composer 修复有效
+- **分支**：dev
+- **概述**：着重号视觉对齐中文习惯(第②层 oracle 第二轮)。排版器修复后用户 InDesign 复看:着重号从"整页不出"恢复显示(确认 Composer 修复有效),但呈日文习惯(字上方芝麻点),中文书不对。用户手搓 kenten golden 给真值:字符级只写 KentenKind="KentenBlackCircle"(实心黑圆点/中文着重号,非芝麻点) + KentenPlacement="-1" + KentenPosition="BelowLeft"(字下方/中文横排,非日文 AboveRight);KentenAlignment 是段落级、不写在字符范围上(旧实现错塞了)。已改 IDMLExporter.styledCharacterRanges,输出与 golden 逐字段一致。
+- **改动文件**：Sources/LayoutDExport/IDMLExporter.swift(kenten emit 改中文习惯+删字符级 KentenAlignment), Tests/LayoutDExportTests/IDMLExporterTests.swift(断言更新), docs/idml-oracle/FINDINGS.md(追加 kenten 结论), docs/idml-oracle/goldens/indesign2026-kenten-cjk.idml(新 golden)
+- **检查**：swift test 216/0 PASS。CLI 重导验证 kenten CSR=KentenKind="KentenBlackCircle" KentenPlacement="-1" KentenPosition="BelowLeft",与 golden 一致。提交 6f2421d,合 dev(merge 63a9a5c)并 push。未合 main。
+- **下一步**：①【需用户·关键】InDesign 复看 ~/Desktop/着重号验收-中文圆点-0623.idml:确认着重号现在是**实心黑圆点、在字下方**(中文习惯)。OK 后这批(排版器修复 e2a78be + 着重号 63a9a5c)可合 main。②【已知·与本修复无关的旧 bug,待用户拍板是否立项】MarkdownBookImporter 只解析首个 YAML frontmatter:多段文档第二个 --- 块(title/layout_direction/columns)被当正文画出,且因此第二段"竖排"没生效。test_emphasis_visual.md 是多段头样例——需确认是样例写法问题还是导入器该支持多段头。③竖排下着重号位置可能需复核(BelowLeft 在竖排=左侧;中文竖排着重号传统在右侧——待竖排 golden 验证)。④后续:第②层做成 Swift diff CLI;第③层 IDML-RNG lint;断言闸加 CoreText 字形覆盖。⑤守 N1/N2/N3。
+
+## 2026-06-23 14:17 | claude | 第②层 oracle 比对立功——发现并修复 CJK 排版器真 bug(着重号一直不渲染的根因)。用户提供 InDesign 2026 手搓 golden(含脚
+- **分支**：dev
+- **概述**：第②层 oracle 比对立功——发现并修复 CJK 排版器真 bug(着重号一直不渲染的根因)。用户提供 InDesign 2026 手搓 golden(含脚注,DOMVersion 21.3),Claude 解包逐字段比对,发现排版器实现三处全错:①属性名 AppliedComposer 真值是 Composer(InDesign 无 AppliedComposer→被忽略);②值 $ID/HL Composer Optyca 其实是拉丁排版器,真值是 HL Composer J(CJK/World-Ready);③位置应挂段落样式定义+文档 TextDefault,不逐 Story 段落内联。旧代码注释还把 Optyca/J 的中西身份写反。已修 IDMLExporter(常量+每个 ParagraphStyle/[No paragraph style]/TextDefault 加 Composer=HL Composer J+删 5 处无效 AppliedComposer),断言闸 rule①同步改为跨 Styles.xml 解析样式 Composer(白名单去掉 Optyca)。脚注真值=NormalParagraphStyle(带 CJK 字体),印证规则②方向。golden+FINDINGS 归档 docs/idml-oracle/。
+- **改动文件**：Sources/LayoutDExport/IDMLExporter.swift, Sources/LayoutDExport/IDMLInvariants.swift, Tests/LayoutDExportTests/IDMLInvariantsTests.swift, Tests/LayoutDExportTests/IDMLExporterTests.swift, docs/idml-oracle/FINDINGS.md(新), docs/idml-oracle/goldens/indesign2026-footnote-cjk.idml(新,用户 golden)
+- **检查**：swift build PASS;swift test 216/0 PASS(含全量导出经断言闸放行)。CLI 重导 Samples/test_emphasis_visual.md 验证:8 段落样式全带 Composer=HL Composer J、TextDefault 就位、零 AppliedComposer、KentenKind 在位。提交 03f03d4,合 dev(merge e2a78be)并 push origin dev。未合 main。
+- **下一步**：①【需用户·关键】肉眼复看 ~/Desktop/着重号验收-排版器修复-0623.idml:在 InDesign 中文版打开,确认"横排/竖排着重强调"那几句字头**真的出着重点**(以及粗体/斜体)。这是排版器修复是否真生效的唯一凭证(结构测试测不出渲染)。OK 后 Claude 可把这批合 main。若仍不出点,把该 idml 或截图回传,Claude 再 diff。②【建议】用户再手搓一份**真·应用了着重号**的 InDesign 文档导出,补一个 kenten golden(当前 golden 只有脚注,KentenKind 仍是段落默认 None)——验证字符级 KentenKind/KentenFontSize 等真值写法。③后续可选:第②层做成 Swift diff CLI(归一化 Self/空白后对 golden)而非手工比对;第③层 IDML-RNG lint;断言闸加 CoreText 字形覆盖。④守 N1/N2/N3。
+
+## 2026-06-23 14:13 | claude | B 工程健壮性已合 main(merge e4a16bd,push)；启动 Backlog 并派 AG。B 内容：Fonts.xml 导出确定性修复(复合字体字
+- **分支**：dev
+- **概述**：B 工程健壮性已合 main(merge e4a16bd,push)；启动 Backlog 并派 AG。B 内容：Fonts.xml 导出确定性修复(复合字体字典→枚举固定序)+CI(GitHub Actions macOS 跑 review-idml.sh,已绿 1m48s)+golden-file 本地回归(scripts/golden-*,基线 Tests/golden)+测试硬编码路径修复(testGenerateBrochurePDF 原写死 /Users/amos/.gemini/.../brain,CI 首跑照出,改临时目录)。Backlog 按车道路由(commit c70d43e)：B1 图文绕排/B2 长表格分页→AG(LayoutEngine+渲染器侧)；B3 索引/B4 参考文献→Claude/Codex(导入+IDMLExporter,非 AG 文件)。AG 现役=B1 图文绕排预览：横排矩形绕排,文本框与图片框重叠时正文绕图,用 CoreText 非矩形 CGPath framesetting(列矩形挖掉图片矩形),改 ChineseTypesetting/LayoutEngine/三渲染器,不碰 IDMLExporter(TextWrap 导出侧是配对 Claude 后续)。规格详见 QUEUE.md AG 道 B1 条。
+- **改动文件**：(未填)
+- **检查**：main e4a16bd build PASS 已推;CI 在 main/dev 均会自动跑。dev c70d43e 纯文档。
+- **下一步**：① AG 开工 B1 图文绕排(从最新 dev 起 feature/ag-b1-textwrap,横排矩形绕排,--export-png-flow 自验,写 handoff 等 Claude 审)。② AG 之后 B2 长表格分页。③ Claude 待排：B1 的 IDML 导出侧 TextWrapPreference(AG 预览侧落 dev 后配对)、B3 索引、B4 参考文献。④ Codex 空闲(待 Claude 排导入侧任务)。⑤ 残留小项：AppStateTests:273 硬编码图片读路径(不阻塞)、ci.yml checkout 可升 v5。⑥ 守 N1/N2/N3,QUEUE 归 Claude 独占。
+
 ## 2026-06-23 14:03 | claude | B 工程健壮性全部完成并合 dev。① 修 Fonts.xml 导出非确定性根因：复合字体映射是字典[CompositeFontClass:Mapping]，r
 - **分支**：dev
 - **概述**：B 工程健壮性全部完成并合 dev。① 修 Fonts.xml 导出非确定性根因：复合字体映射是字典[CompositeFontClass:Mapping]，registerParagraphStyle 按字典自然序遍历调 font()→fontOrder/Self ID 每次导出漂移；改按 CompositeFontClass.allCases 固定序遍历，实测整个 IDML 两次导出逐文件一致；补 testExportIsByteDeterministic 锁定。② CI：.github/workflows/ci.yml，push main/dev+PR 触发 macOS runner 跑 review-idml.sh（build+201测试+IDML探针）。③ golden-file 回归：scripts/golden-{snapshot,update,check}.sh + Tests/golden 基线（本地工具，不进 CI——快照含本机 CoreText 解析的字体名，跨 runner 会误报；同机确定性由单测覆盖）。④ CI 首跑即照出一个既有 bug：AppStateTests.testGenerateBrochurePDF 把 PDF/PNG 写死到 /Users/amos/.gemini/antigravity/brain/... 本机绝对路径，换机即权限错——改写临时目录+defer 清理。CI 现已转绿(review 1m48s PASS)。commit：8969be3(determinism)+85e7d5e(CI/golden)+9e35c58(golden 出 CI)+84f6f0e(test 路径修复)，已 push origin/dev。
