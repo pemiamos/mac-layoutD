@@ -100,7 +100,7 @@
 - [x] `qualityMetrics` 接入可视化与历史追踪。
 - [x] 封面/满版图作固定页导出。
 - [x] 校对批注层（不参与重排的 overlay）。
-- [x] DOCX 导入（D-2）。 — Codex 实现 `DOCXBookImporter.swift`（commit `85d7a00`），待 Claude 集成确认。
+- [x] DOCX 导入（D-2）。 — Codex 实现 `DOCXBookImporter.swift`（`85d7a00`），已合 dev+main（merge `69ba11c`），**用户视觉验收 PASS**。
 
 ---
 
