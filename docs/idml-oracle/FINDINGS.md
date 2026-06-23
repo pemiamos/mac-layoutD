@@ -8,6 +8,7 @@
 | 文件 | 来源 | 覆盖 |
 |---|---|---|
 | `indesign2026-footnote-cjk.idml` | 用户在 InDesign 2026 中文版手搓（含一个脚注），DOMVersion 21.3 | 脚注序列化 + CJK 排版器真值 |
+| `indesign2026-kenten-cjk.idml` | 用户手搓（手动应用着重号），DOMVersion 21.3 | 着重号字符级真值（中文习惯） |
 
 ## 2026-06-23 比对结论（footnote golden）
 
@@ -36,6 +37,28 @@
   （我们的对策：脚注挂带复合字体的 caption/body 样式，方向一致。）
 - 承载脚注的字符范围带 `Position="Superscript"`。
 - 脚注引用标记真值 = `<?ACE 4?>`（自动编号 PI）+ 全角空格 `　` + 正文。
+
+## 2026-06-23 比对结论（kenten golden）
+
+排版器修复后用户复看：着重号从"整页不出"恢复显示，但样子是日文习惯（字上方芝麻点），
+中文书不对。用户手搓 kenten golden 给出中文习惯真值。
+
+### 着重号字符级真值（CharacterStyleRange 上）
+
+InDesign 实际只写**三个**属性，且很精简：
+
+```
+KentenKind="KentenBlackCircle" KentenPlacement="-1" KentenPosition="BelowLeft"
+```
+
+- `KentenBlackCircle`：实心黑圆点 ●（中文着重号），**非** `KentenSesameDot`（芝麻点，日文习惯）。
+- `KentenPosition="BelowLeft"`：点在字**下方**（横排）；旧实现 `AboveRight`=字上方是日文习惯。
+- `KentenPlacement="-1"`：自动；旧实现没写。
+- `KentenAlignment` **不写在 CharacterStyleRange 上**——它是段落级属性（见 footnote golden 的段落样式默认 `AlignKentenCenter`）；旧实现错误地塞在字符范围上。
+
+**修复**（IDMLExporter.styledCharacterRanges）：着重号改 emit
+`KentenKind="KentenBlackCircle" KentenPlacement="-1" KentenPosition="BelowLeft"`，
+删除字符级 `KentenAlignment`。已与 golden 逐字段一致。
 
 ### 待后续 golden 验证（本份未覆盖）
 
