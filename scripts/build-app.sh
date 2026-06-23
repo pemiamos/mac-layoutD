@@ -18,6 +18,10 @@ BUNDLE_ID="com.layoutd.app"
 VERSION="0.1.0"
 BUILD="$(date +%Y%m%d)"
 ICON_SRC="${1:-}"
+# 没传图标时,默认用仓库自带的 assets/app-icon.png
+if [ -z "$ICON_SRC" ] && [ -f "$ROOT/assets/app-icon.png" ]; then
+  ICON_SRC="$ROOT/assets/app-icon.png"
+fi
 OUT="$HOME/Desktop/${APP_NAME}.app"
 
 echo "==> swift build -c release (首次较慢)"
