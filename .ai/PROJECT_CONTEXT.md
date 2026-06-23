@@ -28,7 +28,7 @@ Sources/
   LayoutDDesignAI/      规则 + provider 的 AI 顾问边界，产出结构化 LayoutPlan 候选
   LayoutDImport/        Markdown 稿件导入与图片资源扫描
   LayoutDCheck/         工程与资源问题检查
-  LayoutDExport/        PDF 导出边界
+  LayoutDExport/        导出边界：IDML（主交付）+ PDF / PNG / 预检 JSON
   LayoutDApp/           macOS AppKit 桌面壳（画布/侧栏/检查器/导出）
 Tests/                  各模块单元测试
 Samples/                示例稿件与资源
@@ -49,5 +49,7 @@ docs/                   设计与路线图文档
 - AI 输出必须是受控变体（结构化 LayoutPlan + override），不做自由绘制工具
 - 编辑走 LayoutPlan/override 的两层模型；复合字体 + 竖排已实现
 - 排版质量指标 / 历史追踪 / 全出血固定页导出 已落地
-- **主交付改为导出 IDML 交 InDesign 精调 + 印前**；最大未知是 CJK 保真度（竖排/复合
-  字体/避头尾/框架网格）能否干净落进 InDesign——以 `--idml-spike` 最小验证先证伪
+- **主交付改为导出 IDML 交 InDesign 精调 + 印前**：`--export-idml` 全量映射已落地并经
+  用户 InDesign 中文版视觉验收（竖排/复合字体/避头尾/图链/表格/脚注/动态目录/蒙版/对开
+  全部通过）；曾担心的 CJK 保真度风险已用「不变量断言闸 + InDesign 往返 oracle」化解
+  （见 `docs/idml-oracle/FINDINGS.md`）。剩余可选：IDML-RNG lint、约物挤压/基线网格

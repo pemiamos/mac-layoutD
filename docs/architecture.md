@@ -1,7 +1,7 @@
 # layoutD 软件架构
 
 状态：Draft  
-日期：2026-06-15（2026-06-18 修订）
+日期：2026-06-15（2026-06-23 修订）
 
 ## 架构目标
 
@@ -108,10 +108,11 @@ AI 和模板系统的共同输出格式。它描述“建议如何排”，不�
 - **AI / 模板**：规则型 `LayoutPlan` 候选 + 可插拔 `LayoutPlanProvider`（provider→规则回退）；页面级与章节级版式模板；项目内命名模板的保存、retarget、导入/导出。
 - **预检**：元数据/结构/引用/素材/分页/版面/排印/目录多类问题；frame 级定位与 `suggestedFix`；保守自动修复（`autoFixKind`）；`exportReady` 与按 PRD 成功指标对齐的 `qualityMetrics`（页数、AI 计划采纳页数、自动初排页数、低 DPI / 缺图注命中、版面问题数）。
 - **导出**：审校 PDF（页码范围、裁切线、校对网格）、页面 PNG（范围与倍率）、结构化 `.layoutd`、预检 JSON；CLI `--validate` 作为质量门，`--apply-preflight-fixes` 可在导出前应用保守修复。
+- **IDML 主交付（阶段 E，已落地并经 InDesign 中文版验收）**：`BookProject → IDML` 全量映射（页/文本框/段落样式/颜色 token→Swatch/置入图打包重链/复合字体/竖排/避头尾禁则/行内粗斜/脚注/原生表格/动态目录 TOCStyle/非矩形蒙版/对开跨页），原生 `ZIPArchiveWriter` 打包（mimetype store-first），App/CLI 均有导出入口与选项面板。CJK 保真走「不变量断言闸 + InDesign 往返 oracle」两层守护（见 `docs/idml-oracle/FINDINGS.md`）。CMYK/PDF/X 交 InDesign，不自建。
 
 ## 当前验证状态
 
-完整 Xcode 工具链下 `swift build` 与 `swift test` 均通过（当前测试套件含 124 个测试函数；以本机 `swift test` 实测为准，不在文档中固定数字以免漂移）。覆盖范围包括导入、分页、中文禁则与混排、AI provider 回退、各级版式模板、模板库导入导出、预检分类与自动修复、PDF/PNG/项目导出、CLI 质量门，以及版式计划校验回退。
+完整 Xcode 工具链下 `swift build` 与 `swift test` 均通过（测试数量以本机 `swift test` 实测为准，不在文档中固定数字以免漂移）。覆盖范围包括导入、分页、中文禁则与混排、AI provider 回退、各级版式模板、模板库导入导出、预检分类与自动修复、PDF/PNG/项目导出、CLI 质量门、版式计划校验回退，以及 IDML 导出的容器级断言与不变量闸（`scripts/review-idml.sh` 解包校验 `<Table>`/`<TOCStyle>`/PathGeometry 等结构）。
 
 历史阻塞：机器仅装 Command Line Tools 时 `Foundation` / `PackageDescription` 出现 SDK 模块冲突。解决方式是安装完整 Xcode 并执行：
 
@@ -143,15 +144,18 @@ sudo xcodebuild -license accept
 6. **竖排（直排）**：纵向文本流、分页方向与 frame 几何；最大引擎改动，放在 A/B 稳定后。（已实现）
 7. **两层模型**：为"固定美术页 / 置入装饰资产 / 非矩形蒙版"建一等承载，使满版图、扉页、扇面/印章等成品美术不进重排但可置入。（已实现）
 
-**阶段 D（收尾 / 增强，部分已完成）**
-8. `qualityMetrics` 接入可视化与历史追踪（已实现）；封面/满版图作固定页导出（已实现）；批注层；DOCX 导入。
+**阶段 D（收尾 / 增强，✅ 已完成）**
+8. `qualityMetrics` 接入可视化与历史追踪（已实现）；封面/满版图作固定页导出（已实现）；
+   校对批注层（已实现）；DOCX 导入（已实现，用户视觉验收通过）。
 
-**阶段 E（主交付路线：IDML 灌版交棒，进行中）**
+**阶段 E（主交付路线：IDML 灌版交棒，✅ 核心已落地并经 InDesign 验收）**
 9. **IDML 导出**（从阶段 D 的「结构参照」升级为一等导出格式）。最小验证 spike
-   先行（`--idml-spike`：跨页 + 中文段落样式文本框 + 竖排文本框 + 置入图 + CMYK
-   Swatch），在 InDesign 中文版打开证伪；**唯一高风险是 CJK 保真度（竖排、复合字体、
-   避头尾、框架网格）能否干净落进 InDesign**。v1 验证基础包有效性 + 竖排，v2 再压测
-   复合字体，验证通过后再做正式的 `BookProject → IDML` 全量映射。CMYK/PDF/X 由
-   InDesign 完成（不自建）。
+   （`--idml-spike`）已在 InDesign 中文版人工验证通过（竖排/复合字体/图链/CMYK Swatch
+   全 round-trip），随后落地正式的 `BookProject → IDML` 全量映射（`--export-idml`）：
+   全量样式/颜色/图片打包重链/复合字体/竖排/避头尾/行内格式/脚注/原生表格/动态目录/
+   非矩形蒙版/对开跨页，均经用户 InDesign 视觉验收。曾担心的 CJK 保真度风险已用
+   「不变量断言闸 + InDesign 往返 oracle」两层守护化解（首战即修正了 CJK 排版器
+   `Composer` 三处错误，见 `docs/idml-oracle/FINDINGS.md`）。CMYK/PDF/X 由 InDesign
+   完成（不自建）。剩余可选增量：IDML-RNG lint（E1b③）、约物挤压/基线网格（E3-9）。
 
 > 排版与中文（复合字体/竖排/禁则约物）必须是 layoutD 自有引擎——外部设计工具均不提供（见 [design-tool-comparison.md](design-tool-comparison.md)）。
