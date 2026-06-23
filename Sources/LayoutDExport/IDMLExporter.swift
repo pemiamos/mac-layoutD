@@ -41,10 +41,17 @@ public struct IDMLExporter {
     private let header = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
     private let pkgNS = "xmlns:idPkg=\"http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging\""
     private let dom = "16.0"
-    // 着重号(Kenten)、避头尾等 CJK 排版特性只在 World-Ready / 日文段落排版器下渲染；
-    // 默认拉丁排版器会静默忽略 KentenKind。World-Ready 段落排版器的 IDML 内部名为
-    // "$ID/HL Composer Optyca"（日文段落排版器为 "$ID/HL Composer J"）。
-    private let appliedComposer = "$ID/HL Composer Optyca"
+    // 着重号(Kenten)、避头尾等 CJK 排版特性只在 CJK/World-Ready 段落排版器下渲染；
+    // 拉丁排版器会静默忽略 KentenKind。
+    //
+    // 经真·InDesign 2026 存盘比对(Desktop/未命名-1.idml → /tmp/idml-oracle, 2026-06-23):
+    // ① 正确属性名是 Composer(不是 AppliedComposer——InDesign 无此属性、会被忽略);
+    // ② 正确值是 "HL Composer J"(CJK/World-Ready, 无 $ID/ 前缀)——"HL Composer Optyca"
+    //    其实是拉丁段落排版器(此前注释把中西身份搞反了);
+    // ③ 真值挂在段落样式定义与文档 <TextDefault> 上, 不逐 Story 段落内联。
+    // 故本导出器把 Composer 写进每个 ParagraphStyle + [No paragraph style] + TextDefault,
+    // Story 段落不再写(已删除无效的 AppliedComposer)。
+    private let composer = "HL Composer J"
 
     // MARK: - 入口
 
@@ -691,7 +698,7 @@ public struct IDMLExporter {
             let applied = isComposite ? "CF_\(xmlSafe(style.id))" : famFallback
             let fontStyleAttr = isComposite ? "" : " FontStyle=\"\(esc(styleFallback))\""
             paras += """
-            \t\t<ParagraphStyle Self="ParagraphStyle/\(xmlSafe(style.id))" Imported="false" Name="\(esc(style.displayName))" PointSize="\(fmt(style.fontSize))" Leading="\(fmt(style.lineHeight))" FirstLineIndent="\(fmt(style.firstLineIndent))" SpaceBefore="\(fmt(style.spaceBefore))" SpaceAfter="\(fmt(style.spaceAfter))" FillColor="\(fill)"\(fontStyleAttr) Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
+            \t\t<ParagraphStyle Self="ParagraphStyle/\(xmlSafe(style.id))" Imported="false" Name="\(esc(style.displayName))" PointSize="\(fmt(style.fontSize))" Leading="\(fmt(style.lineHeight))" FirstLineIndent="\(fmt(style.firstLineIndent))" SpaceBefore="\(fmt(style.spaceBefore))" SpaceAfter="\(fmt(style.spaceAfter))" FillColor="\(fill)"\(fontStyleAttr) Composer="\(composer)" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
             \t\t\t<Properties>
             \t\t\t\t<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
             \t\t\t\t<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -714,7 +721,7 @@ public struct IDMLExporter {
         \t\t<CharacterStyle Self="CharacterStyle/$ID/[No character style]" Imported="false" Name="$ID/[No character style]"/>
         \t</RootCharacterStyleGroup>
         \t<RootParagraphStyleGroup Self="u_rpsg">
-        \t\t<ParagraphStyle Self="ParagraphStyle/$ID/[No paragraph style]" Imported="false" Name="$ID/[No paragraph style]"/>
+        \t\t<ParagraphStyle Self="ParagraphStyle/$ID/[No paragraph style]" Imported="false" Name="$ID/[No paragraph style]" Composer="\(composer)"/>
         \(paras)\t</RootParagraphStyleGroup>
         \(tocStyle)
         \t<RootCellStyleGroup Self="u_rcellsg"><CellStyle Self="CellStyle/$ID/[None]" Name="$ID/[None]"/></RootCellStyleGroup>
@@ -734,6 +741,7 @@ public struct IDMLExporter {
         <idPkg:Preferences \(pkgNS) DOMVersion="\(dom)">
         \t<DocumentPreference PageHeight="\(fmt(pageH))" PageWidth="\(fmt(pageW))" PagesPerDocument="1" FacingPages="\(facing)" DocumentBleedTopOffset="0" DocumentBleedBottomOffset="0" DocumentBleedInsideOrLeftOffset="0" DocumentBleedOutsideOrRightOffset="0" DocumentBleedUniformSize="true" SlugTopOffset="0" SlugBottomOffset="0" SlugInsideOrLeftOffset="0" SlugRightOrOutsideOffset="0" DocumentSlugUniformSize="false" PreserveLayoutWhenShuffling="true" AllowPageShuffle="true" OverprintBlack="true" PageBinding="LeftToRight" ColumnDirection="Horizontal" SpreadHiddenVisibility="false" Intent="PrintIntent" CreatePrimaryTextFrame="false" ColumnGuideLocked="true" MasterTextFrame="false" SnippetImportUsesOriginalLocation="false"/>
         \t<ViewPreference HorizontalMeasurementUnits="Points" VerticalMeasurementUnits="Points" RulerOrigin="PageOrigin"/>
+        \t<TextDefault Composer="\(composer)" AppliedLanguage="$ID/Chinese: Simplified" KinsokuType="KinsokuPushInFirst"/>
         </idPkg:Preferences>
         """
     }
@@ -852,7 +860,7 @@ public struct IDMLExporter {
         let effectiveParagraphs = paragraphs.isEmpty ? [(text, 0)] : paragraphs
         let body = effectiveParagraphs.map { line, start in
             """
-            \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)">
+            \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
             \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes, footnoteStyleRef: footnoteStyleRef))
             \t\t</ParagraphStyleRange>
             """
@@ -956,7 +964,7 @@ public struct IDMLExporter {
         // 又能在脚注内出现着重号/避头尾时正确排版。
         return """
         \t\t\t<Footnote>
-        \t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)">
+        \t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
         \(body)
         \t\t\t\t</ParagraphStyleRange>
         \t\t\t</Footnote>
@@ -1002,7 +1010,7 @@ public struct IDMLExporter {
                 let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: runs)
                 cellsXML.append("""
                 \t\t\t\t\t<Cell Self="\(tableSelf)Cell\(c)_\(r)" Name="\(c):\(r)" RowSpan="1" ColumnSpan="1" AppliedCellStyle="CellStyle/$ID/[None]"\(fillAttr) \(border)>
-                \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)" FirstLineIndent="0" Justification="LeftJustified">
+                \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" FirstLineIndent="0" Justification="LeftJustified">
                 \(cellBody)
                 \t\t\t\t\t\t</ParagraphStyleRange>
                 \t\t\t\t\t</Cell>
@@ -1023,7 +1031,7 @@ public struct IDMLExporter {
         <idPkg:Story \(pkgNS) DOMVersion="\(dom)">
         \t<Story Self="\(id)" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
         \t\t<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
-        \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" AppliedComposer="\(appliedComposer)">
+        \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
         \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]">
         \(table)
         \t\t\t\t<Content></Content>
@@ -1061,7 +1069,7 @@ public struct IDMLExporter {
             let style = entry.level <= 1 ? "tocLevel1" : "tocLevel2"
             let paragraphBreak = index < entries.count - 1 ? "\n" : ""
             return """
-            \t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/\(style)" AppliedComposer="\(appliedComposer)">
+            \t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/\(style)">
             \(tabList)
             \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>\(esc(entry.title))\t\(entry.pageNumber)\(paragraphBreak)</Content></CharacterStyleRange>
             \t\t</ParagraphStyleRange>

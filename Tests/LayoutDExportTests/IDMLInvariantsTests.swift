@@ -18,42 +18,67 @@ final class IDMLInvariantsTests: XCTestCase {
 
     private func rules(_ vs: [IDMLInvariantViolation]) -> Set<String> { Set(vs.map(\.rule)) }
 
-    // MARK: - 规则①：着重号需 World-Ready 排版器
-
-    func testKentenWithWorldReadyComposerPasses() {
-        let xml = story("""
-        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body" AppliedComposer="$ID/HL Composer Optyca">
-        <CharacterStyleRange KentenKind="KentenSesameDot"><Content>着重</Content></CharacterStyleRange>
+    /// 着重号 Story（段落引用某样式），可附带 Styles.xml 段落样式与 Preferences TextDefault。
+    /// 排版器真值挂在样式上，故 rule① 需跨部件解析。
+    private func kentenFiles(styleRef: String = "ParagraphStyle/body",
+                             styleComposer: String?? = .some("HL Composer J"),
+                             textDefaultComposer: String? = nil,
+                             kentenKind: String = "KentenSesameDot") -> [String: String] {
+        var files = story("""
+        <ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
+        <CharacterStyleRange KentenKind="\(kentenKind)"><Content>着重</Content></CharacterStyleRange>
         </ParagraphStyleRange>
         """)
-        XCTAssertTrue(IDMLInvariants.check(files: xml).isEmpty)
+        // styleComposer: 外层 .none = 不生成该样式；内层 .none = 样式存在但无 Composer 属性。
+        if case let .some(composer) = styleComposer {
+            let attr = composer.map { " Composer=\"\($0)\"" } ?? ""
+            files["Resources/Styles.xml"] = "<idPkg:Styles><RootParagraphStyleGroup>"
+                + "<ParagraphStyle Self=\"\(styleRef)\" Name=\"body\"\(attr)/></RootParagraphStyleGroup></idPkg:Styles>"
+        }
+        if let td = textDefaultComposer {
+            files["Resources/Preferences.xml"] = "<idPkg:Preferences><TextDefault Composer=\"\(td)\"/></idPkg:Preferences>"
+        }
+        return files
     }
 
-    func testKentenWithLatinComposerFails() {
-        let xml = story("""
-        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body" AppliedComposer="$ID/HL Composer">
-        <CharacterStyleRange KentenKind="KentenSesameDot"><Content>着重</Content></CharacterStyleRange>
-        </ParagraphStyleRange>
-        """)
-        XCTAssertEqual(rules(IDMLInvariants.check(files: xml)), ["kenten-needs-world-ready-composer"])
+    // MARK: - 规则①：着重号需 World-Ready 排版器（真值：挂在段落样式 / TextDefault 上）
+
+    func testKentenWithWorldReadyStylePasses() {
+        let files = kentenFiles(styleComposer: .some("HL Composer J"))
+        XCTAssertTrue(IDMLInvariants.check(files: files).isEmpty)
     }
 
-    func testKentenWithMissingComposerFails() {
-        let xml = story("""
-        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">
+    func testKentenWithLatinStyleFails() {
+        // "HL Composer Optyca" 是拉丁排版器，不渲染着重号。
+        let files = kentenFiles(styleComposer: .some("HL Composer Optyca"))
+        XCTAssertEqual(rules(IDMLInvariants.check(files: files)), ["kenten-needs-world-ready-composer"])
+    }
+
+    func testKentenStyleInheritingWorldReadyTextDefaultPasses() {
+        // 样式自身无 Composer，但文档 TextDefault 是 World-Ready → 继承通过。
+        let files = kentenFiles(styleComposer: .some(.none), textDefaultComposer: "HL Composer J")
+        XCTAssertTrue(IDMLInvariants.check(files: files).isEmpty)
+    }
+
+    func testKentenWithNoComposerAnywhereFails() {
+        let files = kentenFiles(styleComposer: .some(.none))
+        XCTAssertEqual(rules(IDMLInvariants.check(files: files)), ["kenten-needs-world-ready-composer"])
+    }
+
+    func testKentenWithInlineComposerOnPSRPasses() {
+        // 段落自带 Composer（罕见，但合法）→ 以自身为准。
+        var files = story("""
+        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body" Composer="HL Composer J">
         <CharacterStyleRange KentenKind="KentenSesameDot"><Content>着重</Content></CharacterStyleRange>
         </ParagraphStyleRange>
         """)
-        XCTAssertEqual(rules(IDMLInvariants.check(files: xml)), ["kenten-needs-world-ready-composer"])
+        files["Resources/Styles.xml"] = "<idPkg:Styles></idPkg:Styles>"
+        XCTAssertTrue(IDMLInvariants.check(files: files).isEmpty)
     }
 
     func testKentenNoneIsNotFlagged() {
-        let xml = story("""
-        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body" AppliedComposer="$ID/HL Composer">
-        <CharacterStyleRange KentenKind="KentenNone"><Content>普通</Content></CharacterStyleRange>
-        </ParagraphStyleRange>
-        """)
-        XCTAssertTrue(IDMLInvariants.check(files: xml).isEmpty)
+        let files = kentenFiles(styleComposer: .some("HL Composer Optyca"), kentenKind: "KentenNone")
+        XCTAssertTrue(IDMLInvariants.check(files: files).isEmpty)
     }
 
     // MARK: - 规则②：脚注正文需中文复合字体样式（脚注 PSR 嵌在正文 PSR 内）
