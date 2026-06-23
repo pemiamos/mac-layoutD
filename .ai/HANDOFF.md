@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-23 14:03 | claude | B 工程健壮性全部完成并合 dev。① 修 Fonts.xml 导出非确定性根因：复合字体映射是字典[CompositeFontClass:Mapping]，r
+- **分支**：dev
+- **概述**：B 工程健壮性全部完成并合 dev。① 修 Fonts.xml 导出非确定性根因：复合字体映射是字典[CompositeFontClass:Mapping]，registerParagraphStyle 按字典自然序遍历调 font()→fontOrder/Self ID 每次导出漂移；改按 CompositeFontClass.allCases 固定序遍历，实测整个 IDML 两次导出逐文件一致；补 testExportIsByteDeterministic 锁定。② CI：.github/workflows/ci.yml，push main/dev+PR 触发 macOS runner 跑 review-idml.sh（build+201测试+IDML探针）。③ golden-file 回归：scripts/golden-{snapshot,update,check}.sh + Tests/golden 基线（本地工具，不进 CI——快照含本机 CoreText 解析的字体名，跨 runner 会误报；同机确定性由单测覆盖）。④ CI 首跑即照出一个既有 bug：AppStateTests.testGenerateBrochurePDF 把 PDF/PNG 写死到 /Users/amos/.gemini/antigravity/brain/... 本机绝对路径，换机即权限错——改写临时目录+defer 清理。CI 现已转绿(review 1m48s PASS)。commit：8969be3(determinism)+85e7d5e(CI/golden)+9e35c58(golden 出 CI)+84f6f0e(test 路径修复)，已 push origin/dev。
+- **改动文件**：(未填)
+- **检查**：本地 swift build + 201 测试 + review-idml.sh 6/0 PASS；整 IDML 两次导出逐文件一致(golden-check PASS)；GitHub Actions CI(macOS) review job PASS 1m48s。
+- **下一步**：① 可把 B 这批 dev→main（CI 已绿，无视觉项，纯工程，建议直接合）。② 残留小项：AppStateTests:273 仍有硬编码图片读路径(优雅降级不阻塞 CI，可顺手清)；ci.yml 的 actions/checkout 可升 v5 消弃用提醒。③ 主交付主体+工程健壮性均完成。后续方向待用户：Backlog(索引/参考文献等)或拿真实书稿试跑。④ AG/Codex 空闲。⑤ 守 N1/N2/N3。
+
 ## 2026-06-23 13:54 | claude | 三层保真策略第①层落地:灌版打包前的"不变量断言闸"(IDMLInvariants)。背景见 DECISIONS.md(2026-06-23):10-agent
 - **分支**：dev
 - **概述**：三层保真策略第①层落地:灌版打包前的"不变量断言闸"(IDMLInvariants)。背景见 DECISIONS.md(2026-06-23):10-agent 工作流验证——外化 Adobe ExtendScript/UXP API 治不了我们的 CJK 保真坑(着重号/脚注/粗斜体),因为那三个 bug 名字全合规范,病根是 InDesign 渲染偷偷要求的"搭档属性"缺失,而任何规范都只逐属性校验、不编码跨属性前置条件。故改用断言闸锁已知规则。本层用 Foundation XMLParser 走 Story XML(正确处理脚注 PSR 嵌套),锁四条:①KentenKind 须配 World-Ready 排版器 ②脚注正文段落含 CJK 不能挂 [No paragraph style] ③CJK 粗/斜体须 FauxBold/Skew 不用 FontStyle ④AppliedFont 引用完整性。校验对象是实际出厂的 files 字典而非构建逻辑;export() 打包前调用,违规抛 ExportError.invariantsFailed。
