@@ -75,7 +75,7 @@
 > ⏸ **E3-8 CMYK 暂缓**；E3-9 约物挤压维持原排期。
 > 注意斜体导出已用 `Skew="12"`、粗体用 `FauxBold="true"`（别用 `FauxItalic`/`FontStyle`，对 CJK 不可见/出粉色替代字形）。
 
-- [ ] **IMP-1 多段 frontmatter 漏成正文（Claude 2026-06-23 勘根因）** — Codex @ `feature/codex-imp1-frontmatter`
+- [x] **IMP-1 多段 frontmatter 止血** — ✅ Codex 实现 `feature/codex-imp1-frontmatter`(ac903f3)，Claude 审过合 dev+main(c19dd05)。段边界+整块全 key:value 双护栏不误吃正文;title→# 标题。test_emphasis_visual.md 验证零漏出。
   - **现象**（用户 InDesign 截图实证）：`Samples/test_emphasis_visual.md` 用「每段一个 `---…---` 头」想给第二段切竖排，但第二个 `---title: 竖排排版测试\nlayout_direction: vertical\ncolumns: 1---` 块**被当正文画了出来**（`title: …`、`columns: 1` 成了可见段落）。
   - **根因**：`MarkdownBookImporter.extractFrontMatter`（:1035）只认**文件首个** `---` 块；正文解析器不识别其后的 `---…---` 元数据块，于是 `---` 当分隔线、`key: value` 当正文文字漏出。
   - **模型事实（先读懂再动手）**：竖排在本模型是**按段落样式** `style.layoutDirection`（`ChineseTypesetting`）控制的，PageSetup.layoutDirection 只是文档默认——**不存在"分段头切方向"机制**。所以「第二段头让该段竖排」目前模型不直接支持。
@@ -84,7 +84,7 @@
   - **验收**：①`test_emphasis_visual.md` 导出后**不再**出现 `title:`/`columns:`/`layout_direction:` 字样的正文段；② 第二段标题（竖排排版测试 / 竖排强调测试）正常成段/标题；③ 补端到端断言（导出 Story 不含 `layout_direction` 文本）；④`scripts/review-idml.sh` PASS。**修法别破坏**首个 frontmatter 既有解析（title/author/pageSetup 全保留）。
   - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`（仅此一文件，blast radius 小）。
 
-- [ ] **IMP-2 DOCX 内嵌图导入（Claude 2026-06-23 试跑实测缺口）** — 🅰️ **改派 AG（用户 2026-06-24，Codex 近期少用）** @ `feature/ag-imp2-docx-images`
+- [x] **IMP-2 DOCX 内嵌图导入** — ✅ AG 实现 `feature/ag-imp2-docx-images`(3175bae)，Claude 审过合 dev+main(c19dd05)。真实书稿 layoutD村落.docx 验证:assets:3、3 图落对应段位、IDML Links/ 含 3 图、尺寸正确。⚠️遗留小优化:图片写到 docx 旁 images/ 目录(仓库外),将来宜改临时/工程目录。
   - ⚠️ 本任务跨进 import 文件 `DOCXBookImporter.swift`（原 Codex 道）——用户已授权 AG 做；AG 注意这不是渲染层，是导入器加内嵌图提取+落帧。
   - **现象**：`DOCXBookImporter` 当前**完全跳过内嵌图**（源码注释自承"leaves drawings/media to a later asset-import pass"）。实测真实书稿 `layoutD村落.docx`（含 3 张内嵌 PNG）导入后 `assets: 0`，图全丢、位置也丢。
   - **docx 内嵌图结构（已勘，照此实现）**：
