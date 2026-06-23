@@ -18,10 +18,12 @@ This repository currently contains a Swift Package scaffold:
 - `LayoutDDesignAI`: rule-based and provider-backed AI-advisor boundary for structured `LayoutPlan` candidates.
 - `LayoutDImport`: Markdown manuscript importer and image asset scanner.
 - `LayoutDCheck`: project and asset issue inspection.
-- `LayoutDExport`: PDF export boundary.
+- `LayoutDExport`: export boundary — **IDML (primary deliverable)**, plus PDF / PNG / preflight JSON.
 - `LayoutDApp`: macOS AppKit desktop shell.
 
-The MVP now supports a practical end-to-end loop: import a Markdown manuscript, scan referenced images, generate cover/contents/body pages, preview the deterministic layout, save a `.layoutd` project, and export a PDF.
+The MVP supports a practical end-to-end loop: import a Markdown/DOCX manuscript, scan referenced images, generate cover/contents/body pages, preview the deterministic layout, save a `.layoutd` project, and export a PDF.
+
+**Primary delivery route — IDML → InDesign.** layoutD's main job is to pour "visual spec + content" into a high-quality first layout and **export IDML for InDesign** to do manual fine-tuning and prepress (a one-way handoff; InDesign is the source of truth after export). The `BookProject → IDML` full mapping is implemented and has passed manual visual acceptance in Chinese InDesign — covering full styles, color tokens → swatches, packaged & relinked images, composite fonts, vertical writing, kinsoku, inline bold/italic, footnotes, native tables, dynamic TOC, non-rectangular masks, and facing-page spreads. CJK fidelity is guarded by an invariants assertion gate plus an InDesign round-trip oracle (see `docs/idml-oracle/FINDINGS.md`). CMYK / PDF-X are left to InDesign and intentionally not built in layoutD.
 
 ## Local Commands
 
@@ -41,6 +43,7 @@ Inside the app:
 
 - `File -> Open Project, Markdown/DOCX, or Chapter Package...` opens `.layoutd`, `.json`, `.md`, `.markdown`, `.txt`, `.docx`, or a chapter package directory. DOCX import preserves headings, basic bold/italic runs, lists, and tables; embedded images are not imported in the first version.
 - `File -> Save Project...` saves the current structured project as `.layoutd`.
+- `File -> Export IDML...` exports the current layout as an InDesign IDML package (the primary delivery format), with an options panel for facing-page mode.
 - `File -> Export PDF...` exports the current layout.
 - `File -> Export PNG Previews...` exports page preview images as `page-001.png`, `page-002.png`, and so on.
 - `File -> Export Preflight Report...` exports the current project checks as JSON.
@@ -77,6 +80,13 @@ PDF export also supports page ranges and proofing guides:
 
 ```bash
 swift run layoutD -- --export-pdf /tmp/layoutD-proof.pdf --pdf-pages 1,3 --pdf-crop-marks --pdf-grid-guides Samples/demo.md
+```
+
+To export an IDML package for InDesign (the primary delivery format), optionally in facing-page spreads:
+
+```bash
+swift run layoutD -- --export-idml /tmp/layoutD-demo.idml Samples/demo.md
+swift run layoutD -- --export-idml /tmp/layoutD-facing.idml --idml-facing Samples/demo.md
 ```
 
 To export a structured layoutD project file:
@@ -247,9 +257,11 @@ The deterministic engine currently generates:
 ## Verification
 
 `swift build` and `swift test` both pass on a full Xcode toolchain. The suite
-currently holds 124 test functions covering import, pagination, Chinese
-line-break and spacing rules, the AI provider fallback, page/chapter/saved
-layout templates and library import/export, preflight categories and auto-fixes,
-layout-plan validation fallback, and PDF/PNG/project/preflight export. The exact
-count is whatever `swift test` reports — it is intentionally not pinned here so
-the README does not drift as tests are added.
+covers import, pagination, Chinese line-break and spacing rules, the AI provider
+fallback, page/chapter/saved layout templates and library import/export, preflight
+categories and auto-fixes, layout-plan validation fallback, PDF/PNG/project/preflight
+export, and IDML export (container-level assertions plus the invariants gate). The
+exact count is whatever `swift test` reports — it is intentionally not pinned here so
+the README does not drift as tests are added. `scripts/review-idml.sh` additionally
+unpacks an exported IDML and checks structural elements (`<Table>`, `<TOCStyle>`,
+PathGeometry, etc.).

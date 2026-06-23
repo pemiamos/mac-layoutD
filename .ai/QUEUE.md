@@ -70,7 +70,7 @@
 > 高风险/重要的 IDMLExporter 导出任务（E3-4b/E3-6/E2-5/E2-4）**全部改判 Claude 直接做**（见下方「Claude 道」）。
 > AG 升为主力。
 >
-> **🔁 Codex 当前序列：① D-2 DOCX 导入（已交 `85d7a00`，待 Claude 集成）→ ② IMP-1 多段 frontmatter 漏成正文（见下，Claude 2026-06-23 勘）。**
+> **🔁 Codex 近期少用（用户 2026-06-24）。** IMP-3 已 Claude 完成、IMP-2 改派 AG；Codex 当前仅剩 IMP-1 多段 frontmatter 止血（见下），有空再做。
 > 下面 E3-4b/E3-6/E2-5 虽列在本道，但**已改判 Claude**（各条已标），Codex **不要做**。
 > ⏸ **E3-8 CMYK 暂缓**；E3-9 约物挤压维持原排期。
 > 注意斜体导出已用 `Skew="12"`、粗体用 `FauxBold="true"`（别用 `FauxItalic`/`FontStyle`，对 CJK 不可见/出粉色替代字形）。
@@ -83,6 +83,30 @@
   - **❌ 不做**：多段 frontmatter 切竖排——用户明确不需要文档内横竖混排（竖排走段落样式即可，决策见 `.ai/DECISIONS.md` 2026-06-23）。本任务纯止血。
   - **验收**：①`test_emphasis_visual.md` 导出后**不再**出现 `title:`/`columns:`/`layout_direction:` 字样的正文段；② 第二段标题（竖排排版测试 / 竖排强调测试）正常成段/标题；③ 补端到端断言（导出 Story 不含 `layout_direction` 文本）；④`scripts/review-idml.sh` PASS。**修法别破坏**首个 frontmatter 既有解析（title/author/pageSetup 全保留）。
   - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`（仅此一文件，blast radius 小）。
+
+- [ ] **IMP-2 DOCX 内嵌图导入（Claude 2026-06-23 试跑实测缺口）** — 🅰️ **改派 AG（用户 2026-06-24，Codex 近期少用）** @ `feature/ag-imp2-docx-images`
+  - ⚠️ 本任务跨进 import 文件 `DOCXBookImporter.swift`（原 Codex 道）——用户已授权 AG 做；AG 注意这不是渲染层，是导入器加内嵌图提取+落帧。
+  - **现象**：`DOCXBookImporter` 当前**完全跳过内嵌图**（源码注释自承"leaves drawings/media to a later asset-import pass"）。实测真实书稿 `layoutD村落.docx`（含 3 张内嵌 PNG）导入后 `assets: 0`，图全丢、位置也丢。
+  - **docx 内嵌图结构（已勘，照此实现）**：
+    1. `word/_rels/document.xml.rels` 把 `rId → media 文件`：`rId4→media/image1.png`、`rId5→image2`、`rId6→image3`。
+    2. 正文 `word/document.xml` 里图以 `<w:drawing>…<a:blip r:embed="rId4"/>…<wp:extent cx=".." cy=".."/>` 内联在某个 `<w:p>` 段——**该段位置就是图的位置**（实测分别在第 31/53/72 段）。`cx/cy` 单位是 EMU（914400 EMU/英寸）→ 转 pt/mm 得原始显示尺寸。
+  - **要做**：解析 rels 映射 → 解析每个 `<w:drawing>` 的 `r:embed` + `wp:extent` → 从 docx zip 抽出对应 media 字节落到资产目录 → 建 `Asset` + 在该段位置插入图片 `PageFrame`（content=.asset），尺寸用 extent（或按栏宽适配）。
+  - **验收**：导入 `layoutD村落.docx` 后 `assets: 3`、3 个图框落在第 31/53/72 段对应位置；`--export-png-flow` 出图；`--export-idml` 的 `Links/` 含 3 图；补端到端断言（assets 数 + 图框位置顺序）；`scripts/review-idml.sh` PASS。
+  - **文件**：`Sources/LayoutDImport/DOCXBookImporter.swift`（+ 资产落地，blast radius 小）。
+  - 参考：抠好的 3 张图在 `~/Desktop/pilot-村落-图片/`（≈1400×780px）。
+
+- [x] **IMP-3 角色标签结构化导入** — ✅ **Claude 接手完成并合 dev（`4507e65`）**。Codex 初版有 4 个真 bug（角色 over-apply 不复位 / 字体名凭猜错成苹果兰亭黑 / 新字体未进合规白名单致分页崩+越界崩溃 / 斜杠合写标签漏出），Claude 全修，真实书稿 `layoutD村落.docx` 端到端验证：标签零漏出、角色段数全对、IDML 输出中文命名段落样式直通 InDesign、抽言=江城律动宋/概述=方正兰亭细黑/英文=Georgia。218/0 PASS。⚠️ **Codex 请丢弃自己 worktree 里的 IMP-3 未提交改动**（已被 Claude 版本取代）。遗留：正文/一二级标题仍用默认 Songti/PingFang（改全局默认会牵动一批硬编码分页测试，单独一步做，见下）。
+- [ ] ~~**IMP-3 角色标签结构化导入**~~（已完成，上方）— Codex @ `feature/codex-imp3-role-tags`
+  - **背景**：真实书稿用"角色标签"约定——每个内容块前一行标明角色（章名/节名/文章名/概述/抽言…）。通用导入读不懂→标签当正文画、角色全塌成两档。这是 layoutD「结构化书籍工程」的核心能力。完整勘查见 `docs/pilot-findings.md`。
+  - **要做（两部分）**：
+    - **A 解析层**（`DOCXBookImporter` + `MarkdownBookImporter` 共用一个角色识别器）：识别"角色标签段"→**消费掉标签本身（不输出）**→把其后内容块标成该角色，直到下一个标签/标题。
+    - **B 角色→样式**（`BookProject.swift` 默认 StyleLibrary 扩样式角色 + 映射）。
+  - **角色标签词表（可配置/可扩展，先内置）**：`一级标题/章名`→章标题H1(黑体-简/28)；`二级标题/节名`→节标题H2(黑体-简/20)；`三级标题/文章名`→文章标题**H3 新增**(黑体-简/16)；`开节概述`→概述(方正兰亭细黑/11)；`开节概述英文`→英文概述(**Georgia**/10)；`抽言`→抽言(**江城律动宋**/15,居中或缩进)；无标签默认→正文(方正兰亭细黑/10.5,行距≈1.6)。
+  - **特例（已与用户确认）**：① `抽言` 在 Word 里无独立样式（标签与文字都标"正文"）——**只能靠标签认**，作用于标签后紧邻一段；② `开节概述英文` 作用于其后英文段（到下一标签止）；③ **`可视化信息：…` 开头段整段丢弃、不印**（绘图指令）；④ **`参考文献` 段+其后列表→小字正文+悬挂缩进**（不做引文样式）。
+  - **字体落地**：本机均已装（Claude 已核）；字号/字体做**默认值、用户实操可改**（走样式编辑别写死）。标题字体=系统黑体-简（CoreText `Heiti SC`）。
+  - **★ 直通 InDesign 段落样式（用户 2026-06-23 明确要求）**：每个角色样式必须带**规范中文 displayName**（正文/章标题/节标题/文章标题/开节概述/英文概述/抽言/参考文献）——导出器已把 `displayName` 写成 IDML `<ParagraphStyle Name="…">`，故打开 InDesign 即为同名段落样式。**这是一套映射两头通用**（灌版预览 + IDML 导出共用同一"角色→样式"定义，单一真理源）。验收追加：导出 IDML 后 Styles.xml 含上述命名段落样式、每个 Story 段落 `AppliedParagraphStyle` 指向对应角色样式；用户在 InDesign 段落样式面板能看到这些中文名并改一处全书联动。
+  - **验收**：导入 `layoutD村落.docx`——① 10 个标签段不外漏；② 章/节/文章名各成对应级标题、抽言×3 走江城律动宋、英文概述走 Georgia、概述独立样式；③ `可视化信息：`段不印；④ 参考文献小字悬挂缩进；⑤ `--export-png-flow` 结构正确；⑥ 补端到端断言（标签不外漏+各角色样式 id）；⑦ `review-idml.sh` PASS；⑧ **向后兼容**：无标签普通稿行为不变。
+  - **文件**：`DOCXBookImporter.swift`、`MarkdownBookImporter.swift`、`BookProject.swift`。**⚠️ 核心且精细，Claude 严审**；边界拿不准先在 handoff 记、别硬猜。
 
 - [x] **E3-1 行内格式补全到所有 block** — Codex @ `feature/codex-inline-blocks`, commit `8201059`
   - 目标：当前只普通正文段落持久化 inlineRuns；扩到标题/列表/引用/callout。先抽一个统一的 `Paragraph` 构造 helper，再让所有 Markdown block 分支走它。
@@ -206,7 +230,8 @@
 >
 > **⭐ AG 为主力**（用户决定：Codex 不靠谱、少排；AG 多排、连续作业）。预览+GUI+LayoutEngine 全线在 AG。
 > **✅ 上一阶段全部完成并合 dev/main**：E3-2b/E3-4p/E3-3p 预览、E3-6p 目录预览、E2-5p 蒙版预览、E2-4p 对开预览、export-options 导出面板（都已 rebase 并合）。
-> **🔁 AG 现役（2026-06-23 用户启动 Backlog，派 AG）：B1 图文绕排 → 之后 B2 长表格分页。详见下方 B1 条。**
+> **🔁 AG 现役（2026-06-23 用户启动 Backlog，派 AG）：B1 图文绕排。详见下方 B1 条。**
+> （~~B2 长表格分页~~ 已移出，用户 2026-06-23 决定不做。B1 做完 AG 暂无后续 Backlog 项——写 handoff 待 Claude/用户派活。）
 > ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）。
 > 旧的 `feature/ag-e3-6p/e2-5p` 重整后即弃用；`feature/ag-e2-4p`/`feature/ag-export-options` 已合可删。
 > **教训**：每个新任务都从**最新 dev** 起分支；「rebase」是迁 feat 本体、不是在旧分支上补 docs commit。
@@ -290,9 +315,9 @@
 > LayoutEngine/渲染器侧 → AG；导入+IDML 导出侧 → Claude/Codex。
 
 - [~] **B1 图文绕排（text wrap）** → 🅰️ **AG 现役**（LayoutEngine + 渲染器侧，详见 AG 道 B1 条）。导出侧 IDML `TextWrapPreference` 配对任务后续给 Claude。
-- [ ] **B2 长表格分页 + 表头跨页重复** → 🅰️ AG 下一项（LayoutEngine 表格分页/续页/重复表头）。导出侧（IDML 续表）配对 Claude。
-- [ ] **B3 索引（Index）** → Claude/Codex 道（导入解析索引标记 + IDML 原生 Index 机制），非 AG 文件，待 Claude 展开。
-- [ ] **B4 参考文献 / 引文样式** → Claude/Codex 道（导入解析 + 样式化导出），非 AG 文件，待 Claude 展开。
+- ⏹ ~~**B2 长表格分页 + 表头跨页重复**~~ → **已移出（用户 2026-06-23 决定不做）**。
+- ⏹ ~~**B3 索引（Index）**~~ → **已移出（用户 2026-06-23 决定不做）**。
+- ⏹ ~~**B4 参考文献 / 引文样式**~~ → **已移出（用户 2026-06-23 决定不做）**。
 
 ## 基础设施待办（Claude/用户）
 
