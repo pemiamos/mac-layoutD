@@ -55,3 +55,19 @@
 - **决策**：B 工程健壮性完成合 main(e4a16bd)：Fonts.xml 导出确定性修复 + GitHub Actions CI(macOS,review-idml.sh) + golden-file 本地回归 + 测试硬编码路径修复(CI 首跑照出)。同时启动 Backlog 并按车道路由：B1 图文绕排/B2 长表格分页 → AG(LayoutEngine+渲染器侧)；B3 索引/B4 参考文献 → Claude/Codex(导入+IDML导出侧,非 AG 文件)。AG 现役 B1 图文绕排预览(横排矩形绕排,CoreText 非矩形 path framesetting,不碰 IDMLExporter)。
 - **理由**：Backlog 四项按文件边界分流避免跨道：图文绕排/长表格分页核心在 LayoutEngine+渲染器(AG 地盘)，索引/参考文献核心在导入+IDMLExporter(Claude/Codex 文件,派 AG 会违反隔离)。图文绕排选作 AG 现役因其科普书价值最高且可用 CoreText 非矩形 path 优雅实现(渲染器已用 framesetter)。导出侧 TextWrapPreference 拆成配对 Claude 任务,保持单文件单道。
 
+## 2026-06-23 14:37 | claude
+- **决策**：着重号(傍点/Kenten)正式移出开发计划,不再投入(用户 2026-06-23 重申:图书项目不使用着重号)。已合入代码不回滚:① CJK 排版器 Composer="HL Composer J"(dev e2a78be)是通用 CJK 排版基础设施(影响避头尾/断行,非着重号专属),保留;② 着重号 emit + 断言闸 rule①(dev 63a9a5c)仅在稿件出现 ==着重== 时触发、无害,留存。development-plan E3-3/E3-3v/E3-3p 标记移出;不再为着重号 InDesign 渲染/视觉验收花精力。
+- **理由**：延续 2026-06-21 既有决策(罕用特性不为 InDesign 端渲染死磕)。本会话因 oracle 比对顺带把排版器 bug 修对了——但该修复的通用价值在 CJK 断行/避头尾,与着重号解绑,故保留;着重号本身用户明确用不到,停止投入。回滚已合代码反而是额外投入+风险,违背"不再投入精力",故保留无害代码、仅从路线图除名。
+
+## 2026-06-23 15:00 | claude
+- **决策**：不支持多段 frontmatter 混排横排/竖排(用户 2026-06-23 决定)。竖排维持现状:按段落样式 style.layoutDirection 控制,不引入"分段头切方向"机制。IMP-1 任务范围锁定=仅止血:正文解析器消费掉非首个 ---key:value--- 块、不漏成正文,title 用作 section 标题,layout_direction 等键静默忽略(不实现切方向)。三项 InDesign 验收闭环:E3-6 动态目录(页码右对齐+点导引线+层级)、E2-4 对开跨页、E2-5 非矩形蒙版,用户均已 InDesign 肉眼通过。
+- **理由**：用户明确不需要文档内横竖混排;竖排引文/诗已可由竖排段落样式实现,无需 PageSetup 级分段方向(那会牵动分页方向、复杂度高、回报低)。多段 frontmatter 仅需修掉"元数据漏成正文"的脏显示,不必扩成新功能。
+
+## 2026-06-23 15:04 | claude
+- **决策**：B2 长表格分页 + 表头跨页重复：移出计划，不做（用户 2026-06-23 决定）。从 Backlog 去除；AG 现役 B1 图文绕排做完后暂无后续 Backlog 项，待派活。Backlog 剩 B1(AG 进行中)、B3 索引、B4 参考文献(均 Claude/Codex 道)。
+- **理由**：(未填)
+
+## 2026-06-23 15:10 | claude
+- **决策**：B3 索引(Index)、B4 参考文献/引文样式：移出计划，不做（用户 2026-06-23 决定）。Backlog 至此仅剩 B1 图文绕排(AG 进行中);B1 完成后 Backlog 清空。
+- **理由**：(未填)
+

@@ -946,9 +946,13 @@ public struct IDMLExporter {
             if emphasis.contains(.bold) { attrs += " FauxBold=\"true\"" }
             if emphasis.contains(.italic) { attrs += " Skew=\"12\"" }
             if emphasis.contains(.kenten) {
-                attrs += " KentenKind=\"KentenSesameDot\""
-                attrs += " KentenAlignment=\"AlignKentenCenter\""
-                attrs += " KentenPosition=\"AboveRight\""
+                // 着重号按中文习惯：实心黑圆点 ● 置于字下方（KentenBlackCircle + BelowLeft）。
+                // 经真·InDesign 2026 存盘比对(Desktop/未命名-1.idml kenten golden, 2026-06-23):
+                // 真值字符级只写这三个属性, 且 KentenAlignment 是段落级、不写在 CharacterStyleRange 上。
+                // 此前用日文习惯(KentenSesameDot 芝麻点 + AboveRight 字上方)——中文书不对。
+                attrs += " KentenKind=\"KentenBlackCircle\""
+                attrs += " KentenPlacement=\"-1\""
+                attrs += " KentenPosition=\"BelowLeft\""
             }
             return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(attrs)><Content>\(esc(content))</Content></CharacterStyleRange>"
         }.joined(separator: "\n")

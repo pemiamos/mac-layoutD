@@ -1,7 +1,7 @@
 # layoutD 开发计划（执行权威）
 
 状态：Living（本文件是执行计划的唯一权威；PRD 管需求，本文管落地）
-更新：2026-06-18
+更新：2026-06-23
 
 进度图例：✅ 已实现　🟡 部分　⬜ 未开始
 
@@ -100,7 +100,7 @@
 - [x] `qualityMetrics` 接入可视化与历史追踪。
 - [x] 封面/满版图作固定页导出。
 - [x] 校对批注层（不参与重排的 overlay）。
-- [ ] DOCX 导入。 — **已排期**（见阶段 E 的 E3 排期决策，D-2，顺序 2）。
+- [x] DOCX 导入（D-2）。 — Codex 实现 `DOCXBookImporter.swift`（`85d7a00`），已合 dev+main（merge `69ba11c`），**用户视觉验收 PASS**。
 
 ---
 
@@ -110,13 +110,9 @@
 > 导出 IDML 交 InDesign 做人工精调 + 印前。原阶段 D 的「IDML 结构参照」「更完整印前」
 > 两项被本阶段取代/吸收——印前（CMYK/PDF/X）确定交 InDesign，layoutD 不自建。
 
-### E0. 最小验证 spike（先行证伪，别先动架构）
-- [ ] `--idml-spike <path>`：生成只含「一个跨页 + 一个中文段落样式文本框 + 一个竖排
-      文本框 + 一张置入图 + 一个 CMYK Swatch」的 IDML。
-- 验收：在 **InDesign 中文版** 干净打开，样式/图链/颜色/竖排都在。
-- **重点压测竖排**——这是唯一可能让整条路线崩掉的地方，最先证伪。
-- v1 先验证基础包有效性 + 竖排；**v2 再压测复合字体**（合成字体落 IDML 的保真）。
-- 涉及：`LayoutDExport`（IDML 生成）、`LayoutDApp`（CLI 入口）。
+### E0. 最小验证 spike ✅ 已被 E1 取代吸收
+- [x] `--idml-spike <path>` 已实现并在 **InDesign 中文版**人工验证通过（竖排/复合字体/图链/CMYK Swatch
+      全 round-trip），主交付转向 E1 全量映射。spike 代码留作回归探针（`IDMLSpikeExporter.swift`）。
 
 ### E1. BookProject → IDML 全量映射（spike 通过后）
 最小可用版已落地并在 InDesign 中文版**人工终验通过**（`--export-idml PATH`，`Sources/LayoutDExport/IDMLExporter.swift`）：
@@ -128,21 +124,35 @@
 - [x] 容器级自动验证（IDMLExporterTests）+ demo.md 端到端导出、全 XML well-formed、InDesign 4 页内容全正确。
 已随 MVP 一并解决：字体「家族+样式名」拆分（splitFont + FontType 检测）；首页幻影（改单页非对开后自然消失）。
 
+### E1b. CJK 保真三层策略（2026-06-23，决策见 `.ai/DECISIONS.md`、记录见 `docs/idml-oracle/FINDINGS.md`）
+> 不外化 ExtendScript/UXP API（描述内存 DOM，非我们 emit 的 IDML 磁盘格式；且不编码跨属性渲染前置条件）。
+- [x] **①不变量断言闸** `IDMLInvariants.swift`：打包前硬检查已知 CJK 渲染搭档规则（着重号需 World-Ready 排版器、脚注需 CJK 字体样式、CJK 粗斜走 FauxBold/Skew、AppliedFont 引用完整性），撞回归当场报错。
+- [x] **②InDesign 往返 oracle**：用真·InDesign 存盘当 golden diff，抽取规范不写的真值。**首战即修真 bug**：CJK 排版器此前三处全错（属性名 `AppliedComposer`→真值 `Composer`；值 Optyca 拉丁→真值 `HL Composer J`；位置应挂段落样式+TextDefault）——这是中文断行/避头尾一直走错引擎的根因。golden 归档 `docs/idml-oracle/goldens/`。
+- [ ] **③可选 IDML-RNG lint**（vendor InDesign `app.generateIDMLSchema()` 的 RNG 做名/枚举校验）+ 断言闸加 CoreText 字形覆盖检查。后续增量。
+
 ### E2. IDML 增强（接力分工，详见 `.ai/AGENTS.md`）
+
+> 单向流，不做 IDML 回导；交棒后 InDesign 为真理源。
+> **2026-06-23 用户 InDesign 验收 ✅**：E3-6 动态目录（页码右对齐+点导引线+层级缩进）、
+> E2-4 对开跨页（首页单独+左右镜像+订口在内）、E2-5 非矩形蒙版——三项均人工肉眼通过。
+> 验收样例（含最新 CJK 排版器修复）：`~/Desktop/验收1-动态目录-0623.idml`、`验收3-对开跨页-0623.idml`。
+> 蒙版无 Markdown/CLI 路径（maskShape 仅 GUI/布局模型设），几何另有端到端单测（八角8/扇面≥16点）兜底。
 
 > 单向流，不做 IDML 回导；交棒后 InDesign 为真理源。每项验收口径：导出 → InDesign 中文版打开正确（视觉验收由用户/Antigravity 做，Claude 无 Screen Recording 权限）。
 
-| # | 任务 | 主负责 | 说明 / 优先级 |
+> **E2 全部完成（2026-06-23）**：E2-1～E2-7 均已落地并合 dev/main，核心特性经用户 InDesign 视觉验收通过。
+
+| # | 任务 | 主负责 | 状态 |
 |---|---|---|---|
-| E2-1 | **图片打包 + 相对重链** | Codex | 把置入图复制进 `Links/` 文件夹、`LinkResourceURI` 改相对路径，使 `.idml` 可移植。**优先级最高**（当前用绝对 `file:` 路径，换机即断链）|
-| E2-2 | **组件背景 / 描边** | Codex | 知识卡片等组件的底色/描边/accent 映射成 InDesign 框架填色描边（当前只导文字）|
-| E2-3 | **避头尾 → 禁则集** | Codex | 中文禁则映射到 InDesign 禁则集（KinsokuTable）|
-| E2-4 | **对开跨页（facing spread）** | **Claude** | 可选 facing 模式：按 `pageSetup.facingPages` 生成 2 页 spread + 起始页码 Section；较大改动，放后。**2026-06-21 用户指定改由 Claude 做**（跨 Codex 负责文件 IDMLExporter，须等 Codex 本批 IDMLExporter 改动先合 dev）|
-| E2-5 | **固定美术页 → MasterSpread / 非矩形蒙版** | Codex | 满版图/扉页固定页映射、扇面/八角蒙版（图框 PathGeometry）|
-| E2-6 | **`/usr/bin/zip` → 原生 zip 写入** | Codex | 去掉外部进程依赖，保证 mimetype store-first |
-| E2-7 | **GUI 加 IDML 导出入口** | Codex | `LayoutDApp` 菜单/工具栏增加「导出 IDML…」+ 选项面板 |
-| — | **审查 + 拆解指令 + 每项验收闭环** | Claude | 为每项写明确指令进 handoff；Codex 落地后审查 |
-| — | **InDesign 打开效果 / GUI 交互视觉验证** | Antigravity / 用户 | 替代 Claude 做不了的视觉验收 |
+| E2-1 | **图片打包 + 相对重链** | Codex | ✅ 置入图复制进 `Links/`、`LinkResourceURI="file:Links/…"` 相对路径，`.idml` 可移植 |
+| E2-2 | **组件背景 / 描边** | Codex | ✅ 组件底色/描边经 `componentStyle` 映射成框架填色描边 |
+| E2-3 | **避头尾 → 禁则集** | Codex | ✅ 中文禁则映射 InDesign 禁则集 |
+| E2-4 | **对开跨页（facing spread）** | **Claude** | ✅ 视觉验收过（首页单独+左右镜像+订口在内），`02900eb` |
+| E2-5 | **固定美术页 → MasterSpread / 非矩形蒙版** | Claude | ✅ 视觉验收过（八角/扇面 PathGeometry），`404596b` |
+| E2-6 | **`/usr/bin/zip` → 原生 zip 写入** | Codex | ✅ 主 IDML 路径用原生 `ZIPArchiveWriter`（mimetype store-first）|
+| E2-7 | **GUI 加 IDML 导出入口** | Codex | ✅ App/CLI 导出 IDML 入口 + 导出选项面板（对开/CMYK 留位）|
+| — | **审查 + 拆解指令 + 每项验收闭环** | Claude | ✅ 持续闭环 |
+| — | **InDesign 打开效果 / GUI 交互视觉验证** | Antigravity / 用户 | ✅ 已替代 Claude 做视觉验收 |
 
 > 说明：`swift test` 末尾「0 tests in 0 suites」是 **Swift Testing 运行器**（找 `@Test`）的输出，本项目全用 XCTest，实测 **172 个 XCTest 全部执行通过**（`swift test` 完整输出含 "Executed 172 tests, 0 failures"）。relay `run_checks("test")` 仅回显最后一行才造成「0 tests」错觉——**非测试发现 bug，是 run_checks 输出截取问题**，可在 relay 侧改为回显 XCTest 汇总行。
 
@@ -156,12 +166,17 @@
 |---|---|---|---|
 | E3-1 | 行内粗/斜体到所有 block | Codex | ✅ 视觉验收过 |
 | E3-2 | 行内格式预览渲染 + 批注层 | AG | ✅ 视觉验收过 |
-| E3-3 / E3-3v | 傍点（着重号）解析 + AppliedComposer 渲染 | Codex/Claude | ✅ 视觉验收过 |
+| ~~E3-3 / E3-3v~~ | ~~傍点（着重号）~~ | — | ⏹ **已移出计划**（用户 2026-06-23：图书项目不用着重号，不再投入。见下方说明） |
 | E3-4 | 原生表格 `<Table>` | Claude | ✅ 视觉验收过 |
 | E3-7 / E3-7v | 脚注 → 原生 Footnote + 中文豆腐修复 | Codex/Claude | ✅ 视觉验收过 |
-| E3-2b / E3-3p / E3-4p | 竖排斜体 / 傍点 / 表格网格 预览渲染 | AG | 🟡 审过待合（依赖 E3-10p 出图验收） |
+| E3-2b / ~~E3-3p~~ / E3-4p | 竖排斜体 / ~~傍点~~ / 表格网格 预览渲染 | AG | ✅ 已合 dev/main（随 e3-10p `c5fcfb7`，竖排斜体/表格网格视觉验收过；傍点部分已移出，见下） |
 | E3-4b | 表格单元格内行内格式（E3-4 遗留缺口） | Codex | ⬜ 已立项 |
 | E3-10p | 预览验收 harness（让 PNG 能呈现行内特性） | AG | ⬜ 已立项·高优先 |
+
+> **傍点（着重号）已移出计划（2026-06-23，用户决定）**：图书项目不使用着重号，不再投入。
+> 已合入的相关代码**保留不回滚**：① CJK 段落排版器 `Composer="HL Composer J"`（dev `e2a78be`）
+> 是**通用 CJK 排版基础设施**（影响避头尾/断行等，非着重号专属），保留；② 着重号 emit 与断言闸
+> rule①（dev `63a9a5c`）仅在稿件出现 `==着重==` 时触发，无害，留存即可。后续不再为着重号花精力。
 
 #### 排期决策（2026-06-21，用户确认）
 
