@@ -206,7 +206,8 @@
 >
 > **⭐ AG 为主力**（用户决定：Codex 不靠谱、少排；AG 多排、连续作业）。预览+GUI+LayoutEngine 全线在 AG。
 > **✅ 上一阶段全部完成并合 dev/main**：E3-2b/E3-4p/E3-3p 预览、E3-6p 目录预览、E2-5p 蒙版预览、E2-4p 对开预览、export-options 导出面板（都已 rebase 并合）。
-> **🔁 AG 现役（2026-06-23 用户启动 Backlog，派 AG）：B1 图文绕排 → 之后 B2 长表格分页。详见下方 B1 条。**
+> **🔁 AG 现役（2026-06-23 用户启动 Backlog，派 AG）：B1 图文绕排。详见下方 B1 条。**
+> （~~B2 长表格分页~~ 已移出，用户 2026-06-23 决定不做。B1 做完 AG 暂无后续 Backlog 项——写 handoff 待 Claude/用户派活。）
 > ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）。
 > 旧的 `feature/ag-e3-6p/e2-5p` 重整后即弃用；`feature/ag-e2-4p`/`feature/ag-export-options` 已合可删。
 > **教训**：每个新任务都从**最新 dev** 起分支；「rebase」是迁 feat 本体、不是在旧分支上补 docs commit。
@@ -290,7 +291,7 @@
 > LayoutEngine/渲染器侧 → AG；导入+IDML 导出侧 → Claude/Codex。
 
 - [~] **B1 图文绕排（text wrap）** → 🅰️ **AG 现役**（LayoutEngine + 渲染器侧，详见 AG 道 B1 条）。导出侧 IDML `TextWrapPreference` 配对任务后续给 Claude。
-- [ ] **B2 长表格分页 + 表头跨页重复** → 🅰️ AG 下一项（LayoutEngine 表格分页/续页/重复表头）。导出侧（IDML 续表）配对 Claude。
+- ⏹ ~~**B2 长表格分页 + 表头跨页重复**~~ → **已移出（用户 2026-06-23 决定不做）**。
 - [ ] **B3 索引（Index）** → Claude/Codex 道（导入解析索引标记 + IDML 原生 Index 机制），非 AG 文件，待 Claude 展开。
 - [ ] **B4 参考文献 / 引文样式** → Claude/Codex 道（导入解析 + 样式化导出），非 AG 文件，待 Claude 展开。
 
