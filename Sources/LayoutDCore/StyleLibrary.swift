@@ -339,7 +339,14 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         ]
     )
 
-    public static let heading3 = ParagraphStyle(id: StyleID.heading3.rawValue, displayName: "三级标题", fontName: "Heiti SC", fontSize: 16, lineHeight: 23, firstLineIndent: 0, spaceBefore: 10, spaceAfter: 7)
+    // CJK 用「黑体-简」。注意必须带真实存在的字重：Heiti SC 只有 Light/Medium，没有 Regular，
+    // 写裸名 "Heiti SC" 会按 family+Regular 查不到→CoreText 回退 Helvetica→InDesign 粉色豆腐。
+    // 故用 "Heiti SC Medium"（中黑，适合标题）。与 heading1/2 一致走复合字体。
+    public static let heading3 = ParagraphStyle(id: StyleID.heading3.rawValue, displayName: "三级标题", fontName: "Heiti SC Medium", fontSize: 16, lineHeight: 23, firstLineIndent: 0, spaceBefore: 10, spaceAfter: 7, compositeFont: [
+        .chinese: CompositeFontMapping(fontName: "Heiti SC Medium", sizeMultiplier: 1.0, baselineOffset: 0.0),
+        .latin: CompositeFontMapping(fontName: "Helvetica Neue", sizeMultiplier: 1.0, baselineOffset: 0.0),
+        .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
+    ])
     public static let introduction = ParagraphStyle(id: StyleID.introduction.rawValue, displayName: "开节概述", fontName: "方正兰亭细黑简体", fontSize: 11, lineHeight: 17.6, firstLineIndent: 0, spaceBefore: 4, spaceAfter: 8)
     public static let introductionEnglish = ParagraphStyle(id: StyleID.introductionEnglish.rawValue, displayName: "开节概述英文", fontName: "Georgia", fontSize: 10, lineHeight: 16, firstLineIndent: 0, spaceBefore: 0, spaceAfter: 8)
     public static let pullQuote = ParagraphStyle(id: StyleID.pullQuote.rawValue, displayName: "抽言", fontName: "JiangChengLvDongSong", fontSize: 15, lineHeight: 23, firstLineIndent: 0, spaceBefore: 10, spaceAfter: 10)

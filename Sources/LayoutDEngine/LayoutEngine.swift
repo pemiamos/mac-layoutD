@@ -1340,6 +1340,7 @@ private struct LayoutContext {
             "PingFang SC Semibold",
             "PingFang SC Medium",
             "Heiti SC",
+            "Heiti SC Medium",      // 三级标题（黑体-简 中黑；Heiti SC 无 Regular 字重）
             "Kaiti SC",
             "方正兰亭细黑简体",      // 正文/概述/参考文献（用户书稿字体）
             "JiangChengLvDongSong", // 江城律动宋（抽言）
