@@ -1333,38 +1333,49 @@ private struct LayoutContext {
             }
         }
 
-        // 4. Check fonts in paragraph styles used in project (and composite font mappings)
-        let approvedFonts: Set<String> = [
-            "Songti SC",
-            "PingFang SC",
-            "PingFang SC Semibold",
-            "PingFang SC Medium",
-            "Heiti SC",
-            "Heiti SC Medium",      // 三级标题（黑体-简 中黑；Heiti SC 无 Regular 字重）
-            "Kaiti SC",
-            "方正兰亭细黑简体",      // 正文/概述/参考文献（用户书稿字体）
-            "JiangChengLvDongSong", // 江城律动宋（抽言）
-            "Times New Roman",
-            "Helvetica",
-            "Helvetica Neue",
-            "Georgia",
-            "Arial"
-        ]
-        
+        // 4. 字体合规：批准 = 本机已装（任何字体形态：family/显示名/PostScript/本地化名）。
+        // 用户 2026-06-24 决定不再维护手写白名单——装了的字体就能用，没装的（拼错/缺字体）才拒。
         for style in project.styles.paragraphStyles {
-            if !approvedFonts.contains(style.fontName) {
-                failures.append("样式 \(style.displayName) 使用了非批准字体 \(style.fontName)")
+            if !Self.isFontInstalled(style.fontName) {
+                failures.append("样式 \(style.displayName) 使用了未安装字体 \(style.fontName)")
             }
             if let cf = style.compositeFont {
                 for (cls, mapping) in cf {
-                    if !approvedFonts.contains(mapping.fontName) {
-                        failures.append("样式 \(style.displayName) 的 \(cls.rawValue) 分支使用了非批准字体 \(mapping.fontName)")
+                    if !Self.isFontInstalled(mapping.fontName) {
+                        failures.append("样式 \(style.displayName) 的 \(cls.rawValue) 分支使用了未安装字体 \(mapping.fontName)")
                     }
                 }
             }
         }
 
         return failures
+    }
+
+    /// 本机已装字体的全部名字形态（family / 显示名 / PostScript / 本地化中文名），构建一次。
+    static let installedFontNames: Set<String> = {
+        var set = Set<String>()
+        let collection = CTFontCollectionCreateFromAvailableFonts(nil)
+        let descriptors = (CTFontCollectionCreateMatchingFontDescriptors(collection) as? [CTFontDescriptor]) ?? []
+        for d in descriptors {
+            for key in [kCTFontFamilyNameAttribute, kCTFontDisplayNameAttribute, kCTFontNameAttribute] {
+                if let s = CTFontDescriptorCopyAttribute(d, key) as? String { set.insert(s) }
+            }
+            let font = CTFontCreateWithFontDescriptor(d, 12, nil)
+            if let loc = CTFontCopyLocalizedName(font, kCTFontFamilyNameKey, nil) as String? { set.insert(loc) }
+        }
+        return set
+    }()
+
+    /// 字体是否本机已装。接受 family / PostScript / 本地化名等任意形态；
+    /// 也接受「家族名+字重」（如 "Heiti SC Medium"）——去掉末尾字重词后家族仍命中即可。
+    static func isFontInstalled(_ name: String) -> Bool {
+        if installedFontNames.contains(name) { return true }
+        let parts = name.split(separator: " ")
+        if parts.count >= 2 {
+            let family = parts.dropLast().joined(separator: " ")
+            if installedFontNames.contains(family) { return true }
+        }
+        return false
     }
 
     private func isValidColorValue(_ val: String) -> Bool {

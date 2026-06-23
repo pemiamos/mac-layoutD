@@ -294,14 +294,14 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public static let body = ParagraphStyle(
         id: StyleID.body.rawValue,
         displayName: "正文",
-        fontName: "Songti SC",
+        fontName: "方正兰亭细黑简体",
         fontSize: 10.5,
         lineHeight: 16,
         firstLineIndent: 21,
         spaceBefore: 0,
         spaceAfter: 4,
         compositeFont: [
-            .chinese: CompositeFontMapping(fontName: "Songti SC", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .chinese: CompositeFontMapping(fontName: "方正兰亭细黑简体", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .latin: CompositeFontMapping(fontName: "Georgia", sizeMultiplier: 1.05, baselineOffset: 0.0),
             .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
         ]
@@ -310,14 +310,14 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public static let heading1 = ParagraphStyle(
         id: StyleID.heading1.rawValue,
         displayName: "一级标题",
-        fontName: "PingFang SC Semibold",
+        fontName: "Heiti SC Medium",
         fontSize: 22,
         lineHeight: 30,
         firstLineIndent: 0,
         spaceBefore: 18,
         spaceAfter: 14,
         compositeFont: [
-            .chinese: CompositeFontMapping(fontName: "PingFang SC Semibold", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .chinese: CompositeFontMapping(fontName: "Heiti SC Medium", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .latin: CompositeFontMapping(fontName: "Helvetica Neue", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
         ]
@@ -326,14 +326,14 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public static let heading2 = ParagraphStyle(
         id: StyleID.heading2.rawValue,
         displayName: "二级标题",
-        fontName: "PingFang SC Semibold",
+        fontName: "Heiti SC Medium",
         fontSize: 15,
         lineHeight: 22,
         firstLineIndent: 0,
         spaceBefore: 12,
         spaceAfter: 8,
         compositeFont: [
-            .chinese: CompositeFontMapping(fontName: "PingFang SC Semibold", sizeMultiplier: 1.0, baselineOffset: 0.0),
+            .chinese: CompositeFontMapping(fontName: "Heiti SC Medium", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .latin: CompositeFontMapping(fontName: "Helvetica Neue", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .digit: CompositeFontMapping(fontName: "Helvetica", sizeMultiplier: 1.0, baselineOffset: 0.0)
         ]
