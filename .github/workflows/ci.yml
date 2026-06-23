@@ -1,0 +1,30 @@
+name: CI
+
+# 把审核从「人工记得跑」变成 push 即自动跑。复用与本地同一套 scripts/review-idml.sh：
+# swift build + swift test（200+）+ IDML 端到端探针（导出→解包→断言结构与行内样式）。
+# 必须 macOS runner —— 项目依赖 AppKit / CoreText（字体解析、PDF/PNG 渲染），Linux 跑不了。
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift 版本
+        run: swift --version
+
+      - name: 审核（build + test + IDML 端到端探针）
+        run: bash scripts/review-idml.sh
+
+      - name: 导出确定性回归（golden-file）
+        run: bash scripts/golden-check.sh
