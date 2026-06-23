@@ -1,4 +1,5 @@
 import Foundation
+import CoreText
 
 /// 灌版打包前的“不变量断言闸”。
 ///
@@ -43,6 +44,7 @@ public enum IDMLInvariants {
             }
         }
         violations += checkFontReferences(files: files)
+        violations += checkFontWeights(files: files)
         return violations
     }
 
@@ -149,6 +151,76 @@ public enum IDMLInvariants {
                 || (0xFF00...0xFFEF).contains(v)   // 全角/半角
                 || (0x20000...0x2A6DF).contains(v) // 扩展 B
         }
+    }
+
+    /// 规则⑤：通过 CoreText 动态检查所有物理字体的字重存在性（防范 silent Helvetica fallback 豆腐）。
+    private static func checkFontWeights(files: [String: String]) -> [IDMLInvariantViolation] {
+        guard let fontsXML = files["Resources/Fonts.xml"] else { return [] }
+
+        struct FontPair: Hashable {
+            let family: String
+            let style: String
+        }
+        var fontPairs = Set<FontPair>()
+
+        // 1. 提取物理字体中的 (family, style)
+        // 比如：<Font FontFamily="PingFang SC" FontStyleName="Regular" ... />
+        let fontPattern = "<Font\\b[^>]*?\\bFontFamily=\"([^\"]*)\"[^>]*?\\bFontStyleName=\"([^\"]*)\""
+        if let re = try? NSRegularExpression(pattern: fontPattern, options: [.dotMatchesLineSeparators]) {
+            let ns = fontsXML as NSString
+            re.enumerateMatches(in: fontsXML, options: [], range: NSRange(location: 0, length: ns.length)) { match, _, _ in
+                guard let m = match else { return }
+                let family = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+                let style = ns.substring(with: m.range(at: 2)).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !family.isEmpty && !style.isEmpty {
+                    fontPairs.insert(FontPair(family: family, style: style))
+                }
+            }
+        }
+
+        // 2. 提取复合字体 Entry 中的 (family, style)
+        // 比如：<CompositeFontEntry FontStyle="Regular" ...><Properties><AppliedFont type="string">方正兰亭细黑简体</AppliedFont></Properties></CompositeFontEntry>
+        let compositePattern = "<CompositeFontEntry\\b[^>]*?\\bFontStyle=\"([^\"]*)\"[^>]*?>\\s*<Properties>\\s*<AppliedFont[^>]*>([^<]*)</AppliedFont>"
+        if let re = try? NSRegularExpression(pattern: compositePattern, options: [.dotMatchesLineSeparators]) {
+            let ns = fontsXML as NSString
+            re.enumerateMatches(in: fontsXML, options: [], range: NSRange(location: 0, length: ns.length)) { match, _, _ in
+                guard let m = match else { return }
+                let style = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+                let family = ns.substring(with: m.range(at: 2)).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !family.isEmpty && !style.isEmpty {
+                    fontPairs.insert(FontPair(family: family, style: style))
+                }
+            }
+        }
+
+        var violations: [IDMLInvariantViolation] = []
+        for pair in fontPairs.sorted(by: { $0.family < $1.family || ($0.family == $1.family && $0.style < $1.style) }) {
+            let family = pair.family
+            let style = pair.style
+            
+            // 跳过复合字体（CF_ 开头）以及 InDesign 占位/系统标识（$ID/ 等）
+            if family.hasPrefix("CF_") || family.hasPrefix("$ID/") {
+                continue
+            }
+
+            // 使用 CoreText API 校验字重存在性
+            let attrs: [CFString: Any] = [
+                kCTFontFamilyNameAttribute: family as CFString,
+                kCTFontStyleNameAttribute: style as CFString
+            ]
+            let desc = CTFontDescriptorCreateWithAttributes(attrs as CFDictionary)
+            let matches = CTFontDescriptorCreateMatchingFontDescriptors(desc, nil) as? [CTFontDescriptor] ?? []
+
+            if matches.isEmpty {
+                violations.append(IDMLInvariantViolation(
+                    part: "Resources/Fonts.xml",
+                    rule: "font-name-needs-valid-weight",
+                    detail: "字体 \"\(family)\" 的字重 \"\(style)\" 在系统已安装字体中不存在，CoreText/InDesign 会发生回退至 Helvetica 默认字体的豆腐现象。"
+                ))
+            }
+        }
+
+        return violations
     }
 }
 
