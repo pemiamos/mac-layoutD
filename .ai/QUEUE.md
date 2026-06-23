@@ -94,7 +94,8 @@
   - **文件**：`Sources/LayoutDImport/DOCXBookImporter.swift`（+ 资产落地，blast radius 小）。
   - 参考：抠好的 3 张图在 `~/Desktop/pilot-村落-图片/`（≈1400×780px）。
 
-- [ ] **IMP-3 角色标签结构化导入（layoutD 核心能力，用户 2026-06-23 拍板做）** — Codex @ `feature/codex-imp3-role-tags`
+- [x] **IMP-3 角色标签结构化导入** — ✅ **Claude 接手完成并合 dev（`4507e65`）**。Codex 初版有 4 个真 bug（角色 over-apply 不复位 / 字体名凭猜错成苹果兰亭黑 / 新字体未进合规白名单致分页崩+越界崩溃 / 斜杠合写标签漏出），Claude 全修，真实书稿 `layoutD村落.docx` 端到端验证：标签零漏出、角色段数全对、IDML 输出中文命名段落样式直通 InDesign、抽言=江城律动宋/概述=方正兰亭细黑/英文=Georgia。218/0 PASS。⚠️ **Codex 请丢弃自己 worktree 里的 IMP-3 未提交改动**（已被 Claude 版本取代）。遗留：正文/一二级标题仍用默认 Songti/PingFang（改全局默认会牵动一批硬编码分页测试，单独一步做，见下）。
+- [ ] ~~**IMP-3 角色标签结构化导入**~~（已完成，上方）— Codex @ `feature/codex-imp3-role-tags`
   - **背景**：真实书稿用"角色标签"约定——每个内容块前一行标明角色（章名/节名/文章名/概述/抽言…）。通用导入读不懂→标签当正文画、角色全塌成两档。这是 layoutD「结构化书籍工程」的核心能力。完整勘查见 `docs/pilot-findings.md`。
   - **要做（两部分）**：
     - **A 解析层**（`DOCXBookImporter` + `MarkdownBookImporter` 共用一个角色识别器）：识别"角色标签段"→**消费掉标签本身（不输出）**→把其后内容块标成该角色，直到下一个标签/标题。
