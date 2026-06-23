@@ -30,6 +30,7 @@ Options:
   --export-project PATH     Export a structured .layoutd project file.
   --export-package PATH     Export a packaged ZIP resource bundle (.layoutd-pack).
   --export-idml PATH        Export an IDML package for InDesign 人工精调 + 印前 (阶段 E1 最小可用).
+  --idml-facing             Export IDML in facing-pages (对开跨页) spreads (默认单页).
   --export-templates PATH   Export saved layout templates as a reusable JSON library.
   --import-templates PATH   Import a layout template library before export or validation.
   --apply-chapter-template NAME
@@ -208,8 +209,9 @@ if launchProject.exportPDFURL != nil
         }
 
         if let exportIDMLURL = launchProject.exportIDMLURL {
-            try IDMLExporter().export(document: document, project: project, to: exportIDMLURL)
-            print("Exported IDML: \(exportIDMLURL.path)")
+            try IDMLExporter().export(document: document, project: project, to: exportIDMLURL,
+                                      options: IDMLExportOptions(facingPages: launchProject.exportIDMLFacing))
+            print("Exported IDML: \(exportIDMLURL.path)\(launchProject.exportIDMLFacing ? " (对开)" : "")")
         }
 
         if let exportPNGDirectoryURL = launchProject.exportPNGDirectoryURL {

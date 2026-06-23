@@ -1,0 +1,532 @@
+===== META-INF/container.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+	<rootfiles><rootfile full-path="designmap.xml" media-type="text/xml"/></rootfiles>
+</container>
+===== META-INF/metadata.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+	<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+		<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:format>application/x-indesign</dc:format></rdf:Description>
+	</rdf:RDF>
+</x:xmpmeta>
+===== MasterSpreads/MasterSpread_uMasterA.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:MasterSpread xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<MasterSpread Self="uMasterA" Name="A-Master" NamePrefix="A" BaseName="主页" ShowMasterItems="true" PageCount="1" OverriddenPageItemProps="">
+		<Page Self="uMasterApage" Name="A" AppliedMaster="n" MasterPageTransform="1 0 0 1 0 0" GeometricBounds="0 0 737.010 524.410" ItemTransform="1 0 0 1 -262.205 -368.505"/>
+	</MasterSpread>
+</idPkg:MasterSpread>
+===== Resources/Fonts.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Fonts xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<FontFamily Self="dFontFamily0" Name="PingFang SC">
+		<Font Self="dFont0_0" FontFamily="PingFang SC" Name="PingFang SC Semibold" PostScriptName="PingFangSC-Semibold" Status="Installed" FontStyleName="Semibold" FontType="OpenTypeCID" WritingScript="0" FullName="PingFang SC Semibold" FullNameNative="PingFang SC Semibold" FontStyleNameNative="Semibold" PlatformName="$ID/" Version="" TypekitID="$ID/"/>
+		<Font Self="dFont0_1" FontFamily="PingFang SC" Name="PingFang SC Regular" PostScriptName="PingFangSC-Regular" Status="Installed" FontStyleName="Regular" FontType="OpenTypeCID" WritingScript="0" FullName="PingFang SC Regular" FullNameNative="PingFang SC Regular" FontStyleNameNative="Regular" PlatformName="$ID/" Version="" TypekitID="$ID/"/>
+		<Font Self="dFont0_2" FontFamily="PingFang SC" Name="PingFang SC Medium" PostScriptName="PingFangSC-Medium" Status="Installed" FontStyleName="Medium" FontType="OpenTypeCID" WritingScript="0" FullName="PingFang SC Medium" FullNameNative="PingFang SC Medium" FontStyleNameNative="Medium" PlatformName="$ID/" Version="" TypekitID="$ID/"/>
+	</FontFamily>
+	<FontFamily Self="dFontFamily1" Name="Helvetica Neue">
+		<Font Self="dFont1_0" FontFamily="Helvetica Neue" Name="Helvetica Neue" PostScriptName="HelveticaNeue" Status="Installed" FontStyleName="Regular" FontType="TrueType" WritingScript="0" FullName="Helvetica Neue" FullNameNative="Helvetica Neue" FontStyleNameNative="Regular" PlatformName="$ID/" Version="" TypekitID="$ID/"/>
+	</FontFamily>
+	<FontFamily Self="dFontFamily2" Name="Helvetica">
+		<Font Self="dFont2_0" FontFamily="Helvetica" Name="Helvetica" PostScriptName="Helvetica" Status="Installed" FontStyleName="Regular" FontType="TrueType" WritingScript="0" FullName="Helvetica" FullNameNative="Helvetica" FontStyleNameNative="Regular" PlatformName="$ID/" Version="" TypekitID="$ID/"/>
+	</FontFamily>
+	<FontFamily Self="dFontFamily3" Name="Songti SC">
+		<Font Self="dFont3_0" FontFamily="Songti SC" Name="Songti SC Regular" PostScriptName="STSongti-SC-Regular" Status="Installed" FontStyleName="Regular" FontType="TrueType" WritingScript="0" FullName="Songti SC Regular" FullNameNative="Songti SC Regular" FontStyleNameNative="Regular" PlatformName="$ID/" Version="" TypekitID="$ID/"/>
+	</FontFamily>
+	<FontFamily Self="dFontFamily4" Name="Georgia">
+		<Font Self="dFont4_0" FontFamily="Georgia" Name="Georgia" PostScriptName="Georgia" Status="Installed" FontStyleName="Regular" FontType="OpenTypeTT" WritingScript="0" FullName="Georgia" FullNameNative="Georgia" FontStyleNameNative="Regular" PlatformName="$ID/" Version="" TypekitID="$ID/"/>
+	</FontFamily>
+	<CompositeFont Self="CompositeFont/CF_heading1" Name="CF_heading1">
+	<CompositeFontEntry Self="CompositeFont/CF_heading1/漢字" Name="漢字" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_heading1/かな" Name="かな" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_heading1/全角約物" Name="全角約物" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_heading1/全角記号" Name="全角記号" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_heading1/半角欧文" Name="半角欧文" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica Neue</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_heading1/半角数字" Name="半角数字" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica</AppliedFont></Properties>
+	</CompositeFontEntry>
+	</CompositeFont>
+	<CompositeFont Self="CompositeFont/CF_heading2" Name="CF_heading2">
+	<CompositeFontEntry Self="CompositeFont/CF_heading2/漢字" Name="漢字" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_heading2/かな" Name="かな" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_heading2/全角約物" Name="全角約物" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_heading2/全角記号" Name="全角記号" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_heading2/半角欧文" Name="半角欧文" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica Neue</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_heading2/半角数字" Name="半角数字" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica</AppliedFont></Properties>
+	</CompositeFontEntry>
+	</CompositeFont>
+	<CompositeFont Self="CompositeFont/CF_body" Name="CF_body">
+	<CompositeFontEntry Self="CompositeFont/CF_body/漢字" Name="漢字" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Songti SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_body/かな" Name="かな" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Songti SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_body/全角約物" Name="全角約物" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Songti SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_body/全角記号" Name="全角記号" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Songti SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_body/半角欧文" Name="半角欧文" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Georgia</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_body/半角数字" Name="半角数字" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica</AppliedFont></Properties>
+	</CompositeFontEntry>
+	</CompositeFont>
+	<CompositeFont Self="CompositeFont/CF_caption" Name="CF_caption">
+	<CompositeFontEntry Self="CompositeFont/CF_caption/漢字" Name="漢字" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_caption/かな" Name="かな" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_caption/全角約物" Name="全角約物" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_caption/全角記号" Name="全角記号" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_caption/半角欧文" Name="半角欧文" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_caption/半角数字" Name="半角数字" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica</AppliedFont></Properties>
+	</CompositeFontEntry>
+	</CompositeFont>
+	<CompositeFont Self="CompositeFont/CF_callout" Name="CF_callout">
+	<CompositeFontEntry Self="CompositeFont/CF_callout/漢字" Name="漢字" FontStyle="Medium" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_callout/かな" Name="かな" FontStyle="Medium" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_callout/全角約物" Name="全角約物" FontStyle="Medium" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_callout/全角記号" Name="全角記号" FontStyle="Medium" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_callout/半角欧文" Name="半角欧文" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_callout/半角数字" Name="半角数字" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica</AppliedFont></Properties>
+	</CompositeFontEntry>
+	</CompositeFont>
+	<CompositeFont Self="CompositeFont/CF_tocLevel1" Name="CF_tocLevel1">
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel1/漢字" Name="漢字" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel1/かな" Name="かな" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel1/全角約物" Name="全角約物" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel1/全角記号" Name="全角記号" FontStyle="Semibold" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel1/半角欧文" Name="半角欧文" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica Neue</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel1/半角数字" Name="半角数字" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica</AppliedFont></Properties>
+	</CompositeFontEntry>
+	</CompositeFont>
+	<CompositeFont Self="CompositeFont/CF_tocLevel2" Name="CF_tocLevel2">
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel2/漢字" Name="漢字" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel2/かな" Name="かな" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel2/全角約物" Name="全角約物" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel2/全角記号" Name="全角記号" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel2/半角欧文" Name="半角欧文" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica</AppliedFont></Properties>
+	</CompositeFontEntry>
+	<CompositeFontEntry Self="CompositeFont/CF_tocLevel2/半角数字" Name="半角数字" FontStyle="Regular" RelativeSize="100" HorizontalScale="100" VerticalScale="100" BaselineShift="0" Locked="false" ScaleOption="false" CustomCharacters="">
+		<Properties><AppliedFont type="string">Helvetica</AppliedFont></Properties>
+	</CompositeFontEntry>
+	</CompositeFont>
+</idPkg:Fonts>
+===== Resources/Graphic.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Graphic xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Color Self="Color/Paper" Model="Process" Space="CMYK" ColorValue="0 0 0 0" ColorOverride="Specialpaper" AlternateSpace="NoAlternateColor" AlternateColorValue="" Name="Paper" ColorEditable="true" ColorRemovable="false" Visible="true" SwatchCreatorID="7937"/>
+	<Color Self="Color/Black" Model="Process" Space="CMYK" ColorValue="0 0 0 100" ColorOverride="Specialblack" AlternateSpace="NoAlternateColor" AlternateColorValue="" Name="Black" ColorEditable="false" ColorRemovable="false" Visible="true" SwatchCreatorID="7937"/>
+	<Color Self="Color/Registration" Model="Registration" Space="CMYK" ColorValue="100 100 100 100" ColorOverride="Specialregistration" AlternateSpace="NoAlternateColor" AlternateColorValue="" Name="Registration" ColorEditable="false" ColorRemovable="false" Visible="true" SwatchCreatorID="7937"/>
+	<Color Self="Color/C17202A" Model="Process" Space="RGB" ColorValue="23 32 42" ColorOverride="Normal" AlternateSpace="NoAlternateColor" AlternateColorValue="" Name="C17202A" ColorEditable="true" ColorRemovable="true" Visible="true" SwatchCreatorID="7937"/>
+	<Color Self="Color/C2D7A78" Model="Process" Space="RGB" ColorValue="45 122 120" ColorOverride="Normal" AlternateSpace="NoAlternateColor" AlternateColorValue="" Name="C2D7A78" ColorEditable="true" ColorRemovable="true" Visible="true" SwatchCreatorID="7937"/>
+	<Color Self="Color/CE0F5ED" Model="Process" Space="RGB" ColorValue="224 245 237" ColorOverride="Normal" AlternateSpace="NoAlternateColor" AlternateColorValue="" Name="CE0F5ED" ColorEditable="true" ColorRemovable="true" Visible="true" SwatchCreatorID="7937"/>
+	<Swatch Self="Swatch/None" Name="None" ColorEditable="false" ColorRemovable="false" Visible="true" SwatchCreatorID="7937" SwatchColorGroupReference="n"/>
+	<Ink Self="Ink/$ID/Process Cyan" Name="$ID/Process Cyan" AngleForSeparation="75" ConvertToProcess="false" Frequency="70" IsProcessInk="true" NeutralDensity="0.61" PrintInk="true" TrapOrder="1" InkAlias=""/>
+	<Ink Self="Ink/$ID/Process Magenta" Name="$ID/Process Magenta" AngleForSeparation="15" ConvertToProcess="false" Frequency="70" IsProcessInk="true" NeutralDensity="0.76" PrintInk="true" TrapOrder="2" InkAlias=""/>
+	<Ink Self="Ink/$ID/Process Yellow" Name="$ID/Process Yellow" AngleForSeparation="0" ConvertToProcess="false" Frequency="70" IsProcessInk="true" NeutralDensity="0.16" PrintInk="true" TrapOrder="3" InkAlias=""/>
+	<Ink Self="Ink/$ID/Process Black" Name="$ID/Process Black" AngleForSeparation="45" ConvertToProcess="false" Frequency="70" IsProcessInk="true" NeutralDensity="1.7" PrintInk="true" TrapOrder="4" InkAlias=""/>
+</idPkg:Graphic>
+===== Resources/Preferences.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Preferences xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<DocumentPreference PageHeight="737.010" PageWidth="524.410" PagesPerDocument="1" FacingPages="false" DocumentBleedTopOffset="0" DocumentBleedBottomOffset="0" DocumentBleedInsideOrLeftOffset="0" DocumentBleedOutsideOrRightOffset="0" DocumentBleedUniformSize="true" SlugTopOffset="0" SlugBottomOffset="0" SlugInsideOrLeftOffset="0" SlugRightOrOutsideOffset="0" DocumentSlugUniformSize="false" PreserveLayoutWhenShuffling="true" AllowPageShuffle="true" OverprintBlack="true" PageBinding="LeftToRight" ColumnDirection="Horizontal" SpreadHiddenVisibility="false" Intent="PrintIntent" CreatePrimaryTextFrame="false" ColumnGuideLocked="true" MasterTextFrame="false" SnippetImportUsesOriginalLocation="false"/>
+	<ViewPreference HorizontalMeasurementUnits="Points" VerticalMeasurementUnits="Points" RulerOrigin="PageOrigin"/>
+</idPkg:Preferences>
+===== Resources/Styles.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Styles xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<RootCharacterStyleGroup Self="u_rcsg">
+		<CharacterStyle Self="CharacterStyle/$ID/[No character style]" Imported="false" Name="$ID/[No character style]"/>
+	</RootCharacterStyleGroup>
+	<RootParagraphStyleGroup Self="u_rpsg">
+		<ParagraphStyle Self="ParagraphStyle/$ID/[No paragraph style]" Imported="false" Name="$ID/[No paragraph style]"/>
+		<ParagraphStyle Self="ParagraphStyle/heading1" Imported="false" Name="一级标题" PointSize="22.000" Leading="30.000" FirstLineIndent="0.000" SpaceBefore="18.000" SpaceAfter="14.000" FillColor="Color/C17202A" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
+			<Properties>
+				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
+				<PreviewColor type="enumeration">Nothing</PreviewColor>
+				<AppliedFont type="string">CF_heading1</AppliedFont>
+				<KinsokuSet type="enumeration">SimplifiedChineseKinsoku</KinsokuSet>
+			</Properties>
+		</ParagraphStyle>
+		<ParagraphStyle Self="ParagraphStyle/heading2" Imported="false" Name="二级标题" PointSize="15.000" Leading="22.000" FirstLineIndent="0.000" SpaceBefore="12.000" SpaceAfter="8.000" FillColor="Color/C17202A" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
+			<Properties>
+				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
+				<PreviewColor type="enumeration">Nothing</PreviewColor>
+				<AppliedFont type="string">CF_heading2</AppliedFont>
+				<KinsokuSet type="enumeration">SimplifiedChineseKinsoku</KinsokuSet>
+			</Properties>
+		</ParagraphStyle>
+		<ParagraphStyle Self="ParagraphStyle/body" Imported="false" Name="正文" PointSize="10.500" Leading="16.000" FirstLineIndent="21.000" SpaceBefore="0.000" SpaceAfter="4.000" FillColor="Color/C17202A" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
+			<Properties>
+				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
+				<PreviewColor type="enumeration">Nothing</PreviewColor>
+				<AppliedFont type="string">CF_body</AppliedFont>
+				<KinsokuSet type="enumeration">SimplifiedChineseKinsoku</KinsokuSet>
+			</Properties>
+		</ParagraphStyle>
+		<ParagraphStyle Self="ParagraphStyle/caption" Imported="false" Name="图注" PointSize="8.500" Leading="12.000" FirstLineIndent="0.000" SpaceBefore="4.000" SpaceAfter="8.000" FillColor="Color/C17202A" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
+			<Properties>
+				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
+				<PreviewColor type="enumeration">Nothing</PreviewColor>
+				<AppliedFont type="string">CF_caption</AppliedFont>
+				<KinsokuSet type="enumeration">SimplifiedChineseKinsoku</KinsokuSet>
+			</Properties>
+		</ParagraphStyle>
+		<ParagraphStyle Self="ParagraphStyle/callout" Imported="false" Name="知识卡片" PointSize="11.000" Leading="17.000" FirstLineIndent="0.000" SpaceBefore="8.000" SpaceAfter="8.000" FillColor="Color/C2D7A78" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
+			<Properties>
+				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
+				<PreviewColor type="enumeration">Nothing</PreviewColor>
+				<AppliedFont type="string">CF_callout</AppliedFont>
+				<KinsokuSet type="enumeration">SimplifiedChineseKinsoku</KinsokuSet>
+			</Properties>
+		</ParagraphStyle>
+		<ParagraphStyle Self="ParagraphStyle/tocLevel1" Imported="false" Name="目录一级" PointSize="15.000" Leading="22.000" FirstLineIndent="0.000" SpaceBefore="0.000" SpaceAfter="2.000" FillColor="Color/C17202A" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
+			<Properties>
+				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
+				<PreviewColor type="enumeration">Nothing</PreviewColor>
+				<AppliedFont type="string">CF_tocLevel1</AppliedFont>
+				<KinsokuSet type="enumeration">SimplifiedChineseKinsoku</KinsokuSet>
+			</Properties>
+		</ParagraphStyle>
+		<ParagraphStyle Self="ParagraphStyle/tocLevel2" Imported="false" Name="目录二级" PointSize="8.500" Leading="12.000" FirstLineIndent="12.000" SpaceBefore="0.000" SpaceAfter="2.000" FillColor="Color/C17202A" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
+			<Properties>
+				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
+				<PreviewColor type="enumeration">Nothing</PreviewColor>
+				<AppliedFont type="string">CF_tocLevel2</AppliedFont>
+				<KinsokuSet type="enumeration">SimplifiedChineseKinsoku</KinsokuSet>
+			</Properties>
+		</ParagraphStyle>
+	</RootParagraphStyleGroup>
+		<TOCStyle Self="TOCStyle/layoutD_TOC" Name="目录" IncludeBookDocuments="false" CreateBookmarks="true" ReplaceExisting="true">
+			<TOCStyleEntry Self="TOCStyleEntry/layoutD_TOC_heading1" AppliedParagraphStyle="ParagraphStyle/heading1" TOCEntryStyle="ParagraphStyle/tocLevel1" IncludePageNumber="true" PageNumberPosition="AfterEntry"/>
+			<TOCStyleEntry Self="TOCStyleEntry/layoutD_TOC_heading2" AppliedParagraphStyle="ParagraphStyle/heading2" TOCEntryStyle="ParagraphStyle/tocLevel2" IncludePageNumber="true" PageNumberPosition="AfterEntry"/>
+		</TOCStyle>
+	<RootCellStyleGroup Self="u_rcellsg"><CellStyle Self="CellStyle/$ID/[None]" Name="$ID/[None]"/></RootCellStyleGroup>
+	<RootTableStyleGroup Self="u_rtsg"><TableStyle Self="TableStyle/$ID/[No table style]" Name="$ID/[No table style]"/></RootTableStyleGroup>
+	<RootObjectStyleGroup Self="u_rosg"><ObjectStyle Self="ObjectStyle/$ID/[None]" Name="$ID/[None]"/></RootObjectStyleGroup>
+</idPkg:Styles>
+===== Spreads/Spread_uSpread0.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Spread xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Spread Self="uSpread0" PageTransitionType="None" PageTransitionDirection="NotApplicable" PageTransitionDuration="Medium" ShowMasterItems="true" PageCount="1" BindingLocation="0" SpreadHidden="false" AllowPageShuffle="true" ItemTransform="1 0 0 1 0 0.000" FlattenerOverride="Default">
+		<Page Self="uPage0" Name="1" AppliedMaster="uMasterA" MasterPageTransform="1 0 0 1 0 0" GeometricBounds="0 0 737.010 524.410" ItemTransform="1 0 0 1 -262.205 -368.505" LayoutRule="UseMaster" OverrideList=""/>
+		<TextFrame Self="uTF0_0" ParentStory="uStory0_0" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -188.505" LeftDirection="-208.205 -188.505" RightDirection="-208.205 -188.505"/><PathPointType Anchor="214.205 -188.505" LeftDirection="214.205 -188.505" RightDirection="214.205 -188.505"/><PathPointType Anchor="214.205 -116.505" LeftDirection="214.205 -116.505" RightDirection="214.205 -116.505"/><PathPointType Anchor="-208.205 -116.505" LeftDirection="-208.205 -116.505" RightDirection="-208.205 -116.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<TextFrame Self="uTF0_1" ParentStory="uStory0_1" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -102.505" LeftDirection="-208.205 -102.505" RightDirection="-208.205 -102.505"/><PathPointType Anchor="214.205 -102.505" LeftDirection="214.205 -102.505" RightDirection="214.205 -102.505"/><PathPointType Anchor="214.205 -66.505" LeftDirection="214.205 -66.505" RightDirection="214.205 -66.505"/><PathPointType Anchor="-208.205 -66.505" LeftDirection="-208.205 -66.505" RightDirection="-208.205 -66.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<TextFrame Self="uTF0_2" ParentStory="uStory0_2" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 218.505" LeftDirection="-208.205 218.505" RightDirection="-208.205 218.505"/><PathPointType Anchor="214.205 218.505" LeftDirection="214.205 218.505" RightDirection="214.205 218.505"/><PathPointType Anchor="214.205 242.505" LeftDirection="214.205 242.505" RightDirection="214.205 242.505"/><PathPointType Anchor="-208.205 242.505" LeftDirection="-208.205 242.505" RightDirection="-208.205 242.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<TextFrame Self="uTF0_3" ParentStory="uStory0_3" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 248.505" LeftDirection="-208.205 248.505" RightDirection="-208.205 248.505"/><PathPointType Anchor="214.205 248.505" LeftDirection="214.205 248.505" RightDirection="214.205 248.505"/><PathPointType Anchor="214.205 266.505" LeftDirection="214.205 266.505" RightDirection="214.205 266.505"/><PathPointType Anchor="-208.205 266.505" LeftDirection="-208.205 266.505" RightDirection="-208.205 266.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+	</Spread>
+</idPkg:Spread>
+===== Spreads/Spread_uSpread1.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Spread xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Spread Self="uSpread1" PageTransitionType="None" PageTransitionDirection="NotApplicable" PageTransitionDuration="Medium" ShowMasterItems="true" PageCount="1" BindingLocation="0" SpreadHidden="false" AllowPageShuffle="true" ItemTransform="1 0 0 1 0 910.207" FlattenerOverride="Default">
+		<Page Self="uPage1" Name="2" AppliedMaster="uMasterA" MasterPageTransform="1 0 0 1 0 0" GeometricBounds="0 0 737.010 524.410" ItemTransform="1 0 0 1 -262.205 -368.505" LayoutRule="UseMaster" OverrideList=""/>
+		<TextFrame Self="uTF1_0" ParentStory="uStory1_0" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-214.205 -312.505" LeftDirection="-214.205 -312.505" RightDirection="-214.205 -312.505"/><PathPointType Anchor="208.205 -312.505" LeftDirection="208.205 -312.505" RightDirection="208.205 -312.505"/><PathPointType Anchor="208.205 -270.505" LeftDirection="208.205 -270.505" RightDirection="208.205 -270.505"/><PathPointType Anchor="-214.205 -270.505" LeftDirection="-214.205 -270.505" RightDirection="-214.205 -270.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<TextFrame Self="uTF1_1" ParentStory="uStory1_1" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-214.205 -240.505" LeftDirection="-214.205 -240.505" RightDirection="-214.205 -240.505"/><PathPointType Anchor="208.205 -240.505" LeftDirection="208.205 -240.505" RightDirection="208.205 -240.505"/><PathPointType Anchor="208.205 179.495" LeftDirection="208.205 179.495" RightDirection="208.205 179.495"/><PathPointType Anchor="-214.205 179.495" LeftDirection="-214.205 179.495" RightDirection="-214.205 179.495"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+	</Spread>
+</idPkg:Spread>
+===== Spreads/Spread_uSpread2.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Spread xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Spread Self="uSpread2" PageTransitionType="None" PageTransitionDirection="NotApplicable" PageTransitionDuration="Medium" ShowMasterItems="true" PageCount="1" BindingLocation="0" SpreadHidden="false" AllowPageShuffle="true" ItemTransform="1 0 0 1 0 1820.415" FlattenerOverride="Default">
+		<Page Self="uPage2" Name="3" AppliedMaster="uMasterA" MasterPageTransform="1 0 0 1 0 0" GeometricBounds="0 0 737.010 524.410" ItemTransform="1 0 0 1 -262.205 -368.505" LayoutRule="UseMaster" OverrideList=""/>
+		<TextFrame Self="uTF2_0" ParentStory="uStory2_0" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -344.505" LeftDirection="-208.205 -344.505" RightDirection="-208.205 -344.505"/><PathPointType Anchor="214.205 -344.505" LeftDirection="214.205 -344.505" RightDirection="214.205 -344.505"/><PathPointType Anchor="214.205 -328.505" LeftDirection="214.205 -328.505" RightDirection="214.205 -328.505"/><PathPointType Anchor="-208.205 -328.505" LeftDirection="-208.205 -328.505" RightDirection="-208.205 -328.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<TextFrame Self="uTF2_1" ParentStory="uStory2_1" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -294.505" LeftDirection="-208.205 -294.505" RightDirection="-208.205 -294.505"/><PathPointType Anchor="-6.000 -294.505" LeftDirection="-6.000 -294.505" RightDirection="-6.000 -294.505"/><PathPointType Anchor="-6.000 -232.505" LeftDirection="-6.000 -232.505" RightDirection="-6.000 -232.505"/><PathPointType Anchor="-208.205 -232.505" LeftDirection="-208.205 -232.505" RightDirection="-208.205 -232.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<TextFrame Self="uTF2_2" ParentStory="uStory2_2" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -196.505" LeftDirection="-208.205 -196.505" RightDirection="-208.205 -196.505"/><PathPointType Anchor="-6.000 -196.505" LeftDirection="-6.000 -196.505" RightDirection="-6.000 -196.505"/><PathPointType Anchor="-6.000 -135.505" LeftDirection="-6.000 -135.505" RightDirection="-6.000 -135.505"/><PathPointType Anchor="-208.205 -135.505" LeftDirection="-208.205 -135.505" RightDirection="-208.205 -135.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<TextFrame Self="uTF2_3" ParentStory="uStory2_3" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -116.505" LeftDirection="-208.205 -116.505" RightDirection="-208.205 -116.505"/><PathPointType Anchor="-6.000 -116.505" LeftDirection="-6.000 -116.505" RightDirection="-6.000 -116.505"/><PathPointType Anchor="-6.000 -52.505" LeftDirection="-6.000 -52.505" RightDirection="-6.000 -52.505"/><PathPointType Anchor="-208.205 -52.505" LeftDirection="-208.205 -52.505" RightDirection="-208.205 -52.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<TextFrame Self="uTF2_4" ParentStory="uStory2_4" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Color/CE0F5ED" StrokeColor="Color/C2D7A78" StrokeWeight="0.800" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -38.505" LeftDirection="-208.205 -38.505" RightDirection="-208.205 -38.505"/><PathPointType Anchor="-6.000 -38.505" LeftDirection="-6.000 -38.505" RightDirection="-6.000 -38.505"/><PathPointType Anchor="-6.000 -4.505" LeftDirection="-6.000 -4.505" RightDirection="-6.000 -4.505"/><PathPointType Anchor="-208.205 -4.505" LeftDirection="-208.205 -4.505" RightDirection="-208.205 -4.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<Rectangle Self="uAccent2_4" ContentType="Unassigned" FillColor="Color/C2D7A78" StrokeColor="Swatch/None" StrokeWeight="0" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -38.505" LeftDirection="-208.205 -38.505" RightDirection="-208.205 -38.505"/><PathPointType Anchor="-204.205 -38.505" LeftDirection="-204.205 -38.505" RightDirection="-204.205 -38.505"/><PathPointType Anchor="-204.205 -4.505" LeftDirection="-204.205 -4.505" RightDirection="-204.205 -4.505"/><PathPointType Anchor="-208.205 -4.505" LeftDirection="-208.205 -4.505" RightDirection="-208.205 -4.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+		</Rectangle>
+		<TextFrame Self="uTF2_5" ParentStory="uStory2_5" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 9.495" LeftDirection="-208.205 9.495" RightDirection="-208.205 9.495"/><PathPointType Anchor="-6.000 9.495" LeftDirection="-6.000 9.495" RightDirection="-6.000 9.495"/><PathPointType Anchor="-6.000 73.495" LeftDirection="-6.000 73.495" RightDirection="-6.000 73.495"/><PathPointType Anchor="-208.205 73.495" LeftDirection="-208.205 73.495" RightDirection="-208.205 73.495"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+	</Spread>
+</idPkg:Spread>
+===== Stories/Story_uStory0_0.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory0_0" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading1" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>layoutD 科普样章</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory0_1.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory0_1" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading2" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>AI 图文排版系统架构样例</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory0_2.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory0_2" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/caption" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>layoutD</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory0_3.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory0_3" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/caption" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>layoutD Press</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory1_0.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory1_0" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading1" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>目录</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory1_1.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory1_1" AppliedTOCStyle="TOCStyle/layoutD_TOC" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/tocLevel1" AppliedComposer="$ID/HL Composer Optyca">
+			<Properties>
+				<TabList type="list">
+					<ListItem type="record">
+						<Alignment type="enumeration">RightAlign</Alignment>
+						<AlignmentCharacter type="string">.</AlignmentCharacter>
+						<Leader type="string">.</Leader>
+						<Position type="unit">416.410</Position>
+					</ListItem>
+				</TabList>
+			</Properties>
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>第一章 重新理解图文排版	3
+</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/tocLevel2" AppliedComposer="$ID/HL Composer Optyca">
+			<Properties>
+				<TabList type="list">
+					<ListItem type="record">
+						<Alignment type="enumeration">RightAlign</Alignment>
+						<AlignmentCharacter type="string">.</AlignmentCharacter>
+						<Leader type="string">.</Leader>
+						<Position type="unit">416.410</Position>
+					</ListItem>
+				</TabList>
+			</Properties>
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>图像不只是正文的附件	3</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory2_0.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory2_0" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/caption" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>layoutD 科普样章</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory2_1.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory2_1" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading1" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>第一章 重新理解图文排版</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory2_2.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory2_2" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading1" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>图像不只是正文的附件</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory2_3.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory2_3" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>中文科普图书的价值，经常来自文字、图片、图注、知识卡片和跨页解释之间的协作。layoutD 的目标，是把这些内容转化为结构化对象，再由排版引擎稳定输出。</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory2_4.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory2_4" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/callout" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>AI 负责提出版式方案，排版引擎负责确定性分页。</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory2_5.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory2_5" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body" AppliedComposer="$ID/HL Composer Optyca">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>第一版架构先验证文档模型、页面生成、素材管理和 PDF 导出的边界。后续再逐步加入中文禁则、标点压缩、图片主体识别和更复杂的跨页布局。</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== XML/BackingStory.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:BackingStory xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<XmlStory Self="u_backing" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+	</XmlStory>
+</idPkg:BackingStory>
+===== XML/Tags.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Tags xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<XMLTag Self="XMLTag/Root" Name="Root"><Properties><TagColor type="enumeration">LightBlue</TagColor></Properties></XMLTag>
+</idPkg:Tags>
+===== designmap.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?aid style="50" type="document" readerVersion="6.0" featureSet="257" product="16.0(202)" ?>
+<Document xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" Self="layoutd_doc" DOMVersion="16.0" Name="layoutd-export.indd" StoryList="uStory0_0 uStory0_1 uStory0_2 uStory0_3 uStory1_0 uStory1_1 uStory2_0 uStory2_1 uStory2_2 uStory2_3 uStory2_4 uStory2_5">
+	<idPkg:Graphic src="Resources/Graphic.xml"/>
+	<idPkg:Fonts src="Resources/Fonts.xml"/>
+	<KinsokuTable Self="KinsokuTable/$ID/kSimpChineseKinsokuName" Name="$ID/kSimpChineseKinsokuName"/>
+	<idPkg:Styles src="Resources/Styles.xml"/>
+	<idPkg:Preferences src="Resources/Preferences.xml"/>
+	<idPkg:Tags src="XML/Tags.xml"/>
+	<idPkg:MasterSpread src="MasterSpreads/MasterSpread_uMasterA.xml"/>
+	<idPkg:Spread src="Spreads/Spread_uSpread0.xml"/>
+	<idPkg:Spread src="Spreads/Spread_uSpread1.xml"/>
+	<idPkg:Spread src="Spreads/Spread_uSpread2.xml"/>
+	<idPkg:BackingStory src="XML/BackingStory.xml"/>
+	<idPkg:Story src="Stories/Story_uStory0_0.xml"/>
+	<idPkg:Story src="Stories/Story_uStory0_1.xml"/>
+	<idPkg:Story src="Stories/Story_uStory0_2.xml"/>
+	<idPkg:Story src="Stories/Story_uStory0_3.xml"/>
+	<idPkg:Story src="Stories/Story_uStory1_0.xml"/>
+	<idPkg:Story src="Stories/Story_uStory1_1.xml"/>
+	<idPkg:Story src="Stories/Story_uStory2_0.xml"/>
+	<idPkg:Story src="Stories/Story_uStory2_1.xml"/>
+	<idPkg:Story src="Stories/Story_uStory2_2.xml"/>
+	<idPkg:Story src="Stories/Story_uStory2_3.xml"/>
+	<idPkg:Story src="Stories/Story_uStory2_4.xml"/>
+	<idPkg:Story src="Stories/Story_uStory2_5.xml"/>
+</Document>
+===== mimetype =====
+application/vnd.adobe.indesign-idml-package

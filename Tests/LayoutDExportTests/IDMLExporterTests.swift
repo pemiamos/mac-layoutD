@@ -80,12 +80,22 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertEqual(matches(in: story, pattern: "(Skew=\\\"12\\\" KentenKind=\\\"KentenSesameDot\\\"[^>]*><Content>[CD]</Content>)").count, 2)
         XCTAssertFalse(story.contains("Skew=\"12\"><Content>二</Content>"))
         XCTAssertFalse(story.contains("FauxBold=\"true\"><Content>三</Content>"))
-        // 着重号只在 CJK 段落排版器下渲染：每个 ParagraphStyleRange 必须带 World-Ready 排版器，
-        // 否则 InDesign 静默忽略 KentenKind（属性在但视觉无点）。
-        XCTAssertEqual(
-            matches(in: story, pattern: "(<ParagraphStyleRange\\b[^>]*\\bAppliedComposer=\\\"\\$ID/HL Composer Optyca\\\")").count,
-            matches(in: story, pattern: "(<ParagraphStyleRange\\b)").count
+        // 着重号只在 CJK/World-Ready 段落排版器下渲染。经真·InDesign 2026 存盘比对：排版器真值
+        // 是 Composer="HL Composer J"（挂在段落样式定义上），而非 Story 段落内联 AppliedComposer
+        // （InDesign 无此属性、会被忽略）。故 Story 不应再含 AppliedComposer；样式应带 Composer。
+        XCTAssertFalse(story.contains("AppliedComposer"))
+        let styles = try entry(output, "Resources/Styles.xml")
+        XCTAssertTrue(
+            styles.contains("Self=\"ParagraphStyle/body\"") && styles.contains("Composer=\"HL Composer J\""),
+            "body 段落样式应带 World-Ready 排版器 Composer=\"HL Composer J\""
         )
+        // 不变量断言闸应放行（着重号已配 World-Ready 样式）。
+        // 反证：若把样式排版器换成拉丁 Optyca，闸门必须报 kenten-needs-world-ready-composer。
+        let goodFiles = ["Resources/Styles.xml": styles, "Stories/Story_uStory0_0.xml": story]
+        XCTAssertTrue(IDMLInvariants.check(files: goodFiles).isEmpty)
+        let latinStyles = styles.replacingOccurrences(of: "Composer=\"HL Composer J\"", with: "Composer=\"HL Composer Optyca\"")
+        let badFiles = ["Resources/Styles.xml": latinStyles, "Stories/Story_uStory0_0.xml": story]
+        XCTAssertEqual(Set(IDMLInvariants.check(files: badFiles).map(\.rule)), ["kenten-needs-world-ready-composer"])
     }
 
     func testExportsAnchoredFootnoteAsNativeIDMLWithoutDuplicatePageFooter() throws {
@@ -324,6 +334,64 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertEqual(try imageFramePointCount(.octagon), 8, "八角图框应 8 个路径点")
         XCTAssertEqual(try imageFramePointCount(.rect), 4, "矩形图框仍 4 个路径点（无回归）")
         XCTAssertGreaterThanOrEqual(try imageFramePointCount(.fan), 16, "扇面图框应多段弧近似（≥16 点）")
+    }
+
+    func testFacingPagesSpreadImposition() throws {
+        // E2-4：facingPages 开 → FacingPages=true + 首页单独成 spread、其后每 2 页一 spread；
+        //        关 → FacingPages=false + 每页独占 spread（无回归）。
+        let project = BookProject.sample
+        let document = LayoutEngine().layout(project: project)
+        func export(_ facing: Bool) throws -> (prefs: String, spreads: [String]) {
+            let output = FileManager.default.temporaryDirectory
+                .appendingPathComponent("layoutd-idml-facing-\(facing)-\(UUID().uuidString).idml")
+            defer { try? FileManager.default.removeItem(at: output) }
+            try IDMLExporter().export(document: document, project: project, to: output,
+                                      options: IDMLExportOptions(facingPages: facing))
+            let prefs = try entry(output, "Resources/Preferences.xml")
+            let spreads = try zipEntries(output)
+                .filter { $0.hasPrefix("Spreads/Spread_") }.sorted()
+                .map { try entry(output, $0) }
+            return (prefs, spreads)
+        }
+        func pageCount(_ spread: String) -> Int { matches(in: spread, pattern: "(<Page )").count }
+
+        // 关：无回归——FacingPages=false，每个 spread 恰 1 页。
+        let off = try export(false)
+        XCTAssertTrue(off.prefs.contains("FacingPages=\"false\""))
+        XCTAssertTrue(off.spreads.allSatisfy { pageCount($0) == 1 }, "非对开每 spread 应恰 1 页")
+
+        // 开：FacingPages=true；首页 spread 1 页，存在 2 页 spread。
+        let on = try export(true)
+        XCTAssertTrue(on.prefs.contains("FacingPages=\"true\""))
+        XCTAssertEqual(pageCount(on.spreads[0]), 1, "首页应单独成 spread（recto）")
+        XCTAssertTrue(on.spreads.contains { pageCount($0) == 2 }, "应存在 2 页对开 spread")
+        // verso 页框在书脊左（ItemTransform x = -pageW）。
+        let twoPageSpread = try XCTUnwrap(on.spreads.first { pageCount($0) == 2 })
+        let pageW = project.pageSetup.pageSize.width
+        XCTAssertTrue(twoPageSpread.contains("ItemTransform=\"1 0 0 1 \(String(format: "%.3f", -pageW)) "),
+                      "verso 页框应在书脊左侧 x=-pageW")
+    }
+
+    func testExportIsByteDeterministic() throws {
+        // 导出必须确定：同一项目两次导出每个内部文件逐字节一致。
+        // （否则 golden-file 回归基线对不上。曾因复合字体字典迭代顺序非确定而漂移。）
+        let project = BookProject.sample
+        let document = LayoutEngine().layout(project: project)
+        func exportEntries() throws -> [String: String] {
+            let out = FileManager.default.temporaryDirectory
+                .appendingPathComponent("layoutd-idml-determinism-\(UUID().uuidString).idml")
+            defer { try? FileManager.default.removeItem(at: out) }
+            try IDMLExporter().export(document: document, project: project, to: out)
+            var map: [String: String] = [:]
+            for name in try zipEntries(out) { map[name] = try entry(out, name) }
+            return map
+        }
+        let a = try exportEntries()
+        let b = try exportEntries()
+        XCTAssertEqual(a.keys.sorted(), b.keys.sorted(), "两次导出文件清单应一致")
+        for key in a.keys.sorted() {
+            XCTAssertEqual(a[key], b[key], "导出文件 \(key) 两次应逐字节一致（确定性）")
+        }
     }
 
     func testExportsValidIDMLFromSampleProject() throws {

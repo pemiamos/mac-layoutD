@@ -58,7 +58,7 @@
 
 > Claude 既做 dev/main 集成与审核，也直接实现高风险/重要的 IDMLExporter 导出任务（用户决定：Codex 不靠谱，这些收 Claude 手里）。
 > 都改 `Sources/LayoutDExport/IDMLExporter.swift`，**串行做、各自专用 worktree+feature 分支**（守 N1/N2/N3），互不并行避免同文件冲突。
-> **顺序（依赖/风险）：~~E3-6~~✅ → ~~E3-4b~~✅ → ~~E2-5 非矩形蒙版~~（✅ 已合 404596b）→ E2-4 对开跨页（风险最高最后，剩最后一项）。**
+> **顺序（依赖/风险）：~~E3-6~~✅ → ~~E3-4b~~✅ → ~~E2-5 非矩形蒙版~~✅ → ~~E2-4 对开跨页~~（✅ 已合 02900eb）。Claude 道全部完成。**
 > 任务详情见下方 Codex 道里对应条目（已标「改判 Claude」）与本道 E2-4 条目；E2-4 须等 Codex 的 D-2 与本道前序都稳定后做。
 
 ## Codex 道队列（IDML 导出管线 + 内容模型）
@@ -195,21 +195,25 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDExport/PDFExporter.swift`、
 > `PNGExporter.swift`、`Sources/LayoutDApp/*`
 >
-> **⭐ 2026-06-21 起 AG 为主力**（用户决定：Codex 不靠谱、少排；AG 多排、连续作业）。预览+GUI 全线都在 AG。
-> **✅ 上一批（E3-2b/E3-4p/E3-3p 预览）AG 已实现、Claude 审过，待合 dev（用户选 C 暂缓，Claude 合）。AG 不必重做。**
-> **🔁 进度更新（2026-06-21 17:10 Claude）**：AG 16:58 交接称已 rebase，**核实后实际只对 export-options 成立**——
->   - ✅ `feature/ag-export-options`（导出面板：facingPages/cmykColors 设置）基于最新 dev、merge-tree 干净，已合 dev（merge `16c12c3`），见下方「导出选项面板」条。
->   - ✅ `feature/ag-e2-4p`（对开页码预览）merge-tree 干净（内容不撞），已合 dev（merge `9497663`），见下方 E2-4p 条。注：AG 并未真把它变基，只加了一条 docs commit，但内容恰好不冲突，Claude 隔离 worktree 验 build+196测试+review 6/0 后合入。
->   - ❌ `feature/ag-e2-5p`（蒙版预览，仍 1 处测试文件冲突）/ `feature/ag-e3-6p`（目录预览，仍 5 处渲染代码冲突）**AG 并未真正变基**（base 仍旧、不含 c5fcfb7），退回重做。
-> **请 AG 真正重整 e2-5p / e3-6p（不是加 docs commit，是把 feat 本体迁到新 base）**：
->   1. 从**最新 dev**（`9515f9b` 或更新）起新分支（如 `feature/ag-e3-6p-v2`），`git cherry-pick` 对应 feat commit（4862e1a 目录 / 2e0b0a8 蒙版）或重新实现该 delta，解冲突——**冲突基本是加性**：保留 dev 已有的 `drawTable`/flow-harness/`drawKentenDots` 等，叠加你的 TOC/蒙版预览函数；
->   2. 每条 `bash scripts/review-idml.sh` PASS + 用 `--export-png-flow` 重导样例肉眼确认（目录点导引线 / 蒙版裁形），写 handoff 列出新分支名与 commit，由 Claude 合 dev。
+> **⭐ AG 为主力**（用户决定：Codex 不靠谱、少排；AG 多排、连续作业）。预览+GUI+LayoutEngine 全线在 AG。
+> **✅ 上一阶段全部完成并合 dev/main**：E3-2b/E3-4p/E3-3p 预览、E3-6p 目录预览、E2-5p 蒙版预览、E2-4p 对开预览、export-options 导出面板（都已 rebase 并合）。
+> **🔁 AG 现役（2026-06-23 用户启动 Backlog，派 AG）：B1 图文绕排 → 之后 B2 长表格分页。详见下方 B1 条。**
+> ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）。
 > 旧的 `feature/ag-e3-6p/e2-5p` 重整后即弃用；`feature/ag-e2-4p`/`feature/ag-export-options` 已合可删。
 > **教训**：每个新任务都从**最新 dev** 起分支；「rebase」是迁 feat 本体、不是在旧分支上补 docs commit。
 > 配对预览做「预览追平 IDML」：Claude 在导出侧做 E3-6（已合）/E2-5/E2-4，AG 在预览侧画对应效果。
 > 约 1 小时或做完/撞阻塞为止，收尾写一条汇总 handoff。
 > 主题：**让预览（Canvas/PDF/PNG）追平 IDML 输出**——本阶段 AG 的核心价值是「InDesign 打开后版面与 layoutD 预览一致」。
 > ⚠️ **每项都从最新 dev 起新分支 `feature/ag-<task>`**，别叠旧分支。斜体已在 dev 用 12° `Skew` 矩阵渲染（与 IDML `Skew="12"` 同算法），别改回 FauxItalic。
+
+- [~] **B1 图文绕排（text wrap）预览** — 🅰️ **AG 现役（2026-06-23 用户启动 Backlog 派 AG）**
+  - **背景**：科普书常见——正文绕着图片/知识卡片排。当前 LayoutEngine 把文本框与图片框放在**互不重叠的矩形**里，正文不绕图。
+  - **目标（先做横排矩形绕排）**：当一个文本框 rect 与图片框 rect **重叠**时，该文本框的正文**绕开图片**排——图占的区域不压字、绕图那几行行宽相应收窄；图在文本列的左侧或右侧均可。
+  - **做法（CoreText 原生支持，别自己拆行）**：CoreText 的 `CTFramesetterCreateFrame` 接受**非矩形 CGPath**——给文本 frame 传「文本列矩形**挖掉**重叠图片矩形」的 path，正文会自动绕排。`ChineseTypesetting` 已用 framesetter，扩成可传带洞 path。
+  - **文件**：`ChineseTypesetting.swift`（makeAttributedString/framesetting 接受排除矩形→构造带洞 path）、`LayoutEngine.swift`（找出与某文本框重叠的图片框，把排除矩形传给该文本框渲染；测高也按绕排后高度）、`CanvasView.swift`/`PDFExporter.swift`/`PNGExporter.swift`（用带洞 path 绘制，三处一致）。
+  - **范围**：本批只做**横排、单图、矩形绕排**。竖排绕排、形状绕排（配 E2-5 扇面/八角蒙版的 `maskShape`）、多图绕排——后续另起。
+  - **不碰**：`IDMLExporter.swift`——IDML 导出侧的 `TextWrapPreference`（让 InDesign 也绕排）是**配对 Claude 任务**，本任务只做预览/布局侧。
+  - **验收**：构造一张图与正文列重叠的样例，用 `--export-png-flow` 导 PNG——正文**绕图排**（图占区无字、绕图行变窄、图侧不压字）、其余行满宽；补单测断言绕排行的可用宽度被排除矩形收窄；`scripts/review-idml.sh` PASS。做完写 handoff 列分支+commit，Claude 审核出 PNG 交用户肉眼验。
 
 - [x] **E3-2b 竖排（直排）下行内格式预览验收 + 修正** — ✅ 已合 dev（随 e3-10p merge `c5fcfb7`），竖排斜体视觉验收过。竖排斜体改用 b=tan12° 切变（横笔倾斜竖笔不动）。AG 不必重做。
   - 背景：E3-2 已把 `inlineRuns` 透传进 `addFlowingVerticalText`，但**斜体用的是横排 12° 水平切变矩阵**，竖排里直接照搬很可能方向错（竖排字应沿竖向基线倾斜，不是横向歪）。粗体在竖排是否真加重也需肉眼确认。
@@ -245,13 +249,13 @@
   - 文件：`Sources/LayoutDApp/main.swift`（CLI/导出路径）、`PNGExporter.swift`/`PDFExporter.swift`、`LayoutEngine.swift`（如需正文连续成帧）。
   - 验收：含 `==着重==`、`**粗**`、`*斜*`、竖排段的测试稿导 PNG，**逐项都能在图里肉眼看到**（傍点出点、粗体加重、斜体倾斜、竖排倾斜方向正确）；`scripts/review-idml.sh` PASS。这条做完，E3-3p / E3-2b 才能真正走完视觉验收。
 
-- [ ] **E3-6p 目录（TOC）预览渲染**（配对 Claude E3-6 动态目录）
+- [x] **E3-6p 目录（TOC）预览渲染**（配对 Claude E3-6 动态目录） — ✅ AG `feature/ag-e3-6p`(d234d22, 真变基自最新 dev) `makeTOCAttributedString` 点导引线/制表位/层级缩进，已合 dev（merge `dad96a5`，2026-06-21 18:1x Claude）。AG 已 `--export-png-flow` 肉眼复验；build+199测试+review-idml 6/0 PASS。合并仅测试文件加性冲突，已解。
   - 背景：Claude 在导出侧把目录做成结构化段落（标题 + tab 点导引线 + 右对齐页码）和动态 `<TOCStyle>`。预览侧（Canvas/PDF/PNG）当前目录基本是裸文字行，需追平。
   - 目标：预览里目录条目按层级缩进、标题与页码间画**点导引线（dot leader）**、页码右对齐贴版心右边；与导出版式一致。
   - 文件：`LayoutEngine.swift`（目录条目成帧/制表位）、`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
   - 验收：含多级标题的稿件导 PNG，目录页点导引线连续、页码右对齐、层级缩进正确；单测断言目录条目带 tab/leader 结构；`scripts/review-idml.sh` PASS。
 
-- [ ] **E2-5p 非矩形蒙版预览渲染**（配对 Claude E2-5 扇面/八角蒙版）
+- [x] **E2-5p 非矩形蒙版预览渲染**（配对 Claude E2-5 扇面/八角蒙版） — ✅ AG `feature/ag-e2-5p`(7f486ab, 真变基自最新 dev) 统一 `polygonPoints` 八角/扇面预览裁形，已合 dev（merge `dad96a5`，2026-06-21 18:1x Claude）。与导出侧 E2-5(404596b) 互补。AG 已 `--export-png-flow` 肉眼复验；build+199测试+review-idml 6/0 PASS。
   - 背景：模型已有 `ImageMaskShape{rect,fan,octagon}`（`LayoutPlan.swift:114`）+ 帧 `maskShape`；Claude 在导出侧让图框按多边形 PathGeometry 裁切。预览侧需把图也裁成同形状，否则预览≠输出。
   - 目标：Canvas/PDF/PNG 对 `maskShape == .fan/.octagon` 的图框，用对应多边形路径裁剪置入图（八角 8 点、扇面弧近似），`rect` 维持现状。
   - 文件：`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`、必要时 `LayoutEngine.swift`/`ChineseTypesetting.swift` 旁的图形工具。
@@ -271,15 +275,15 @@
 
 ---
 
-## 待评估 Backlog（需用户拍板是否进路线图，先不排期）
+## Backlog（2026-06-23 用户启动，按车道路由）
 
-> 这些是图书排版常见但 layoutD 尚未列入需求的功能。是否做、何时做由用户决定；
-> 列在此避免遗忘。每项落到正式队列前由 Claude 补「目标/文件/验收」。
+> 图书排版常见增强。**2026-06-23 用户拍板启动**，按文件边界路由到各道：
+> LayoutEngine/渲染器侧 → AG；导入+IDML 导出侧 → Claude/Codex。
 
-- [ ] **索引（Index）**：术语→页码索引页生成（InDesign 有原生 Index 机制，可对标）。
-- [ ] **参考文献 / 引文样式**：文末参考文献列表 + 文中引用标记的样式化。
-- [ ] **长表格分页 + 表头跨页重复**：超过一页的表格自动续页、每页重复表头（依赖 E3-4 表格基础）。
-- [ ] **图表跨页 / 图文绕排进阶**：满版图跨对开、图片文字绕排（当前为矩形成帧）。
+- [~] **B1 图文绕排（text wrap）** → 🅰️ **AG 现役**（LayoutEngine + 渲染器侧，详见 AG 道 B1 条）。导出侧 IDML `TextWrapPreference` 配对任务后续给 Claude。
+- [ ] **B2 长表格分页 + 表头跨页重复** → 🅰️ AG 下一项（LayoutEngine 表格分页/续页/重复表头）。导出侧（IDML 续表）配对 Claude。
+- [ ] **B3 索引（Index）** → Claude/Codex 道（导入解析索引标记 + IDML 原生 Index 机制），非 AG 文件，待 Claude 展开。
+- [ ] **B4 参考文献 / 引文样式** → Claude/Codex 道（导入解析 + 样式化导出），非 AG 文件，待 Claude 展开。
 
 ## 基础设施待办（Claude/用户）
 

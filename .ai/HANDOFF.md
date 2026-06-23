@@ -9,6 +9,40 @@
 - **改动文件**：(无，仅做分支同步与本地废弃分支清理)
 - **检查**：swift build: pass, swift test: pass (194 tests)
 - **下一步**：① 用户或 Claude 进行已合并功能的 IDML 导出与跨页渲染的视觉终验；② 供 Claude 继续推进 E2-4 对开跨页任务；③ Codex 待命或继续根据后续需求调整。
+## 2026-06-23 14:03 | claude | B 工程健壮性全部完成并合 dev。① 修 Fonts.xml 导出非确定性根因：复合字体映射是字典[CompositeFontClass:Mapping]，r
+- **分支**：dev
+- **概述**：B 工程健壮性全部完成并合 dev。① 修 Fonts.xml 导出非确定性根因：复合字体映射是字典[CompositeFontClass:Mapping]，registerParagraphStyle 按字典自然序遍历调 font()→fontOrder/Self ID 每次导出漂移；改按 CompositeFontClass.allCases 固定序遍历，实测整个 IDML 两次导出逐文件一致；补 testExportIsByteDeterministic 锁定。② CI：.github/workflows/ci.yml，push main/dev+PR 触发 macOS runner 跑 review-idml.sh（build+201测试+IDML探针）。③ golden-file 回归：scripts/golden-{snapshot,update,check}.sh + Tests/golden 基线（本地工具，不进 CI——快照含本机 CoreText 解析的字体名，跨 runner 会误报；同机确定性由单测覆盖）。④ CI 首跑即照出一个既有 bug：AppStateTests.testGenerateBrochurePDF 把 PDF/PNG 写死到 /Users/amos/.gemini/antigravity/brain/... 本机绝对路径，换机即权限错——改写临时目录+defer 清理。CI 现已转绿(review 1m48s PASS)。commit：8969be3(determinism)+85e7d5e(CI/golden)+9e35c58(golden 出 CI)+84f6f0e(test 路径修复)，已 push origin/dev。
+- **改动文件**：(未填)
+- **检查**：本地 swift build + 201 测试 + review-idml.sh 6/0 PASS；整 IDML 两次导出逐文件一致(golden-check PASS)；GitHub Actions CI(macOS) review job PASS 1m48s。
+- **下一步**：① 可把 B 这批 dev→main（CI 已绿，无视觉项，纯工程，建议直接合）。② 残留小项：AppStateTests:273 仍有硬编码图片读路径(优雅降级不阻塞 CI，可顺手清)；ci.yml 的 actions/checkout 可升 v5 消弃用提醒。③ 主交付主体+工程健壮性均完成。后续方向待用户：Backlog(索引/参考文献等)或拿真实书稿试跑。④ AG/Codex 空闲。⑤ 守 N1/N2/N3。
+
+## 2026-06-23 13:54 | claude | 三层保真策略第①层落地:灌版打包前的"不变量断言闸"(IDMLInvariants)。背景见 DECISIONS.md(2026-06-23):10-agent
+- **分支**：dev
+- **概述**：三层保真策略第①层落地:灌版打包前的"不变量断言闸"(IDMLInvariants)。背景见 DECISIONS.md(2026-06-23):10-agent 工作流验证——外化 Adobe ExtendScript/UXP API 治不了我们的 CJK 保真坑(着重号/脚注/粗斜体),因为那三个 bug 名字全合规范,病根是 InDesign 渲染偷偷要求的"搭档属性"缺失,而任何规范都只逐属性校验、不编码跨属性前置条件。故改用断言闸锁已知规则。本层用 Foundation XMLParser 走 Story XML(正确处理脚注 PSR 嵌套),锁四条:①KentenKind 须配 World-Ready 排版器 ②脚注正文段落含 CJK 不能挂 [No paragraph style] ③CJK 粗/斜体须 FauxBold/Skew 不用 FontStyle ④AppliedFont 引用完整性。校验对象是实际出厂的 files 字典而非构建逻辑;export() 打包前调用,违规抛 ExportError.invariantsFailed。
+- **改动文件**：Sources/LayoutDExport/IDMLInvariants.swift(新), Sources/LayoutDExport/IDMLExporter.swift(ExportError 加 case + export() 打包前调用断言闸), Tests/LayoutDExportTests/IDMLInvariantsTests.swift(新,13 测试)
+- **检查**：swift build PASS;swift test 41/0 PASS(含既有全量导出测试不误报);新 IDMLInvariantsTests 13/0,每规则好/坏两面。已提交 eda34ce,合 dev(merge 25a0f9c)并 push origin dev。未合 main。
+- **下一步**：①【需用户/有 InDesign 的一方】第②层 InDesign 往返真值机:用户在已验收的 InDesign 里手搓"着重号"或"脚注"一例 → 导出 .indd→IDML 给 Claude,Claude 拿来 diff 我们的输出,一次性验真可疑暗号 $ID/HL Composer Optyca(代码注释自承"取自公开资料,非真·InDesign 比对")与脚注 AppliedFont 要求,并种下第一个 golden fixture。②【可选 第③层】vendor IDML RelaxNG(InDesign app.generateIDMLSchema() 生成)做 Swift 名/枚举/类型 lint + 收编 ~40-50 个 $ID/ 暗号成一张审计表——纯 lint,非保真策略。③断言闸后续可加 CoreText 字形覆盖检查(逐 run 解析复合字体成员字体,逮豆腐),本层暂只做了 AppliedFont 声明完整性。④明确不做:不外化 ExtendScript/UXP API;不把交付改成 .jsx 脚本。⑤守 N1/N2/N3。
+
+## 2026-06-23 13:48 | claude | 里程碑：E2-4 对开跨页用户 InDesign 视觉验收 PASS（Pages 面板确认首页 recto 单独、2-3 对开 verso左/recto右、内容
+- **分支**：dev
+- **概述**：里程碑：E2-4 对开跨页用户 InDesign 视觉验收 PASS（Pages 面板确认首页 recto 单独、2-3 对开 verso左/recto右、内容各归页），已合 dev→main（merge 5c3773a，push origin/main）。至此主交付 IDML 灌版路线主体全部落地并经用户验收：全量映射/图片打包/行内格式/脚注/表格(含单元格内格式)/动态目录/避头尾/非矩形蒙版/对开跨页/竖排/复合字体 + 预览全面追平 + DOCX 导入。Claude 道四项(E3-6/E3-4b/E2-5/E2-4)全部完成。剩余皆可选：暂缓(CMYK/着重号渲染,用户已决定不做)、Backlog(索引/参考文献/长表格分页/图文绕排,待用户拍板)、工程健壮性(CI/IDML schema golden-file 回归——需先消除已发现的 Fonts.xml 导出非确定性)、E3-9 约物挤压。AG/Codex 当前均空闲无在排任务。
+- **改动文件**：(未填)
+- **检查**：main 5c3773a swift build PASS;已 push origin/main。E2-4 对开用户 InDesign 视觉验收 PASS。
+- **下一步**：① 主交付主体完成,可用于真实书稿。② 待用户决定下一方向:A 启动 Backlog(索引/参考文献等,需 Claude 补验收规格再排队);B 工程健壮性(CI + golden-file 回归,先修 Fonts.xml 非确定性);C E3-9 约物挤压/基线网格;D 暂收尾。③ AG/Codex 空闲,等新任务或排 backlog。④ 隐患:Fonts.xml 导出非确定性(每次运行字体顺序/内容可能变)——做 golden-file 前必先修。⑤ 守 N1/N2/N3。
+
+## 2026-06-22 08:04 | claude | 完成 E2-4 对开跨页——Claude 道全部任务收官。先把上一批已验收的合 main（merge 558b53e：E3-6p/E2-5p 预览+E3-4b+
+- **分支**：dev
+- **概述**：完成 E2-4 对开跨页——Claude 道全部任务收官。先把上一批已验收的合 main（merge 558b53e：E3-6p/E2-5p 预览+E3-4b+E2-5蒙版+AG export-options）。E2-4：facingPages 开关(IDMLExportOptions/CLI 新增 --idml-facing,默认关)；几何函数加 dx(默认0)每页内容按侧偏移(recto +pageW/2/verso -pageW/2)，页循环按对开分组(首页 recto 单独成 spread,其后每2页 verso左+recto右),spreadXML 支持多页(PageCount/BindingLocation),Preferences FacingPages 随开关。最高风险=回归:已逐字节验证 facing 关时 Spreads/Preferences 与 dev 完全一致(仅 Fonts.xml 差异,经两次 dev 自比证实是既有非确定性,与 E2-4 无关)。facing 开实测:首页1页 spread+2页 spread,verso 页框 x=-pageW/recto x=0,FacingPages=true。200测试+review 6/0 PASS。已合 dev(02900eb,未合 main)。桌面 E2-4对开跨页验收-0621.idml 待用户 InDesign 复看。
+- **改动文件**：(未填)
+- **检查**：dev swift build PASS；200 测试 0 失败；review-idml.sh 6/0；facing 关 Spreads/Preferences 逐字节=dev(无回归)；facing 开 spread imposition 结构正确。main 558b53e build PASS 已推。
+- **下一步**：① 用户 InDesign 复看 ~/Desktop/E2-4对开跨页验收-0621.idml：对开跨页左右页镜像、首页单独、订口在内。OK 后 Claude 合 dev→main。② Claude 道全部完成(E3-6/E3-4b/E2-5/E2-4)。后续 Claude 仅集成+审 AG。③ AG：导出选项面板已合;预览侧配对齐;可排新活或进 backlog(索引/参考文献等待用户拍板)。④ Codex 空闲。⑤ 隐患记录:Fonts.xml 导出非确定性(每次运行字体顺序/内容可能变),将来做 golden-file 回归前需先消除。⑥ 守 N1/N2/N3。
+
+## 2026-06-21 18:16 | claude | 合并 AG 17:36 交接的两条「真变基」预览分支。这次 AG 做对了:feature/ag-e2-5p(7f486ab 蒙版预览 polygonPoints
+- **分支**：dev
+- **概述**：合并 AG 17:36 交接的两条「真变基」预览分支。这次 AG 做对了:feature/ag-e2-5p(7f486ab 蒙版预览 polygonPoints)/feature/ag-e3-6p(d234d22 目录预览 makeTOCAttributedString 点导引线+制表位+层级缩进) 都真正从最新 dev 起、含 c5fcfb7、AG 已 --export-png-flow 肉眼复验。注意:两条 base 是 71c1c4b(含 flow harness 但落后当前 dev ~10 提交),merge-tree 0 文本冲突但需防语义破坏——Claude 在 /tmp 隔离 worktree 顺序合两条,e3-6p 撞测试文件加性冲突(testImageMaskShapePolygonPoints vs testTOCAttributedString,两独立测试都保留)已手解,build+199测试+review-idml 6/0 全 PASS 后才合 dev。两条预览侧(E3-6p/E2-5p)至此完成,与各自导出侧(E3-6/E2-5)配对齐。已合 dev(merge dad96a5)并 push origin/dev=dad96a5。踩坑:push 前误用 git pull --rebase(本地已=origin+我的merge),它重放我的 merge 导致 d234d22 冲突半截 rebase,已 git rebase --abort 恢复——dev ref 未受影响、push 成功、结果正确。教训:本地已是 origin 基础+自己 merge、只为 push 时直接 push 或 pull --ff-only,别 pull --rebase。另:feature/ag-inline-preview 是远古废分支(base 无 c5fcfb7、diff -3203 行会删 DOCXImporter/大半 IDMLExporter),勿合,建议删。
+- **改动文件**：Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDCore/ChineseTypesetting.swift, Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDEngine/LayoutEngine.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift (经 merge ag-e2-5p + ag-e3-6p)
+- **检查**：dev(dad96a5) swift build PASS; swift test 199/0; scripts/review-idml.sh 6/0 PASS。已 push origin/dev=dad96a5。
+- **下一步**：① 用户:InDesign/PNG 复看目录点导引线 + 蒙版裁形预览(AG 已自验,用户终验)。② Claude 道:仅剩 E2-4 对开跨页(最高风险,单独一棒,改完务必回归非对开模式)。③ 清理废分支:feature/ag-inline-preview(远古废分支勿合)、已合的 ag-e2-4p/ag-e3-6p/ag-e2-5p/ag-export-options/codex-*。④ 并发警示:仍有第二个 Claude 会话在同一 checkout 操作,git 写操作直接 push 或 pull --ff-only,勿 pull --rebase 重放本地 merge;守 N1/N2/N3。⑤ dev 上预览侧(E3-6p/E2-5p/E2-4p)+导出侧基本配齐,可考虑攒批交用户 InDesign 视觉总验后合 main。
 
 ## 2026-06-21 17:54 | claude | 完成 Claude 道 E2-5 非矩形蒙版——已合 dev（merge 404596b，push origin/dev）。maskGeometry 输出八角(
 - **分支**：dev
