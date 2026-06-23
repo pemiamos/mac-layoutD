@@ -79,8 +79,8 @@
   - **现象**（用户 InDesign 截图实证）：`Samples/test_emphasis_visual.md` 用「每段一个 `---…---` 头」想给第二段切竖排，但第二个 `---title: 竖排排版测试\nlayout_direction: vertical\ncolumns: 1---` 块**被当正文画了出来**（`title: …`、`columns: 1` 成了可见段落）。
   - **根因**：`MarkdownBookImporter.extractFrontMatter`（:1035）只认**文件首个** `---` 块；正文解析器不识别其后的 `---…---` 元数据块，于是 `---` 当分隔线、`key: value` 当正文文字漏出。
   - **模型事实（先读懂再动手）**：竖排在本模型是**按段落样式** `style.layoutDirection`（`ChineseTypesetting`）控制的，PageSetup.layoutDirection 只是文档默认——**不存在"分段头切方向"机制**。所以「第二段头让该段竖排」目前模型不直接支持。
-  - **本任务范围（最小正确修复，先止血）**：正文解析器遇到「位于段/章边界、整块都是 `key: value` 的 `---…---`」时**消费掉它、不漏成正文**；识别到的 `title` 用作**新 section 标题**。`layout_direction` 等"切方向/切页面"语义**本批不实现**（需产品决策，见下）。
-  - **⚠️ 产品决策待用户拍板（Claude 转述，别擅自定）**：多段 frontmatter 到底该不该支持"分段切竖排"？若要，正路是「该 section 的段落样式用竖排变体」而非 PageSetup——属新功能，另立项。本任务只保证**不漏脏文字**。
+  - **本任务范围（用户 2026-06-23 已拍板：只止血，不做分段方向）**：正文解析器遇到「位于段/章边界、整块都是 `key: value` 的 `---…---`」时**消费掉它、不漏成正文**；识别到的 `title` 用作**新 section 标题**；`layout_direction`/`columns` 等键**静默忽略**（不实现分段切方向/切页面）。
+  - **❌ 不做**：多段 frontmatter 切竖排——用户明确不需要文档内横竖混排（竖排走段落样式即可，决策见 `.ai/DECISIONS.md` 2026-06-23）。本任务纯止血。
   - **验收**：①`test_emphasis_visual.md` 导出后**不再**出现 `title:`/`columns:`/`layout_direction:` 字样的正文段；② 第二段标题（竖排排版测试 / 竖排强调测试）正常成段/标题；③ 补端到端断言（导出 Story 不含 `layout_direction` 文本）；④`scripts/review-idml.sh` PASS。**修法别破坏**首个 frontmatter 既有解析（title/author/pageSetup 全保留）。
   - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`（仅此一文件，blast radius 小）。
 
@@ -151,7 +151,7 @@
   - 文件：`BookProject.swift`、`MarkdownBookImporter.swift`、`IDMLExporter.swift`。
   - 验收：`printf '| 名称 | 说明 |\n| --- | --- |\n| 线粒体 | **产能**中心 |\n| 核糖体 | 合成*蛋白质* |\n'` 导出解包，单元格内 `**产能**`→FauxBold、`*蛋白质*`→Skew，无残留 `*`；补端到端断言；`scripts/review-idml.sh` PASS；用户 InDesign 肉眼确认表格内粗斜体可见。
 
-- [x] **E3-6 目录（TOC）动态化** — ✅ 已合 dev（merge `dd2c49b`）。Codex 实现 `feature/codex-e3-6-toc`(748c60c)：TOCStyle + heading1/2 映射 + 结构化目录条目，本体正确；Claude 接手修一处保真坑（`feature/claude-e3-6-toc` 9568de3）：制表位原写成 ParagraphStyleRange 扁平属性会被 InDesign 忽略，改为合法嵌套 `<Properties><TabList>`（右对齐+点导引线）。190 测试 + review-idml.sh PASS。**待用户 InDesign 肉眼验收**：① 目录页码右对齐、点导引线连续；② Layout→更新目录 能按标题样式重建。⚠️ 制表位渲染是「属性在视觉无」高发区，务必人看。
+- [x] **E3-6 目录（TOC）动态化** — ✅ 已合 dev（merge `dd2c49b`）。Codex 实现 `feature/codex-e3-6-toc`(748c60c)：TOCStyle + heading1/2 映射 + 结构化目录条目，本体正确；Claude 接手修一处保真坑（`feature/claude-e3-6-toc` 9568de3）：制表位原写成 ParagraphStyleRange 扁平属性会被 InDesign 忽略，改为合法嵌套 `<Properties><TabList>`（右对齐+点导引线）。190 测试 + review-idml.sh PASS。**✅ 用户 2026-06-23 InDesign 验收通过**：目录页码右对齐、点导引线连续、层级缩进正常（样例 `~/Desktop/验收1-动态目录-0623.idml`）。
   - **现状（Claude 已勘）**：`LayoutEngine` 排版时已收集带**真实页码**的目录条目（`tableOfContents: [TableOfContentsEntry(level,title,pageNumber)]`，`LayoutEngine.swift:131/138`），但在 `LayoutEngine.swift:1141` 被拼成纯文本行（`"标题  3"`）放进 `.tableOfContents` 页 → 导出到 IDML 就是**死文字**，正文页码一变目录不会跟。导出侧 TOC story 现在 `AppliedTOCStyle="n"`（`IDMLExporter.swift:891` 一带）。
   - **目标**：让目录在 InDesign 里能用「Layout → 更新目录」重新生成/刷新页码，而非手敲数字；且排版专业（点导引线 + 页码右对齐）。
   - **做法（两层，至少做到第 1 层即算过；第 2 层加分）**：
@@ -177,7 +177,7 @@
   - 文件：`IDMLExporter.swift`（⚠️ Codex 负责文件，本项跨道由 Claude 直接做，故须等 Codex 本批先落 dev）。
   - ⚠️ 风险高（可能打破当前"单页 spread 干净分页"），单独一棒、改完先确认非对开模式没有回归，再重点交用户 InDesign 验收对开效果。
 
-- [x] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版** — ✅ 已合 dev（404596b）。非矩形蒙版完成：maskGeometry 输出八角(8点)/扇面(环形扇区弧线近似)PathGeometry，图片放满 rect 被裁成形；.rect/nil 回退矩形(无回归)；端到端断言八角8/矩形4/扇面≥16点；桌面 E2-5蒙版验收-0621.idml 待用户 InDesign 复看。固定美术页「不叠主页项」一项 N/A：当前 MasterSpread 为空(无页码等元素)、满版图本就按出血矩形导出，无可叠之物。
+- [x] **E2-5 固定美术页 → MasterSpread / 非矩形蒙版** — ✅ 已合 dev（404596b）。非矩形蒙版完成：maskGeometry 输出八角(8点)/扇面(环形扇区弧线近似)PathGeometry，图片放满 rect 被裁成形；.rect/nil 回退矩形(无回归)；端到端断言八角8/矩形4/扇面≥16点；**✅ 用户 2026-06-23 确认 InDesign 验收通过**（之前已复看）。固定美术页「不叠主页项」一项 N/A：当前 MasterSpread 为空(无页码等元素)、满版图本就按出血矩形导出，无可叠之物。
   - **现状（Claude 已勘）**：模型已就绪——`ImageMaskShape{rect,fan,octagon}`（`LayoutPlan.swift:114`）+ 帧上 `maskShape` 字段；固定美术页用 `LayoutPlanStrategy.cover/.fullPageImage/.titlePage`（`BookProject.swift:480`）。但导出器**只为矩形写 PathGeometry**（`IDMLExporter.swift:404` 四角点），且文件头注释自承「固定美术页→MasterSpread、非矩形蒙版**暂未覆盖**」。现有 A-Master 是个空主页（`masterSpread()` `IDMLExporter.swift:638`）。
   - **第 1 步·非矩形蒙版（先做，独立）**：帧 `maskShape == .fan/.octagon` 时，把该图框的 `<PathGeometry><GeometryPathType>` 点数组算成对应**多边形**（八角=8 点、扇面=弧近似多段点），InDesign 据此把置入图裁成该形；`rect` 保持现状。注意图片 `<Image>` 仍按原图矩形放，靠图框 path 裁切。
   - **第 2 步·固定美术页**：`cover/fullPageImage/titlePage` 固定页导出时——① 满版图按**出血满版**定位（已知 bleed），② 该页**不要叠加正文主页项/页码**（应用 `[None]` 主页或不挂 A-Master），避免页码/主页元素盖在满版图上；非固定页维持现状不回归。（把共享背景美术放进 MasterSpread 为可选加分，非必须。）
