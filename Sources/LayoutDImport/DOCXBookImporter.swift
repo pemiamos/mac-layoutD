@@ -1,10 +1,11 @@
 import Compression
 import Foundation
+import ImageIO
 import LayoutDCore
 
 /// Minimal, dependency-free OOXML importer. It deliberately handles the document
-/// structures layoutD can model today (paragraphs, basic emphasis, lists and
-/// tables) and leaves drawings/media to a later asset-import pass.
+/// structures layoutD can model today (paragraphs, basic emphasis, lists, tables
+/// and embedded drawings/images).
 public struct DOCXBookImporter {
     public enum ImportError: LocalizedError {
         case missingDocumentXML
@@ -33,28 +34,131 @@ public struct DOCXBookImporter {
         }
         let styleNames = (try? archive.string(named: "word/styles.xml"))
             .map(DOCXStyles.init(xml:))?.paragraphNames ?? [:]
+        
+        var rels: [String: String] = [:]
+        if let relsXML = try? archive.string(named: "word/_rels/document.xml.rels") {
+            rels = DOCXRelsParser(xml: relsXML).rels
+        }
+        
         let parsed = DOCXDocumentParser(styleNames: styleNames).parse(xml: documentXML)
         guard !parsed.failed else { throw ImportError.malformedDocument }
 
-        let paragraphs = parsed.blocks.compactMap { block -> Paragraph? in
+        var projectAssets: [Asset] = []
+
+        let paragraphs = parsed.blocks.flatMap { block -> [Paragraph] in
             switch block {
             case .paragraph(let value):
-                guard !value.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-                return Paragraph(kind: kind(for: value, styleNames: styleNames), text: value.text,
-                                 styleId: styleID(for: value, styleNames: styleNames), inlineRuns: inlineRuns(for: value))
+                var result: [Paragraph] = []
+                let cleanText = value.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                var imageParagraphs: [Paragraph] = []
+                for img in value.images {
+                    if let asset = extractAndRegisterImage(img, rels: rels, from: archive, docxURL: url) {
+                        projectAssets.append(asset)
+                        let imgPara = Paragraph(
+                            kind: .figure(assetId: asset.id),
+                            text: asset.fileName,
+                            styleId: StyleID.caption.rawValue
+                        )
+                        imageParagraphs.append(imgPara)
+                    }
+                }
+                
+                if !cleanText.isEmpty {
+                    let textPara = Paragraph(
+                        kind: kind(for: value, styleNames: styleNames),
+                        text: value.text,
+                        styleId: styleID(for: value, styleNames: styleNames),
+                        inlineRuns: inlineRuns(for: value)
+                    )
+                    result.append(textPara)
+                }
+                
+                result.append(contentsOf: imageParagraphs)
+                return result
+                
             case .table(let rows):
                 let cells = rows.filter { !$0.isEmpty }
-                guard !cells.isEmpty else { return nil }
-                return Paragraph(kind: .table, text: cells.map { $0.joined(separator: "    ") }.joined(separator: "\n"),
-                                 styleId: StyleID.body.rawValue, tableCells: cells)
+                guard !cells.isEmpty else { return [] }
+                return [Paragraph(kind: .table, text: cells.map { $0.joined(separator: "    ") }.joined(separator: "\n"),
+                                 styleId: StyleID.body.rawValue, tableCells: cells)]
             }
         }
+        
         let roleMappedParagraphs = applyContentRoles(to: paragraphs)
         let title = fallbackTitle ?? url.deletingPathExtension().lastPathComponent
         return BookProject(
             metadata: ProjectMetadata(title: title.isEmpty ? "未命名 DOCX 书稿" : title, author: defaultAuthor),
-            sections: [BookSection(title: title.isEmpty ? "正文" : title, stories: [Story(title: "正文", paragraphs: roleMappedParagraphs)])]
+            sections: [BookSection(title: title.isEmpty ? "正文" : title, stories: [Story(title: "正文", paragraphs: roleMappedParagraphs)])],
+            assets: projectAssets
         )
+    }
+
+    private func extractAndRegisterImage(_ img: DOCXImage, rels: [String: String], from archive: OOXMLArchive, docxURL: URL) -> Asset? {
+        guard let target = rels[img.rId] else { return nil }
+        let entryName = target.hasPrefix("word/") ? target : "word/\(target)"
+        guard let data = try? archive.data(named: entryName) else { return nil }
+        
+        let imagesDirectory = docxURL.deletingLastPathComponent().appendingPathComponent("images")
+        try? FileManager.default.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
+        
+        let fileName = URL(fileURLWithPath: target).lastPathComponent
+        let destURL = imagesDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try data.write(to: destURL)
+        } catch {
+            return nil
+        }
+        
+        var pixelWidth = 0
+        var pixelHeight = 0
+        var dpi: Double? = nil
+        
+        if let source = CGImageSourceCreateWithURL(destURL as CFURL, nil),
+           let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] {
+            pixelWidth = properties[kCGImagePropertyPixelWidth as String] as? Int ?? 0
+            pixelHeight = properties[kCGImagePropertyPixelHeight as String] as? Int ?? 0
+            dpi = properties[kCGImagePropertyDPIWidth as String] as? Double
+        }
+        
+        if pixelWidth == 0 || pixelHeight == 0 {
+            if let cx = img.cx, let cy = img.cy, cx > 0, cy > 0 {
+                pixelWidth = cx / 12700
+                pixelHeight = cy / 12700
+            }
+        }
+        
+        return Asset(
+            id: UUID(),
+            fileName: "images/\(fileName)",
+            sourcePath: destURL.path,
+            role: inferRole(from: fileName),
+            pixelWidth: pixelWidth,
+            pixelHeight: pixelHeight,
+            dpi: dpi,
+            usage: .placed
+        )
+    }
+
+    private func inferRole(from fileName: String) -> AssetRole {
+        let lowered = fileName.lowercased()
+        if lowered.contains("hero") || lowered.contains("cover") || lowered.contains("主图") {
+            return .hero
+        }
+        if lowered.contains("chart") || lowered.contains("graph") || lowered.contains("图表") {
+            return .chart
+        }
+        if lowered.contains("step") || lowered.contains("步骤") {
+            return .step
+        }
+        if lowered.contains("compare") || lowered.contains("对比") {
+            return .comparison
+        }
+        if lowered.contains("diagram") || lowered.contains("示意") {
+            return .diagram
+        }
+        return .photo
     }
 
     private func applyContentRoles(to paragraphs: [Paragraph]) -> [Paragraph] {
@@ -114,8 +218,9 @@ public struct DOCXBookImporter {
     }
 }
 
+private struct DOCXImage { var rId: String; var cx: Int?; var cy: Int? }
 private struct DOCXRun { var text = ""; var emphasis = Set<InlineEmphasis>() }
-private struct DOCXParagraph { var text = ""; var runs: [DOCXRun] = []; var styleID: String?; var isList = false }
+private struct DOCXParagraph { var text = ""; var runs: [DOCXRun] = []; var styleID: String?; var isList = false; var images: [DOCXImage] = [] }
 private enum DOCXBlock { case paragraph(DOCXParagraph), table([[String]]) }
 private struct DOCXParseResult { var blocks: [DOCXBlock] = []; var failed = false }
 
@@ -124,6 +229,7 @@ private final class DOCXDocumentParser: NSObject, XMLParserDelegate {
     private var result = DOCXParseResult()
     private var paragraph: DOCXParagraph?
     private var run: DOCXRun?
+    private var currentImage: DOCXImage?
     private var tableRows: [[String]] = []
     private var tableRow: [String] = []
     private var tableCellParagraphs: [String] = []
@@ -155,6 +261,16 @@ private final class DOCXDocumentParser: NSObject, XMLParserDelegate {
         case "t": textTarget = .run
         case "tab": run?.text.append("\t")
         case "br", "cr": run?.text.append("\n")
+        case "drawing": currentImage = DOCXImage(rId: "")
+        case "blip":
+            let embedId = attributeDict["r:embed"] ?? attributeDict["embed"] ?? attributeDict["r:link"] ?? attributeDict["link"] ?? ""
+            currentImage?.rId = embedId
+        case "extent":
+            if let cxStr = attributeDict["cx"], let cx = Int(cxStr),
+               let cyStr = attributeDict["cy"], let cy = Int(cyStr) {
+                currentImage?.cx = cx
+                currentImage?.cy = cy
+            }
         default: break
         }
     }
@@ -169,6 +285,11 @@ private final class DOCXDocumentParser: NSObject, XMLParserDelegate {
         case "r":
             if let run { paragraph?.runs.append(run); paragraph?.text += run.text }
             run = nil
+        case "drawing":
+            if let img = currentImage, !img.rId.isEmpty {
+                paragraph?.images.append(img)
+            }
+            currentImage = nil
         case "p":
             if let paragraph {
                 if tableDepth > 0 { tableCellParagraphs.append(paragraph.text) }
@@ -207,6 +328,24 @@ private final class DOCXStyles: NSObject, XMLParserDelegate {
     }
 }
 
+private final class DOCXRelsParser: NSObject, XMLParserDelegate {
+    var rels: [String: String] = [:]
+
+    convenience init(xml: String) { self.init(); parse(xml: xml) }
+    private func parse(xml: String) {
+        guard let data = xml.data(using: .utf8) else { return }
+        let parser = XMLParser(data: data); parser.delegate = self; parser.parse()
+    }
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
+        let name = (qName ?? elementName).split(separator: ":").last.map(String.init) ?? elementName
+        if name == "Relationship" {
+            if let id = attributeDict["Id"], let target = attributeDict["Target"] {
+                rels[id] = target
+            }
+        }
+    }
+}
+
 private struct OOXMLArchive {
     private let data: Data
     init(data: Data) throws {
@@ -218,6 +357,11 @@ private struct OOXMLArchive {
         guard let entry = try entry(named: name) else { return nil }
         let bytes = try data(for: entry)
         return String(data: bytes, encoding: .utf8)
+    }
+
+    func data(named name: String) throws -> Data? {
+        guard let entry = try entry(named: name) else { return nil }
+        return try data(for: entry)
     }
 
     private func entry(named target: String) throws -> (method: UInt16, compressed: Int, uncompressed: Int, offset: Int)? {
