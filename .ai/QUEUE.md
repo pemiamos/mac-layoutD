@@ -70,7 +70,7 @@
 > 高风险/重要的 IDMLExporter 导出任务（E3-4b/E3-6/E2-5/E2-4）**全部改判 Claude 直接做**（见下方「Claude 道」）。
 > AG 升为主力。
 >
-> **🔁 Codex 当前序列：① IMP-2 DOCX 内嵌图导入（进行中，用户已交接）→ ② IMP-3 角色标签结构化导入（layoutD 核心，最重要）→ ③ IMP-1 多段 frontmatter 漏成正文。**（D-2 DOCX `85d7a00` 已合 dev+main、用户验收过。）
+> **🔁 Codex 近期少用（用户 2026-06-24）。** IMP-3 已 Claude 完成、IMP-2 改派 AG；Codex 当前仅剩 IMP-1 多段 frontmatter 止血（见下），有空再做。
 > 下面 E3-4b/E3-6/E2-5 虽列在本道，但**已改判 Claude**（各条已标），Codex **不要做**。
 > ⏸ **E3-8 CMYK 暂缓**；E3-9 约物挤压维持原排期。
 > 注意斜体导出已用 `Skew="12"`、粗体用 `FauxBold="true"`（别用 `FauxItalic`/`FontStyle`，对 CJK 不可见/出粉色替代字形）。
@@ -84,7 +84,8 @@
   - **验收**：①`test_emphasis_visual.md` 导出后**不再**出现 `title:`/`columns:`/`layout_direction:` 字样的正文段；② 第二段标题（竖排排版测试 / 竖排强调测试）正常成段/标题；③ 补端到端断言（导出 Story 不含 `layout_direction` 文本）；④`scripts/review-idml.sh` PASS。**修法别破坏**首个 frontmatter 既有解析（title/author/pageSetup 全保留）。
   - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`（仅此一文件，blast radius 小）。
 
-- [ ] **IMP-2 DOCX 内嵌图导入（Claude 2026-06-23 试跑实测缺口）** — Codex @ `feature/codex-imp2-docx-images`
+- [ ] **IMP-2 DOCX 内嵌图导入（Claude 2026-06-23 试跑实测缺口）** — 🅰️ **改派 AG（用户 2026-06-24，Codex 近期少用）** @ `feature/ag-imp2-docx-images`
+  - ⚠️ 本任务跨进 import 文件 `DOCXBookImporter.swift`（原 Codex 道）——用户已授权 AG 做；AG 注意这不是渲染层，是导入器加内嵌图提取+落帧。
   - **现象**：`DOCXBookImporter` 当前**完全跳过内嵌图**（源码注释自承"leaves drawings/media to a later asset-import pass"）。实测真实书稿 `layoutD村落.docx`（含 3 张内嵌 PNG）导入后 `assets: 0`，图全丢、位置也丢。
   - **docx 内嵌图结构（已勘，照此实现）**：
     1. `word/_rels/document.xml.rels` 把 `rId → media 文件`：`rId4→media/image1.png`、`rId5→image2`、`rId6→image3`。
