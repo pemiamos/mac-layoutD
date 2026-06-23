@@ -3,6 +3,12 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-23 15:06 | codex | IMP-1 多段 frontmatter 止血完成，待 Claude 集成审核
+- **分支**：`feature/codex-imp1-frontmatter`
+- **概述**：后续位于段/章边界、内容完整为 `key: value` 的 `--- ... ---` 块现在会在 Markdown 导入前被消费，不再作为正文输出；其中 `title` 转为一级标题并交给既有解析器创建新 section。`layout_direction`、`columns` 等后续元数据静默忽略，未实现分段横竖混排。普通草稿分隔线及非元数据块保持原行为。
+- **改动文件**：`Sources/LayoutDImport/MarkdownBookImporter.swift`、`Tests/LayoutDImportTests/MarkdownBookImporterTests.swift`。
+- **检查**：`swift test --filter MarkdownBookImporterTests` 35/0 PASS；`bash scripts/review-idml.sh` PASS（全量 218/0；IDML 探针 6/0）。代码提交：`ac903f3 fix(import): consume subsequent frontmatter blocks`。
+- **下一步**：Claude 在专用临时 worktree 审核并合入 dev；重点复核 `Samples/test_emphasis_visual.md` 的导出 Story 不含 `title:`/`layout_direction:`/`columns:`，且第二段标题成为独立 section。D-2 (`85d7a00`) 仍待集成审核。
 ## 2026-06-24 00:21 | claude | 用户三项需求落地(2026-06-24)。ask1:正文换方正兰亭细黑简体(CF_body 解析 FZLanTingHeiS-L-GB)、一二三级标题换黑体-简
 - **分支**：dev
 - **概述**：用户三项需求落地(2026-06-24)。ask1:正文换方正兰亭细黑简体(CF_body 解析 FZLanTingHeiS-L-GB)、一二三级标题换黑体-简 Heiti SC Medium(STHeitiSC-Medium);注意 Heiti SC 无 Regular 字重必带 Medium。ask2:合规闸门(planValidationFailures 字体检查)从手写白名单改为动态查本机已装字体——LayoutEngine.installedFontNames 用 CTFontCollection 收集全部名字形态(family/显示名/PostScript/本地化中文),isFontInstalled 支持家族+字重;任何已装字体自动通过,根除"新字体未进白名单→计划被拒→分页崩"整类隐患。ask3:IMP-2 DOCX 内嵌图导入改派 AG(Codex 近期少用)。另:上一轮修了三级标题黑体粉色豆腐(Heiti SC 字重根因)。真实书稿端到端:正文方正兰亭细黑/标题黑体全解析正确无 Helvetica 回退;218/0 PASS。
