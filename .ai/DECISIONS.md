@@ -51,3 +51,7 @@
 - **决策**：不外化 ExtendScript/UXP API 到项目;主交付仍为 IDML→InDesign。改为三层保真策略,从①入手:①灌版打包前加"不变量断言闸"(把已知跨属性渲染搭档规则锁成硬检查+CoreText 字体/字形覆盖检查,不依赖 InDesign);②InDesign 往返 golden-file diff 真值机(唯一能发现新"属性在渲染死"搭档规则的办法,每功能开一次 InDesign);③可选:vendor IDML RelaxNG(app.generateIDMLSchema)做 Swift 名/枚举 lint+收编 ~40-50 个 $ID/ 暗号。明确不做:不外化 ExtendScript/UXP API(描述的是内存脚本 DOM,非我们 emit 的 IDML 磁盘格式);不把交付改成 .jsx 脚本(XL 重构,丢掉已验收+可移植+可无头测试的 IDML 路线)。
 - **理由**：10-agent 工作流(6 查证+1 架构+3 对抗验证,全部 claimHolds=true)逐行核对仓库实证:已翻车的三 bug(着重号 8ce89a8/脚注 d449077/粗斜体 b567808)名字全合规范,病根是 InDesign 渲染偷偷要求的"搭档属性"缺失(着重号需 World-Ready 排版器;脚注需复合字体样式;CJK 粗斜体需 FauxBold/Skew)。任何规范(API/IDML schema)都只逐属性校验、不编码跨属性渲染前置条件 → 外化规范只消除 ~10-20% 痛(拼写/枚举/类型),对真正反复翻车的"属性在渲染死"~0% 帮助。且 ExtendScript/UXP 描述的是内存 DOM,对不上我们 emit 的 IDML 磁盘格式;要给 IDML emit 配机读规范应 vendor IDML RNG 而非 API types。
 
+## 2026-06-23 14:12 | claude
+- **决策**：B 工程健壮性完成合 main(e4a16bd)：Fonts.xml 导出确定性修复 + GitHub Actions CI(macOS,review-idml.sh) + golden-file 本地回归 + 测试硬编码路径修复(CI 首跑照出)。同时启动 Backlog 并按车道路由：B1 图文绕排/B2 长表格分页 → AG(LayoutEngine+渲染器侧)；B3 索引/B4 参考文献 → Claude/Codex(导入+IDML导出侧,非 AG 文件)。AG 现役 B1 图文绕排预览(横排矩形绕排,CoreText 非矩形 path framesetting,不碰 IDMLExporter)。
+- **理由**：Backlog 四项按文件边界分流避免跨道：图文绕排/长表格分页核心在 LayoutEngine+渲染器(AG 地盘)，索引/参考文献核心在导入+IDMLExporter(Claude/Codex 文件,派 AG 会违反隔离)。图文绕排选作 AG 现役因其科普书价值最高且可用 CoreText 非矩形 path 优雅实现(渲染器已用 framesetter)。导出侧 TextWrapPreference 拆成配对 Claude 任务,保持单文件单道。
+
