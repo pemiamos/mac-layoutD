@@ -25,6 +25,6 @@ jobs:
 
       - name: 审核（build + test + IDML 端到端探针）
         run: bash scripts/review-idml.sh
-
-      - name: 导出确定性回归（golden-file）
-        run: bash scripts/golden-check.sh
+        # 注：golden-check（scripts/golden-check.sh）是**本地**回归工具，不在 CI 跑——
+        # golden 快照含 CoreText 按本机字体/系统版本解析出的字体名，CI runner 的 macOS
+        # 版本不同可能误报。导出**同机确定性**已由单测 testExportIsByteDeterministic 覆盖（CI 内同 runner 两次导出比对，机器无关）。
