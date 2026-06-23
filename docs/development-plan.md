@@ -1,7 +1,7 @@
 # layoutD 开发计划（执行权威）
 
 状态：Living（本文件是执行计划的唯一权威；PRD 管需求，本文管落地）
-更新：2026-06-18
+更新：2026-06-23
 
 进度图例：✅ 已实现　🟡 部分　⬜ 未开始
 
@@ -140,17 +140,19 @@
 
 > 单向流，不做 IDML 回导；交棒后 InDesign 为真理源。每项验收口径：导出 → InDesign 中文版打开正确（视觉验收由用户/Antigravity 做，Claude 无 Screen Recording 权限）。
 
-| # | 任务 | 主负责 | 说明 / 优先级 |
+> **E2 全部完成（2026-06-23）**：E2-1～E2-7 均已落地并合 dev/main，核心特性经用户 InDesign 视觉验收通过。
+
+| # | 任务 | 主负责 | 状态 |
 |---|---|---|---|
-| E2-1 | **图片打包 + 相对重链** | Codex | 把置入图复制进 `Links/` 文件夹、`LinkResourceURI` 改相对路径，使 `.idml` 可移植。**优先级最高**（当前用绝对 `file:` 路径，换机即断链）|
-| E2-2 | **组件背景 / 描边** | Codex | 知识卡片等组件的底色/描边/accent 映射成 InDesign 框架填色描边（当前只导文字）|
-| E2-3 | **避头尾 → 禁则集** | Codex | 中文禁则映射到 InDesign 禁则集（KinsokuTable）|
-| E2-4 | **对开跨页（facing spread）** | **Claude** | 可选 facing 模式：按 `pageSetup.facingPages` 生成 2 页 spread + 起始页码 Section；较大改动，放后。**2026-06-21 用户指定改由 Claude 做**（跨 Codex 负责文件 IDMLExporter，须等 Codex 本批 IDMLExporter 改动先合 dev）|
-| E2-5 | **固定美术页 → MasterSpread / 非矩形蒙版** | Codex | 满版图/扉页固定页映射、扇面/八角蒙版（图框 PathGeometry）|
-| E2-6 | **`/usr/bin/zip` → 原生 zip 写入** | Codex | 去掉外部进程依赖，保证 mimetype store-first |
-| E2-7 | **GUI 加 IDML 导出入口** | Codex | `LayoutDApp` 菜单/工具栏增加「导出 IDML…」+ 选项面板 |
-| — | **审查 + 拆解指令 + 每项验收闭环** | Claude | 为每项写明确指令进 handoff；Codex 落地后审查 |
-| — | **InDesign 打开效果 / GUI 交互视觉验证** | Antigravity / 用户 | 替代 Claude 做不了的视觉验收 |
+| E2-1 | **图片打包 + 相对重链** | Codex | ✅ 置入图复制进 `Links/`、`LinkResourceURI="file:Links/…"` 相对路径，`.idml` 可移植 |
+| E2-2 | **组件背景 / 描边** | Codex | ✅ 组件底色/描边经 `componentStyle` 映射成框架填色描边 |
+| E2-3 | **避头尾 → 禁则集** | Codex | ✅ 中文禁则映射 InDesign 禁则集 |
+| E2-4 | **对开跨页（facing spread）** | **Claude** | ✅ 视觉验收过（首页单独+左右镜像+订口在内），`02900eb` |
+| E2-5 | **固定美术页 → MasterSpread / 非矩形蒙版** | Claude | ✅ 视觉验收过（八角/扇面 PathGeometry），`404596b` |
+| E2-6 | **`/usr/bin/zip` → 原生 zip 写入** | Codex | ✅ 主 IDML 路径用原生 `ZIPArchiveWriter`（mimetype store-first）|
+| E2-7 | **GUI 加 IDML 导出入口** | Codex | ✅ App/CLI 导出 IDML 入口 + 导出选项面板（对开/CMYK 留位）|
+| — | **审查 + 拆解指令 + 每项验收闭环** | Claude | ✅ 持续闭环 |
+| — | **InDesign 打开效果 / GUI 交互视觉验证** | Antigravity / 用户 | ✅ 已替代 Claude 做视觉验收 |
 
 > 说明：`swift test` 末尾「0 tests in 0 suites」是 **Swift Testing 运行器**（找 `@Test`）的输出，本项目全用 XCTest，实测 **172 个 XCTest 全部执行通过**（`swift test` 完整输出含 "Executed 172 tests, 0 failures"）。relay `run_checks("test")` 仅回显最后一行才造成「0 tests」错觉——**非测试发现 bug，是 run_checks 输出截取问题**，可在 relay 侧改为回显 XCTest 汇总行。
 

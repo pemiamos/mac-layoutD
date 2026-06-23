@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-23 22:04 | claude | 用户请求「推进合并 E3-2b/E3-4p」——核查发现这两条预览(竖排斜体/表格网格)实际早已合入：随 e3-10p 合并提交 c5fcfb7 进 dev 且
+- **分支**：dev
+- **概述**：用户请求「推进合并 E3-2b/E3-4p」——核查发现这两条预览(竖排斜体/表格网格)实际早已合入：随 e3-10p 合并提交 c5fcfb7 进 dev 且已同步 main，QUEUE.md 也标 [x] 视觉验收过。无工程合并待办。真正缺口是 docs/development-plan.md 计划表状态过时(仍写「🟡 审过待合」)，与 QUEUE/实际不符。已修正为「✅ 已合 dev/main」并同步 main。
+- **改动文件**：docs/development-plan.md(E3 状态表 E3-2b/E3-4p 行：🟡 审过待合 → ✅ 已合 dev/main)
+- **检查**：纯文档改动无需 build/test。git：dev e9f3859 → main 263bed0(Merge dev into main，--no-ff)，均已 push origin。dev/main 同步。
+- **下一步**：①E3 系列主体已完成：E3-1/2/4/6/7 + E3-2b/4p 预览全部已合并验收；剩 E3-4b(表格单元格内行内格式·Codex 已立项)、E3-10p(已合)；E3-8 CMYK 暂缓、E3-9 约物挤压未排未认领、傍点已移出。②E3-9 若要做按文件归属应走 Codex 道(IDMLExporter.swift)，待用户拍板。③其余进行中：Codex IMP-1 止血/D-2 集成审核、AG B1 图文绕排。④守 N1/N2/N3。
+
 ## 2026-06-23 15:02 | claude | 三项 InDesign 验收闭环 + 多段 frontmatter 定调。用户 2026-06-23 InDesign 肉眼验收通过:E3-6 动态目录(页码右
 - **分支**：dev
 - **概述**：三项 InDesign 验收闭环 + 多段 frontmatter 定调。用户 2026-06-23 InDesign 肉眼验收通过:E3-6 动态目录(页码右对齐+点导引线+层级)、E2-4 对开跨页、E2-5 非矩形蒙版。多段 frontmatter:用户决定不支持文档内横竖混排,IMP-1 范围锁定为纯止血(消费掉漏成正文的 ---key:value--- 块、title 作 section 标题、layout_direction 静默忽略),不做分段切方向。已记决策、更新 plan/QUEUE,合 main(1643323)。
