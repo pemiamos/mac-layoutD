@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-23 15:06 | codex | IMP-1 多段 frontmatter 止血完成，待 Claude 集成审核
+- **分支**：`feature/codex-imp1-frontmatter`
+- **概述**：后续位于段/章边界、内容完整为 `key: value` 的 `--- ... ---` 块现在会在 Markdown 导入前被消费，不再作为正文输出；其中 `title` 转为一级标题并交给既有解析器创建新 section。`layout_direction`、`columns` 等后续元数据静默忽略，未实现分段横竖混排。普通草稿分隔线及非元数据块保持原行为。
+- **改动文件**：`Sources/LayoutDImport/MarkdownBookImporter.swift`、`Tests/LayoutDImportTests/MarkdownBookImporterTests.swift`。
+- **检查**：`swift test --filter MarkdownBookImporterTests` 35/0 PASS；`bash scripts/review-idml.sh` PASS（全量 218/0；IDML 探针 6/0）。代码提交：`ac903f3 fix(import): consume subsequent frontmatter blocks`。
+- **下一步**：Claude 在专用临时 worktree 审核并合入 dev；重点复核 `Samples/test_emphasis_visual.md` 的导出 Story 不含 `title:`/`layout_direction:`/`columns:`，且第二段标题成为独立 section。D-2 (`85d7a00`) 仍待集成审核。
+
 ## 2026-06-23 15:02 | claude | 三项 InDesign 验收闭环 + 多段 frontmatter 定调。用户 2026-06-23 InDesign 肉眼验收通过:E3-6 动态目录(页码右
 - **分支**：dev
 - **概述**：三项 InDesign 验收闭环 + 多段 frontmatter 定调。用户 2026-06-23 InDesign 肉眼验收通过:E3-6 动态目录(页码右对齐+点导引线+层级)、E2-4 对开跨页、E2-5 非矩形蒙版。多段 frontmatter:用户决定不支持文档内横竖混排,IMP-1 范围锁定为纯止血(消费掉漏成正文的 ---key:value--- 块、title 作 section 标题、layout_direction 静默忽略),不做分段切方向。已记决策、更新 plan/QUEUE,合 main(1643323)。
