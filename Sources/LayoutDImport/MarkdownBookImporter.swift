@@ -66,6 +66,7 @@ private struct MarkdownParser {
     mutating func parse() -> BookProject {
         var lines = markdown.components(separatedBy: .newlines)
         let frontMatter = extractFrontMatter(from: &lines)
+        lines = consumingSubsequentFrontMatter(in: lines)
         footnoteDefinitions = collectAndRemoveFootnoteDefinitions(from: &lines)
         referenceImageTargets = collectReferenceImageTargets(from: lines)
         title = frontMatter.title
@@ -1070,6 +1071,78 @@ private struct MarkdownParser {
             keywords: parseKeywords(values["keywords"] ?? values["tags"]),
             pageSetup: parsePageSetup(values)
         )
+    }
+
+    /// Manuscripts occasionally put a YAML-like metadata block before a later chapter.
+    /// This importer has no per-section page setup, so consume that metadata rather than
+    /// letting it leak into the book text. A title still has document meaning: turn it
+    /// into a level-one heading so the normal section parser owns the boundary.
+    private func consumingSubsequentFrontMatter(in lines: [String]) -> [String] {
+        var result: [String] = []
+        var index = 0
+
+        while index < lines.count {
+            guard isFrontMatterDelimiter(lines[index]), isSectionBoundary(before: result),
+                  let endIndex = subsequentFrontMatterEnd(in: lines, startingAt: index),
+                  let values = frontMatterValues(in: lines[(index + 1)..<endIndex])
+            else {
+                result.append(lines[index])
+                index += 1
+                continue
+            }
+
+            if let title = values["title"], !title.isEmpty {
+                result.append("# \(title)")
+            }
+            index = endIndex + 1
+        }
+
+        return result
+    }
+
+    private func isFrontMatterDelimiter(_ line: String) -> Bool {
+        line.trimmingCharacters(in: .whitespacesAndNewlines) == "---"
+    }
+
+    private func isSectionBoundary(before lines: [String]) -> Bool {
+        guard let previous = lines.last else {
+            return true
+        }
+        return previous.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func subsequentFrontMatterEnd(in lines: [String], startingAt startIndex: Int) -> Int? {
+        let searchStart = startIndex + 1
+        guard searchStart < lines.count else {
+            return nil
+        }
+
+        for index in searchStart..<lines.count where isFrontMatterDelimiter(lines[index]) {
+            return index
+        }
+        return nil
+    }
+
+    private func frontMatterValues(in lines: ArraySlice<String>) -> [String: String]? {
+        guard !lines.isEmpty else {
+            return nil
+        }
+
+        var values: [String: String] = [:]
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty, let separator = line.firstIndex(of: ":") else {
+                return nil
+            }
+
+            let key = String(line[..<separator]).trimmed.lowercased()
+            let value = String(line[line.index(after: separator)...]).trimmed.trimmedQuotes
+            guard !key.isEmpty else {
+                return nil
+            }
+            values[key] = value
+        }
+        return values
     }
 
     private func parseKeywords(_ value: String?) -> [String] {
