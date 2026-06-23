@@ -70,7 +70,7 @@
 > 高风险/重要的 IDMLExporter 导出任务（E3-4b/E3-6/E2-5/E2-4）**全部改判 Claude 直接做**（见下方「Claude 道」）。
 > AG 升为主力。
 >
-> **🔁 Codex 当前序列：① D-2 DOCX 导入（已交 `85d7a00`，待 Claude 集成）→ ② IMP-1 多段 frontmatter 漏成正文（见下，Claude 2026-06-23 勘）。**
+> **🔁 Codex 当前序列：① IMP-2 DOCX 内嵌图导入（用户 2026-06-23 指定现在写，真实书稿试跑实测缺口）→ ② IMP-1 多段 frontmatter 漏成正文。**（D-2 DOCX `85d7a00` 已合 dev+main、用户验收过。）
 > 下面 E3-4b/E3-6/E2-5 虽列在本道，但**已改判 Claude**（各条已标），Codex **不要做**。
 > ⏸ **E3-8 CMYK 暂缓**；E3-9 约物挤压维持原排期。
 > 注意斜体导出已用 `Skew="12"`、粗体用 `FauxBold="true"`（别用 `FauxItalic`/`FontStyle`，对 CJK 不可见/出粉色替代字形）。
@@ -83,6 +83,16 @@
   - **❌ 不做**：多段 frontmatter 切竖排——用户明确不需要文档内横竖混排（竖排走段落样式即可，决策见 `.ai/DECISIONS.md` 2026-06-23）。本任务纯止血。
   - **验收**：①`test_emphasis_visual.md` 导出后**不再**出现 `title:`/`columns:`/`layout_direction:` 字样的正文段；② 第二段标题（竖排排版测试 / 竖排强调测试）正常成段/标题；③ 补端到端断言（导出 Story 不含 `layout_direction` 文本）；④`scripts/review-idml.sh` PASS。**修法别破坏**首个 frontmatter 既有解析（title/author/pageSetup 全保留）。
   - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`（仅此一文件，blast radius 小）。
+
+- [ ] **IMP-2 DOCX 内嵌图导入（Claude 2026-06-23 试跑实测缺口）** — Codex @ `feature/codex-imp2-docx-images`
+  - **现象**：`DOCXBookImporter` 当前**完全跳过内嵌图**（源码注释自承"leaves drawings/media to a later asset-import pass"）。实测真实书稿 `layoutD村落.docx`（含 3 张内嵌 PNG）导入后 `assets: 0`，图全丢、位置也丢。
+  - **docx 内嵌图结构（已勘，照此实现）**：
+    1. `word/_rels/document.xml.rels` 把 `rId → media 文件`：`rId4→media/image1.png`、`rId5→image2`、`rId6→image3`。
+    2. 正文 `word/document.xml` 里图以 `<w:drawing>…<a:blip r:embed="rId4"/>…<wp:extent cx=".." cy=".."/>` 内联在某个 `<w:p>` 段——**该段位置就是图的位置**（实测分别在第 31/53/72 段）。`cx/cy` 单位是 EMU（914400 EMU/英寸）→ 转 pt/mm 得原始显示尺寸。
+  - **要做**：解析 rels 映射 → 解析每个 `<w:drawing>` 的 `r:embed` + `wp:extent` → 从 docx zip 抽出对应 media 字节落到资产目录 → 建 `Asset` + 在该段位置插入图片 `PageFrame`（content=.asset），尺寸用 extent（或按栏宽适配）。
+  - **验收**：导入 `layoutD村落.docx` 后 `assets: 3`、3 个图框落在第 31/53/72 段对应位置；`--export-png-flow` 出图；`--export-idml` 的 `Links/` 含 3 图；补端到端断言（assets 数 + 图框位置顺序）；`scripts/review-idml.sh` PASS。
+  - **文件**：`Sources/LayoutDImport/DOCXBookImporter.swift`（+ 资产落地，blast radius 小）。
+  - 参考：抠好的 3 张图在 `~/Desktop/pilot-村落-图片/`（≈1400×780px）。
 
 - [x] **E3-1 行内格式补全到所有 block** — Codex @ `feature/codex-inline-blocks`, commit `8201059`
   - 目标：当前只普通正文段落持久化 inlineRuns；扩到标题/列表/引用/callout。先抽一个统一的 `Paragraph` 构造 helper，再让所有 Markdown block 分支走它。
