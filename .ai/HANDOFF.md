@@ -23,6 +23,12 @@
 - **检查**：swift test 218/0 PASS。真实书稿导入:章名1/节名1/文章名3/概述1/英文概述2/抽言3/参考文献13/正文19,标签零漏出;IDML 命名段落样式直通 InDesign,抽言江城律动宋/概述方正兰亭细黑/英文Georgia 字体接对。合 dev 4507e65→77f2fc2,push。未合 main(待用户验收)。
 - **下一步**：①【Codex 重要】丢弃自己 worktree 里 IMP-3 未提交改动(git checkout/restore),已被 Claude 版取代;Codex 剩 IMP-2 DOCX 内嵌图(图仍未导入,assets:0)、IMP-1 多段 frontmatter。②【用户验收】~/Desktop/验收-村落-角色样式-0623.idml(InDesign 看命名段落样式+抽言/概述字体) + ~/Desktop/村落预览/*.png(8页)。③【遗留·Claude 下一步】正文=方正兰亭细黑/一二级标题=黑体 尚未落地(改全局默认 body/h1/h2 会牵动一批硬编码分页的 demo 测试)。建议走"导入书用 house 字体、demo 默认不动"的干净路子,避免destabilize。④验收 OK 后合 main。守 N1/N2/N3。
 
+## 2026-06-22 07:08 | antigravity | 完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 featu
+- **分支**：ag-lane
+- **概述**：完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 feature 分支。
+- **改动文件**：(无，仅做分支同步与本地废弃分支清理)
+- **检查**：swift build: pass, swift test: pass (194 tests)
+- **下一步**：① 用户或 Claude 进行已合并功能的 IDML 导出与跨页渲染的视觉终验；② 供 Claude 继续推进 E2-4 对开跨页任务；③ Codex 待命或继续根据后续需求调整。
 ## 2026-06-23 23:14 | claude | 真实书稿端到端试跑(layoutD村落.docx,科普书一章)启动,逮到 3 个真痛点并立项。① DOCX 内嵌图不导入(assets:0)→IMP-2(用户已
 - **分支**：dev
 - **概述**：真实书稿端到端试跑(layoutD村落.docx,科普书一章)启动,逮到 3 个真痛点并立项。① DOCX 内嵌图不导入(assets:0)→IMP-2(用户已交接 Codex,进行中,等审)。② 核心发现:书稿用"角色标签"约定(章名/节名/文章名/开节概述/开节概述英文/抽言),通用导入读不懂→标签当正文画、角色塌成两档。用户拍板:这是 layoutD 结构化书籍工程的核心能力,要做→IMP-3 角色标签结构化导入(规格已写全,排 IMP-2 之后)。③ 用户三决策已定:可视化信息段丢弃不印、参考文献小字悬挂缩进、英文概述用 Georgia(可后改)。字体:正文方正兰亭细黑/标题黑体-简/抽言江城律动宋,本机均已装(Claude 已核)。完整勘查见 docs/pilot-findings.md + real-book-pilot-runbook.md。
