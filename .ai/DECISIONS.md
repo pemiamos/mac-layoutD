@@ -47,3 +47,7 @@
 - **决策**：不再追求着重号(傍点/Kenten)在 InDesign 的渲染——用户图书项目一般不用着重号,需要时在 InDesign 手动加。E3-3v(傍点 InDesign 渲染)就此停止投入(KentenKind 属性仍写进 IDML 保留作者意图、layoutD 预览仍画点,但不再为"InDesign 端是否出点"花精力);表格内傍点同理。表格内粗体也不死磕(一键手动)。确立通用原则:是否为某保真坑较真,看 (该特性在真实图书里的使用频率) ×(在 InDesign 手动改的成本会不会随书规模放大)——常用且改起来不 scale 的才在 layoutD 导出端弄对;罕用或一键可改的留给 InDesign 最后顺手做(InDesign 本就是最终真理源)。
 - **理由**：2026-06-21 用户明确:图书项目一般不用着重号。layoutD 定位是灌版引擎、InDesign 是最终精调真理源,故不值得为罕用特性的 InDesign 端渲染死磕(那是反复踩的"属性在视觉无"高发坑,投入大回报小)。把有限精力放在常用且手动改不 scale 的特性上(竖排/复合字体/脚注/表格结构/动态目录等已做)。
 
+## 2026-06-23 13:48 | claude
+- **决策**：不外化 ExtendScript/UXP API 到项目;主交付仍为 IDML→InDesign。改为三层保真策略,从①入手:①灌版打包前加"不变量断言闸"(把已知跨属性渲染搭档规则锁成硬检查+CoreText 字体/字形覆盖检查,不依赖 InDesign);②InDesign 往返 golden-file diff 真值机(唯一能发现新"属性在渲染死"搭档规则的办法,每功能开一次 InDesign);③可选:vendor IDML RelaxNG(app.generateIDMLSchema)做 Swift 名/枚举 lint+收编 ~40-50 个 $ID/ 暗号。明确不做:不外化 ExtendScript/UXP API(描述的是内存脚本 DOM,非我们 emit 的 IDML 磁盘格式);不把交付改成 .jsx 脚本(XL 重构,丢掉已验收+可移植+可无头测试的 IDML 路线)。
+- **理由**：10-agent 工作流(6 查证+1 架构+3 对抗验证,全部 claimHolds=true)逐行核对仓库实证:已翻车的三 bug(着重号 8ce89a8/脚注 d449077/粗斜体 b567808)名字全合规范,病根是 InDesign 渲染偷偷要求的"搭档属性"缺失(着重号需 World-Ready 排版器;脚注需复合字体样式;CJK 粗斜体需 FauxBold/Skew)。任何规范(API/IDML schema)都只逐属性校验、不编码跨属性渲染前置条件 → 外化规范只消除 ~10-20% 痛(拼写/枚举/类型),对真正反复翻车的"属性在渲染死"~0% 帮助。且 ExtendScript/UXP 描述的是内存 DOM,对不上我们 emit 的 IDML 磁盘格式;要给 IDML emit 配机读规范应 vendor IDML RNG 而非 API types。
+

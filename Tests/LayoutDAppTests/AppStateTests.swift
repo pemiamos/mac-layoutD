@@ -344,8 +344,11 @@ final class AppStateTests: XCTestCase {
         
         let document = LaidOutDocument(projectId: project.id, pages: [page1, page2])
         
-        // Exporter locations:
-        let artifactsDir = URL(fileURLWithPath: "/Users/amos/.gemini/antigravity/brain/75dd62c5-313e-4b5a-9377-1acabb5bba32")
+        // 导出到临时目录——不能写死本机绝对路径（曾写死某 AI 的 brain 目录，换机/CI 即失败）。
+        let artifactsDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-brochure-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: artifactsDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: artifactsDir) }
         let pdfURL = artifactsDir.appendingPathComponent("brochure.pdf")
         
         try PDFExporter().export(

@@ -362,6 +362,28 @@ final class IDMLExporterTests: XCTestCase {
                       "verso 页框应在书脊左侧 x=-pageW")
     }
 
+    func testExportIsByteDeterministic() throws {
+        // 导出必须确定：同一项目两次导出每个内部文件逐字节一致。
+        // （否则 golden-file 回归基线对不上。曾因复合字体字典迭代顺序非确定而漂移。）
+        let project = BookProject.sample
+        let document = LayoutEngine().layout(project: project)
+        func exportEntries() throws -> [String: String] {
+            let out = FileManager.default.temporaryDirectory
+                .appendingPathComponent("layoutd-idml-determinism-\(UUID().uuidString).idml")
+            defer { try? FileManager.default.removeItem(at: out) }
+            try IDMLExporter().export(document: document, project: project, to: out)
+            var map: [String: String] = [:]
+            for name in try zipEntries(out) { map[name] = try entry(out, name) }
+            return map
+        }
+        let a = try exportEntries()
+        let b = try exportEntries()
+        XCTAssertEqual(a.keys.sorted(), b.keys.sorted(), "两次导出文件清单应一致")
+        for key in a.keys.sorted() {
+            XCTAssertEqual(a[key], b[key], "导出文件 \(key) 两次应逐字节一致（确定性）")
+        }
+    }
+
     func testExportsValidIDMLFromSampleProject() throws {
         let project = BookProject.sample
         let document = LayoutEngine().layout(project: project)

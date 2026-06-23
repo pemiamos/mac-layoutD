@@ -27,9 +27,13 @@ public struct IDMLExporter {
 
     public enum ExportError: Error, LocalizedError {
         case zipFailed(String)
+        /// 灌版打包前的不变量断言闸发现已知 CJK 保真搭档规则被违反（见 IDMLInvariants）。
+        case invariantsFailed([IDMLInvariantViolation])
         public var errorDescription: String? {
             switch self {
             case .zipFailed(let d): return "IDML 打包失败：\(d)"
+            case .invariantsFailed(let vs):
+                return "IDML 保真断言未通过（\(vs.count) 项）：\n" + vs.map { "  · \($0)" }.joined(separator: "\n")
             }
         }
     }
@@ -239,6 +243,10 @@ public struct IDMLExporter {
         files.merge(spreadFiles) { _, b in b }
         files.merge(storyFiles) { _, b in b }
 
+        // 打包前过一遍不变量断言闸：锁住已知的 CJK 渲染搭档规则，撞回归当场报错而非等 InDesign。
+        let violations = IDMLInvariants.check(files: files)
+        guard violations.isEmpty else { throw ExportError.invariantsFailed(violations) }
+
         try writePackage(files: files, to: url)
         try copyPackagedLinks(packagedLinks.values, beside: url)
     }
@@ -410,7 +418,11 @@ public struct IDMLExporter {
             _ = color(project.resolvedColorHex(resolved.colorToken) ?? "#000000")
             if let cf = resolved.compositeFont, !cf.isEmpty {
                 compositeFontStyleIds.append(resolved.id)
-                for (_, m) in cf { font(m.fontName) }
+                // 按枚举固定顺序遍历，而非字典自然序——字典迭代顺序非确定，会让
+                // Fonts.xml 的家族顺序每次导出都变（golden-file 回归对不上）。
+                for cls in CompositeFontClass.allCases {
+                    if let m = cf[cls] { font(m.fontName) }
+                }
                 font(resolved.fontName)
             } else {
                 font(resolved.fontName)
