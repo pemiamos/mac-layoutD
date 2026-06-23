@@ -1341,6 +1341,8 @@ private struct LayoutContext {
             "PingFang SC Medium",
             "Heiti SC",
             "Kaiti SC",
+            "方正兰亭细黑简体",      // 正文/概述/参考文献（用户书稿字体）
+            "JiangChengLvDongSong", // 江城律动宋（抽言）
             "Times New Roman",
             "Helvetica",
             "Helvetica Neue",

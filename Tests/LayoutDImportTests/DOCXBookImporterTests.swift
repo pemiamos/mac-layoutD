@@ -33,6 +33,28 @@ final class DOCXBookImporterTests: XCTestCase {
         XCTAssertEqual(paragraphs[3].tableCells, [["名称", "功能"], ["线粒体", "产能"]])
     }
 
+    func testConsumesRoleTagsAndAppliesRoleStyles() throws {
+        let xml = "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body><w:p><w:r><w:t>章名</w:t></w:r></w:p><w:p><w:r><w:t>越山脉</w:t></w:r></w:p><w:p><w:r><w:t>抽言</w:t></w:r></w:p><w:p><w:r><w:t>山高水长</w:t></w:r></w:p><w:p><w:r><w:t>可视化信息：绘图指令</w:t></w:r></w:p><w:p><w:r><w:t>正文</w:t></w:r></w:p></w:body></w:document>"
+        let url = try makeDOCX(entries: ["word/document.xml": xml])
+        defer { try? FileManager.default.removeItem(at: url) }
+        let paragraphs = try XCTUnwrap(try DOCXBookImporter().importDocument(from: url).sections.first?.stories.first?.paragraphs)
+        XCTAssertEqual(paragraphs.map(\.text), ["越山脉", "山高水长", "正文"])
+        // 抽言是单段角色：只作用于紧邻的"山高水长"，其后的"正文"复位为 body（不再被污染）。
+        XCTAssertEqual(paragraphs.map(\.styleId), [StyleID.heading1.rawValue, StyleID.pullQuote.rawValue, StyleID.body.rawValue])
+        XCTAssertEqual(paragraphs[0].kind, .heading(level: 1))
+        XCTAssertEqual(paragraphs[1].kind, .body)   // 抽言用 body kind（仅样式不同），不是标题
+    }
+
+    /// 真实书稿用斜杠合写标签（"一级标题/章名"），须按斜杠拆开识别；否则标签会漏成正文。
+    func testRecognizesSlashCombinedRoleTags() throws {
+        let xml = "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body><w:p><w:r><w:t>一级标题/章名</w:t></w:r></w:p><w:p><w:r><w:t>越山脉</w:t></w:r></w:p><w:p><w:r><w:t>三级标题/文章名</w:t></w:r></w:p><w:p><w:r><w:t>山·黄山</w:t></w:r></w:p><w:p><w:r><w:t>正文一段</w:t></w:r></w:p></w:body></w:document>"
+        let url = try makeDOCX(entries: ["word/document.xml": xml])
+        defer { try? FileManager.default.removeItem(at: url) }
+        let paragraphs = try XCTUnwrap(try DOCXBookImporter().importDocument(from: url).sections.first?.stories.first?.paragraphs)
+        XCTAssertEqual(paragraphs.map(\.text), ["越山脉", "山·黄山", "正文一段"])   // 标签全消费，不漏
+        XCTAssertEqual(paragraphs.map(\.styleId), [StyleID.heading1.rawValue, StyleID.heading3.rawValue, StyleID.body.rawValue])
+    }
+
     private func makeDOCX(entries: [String: String]) throws -> URL {
         var local = Data(); var central = Data(); var offset: UInt32 = 0
         for name in entries.keys.sorted() {
