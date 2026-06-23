@@ -133,11 +133,10 @@
 ### E2. IDML 增强（接力分工，详见 `.ai/AGENTS.md`）
 
 > 单向流，不做 IDML 回导；交棒后 InDesign 为真理源。
-> **2026-06-23 待用户 InDesign 复看的样例**（均含最新 CJK 排版器修复）：
-> `~/Desktop/验收1-动态目录-0623.idml`（E3-6 TOC：页码右对齐+点导引线、Layout→更新目录）、
-> `~/Desktop/验收3-对开跨页-0623.idml`（E2-4 facing：首页单独+左右页镜像+订口在内）。
-> **非矩形蒙版（E2-5）无 CLI 路径**——maskShape 由 GUI/布局模型设、Markdown 无蒙版语法；
-> 蒙版几何已有端到端单测（八角8/扇面≥16点），InDesign 视觉复看需在 GUI 里设蒙版后导出。
+> **2026-06-23 用户 InDesign 验收 ✅**：E3-6 动态目录（页码右对齐+点导引线+层级缩进）、
+> E2-4 对开跨页（首页单独+左右镜像+订口在内）、E2-5 非矩形蒙版——三项均人工肉眼通过。
+> 验收样例（含最新 CJK 排版器修复）：`~/Desktop/验收1-动态目录-0623.idml`、`验收3-对开跨页-0623.idml`。
+> 蒙版无 Markdown/CLI 路径（maskShape 仅 GUI/布局模型设），几何另有端到端单测（八角8/扇面≥16点）兜底。
 
 > 单向流，不做 IDML 回导；交棒后 InDesign 为真理源。每项验收口径：导出 → InDesign 中文版打开正确（视觉验收由用户/Antigravity 做，Claude 无 Screen Recording 权限）。
 
