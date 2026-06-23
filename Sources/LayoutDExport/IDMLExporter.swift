@@ -410,7 +410,11 @@ public struct IDMLExporter {
             _ = color(project.resolvedColorHex(resolved.colorToken) ?? "#000000")
             if let cf = resolved.compositeFont, !cf.isEmpty {
                 compositeFontStyleIds.append(resolved.id)
-                for (_, m) in cf { font(m.fontName) }
+                // 按枚举固定顺序遍历，而非字典自然序——字典迭代顺序非确定，会让
+                // Fonts.xml 的家族顺序每次导出都变（golden-file 回归对不上）。
+                for cls in CompositeFontClass.allCases {
+                    if let m = cf[cls] { font(m.fontName) }
+                }
                 font(resolved.fontName)
             } else {
                 font(resolved.fontName)
