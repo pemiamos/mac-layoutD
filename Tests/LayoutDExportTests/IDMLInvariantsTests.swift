@@ -197,4 +197,59 @@ final class IDMLInvariantsTests: XCTestCase {
         """)
         XCTAssertTrue(IDMLInvariants.check(files: xml).isEmpty)
     }
+
+    // MARK: - 规则⑤：通过 CoreText 动态检查字重存在性
+
+    func testInvalidFontWeightFails() {
+        let files: [String: String] = [
+            "Resources/Fonts.xml": """
+            <Fonts>
+            <FontFamily Name="Heiti SC">
+                <Font FontFamily="Heiti SC" FontStyleName="Regular" PostScriptName="STHeitiSC-Regular" Name="Heiti SC Regular" Status="Installed"/>
+            </FontFamily>
+            </Fonts>
+            """
+        ]
+        XCTAssertEqual(rules(IDMLInvariants.check(files: files)), ["font-name-needs-valid-weight"])
+    }
+
+    func testInvalidCompositeFontWeightFails() {
+        let files: [String: String] = [
+            "Resources/Fonts.xml": """
+            <Fonts>
+            <FontFamily Name="Heiti SC"></FontFamily>
+            <CompositeFont Name="CF_body">
+            <CompositeFontEntry FontStyle="Regular">
+                <Properties><AppliedFont type="string">Heiti SC</AppliedFont></Properties>
+            </CompositeFontEntry>
+            </CompositeFont>
+            </Fonts>
+            """
+        ]
+        XCTAssertEqual(rules(IDMLInvariants.check(files: files)), ["font-name-needs-valid-weight"])
+    }
+
+    func testValidFontWeightPasses() {
+        let files: [String: String] = [
+            "Resources/Fonts.xml": """
+            <Fonts>
+            <FontFamily Name="Heiti SC">
+                <Font FontFamily="Heiti SC" FontStyleName="Medium" PostScriptName="STHeitiSC-Medium" Name="Heiti SC Medium" Status="Installed"/>
+            </FontFamily>
+            <FontFamily Name="PingFang SC">
+                <Font FontFamily="PingFang SC" FontStyleName="Regular" PostScriptName="PingFangSC-Regular" Name="PingFang SC Regular" Status="Installed"/>
+            </FontFamily>
+            <CompositeFont Name="CF_body">
+            <CompositeFontEntry FontStyle="Medium">
+                <Properties><AppliedFont type="string">Heiti SC</AppliedFont></Properties>
+            </CompositeFontEntry>
+            <CompositeFontEntry FontStyle="Regular">
+                <Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+            </CompositeFontEntry>
+            </CompositeFont>
+            </Fonts>
+            """
+        ]
+        XCTAssertTrue(IDMLInvariants.check(files: files).isEmpty)
+    }
 }

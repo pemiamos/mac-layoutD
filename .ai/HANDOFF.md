@@ -9,6 +9,26 @@
 - **改动文件**：`Sources/LayoutDImport/MarkdownBookImporter.swift`、`Tests/LayoutDImportTests/MarkdownBookImporterTests.swift`。
 - **检查**：`swift test --filter MarkdownBookImporterTests` 35/0 PASS；`bash scripts/review-idml.sh` PASS（全量 218/0；IDML 探针 6/0）。代码提交：`ac903f3 fix(import): consume subsequent frontmatter blocks`。
 - **下一步**：Claude 在专用临时 worktree 审核并合入 dev；重点复核 `Samples/test_emphasis_visual.md` 的导出 Story 不含 `title:`/`layout_direction:`/`columns:`，且第二段标题成为独立 section。D-2 (`85d7a00`) 仍待集成审核。
+## 2026-06-24 00:40 | antigravity | 完成了动态 CoreText 字体与字重存在性校验逻辑，防范字重不存在导致 CoreText/InDesign 偷偷回退到 Helvetica 的豆腐现象。已在 IDMLInvariants 增加了 checkFontWeights() 校验，并补充了测试用例。
+- **分支**：feature/ag-invariants-font-weight
+- **概述**：完成了动态 CoreText 字体与字重存在性校验逻辑，防范字重不存在导致 CoreText/InDesign 偷偷回退到 Helvetica 的豆腐现象。已在 IDMLInvariants 增加了 checkFontWeights() 校验，并补充了测试用例。
+- **改动文件**：Sources/LayoutDExport/IDMLInvariants.swift, Tests/LayoutDExportTests/IDMLInvariantsTests.swift
+- **检查**：swift test: 222/222 PASS, review-idml.sh: 6/6 PASS
+- **下一步**：1. 审核并集成分支 feature/ag-invariants-font-weight 至 dev 分支；2. 确认该字体字重检查规则对其他复杂物理字体的有效拦截性。
+
+## 2026-06-22 07:08 | antigravity | 完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 featu
+- **分支**：ag-lane
+- **概述**：完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 feature 分支。
+- **改动文件**：(无，仅做分支同步与本地废弃分支清理)
+- **检查**：swift build: pass, swift test: pass (194 tests)
+- **下一步**：① 用户或 Claude 进行已合并功能的 IDML 导出与跨页渲染的视觉终验；② 供 Claude 继续推进 E2-4 对开跨页任务；③ Codex 待命或继续根据后续需求调整。
+## 2026-06-24 00:33 | claude | [派 AG·IMP-2] 用户 2026-06-24 验收通过 IMP-3 + 字体落地,已合 main(6f1ded2)。IMP-2 DOCX 内嵌图导入改派
+- **分支**：dev
+- **概述**：[派 AG·IMP-2] 用户 2026-06-24 验收通过 IMP-3 + 字体落地,已合 main(6f1ded2)。IMP-2 DOCX 内嵌图导入改派 AG。现状:真实书稿 layoutD村落.docx 文字/角色/字体全部导入正确,唯独 3 张内嵌图没进来(DOCXBookImporter 跳过内嵌图,assets:0)。这是真实书稿试跑剩下的最后一块。
+- **改动文件**：(交接说明)
+- **检查**：main/dev 同步(6f1ded2);218/0 PASS。
+- **下一步**：【AG·IMP-2 DOCX 内嵌图导入】规格全文见 .ai/QUEUE.md IMP-2 条。要点:① 解析 word/_rels/document.xml.rels 把 rId→media 文件(实测 rId4→image1/rId5→image2/rId6→image3);② 正文 word/document.xml 里图以 <w:drawing>…<a:blip r:embed="rId"/>…<wp:extent cx cy/> 内联在某 <w:p>,该段位置即图位置(实测第 31/53/72 段),cx/cy 单位 EMU(914400/英寸);③ 从 docx zip 抽 media 字节落资产 + 在该段插图片 PageFrame。验收:导入 layoutD村落.docx 后 assets:3、3 图框落对应段位、--export-png-flow 出图、--export-idml 的 Links/ 含 3 图、补端到端断言、review-idml.sh PASS。⚠️ 跨进 DOCXBookImporter.swift(原 Codex 道,用户已授权 AG);这是导入器加图,不是渲染层。抠好的 3 图在 ~/Desktop/pilot-村落-图片/ 可参考。做完写 handoff,Claude 审。AG 另:B1 图文绕排若未完先收尾。守 N1/N2/N3。
+
 ## 2026-06-24 00:21 | claude | 用户三项需求落地(2026-06-24)。ask1:正文换方正兰亭细黑简体(CF_body 解析 FZLanTingHeiS-L-GB)、一二三级标题换黑体-简
 - **分支**：dev
 - **概述**：用户三项需求落地(2026-06-24)。ask1:正文换方正兰亭细黑简体(CF_body 解析 FZLanTingHeiS-L-GB)、一二三级标题换黑体-简 Heiti SC Medium(STHeitiSC-Medium);注意 Heiti SC 无 Regular 字重必带 Medium。ask2:合规闸门(planValidationFailures 字体检查)从手写白名单改为动态查本机已装字体——LayoutEngine.installedFontNames 用 CTFontCollection 收集全部名字形态(family/显示名/PostScript/本地化中文),isFontInstalled 支持家族+字重;任何已装字体自动通过,根除"新字体未进白名单→计划被拒→分页崩"整类隐患。ask3:IMP-2 DOCX 内嵌图导入改派 AG(Codex 近期少用)。另:上一轮修了三级标题黑体粉色豆腐(Heiti SC 字重根因)。真实书稿端到端:正文方正兰亭细黑/标题黑体全解析正确无 Helvetica 回退;218/0 PASS。
