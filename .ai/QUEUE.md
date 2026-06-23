@@ -70,10 +70,19 @@
 > 高风险/重要的 IDMLExporter 导出任务（E3-4b/E3-6/E2-5/E2-4）**全部改判 Claude 直接做**（见下方「Claude 道」）。
 > AG 升为主力。
 >
-> **🔁 Codex 当前序列（就这一项，做完写 handoff 等审）：D-2 DOCX 导入**（全新独立文件 `DOCXBookImporter.swift`，不碰现有导出/IDMLExporter，blast radius 最小）。
+> **🔁 Codex 当前序列：① D-2 DOCX 导入（已交 `85d7a00`，待 Claude 集成）→ ② IMP-1 多段 frontmatter 漏成正文（见下，Claude 2026-06-23 勘）。**
 > 下面 E3-4b/E3-6/E2-5 虽列在本道，但**已改判 Claude**（各条已标），Codex **不要做**。
 > ⏸ **E3-8 CMYK 暂缓**；E3-9 约物挤压维持原排期。
 > 注意斜体导出已用 `Skew="12"`、粗体用 `FauxBold="true"`（别用 `FauxItalic`/`FontStyle`，对 CJK 不可见/出粉色替代字形）。
+
+- [ ] **IMP-1 多段 frontmatter 漏成正文（Claude 2026-06-23 勘根因）** — Codex @ `feature/codex-imp1-frontmatter`
+  - **现象**（用户 InDesign 截图实证）：`Samples/test_emphasis_visual.md` 用「每段一个 `---…---` 头」想给第二段切竖排，但第二个 `---title: 竖排排版测试\nlayout_direction: vertical\ncolumns: 1---` 块**被当正文画了出来**（`title: …`、`columns: 1` 成了可见段落）。
+  - **根因**：`MarkdownBookImporter.extractFrontMatter`（:1035）只认**文件首个** `---` 块；正文解析器不识别其后的 `---…---` 元数据块，于是 `---` 当分隔线、`key: value` 当正文文字漏出。
+  - **模型事实（先读懂再动手）**：竖排在本模型是**按段落样式** `style.layoutDirection`（`ChineseTypesetting`）控制的，PageSetup.layoutDirection 只是文档默认——**不存在"分段头切方向"机制**。所以「第二段头让该段竖排」目前模型不直接支持。
+  - **本任务范围（最小正确修复，先止血）**：正文解析器遇到「位于段/章边界、整块都是 `key: value` 的 `---…---`」时**消费掉它、不漏成正文**；识别到的 `title` 用作**新 section 标题**。`layout_direction` 等"切方向/切页面"语义**本批不实现**（需产品决策，见下）。
+  - **⚠️ 产品决策待用户拍板（Claude 转述，别擅自定）**：多段 frontmatter 到底该不该支持"分段切竖排"？若要，正路是「该 section 的段落样式用竖排变体」而非 PageSetup——属新功能，另立项。本任务只保证**不漏脏文字**。
+  - **验收**：①`test_emphasis_visual.md` 导出后**不再**出现 `title:`/`columns:`/`layout_direction:` 字样的正文段；② 第二段标题（竖排排版测试 / 竖排强调测试）正常成段/标题；③ 补端到端断言（导出 Story 不含 `layout_direction` 文本）；④`scripts/review-idml.sh` PASS。**修法别破坏**首个 frontmatter 既有解析（title/author/pageSetup 全保留）。
+  - 文件：`Sources/LayoutDImport/MarkdownBookImporter.swift`（仅此一文件，blast radius 小）。
 
 - [x] **E3-1 行内格式补全到所有 block** — Codex @ `feature/codex-inline-blocks`, commit `8201059`
   - 目标：当前只普通正文段落持久化 inlineRuns；扩到标题/列表/引用/callout。先抽一个统一的 `Paragraph` 构造 helper，再让所有 Markdown block 分支走它。
@@ -290,4 +299,4 @@
 - [ ] 真正 CI（GitHub Actions 跑 `scripts/review-idml.sh`），把审核从「人工记得跑」变成 push 即跑。
 - [ ] IDML 官方 RNG schema 校验 + golden-file 回归基线，补强 `review-idml.sh`。
 - [ ] relay `run_checks("test")` 末行误显「0 tests」，改回显 XCTest 汇总行。
-- [ ] **文档同步**：`docs/development-plan.md` 的 E0 spike 仍标 `[ ]`，实际已被 E1 取代吸收——回填标注（E1 已在 InDesign 人工终验通过）。
+- [x] **文档同步**：`docs/development-plan.md` E0 spike 回填为已被 E1 取代吸收；D-2 DOCX 标已实现；新增 E1b CJK 保真三层策略 + 0623 验收样例说明（Claude 2026-06-23）。

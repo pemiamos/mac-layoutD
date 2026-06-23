@@ -100,7 +100,7 @@
 - [x] `qualityMetrics` 接入可视化与历史追踪。
 - [x] 封面/满版图作固定页导出。
 - [x] 校对批注层（不参与重排的 overlay）。
-- [ ] DOCX 导入。 — **已排期**（见阶段 E 的 E3 排期决策，D-2，顺序 2）。
+- [x] DOCX 导入（D-2）。 — Codex 实现 `DOCXBookImporter.swift`（commit `85d7a00`），待 Claude 集成确认。
 
 ---
 
@@ -110,13 +110,9 @@
 > 导出 IDML 交 InDesign 做人工精调 + 印前。原阶段 D 的「IDML 结构参照」「更完整印前」
 > 两项被本阶段取代/吸收——印前（CMYK/PDF/X）确定交 InDesign，layoutD 不自建。
 
-### E0. 最小验证 spike（先行证伪，别先动架构）
-- [ ] `--idml-spike <path>`：生成只含「一个跨页 + 一个中文段落样式文本框 + 一个竖排
-      文本框 + 一张置入图 + 一个 CMYK Swatch」的 IDML。
-- 验收：在 **InDesign 中文版** 干净打开，样式/图链/颜色/竖排都在。
-- **重点压测竖排**——这是唯一可能让整条路线崩掉的地方，最先证伪。
-- v1 先验证基础包有效性 + 竖排；**v2 再压测复合字体**（合成字体落 IDML 的保真）。
-- 涉及：`LayoutDExport`（IDML 生成）、`LayoutDApp`（CLI 入口）。
+### E0. 最小验证 spike ✅ 已被 E1 取代吸收
+- [x] `--idml-spike <path>` 已实现并在 **InDesign 中文版**人工验证通过（竖排/复合字体/图链/CMYK Swatch
+      全 round-trip），主交付转向 E1 全量映射。spike 代码留作回归探针（`IDMLSpikeExporter.swift`）。
 
 ### E1. BookProject → IDML 全量映射（spike 通过后）
 最小可用版已落地并在 InDesign 中文版**人工终验通过**（`--export-idml PATH`，`Sources/LayoutDExport/IDMLExporter.swift`）：
@@ -128,7 +124,20 @@
 - [x] 容器级自动验证（IDMLExporterTests）+ demo.md 端到端导出、全 XML well-formed、InDesign 4 页内容全正确。
 已随 MVP 一并解决：字体「家族+样式名」拆分（splitFont + FontType 检测）；首页幻影（改单页非对开后自然消失）。
 
+### E1b. CJK 保真三层策略（2026-06-23，决策见 `.ai/DECISIONS.md`、记录见 `docs/idml-oracle/FINDINGS.md`）
+> 不外化 ExtendScript/UXP API（描述内存 DOM，非我们 emit 的 IDML 磁盘格式；且不编码跨属性渲染前置条件）。
+- [x] **①不变量断言闸** `IDMLInvariants.swift`：打包前硬检查已知 CJK 渲染搭档规则（着重号需 World-Ready 排版器、脚注需 CJK 字体样式、CJK 粗斜走 FauxBold/Skew、AppliedFont 引用完整性），撞回归当场报错。
+- [x] **②InDesign 往返 oracle**：用真·InDesign 存盘当 golden diff，抽取规范不写的真值。**首战即修真 bug**：CJK 排版器此前三处全错（属性名 `AppliedComposer`→真值 `Composer`；值 Optyca 拉丁→真值 `HL Composer J`；位置应挂段落样式+TextDefault）——这是中文断行/避头尾一直走错引擎的根因。golden 归档 `docs/idml-oracle/goldens/`。
+- [ ] **③可选 IDML-RNG lint**（vendor InDesign `app.generateIDMLSchema()` 的 RNG 做名/枚举校验）+ 断言闸加 CoreText 字形覆盖检查。后续增量。
+
 ### E2. IDML 增强（接力分工，详见 `.ai/AGENTS.md`）
+
+> 单向流，不做 IDML 回导；交棒后 InDesign 为真理源。
+> **2026-06-23 待用户 InDesign 复看的样例**（均含最新 CJK 排版器修复）：
+> `~/Desktop/验收1-动态目录-0623.idml`（E3-6 TOC：页码右对齐+点导引线、Layout→更新目录）、
+> `~/Desktop/验收3-对开跨页-0623.idml`（E2-4 facing：首页单独+左右页镜像+订口在内）。
+> **非矩形蒙版（E2-5）无 CLI 路径**——maskShape 由 GUI/布局模型设、Markdown 无蒙版语法；
+> 蒙版几何已有端到端单测（八角8/扇面≥16点），InDesign 视觉复看需在 GUI 里设蒙版后导出。
 
 > 单向流，不做 IDML 回导；交棒后 InDesign 为真理源。每项验收口径：导出 → InDesign 中文版打开正确（视觉验收由用户/Antigravity 做，Claude 无 Screen Recording 权限）。
 
