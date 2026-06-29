@@ -306,6 +306,27 @@ final class AppState: ObservableObject {
         }
     }
 
+    func updateSelectedFrameText(_ text: String) {
+        commitState()
+        guard let frameId = selectedFrameId,
+              let pageNum = findPageNumber(for: frameId) else { return }
+
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+
+        guard let idx = plan.blocks.firstIndex(where: { $0.id == frameId }) else { return }
+        guard plan.blocks[idx].kind == .text || plan.blocks[idx].kind == .caption else {
+            return
+        }
+
+        plan.blocks[idx].contentReference = .generated(text)
+        plan.notes = ["手动修改元素文字"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
+    }
+
     func clearCustomLayoutForPage(number: Int) {
         commitState()
         var currentProject = project
@@ -833,6 +854,10 @@ final class AppState: ObservableObject {
     }
 
     func updateFrameCoordinate(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {
+        updateFrameCoordinatesWithoutUndo(id: id, x: x, y: y, width: width, height: height)
+    }
+
+    private func updateFrameCoordinatesWithoutUndo(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {
         guard let pageNum = findPageNumber(for: id) else { return }
         var currentProject = project
         var plans = currentProject.safeAppliedLayoutPlans

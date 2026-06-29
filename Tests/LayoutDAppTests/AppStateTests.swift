@@ -255,6 +255,41 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(reloadedFrame?.textColorHex, "#FF0000")
     }
 
+    func testUpdateSelectedFrameTextPersistsAsLayoutPlanOverride() throws {
+        let state = AppState(project: .sample)
+        let frame = state.laidOutDocument?.pages
+            .first(where: { $0.number == 3 })?
+            .frames
+            .first { frame in
+                if case .text(let text) = frame.content {
+                    return text.contains("重新理解图文排版")
+                }
+                return false
+            }
+        let frameId = try XCTUnwrap(frame?.id)
+
+        state.selectedFrameId = frameId
+        state.updateSelectedFrameText("人工校改后的段落")
+
+        let block = state.project.safeAppliedLayoutPlans[3]?.blocks.first { $0.id == frameId }
+        XCTAssertEqual(block?.kind, .text)
+        if case .generated(let text) = block?.contentReference {
+            XCTAssertEqual(text, "人工校改后的段落")
+        } else {
+            XCTFail("Expected generated text override")
+        }
+
+        let updatedFrame = state.laidOutDocument?.pages
+            .first(where: { $0.number == 3 })?
+            .frames
+            .first { $0.id == frameId }
+        if case .text(let text) = updatedFrame?.content {
+            XCTAssertEqual(text, "人工校改后的段落")
+        } else {
+            XCTFail("Expected updated text frame")
+        }
+    }
+
     func testGenerateBrochurePDF() throws {
         let pageSetup = PageSetup(
             pageSize: PageSize(width: 792, height: 612, label: "US Letter Landscape"),
