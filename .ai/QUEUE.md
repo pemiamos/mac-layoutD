@@ -52,6 +52,12 @@
   结构层 `scripts/review-idml.sh` 全绿（mimetype/XML/FontStyle 断言全过）；
   **等用户在桌面打开导出样例做最终 InDesign 视觉确认**（非阻塞，可继续后续任务）。
 
+- [x] **基础工具可用性热修（GUI）** — 用户 2026-06-29 临时插单（未走预排队列，事后补登记）。
+  Codex 在 `feature/codex-basic-tools-usability` 做、Claude 审核合 `dev`（`783f96f` 代码 + `9773fe7` 文档，快进合并，dev=`9773fe7`，已 push）。
+  改 4 处：① 画布拖拽/缩放/调间距改本地预览、`mouseUp` 一次性提交（消除每次 drag 全量 layout/preflight 卡顿）；② Direct Selection 暂改 select-only（无图片裁切模型前不假装可调图内部）；③ Inspector 给文本/图注帧加「文字内容」编辑框 → 写 LayoutPlan generated override；④ 删工具栏假「渐变」按钮（实际写纯色）。
+  自检：`swift test` 225/0、`review-idml.sh` 6/0（Claude 在 /tmp 隔离 worktree 复验通过）。
+  **等用户 GUI 视觉复验**：选择工具拖拽/缩放是否顺滑、间隔工具松手只产生一次覆写、文字工具选中文本/图注后 Inspector 可应用文字、工具栏不再有假渐变。验收 OK 后再合 `main`。
+
 ---
 
 ## Claude 道（直接实现 + 集成；2026-06-21 起接管高风险导出）
