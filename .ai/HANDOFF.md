@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-06-29 23:45 | codex | 临时修复基础工具体验，未列入 Claude 计划，待 Claude 补登记/集成审核
+- **分支**：`feature/codex-basic-tools-usability`
+- **概述**：用户反馈“基本工具不好用”，本轮未经过 Claude 预先拆队列，按用户明确授权在 Codex 工作副本做一条临时 GUI 修复并报备。改动聚焦基础可用性：Canvas 拖拽/缩放 frame 与 gap 调整改为本地预览、`mouseUp` 一次性提交，避免每个 `mouseDragged` 写 `project` 触发完整 layout/preflight；Direct Selection 在没有图片裁切模型前改为 select-only，避免伪装成可调内部图片；Inspector 给 text/caption frame 增加“文字内容”草稿编辑框，应用后写入 LayoutPlan generated text override；移除工具栏“渐变”假按钮（此前显示渐变但实际写入固定纯色）。新增 AppState 回归测试覆盖文字覆写持久化。
+- **改动文件**：`Sources/LayoutDApp/AppState.swift`、`Sources/LayoutDApp/CanvasView.swift`、`Sources/LayoutDApp/InspectorView.swift`、`Sources/LayoutDApp/ToolbarView.swift`、`Tests/LayoutDAppTests/AppStateTests.swift`。
+- **检查**：`swift test --filter AppStateTests` 18/0 PASS；`swift test` 225/0 PASS；`bash scripts/review-idml.sh` PASS（6/0，第一次沙箱内失败为 SwiftPM 写 `~/.cache/clang/ModuleCache` 权限问题，已用提升权限重跑通过）。代码提交：`783f96f fix(app): improve basic tool interactions`。
+- **下一步**：Claude 集成前请补登记到队列/计划或在审核记录注明“用户 2026-06-29 临时插单”；建议视觉复验 App：选择工具拖拽/缩放是否顺滑、间隔工具松手后是否只产生一次覆写、文字工具选中文本/图注后 Inspector 应可应用文字、工具栏不再出现假渐变。
+
 ## 2026-06-23 15:06 | codex | IMP-1 多段 frontmatter 止血完成，待 Claude 集成审核
 - **分支**：`feature/codex-imp1-frontmatter`
 - **概述**：后续位于段/章边界、内容完整为 `key: value` 的 `--- ... ---` 块现在会在 Markdown 导入前被消费，不再作为正文输出；其中 `title` 转为一级标题并交给既有解析器创建新 section。`layout_direction`、`columns` 等后续元数据静默忽略，未实现分段横竖混排。普通草稿分隔线及非元数据块保持原行为。
