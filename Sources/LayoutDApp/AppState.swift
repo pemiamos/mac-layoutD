@@ -42,6 +42,13 @@ final class AppState: ObservableObject {
     private var redoStack: [BookProject] = []
     private var isPerformingUndoRedo = false
     private var isPerformingRecalculation = false
+
+    /// The stripped project the current `baselineDocument` was laid out from.
+    /// Plan-only edits (apply/clear a LayoutPlan, quality-history bookkeeping)
+    /// leave this value unchanged, so the second full-book layout is skipped.
+    private var baselineSource: BookProject?
+    /// How many times the baseline document was actually laid out (test hook).
+    private(set) var baselineLayoutCount = 0
     
     let engine = LayoutEngine()
     let inspectorEngine = ProjectInspector()
@@ -108,7 +115,14 @@ final class AppState: ObservableObject {
         
         var baselineProj = project
         baselineProj.appliedLayoutPlans = nil
-        self.baselineDocument = engine.layout(project: baselineProj)
+        // Quality history is bookkeeping appended after every recalculation; it has
+        // no effect on layout but would defeat the equality check below.
+        baselineProj.qualityMetricsHistory = nil
+        if baselineDocument == nil || baselineSource != baselineProj {
+            self.baselineDocument = engine.layout(project: baselineProj)
+            baselineSource = baselineProj
+            baselineLayoutCount += 1
+        }
         
         let report = inspectorEngine.preflight(project: project, document: doc, exportOptions: pdfExportOptions)
         self.report = report
