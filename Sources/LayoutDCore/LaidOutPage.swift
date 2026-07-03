@@ -53,6 +53,7 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
     /// Present only on the body frame of the generated contents page. Optional for
     /// backwards compatibility with existing saved layout documents.
     public var tableOfContentsEntries: [TableOfContentsEntry]?
+    public var exclusionRects: [Rect]?
 
     public init(
         id: UUID = UUID(),
@@ -66,7 +67,8 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
         textColorHex: String? = nil,
         sourceParagraphId: UUID? = nil,
         maskShape: ImageMaskShape? = nil,
-        tableOfContentsEntries: [TableOfContentsEntry]? = nil
+        tableOfContentsEntries: [TableOfContentsEntry]? = nil,
+        exclusionRects: [Rect]? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -80,6 +82,7 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
         self.sourceParagraphId = sourceParagraphId
         self.maskShape = maskShape
         self.tableOfContentsEntries = tableOfContentsEntries
+        self.exclusionRects = exclusionRects
     }
 }
 

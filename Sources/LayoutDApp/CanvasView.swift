@@ -409,11 +409,24 @@ final class CanvasView: NSView {
                         textColorOverride: componentTextColor,
                         applyDefaultInset: false,
                         sourceParagraphId: frame.sourceParagraphId,
-                        tableOfContentsEntries: frame.tableOfContentsEntries
+                        tableOfContentsEntries: frame.tableOfContentsEntries,
+                        exclusionRects: frame.exclusionRects,
+                        frameRect: frame.rect
                     )
                 }
             } else {
-                drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor, sourceParagraphId: frame.sourceParagraphId, tableOfContentsEntries: frame.tableOfContentsEntries)
+                drawText(
+                    text,
+                    styleId: frame.styleId,
+                    project: project,
+                    rect: rect,
+                    kind: frame.kind,
+                    textColorOverride: textColor,
+                    sourceParagraphId: frame.sourceParagraphId,
+                    tableOfContentsEntries: frame.tableOfContentsEntries,
+                    exclusionRects: frame.exclusionRects,
+                    frameRect: frame.rect
+                )
             }
         case .asset(let assetId):
             drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect, maskShape: frame.maskShape)
@@ -660,7 +673,9 @@ final class CanvasView: NSView {
         textColorOverride: NSColor? = nil,
         applyDefaultInset: Bool = true,
         sourceParagraphId: UUID? = nil,
-        tableOfContentsEntries: [TableOfContentsEntry]? = nil
+        tableOfContentsEntries: [TableOfContentsEntry]? = nil,
+        exclusionRects: [Rect]? = nil,
+        frameRect: Rect? = nil
     ) {
         let style: ParagraphStyle
         if kind == .footnote {
@@ -730,15 +745,48 @@ final class CanvasView: NSView {
         let path = CGPath(rect: CGRect(x: 0, y: 0, width: drawingRect.width, height: drawingRect.height), transform: nil)
         let framesetter = CTFramesetterCreateWithAttributedString(attrString)
         
-        let frame: CTFrame
+        var frameAttributes: [CFString: Any] = [:]
         if style.layoutDirection == .vertical {
-            let frameAttributes: [CFString: Any] = [
-                kCTFrameProgressionAttributeName: CTFrameProgression.rightToLeft.rawValue as CFNumber
-            ]
-            frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, frameAttributes as CFDictionary)
-        } else {
-            frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
+            frameAttributes[kCTFrameProgressionAttributeName] = CTFrameProgression.rightToLeft.rawValue as CFNumber
         }
+        
+        if let exclusionRects = exclusionRects, !exclusionRects.isEmpty, let frameRect = frameRect {
+            let compStyle = project.styles.componentStyle(for: kind)
+            let insetX = applyDefaultInset ? 4.0 : (compStyle?.textInsetX ?? 0.0)
+            let insetY = applyDefaultInset ? 2.0 : (compStyle?.textInsetY ?? 0.0)
+            let extraWidth = (kind == .text || kind == .footnote || kind == .sideNote || kind == .runningHeader) ? (style.fontSize * 0.5) : 0.0
+            
+            let textRectPageInset = Rect(
+                x: frameRect.x + insetX,
+                y: frameRect.y + insetY,
+                width: max(0, frameRect.width + extraWidth - insetX * 2),
+                height: max(0, frameRect.height - insetY * 2)
+            )
+            
+            var exclusionPaths: [CGPath] = []
+            for img in exclusionRects {
+                let overlap = textRectPageInset.intersection(img)
+                guard overlap.width > 0 && overlap.height > 0 else { continue }
+                
+                let localMinX = overlap.x - textRectPageInset.x
+                let localMinY = textRectPageInset.y + textRectPageInset.height - (overlap.y + overlap.height)
+                
+                let scaledRect = CGRect(
+                    x: CGFloat(localMinX) * zoomScale,
+                    y: CGFloat(localMinY) * zoomScale,
+                    width: CGFloat(overlap.width) * zoomScale,
+                    height: CGFloat(overlap.height) * zoomScale
+                )
+                exclusionPaths.append(CGPath(rect: scaledRect, transform: nil))
+            }
+            
+            if !exclusionPaths.isEmpty {
+                let clippingPaths = exclusionPaths.map { [kCTFramePathClippingPathAttributeName: $0] }
+                frameAttributes[kCTFrameClippingPathsAttributeName] = clippingPaths
+            }
+        }
+        
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, frameAttributes as CFDictionary)
         
         cgContext.textMatrix = .identity
         CTFrameDraw(frame, cgContext)
