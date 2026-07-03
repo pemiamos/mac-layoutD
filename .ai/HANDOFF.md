@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-04 04:35 | codex | GUARD-1 角色标签端到端探针完成，待 Claude 集成审核
+- **分支**：`feature/codex-guard-role-tags`
+- **概述**：在 `scripts/review-idml.sh` 的 IDML 端到端探针中新增角色标签 fixture：覆盖 `一级标题/章名`、`开节概述`、`抽言`、`参考文献` 与普通正文。脚本导出 IDML 后解包检查：角色标签字面不漏进 Story；`Resources/Styles.xml` 含中文命名段落样式；对应内容段落分别挂到 `ParagraphStyle/heading1`、`ParagraphStyle/introduction`、`ParagraphStyle/pullQuote`、`ParagraphStyle/bibliography`、`ParagraphStyle/body`。已在 `/private/tmp` 临时副本把 `ContentRole.tag` 改为返回 nil 做负向验证，新增探针按预期 FAIL（标签漏出、角色样式引用丢失），工作副本源码未改。
+- **改动文件**：`scripts/review-idml.sh`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
+- **检查**：`bash scripts/review-idml.sh` PASS（swift build PASS；swift test 228/0；IDML 探针 8/0）。负向验证：临时副本禁用 `ContentRole.tag` 后 `review-idml.sh` FAIL，新增角色标签断言命中失败。
+- **下一步**：Claude 在主仓库审核 `feature/codex-guard-role-tags`，复跑 `bash scripts/review-idml.sh` 后合入 `dev`。Codex 可继续领 `SPLIT-IMPORT MarkdownBookImporter.swift 拆分`。
+
 ## 2026-07-04 03:51 | claude | 执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自
 - **分支**：dev
 - **概述**：执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自 lane 并快进到最新 dev；③ 删 11 条已合并 feature 分支 + 强删被 AG 版取代的 feature/codex-imp2-docx-images(b4d83d8,reflog 可救)；④ QUEUE.md 瘦身：已完成项归档到新建 .ai/QUEUE-ARCHIVE.md，登记性能批 PERF-1~4(Claude)/GUARD-1+SPLIT-IMPORT(Codex)/GUARD-2+E2-4p补完+SPLIT-GUI(AG)/B1-IDML 新任务，铁律加「生成产物不进仓库」；⑤ 简报更新到 07-04(8e253dd)。【B1 集成】审核 AG feature/ag-b1-text-wrap(CoreText 挖洞绕排)：/tmp 隔离 worktree 合并复验 swift test 226/0 + review-idml 6/0 PASS；剔除 AG 误提交的 20 个 Samples/output-* 样张；PNG 视觉样张确认绕图行变窄/图占区无字(~/Desktop/B1绕排验收-0704)；合 dev(09b8cc4) 已推。【第1批·性能】feature/claude-perf-baseline 合 dev(23df697)：PERF-1 全书基准 161 页/本机 ≈1179ms/次全量排版(坐实"每次改动排两遍≈2.5s"问题)；PERF-2 baseline 布局缓存(纯 plan 操作不再二次全书排版,约省一半)。228 测试 + review-idml.sh 全 PASS。
