@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-04 03:51 | claude | 执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自
+- **分支**：dev
+- **概述**：执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自 lane 并快进到最新 dev；③ 删 11 条已合并 feature 分支 + 强删被 AG 版取代的 feature/codex-imp2-docx-images(b4d83d8,reflog 可救)；④ QUEUE.md 瘦身：已完成项归档到新建 .ai/QUEUE-ARCHIVE.md，登记性能批 PERF-1~4(Claude)/GUARD-1+SPLIT-IMPORT(Codex)/GUARD-2+E2-4p补完+SPLIT-GUI(AG)/B1-IDML 新任务，铁律加「生成产物不进仓库」；⑤ 简报更新到 07-04(8e253dd)。【B1 集成】审核 AG feature/ag-b1-text-wrap(CoreText 挖洞绕排)：/tmp 隔离 worktree 合并复验 swift test 226/0 + review-idml 6/0 PASS；剔除 AG 误提交的 20 个 Samples/output-* 样张；PNG 视觉样张确认绕图行变窄/图占区无字(~/Desktop/B1绕排验收-0704)；合 dev(09b8cc4) 已推。【第1批·性能】feature/claude-perf-baseline 合 dev(23df697)：PERF-1 全书基准 161 页/本机 ≈1179ms/次全量排版(坐实"每次改动排两遍≈2.5s"问题)；PERF-2 baseline 布局缓存(纯 plan 操作不再二次全书排版,约省一半)。228 测试 + review-idml.sh 全 PASS。
+- **改动文件**：.ai/HANDOFF.md, .ai/QUEUE.md, .ai/QUEUE-ARCHIVE.md(新), docs/项目简报.md, Sources/LayoutDApp/AppState.swift, Tests/LayoutDAppTests/AppStateTests.swift, Tests/LayoutDCoreTests/PerformanceBenchmarkTests.swift(新), (B1 合并带入: CanvasView/LaidOutPage/PageSetup/LayoutEngine/PDFExporter/PNGExporter/LayoutDCoreTests)
+- **检查**：review-idml.sh 6/0 PASS × 3 轮(B1 隔离复验 226/0、性能批 228/0)。dev=23df697 已推 origin。main 仍在 ba74f65,等用户视觉复验后合并。
+- **下一步**：①【用户·视觉复验，阻塞合 main】三项一起验：基础工具热修 GUI 四项 + B1 绕排样张(~/Desktop/B1绕排验收-0704/page-003.png) + 行内格式 InDesign 终验(非阻塞)。OK → Claude 合 dev→main 并 push。②【Claude 下一棒】PERF-3 排版异步化+防抖(等复验后做,避免叠加未验收的 GUI 行为改动)；之后 PERF-4 引擎测量改造(用 1179ms 基线对比)。③【Codex 可领】GUARD-1 角色标签探针、SPLIT-IMPORT。④【AG 可领】GUARD-2 字形覆盖 rule⑥、E2-4p 补完、SPLIT-GUI。⑤ 队列已瘦身,活任务见 QUEUE.md,历史见 QUEUE-ARCHIVE.md。
+
 ## 2026-07-04 03:32 | claude | 全项目 review（只读，未改代码）。总体健康：模块分层清晰、零外部依赖、225 测试 + CI(macOS runner)、真实书稿试跑收官。主要发现：① 
 - **分支**：dev
 - **概述**：全项目 review（只读，未改代码）。总体健康：模块分层清晰、零外部依赖、225 测试 + CI(macOS runner)、真实书稿试跑收官。主要发现：① 性能是最大隐患——AppState.recalculateLayout 每次改动同步全书排版两遍(主排+baseline)+preflight，书稿变大会卡；引擎 fittingPrefix 二分测高每段反复建 framesetter，建议改 CTTypesetter 逐行填充+测量缓存+baseline 缓存+异步化，并加全书规模 benchmark。② 可维护性——5 个 1400~1650 行巨型文件(LayoutEngine/InspectorView/MarkdownBookImporter/main.swift/CanvasView)建议按车道分批拆分，降低三 AI 协作冲突面。③ 仓库卫生——dev 领先 main 3 commits 等用户 GUI 视觉复验(06-29 至今)；约 10 条已合并 feature 分支未删；codex/ag worktree 停在已合并分支上未归位 lane；QUEUE.md 334 行大半是已完成项应归档；简报停在 06-24。④ 护栏——review-idml.sh 探针只覆盖行内强调，建议补角色标签 docx 端到端探针；断言闸第③层字形覆盖检查(路线图已有)待做。⑤ 遗留小项：IMP-2 图片落 docx 旁 images/ 目录、正文默认字体仍 Songti/PingFang、undo 栈存全量快照。已向用户提交四批次优化计划(卫生→性能→拆文件→护栏)。

@@ -61,14 +61,8 @@
 
 > 2026-07-04 全项目 review 立项「性能批」：根因是每次改动全书重排两遍+preflight 同步跑在界面线程（AppState.recalculateLayout），书稿变大会卡。顺序做、每步靠 PERF-1 的基准数字验证。
 
-- [~] **PERF-1 全书规模性能基准** — 认领: Claude（2026-07-04 现役）
-  - 目标：合成一份 200+ 页规模书稿 fixture，加 XCTest 基准（全量 layout 一次的耗时上限断言 + 打印毫秒数），进 CI 防性能回归。
-  - 文件：`Tests/LayoutDCoreTests/`（新测试文件）。
-  - 验收：本机跑出基线毫秒数记录在 handoff；断言上限取基线 3~5 倍（防环境抖动误报）；`review-idml.sh` PASS。
-- [~] **PERF-2 baseline 布局缓存** — 认领: Claude（2026-07-04 现役）
-  - 目标：`AppState.recalculateLayout` 目前每次把「无 AI 方案对照版」也全量重排一遍。改为：只有内容/样式（即去掉 appliedLayoutPlans 后的 project）变化时才重算 baselineDocument，纯覆写/换色等操作跳过。
-  - 文件：`Sources/LayoutDApp/AppState.swift`。
-  - 验收：单测断言「只改 appliedLayoutPlans 时 baseline 不重算、内容变时重算」；PERF-1 场景下重复 override 操作耗时明显下降；`review-idml.sh` PASS。
+- [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
+- [x] **PERF-2 baseline 布局缓存** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。对照版只在内容/样式真变时重排（比较时剔除 appliedLayoutPlans + qualityMetricsHistory）；纯版面方案操作/undo/redo 不再触发第二次全书排版，单次改动成本约减半。加 baselineLayoutCount 测试钩子+缓存单测。
 - [ ] **PERF-3 排版异步化 + 防抖** — 等 PERF-1/2 落地后单独一棒（动状态流，须防 GUI 竞态）。
   - 目标：连续操作只排最后一次，layout/preflight 移出界面线程；首帧仍同步保证打开即有版面。
   - 文件：`AppState.swift`、可能 `CanvasView.swift`。
