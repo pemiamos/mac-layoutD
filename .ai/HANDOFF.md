@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-04 04:15 | claude | 用户验收回执处理 + GUI 按 InDesign 布局重做(第一步)。① 用户确认 B1 绕排样张与行内格式 InDesign 终验 OK → dev 合 m
+- **分支**：dev
+- **概述**：用户验收回执处理 + GUI 按 InDesign 布局重做(第一步)。① 用户确认 B1 绕排样张与行内格式 InDesign 终验 OK → dev 合 main(6b12271, merge commit 惯例)并推送;基础工具热修不单独验收——用户要求 GUI 整体按 InDesign UI 布局重做。② Claude 实现 InDesign 式工作区骨架(feature/claude-gui-indesign-layout f40154d,合 dev 72590f8):顶部上下文控制面板(选中帧可编辑 X/Y/宽/高,写 LayoutPlan 覆写可撤销;未选中显示文档概要)、底部状态栏(页码导航/输入跳页+预检状态灯(绿无错/红N错误)+缩放百分比与适合页宽)、右侧面板坞(原侧栏+检查器两列合并为一列 320pt「面板/检查器」分段切换,两面板保持挂载切换不丢状态,画布显著变宽)、整窗 darkAqua 深色(画布台面深灰随外观自适应,页面纸张仍显式白)、窗口工具条精简为文档级动作图标模式(翻页/缩放移到状态栏)、CanvasView 加 onZoomChanged 回调。swift build+test+review-idml.sh 全 PASS。computer-use 截图权限通道打不开(request_access 两次 stream closed),视觉自查未做成,已启动新 UI 的 App(pid 97832, demo.md)交用户肉眼验收。
+- **改动文件**：Sources/LayoutDApp/ControlPanelView.swift(新), Sources/LayoutDApp/StatusBarView.swift(新), Sources/LayoutDApp/PanelDockView.swift(新), Sources/LayoutDApp/main.swift, Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/CanvasView.swift, .ai/QUEUE.md
+- **检查**：review-idml.sh 6/0 PASS(含 swift build + swift test 228/0)。main=6b12271、dev=72590f8 均已推 origin。
+- **下一步**：①【用户·GUI 视觉验收】新 UI 已启动(也可 swift run layoutD Samples/demo.md):顶部控制面板、底部状态栏(页码/预检灯/缩放)、右侧面板坞分段切换、深色工作区。OK→合 main;不满意处直接反馈 Claude 迭代(这是「第一步」,预期有迭代)。②【Claude 下一棒】用户验收后:PERF-3 排版异步化+防抖;GUI 若有反馈优先迭代。③【Codex/AG 可领】GUARD-1/SPLIT-IMPORT、GUARD-2/E2-4p补完/SPLIT-GUI(注意 SPLIT-GUI 需在本次 GUI 骨架之上拆,先 merge origin/dev)。
+
 ## 2026-07-04 03:51 | claude | 执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自
 - **分支**：dev
 - **概述**：执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自 lane 并快进到最新 dev；③ 删 11 条已合并 feature 分支 + 强删被 AG 版取代的 feature/codex-imp2-docx-images(b4d83d8,reflog 可救)；④ QUEUE.md 瘦身：已完成项归档到新建 .ai/QUEUE-ARCHIVE.md，登记性能批 PERF-1~4(Claude)/GUARD-1+SPLIT-IMPORT(Codex)/GUARD-2+E2-4p补完+SPLIT-GUI(AG)/B1-IDML 新任务，铁律加「生成产物不进仓库」；⑤ 简报更新到 07-04(8e253dd)。【B1 集成】审核 AG feature/ag-b1-text-wrap(CoreText 挖洞绕排)：/tmp 隔离 worktree 合并复验 swift test 226/0 + review-idml 6/0 PASS；剔除 AG 误提交的 20 个 Samples/output-* 样张；PNG 视觉样张确认绕图行变窄/图占区无字(~/Desktop/B1绕排验收-0704)；合 dev(09b8cc4) 已推。【第1批·性能】feature/claude-perf-baseline 合 dev(23df697)：PERF-1 全书基准 161 页/本机 ≈1179ms/次全量排版(坐实"每次改动排两遍≈2.5s"问题)；PERF-2 baseline 布局缓存(纯 plan 操作不再二次全书排版,约省一半)。228 测试 + review-idml.sh 全 PASS。
