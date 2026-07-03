@@ -5,7 +5,7 @@
 
 ## 2026-07-04 04:35 | codex | GUARD-1 角色标签端到端探针完成，待 Claude 集成审核
 - **分支**：`feature/codex-guard-role-tags`
-- **概述**：在 `scripts/review-idml.sh` 的 IDML 端到端探针中新增角色标签 fixture：覆盖 `一级标题/章名`、`开节概述`、`抽言`、`参考文献` 与普通正文。脚本导出 IDML 后解包检查：角色标签字面不漏进 Story；`Resources/Styles.xml` 含中文命名段落样式；对应内容段落分别挂到 `ParagraphStyle/heading1`、`ParagraphStyle/introduction`、`ParagraphStyle/pullQuote`、`ParagraphStyle/bibliography`、`ParagraphStyle/body`。已在 `/private/tmp` 临时副本把 `ContentRole.tag` 改为返回 nil 做负向验证，新增探针按预期 FAIL（标签漏出、角色样式引用丢失），工作副本源码未改。
+- **概述**：在 `scripts/review-idml.sh` 的 IDML 端到端探针中新增角色标签 fixture：覆盖 `一级标题/章名`、`开节概述`、`抽言`、`参考文献` 与普通正文。脚本导出 IDML 后解包检查：角色标签字面不漏进 Story；`Resources/Styles.xml` 含中文命名段落样式；对应内容段落分别挂到 `ParagraphStyle/heading1`、`ParagraphStyle/introduction`、`ParagraphStyle/pullQuote`、`ParagraphStyle/bibliography`、`ParagraphStyle/body`。已在 `/private/tmp` 临时副本把 `ContentRole.tag` 改为返回 nil 做负向验证，新增探针按预期 FAIL（标签漏出、角色样式引用丢失），工作副本源码未改。代码提交：`bdd1ac2 test: guard role tag idml review probe`。
 - **改动文件**：`scripts/review-idml.sh`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
 - **检查**：`bash scripts/review-idml.sh` PASS（swift build PASS；swift test 228/0；IDML 探针 8/0）。负向验证：临时副本禁用 `ContentRole.tag` 后 `review-idml.sh` FAIL，新增角色标签断言命中失败。
 - **下一步**：Claude 在主仓库审核 `feature/codex-guard-role-tags`，复跑 `bash scripts/review-idml.sh` 后合入 `dev`。Codex 可继续领 `SPLIT-IMPORT MarkdownBookImporter.swift 拆分`。
