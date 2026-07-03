@@ -289,6 +289,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // InDesign 式深色工作区（页面纸张仍为白色，见 CanvasView 的显式绘制）。
+        NSApp.appearance = NSAppearance(named: .darkAqua)
+
         let controller = WorkspaceViewController(
             project: launchProject.project,
             sourceDescription: launchProject.sourceDescription
@@ -308,7 +311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toolbar.delegate = controller
         toolbar.allowsUserCustomization = false
         toolbar.autosavesConfiguration = false
-        toolbar.displayMode = .iconAndLabel
+        toolbar.displayMode = .iconOnly
         window.toolbar = toolbar
         
         window.makeKeyAndOrderFront(nil)
@@ -543,8 +546,6 @@ final class WorkspaceViewController: NSViewController {
     private var appState: AppState
     private var sourceDescription: String
     private let canvas = CanvasView()
-    private var sidebarHosting: NSHostingView<SidebarView>?
-    private var inspectorHosting: NSHostingView<InspectorView>?
     private var selectedFrameCancellable: AnyCancellable?
     private var screenModeCancellable: AnyCancellable?
     private var backgroundColorsCancellable: AnyCancellable?
@@ -737,12 +738,6 @@ final class WorkspaceViewController: NSViewController {
         let sidebarView = SidebarView(state: appState) { [weak self] pageNum in
             self?.canvas.scrollToPage(number: pageNum)
         }
-        let sidebarHost = NSHostingView(rootView: sidebarView)
-        sidebarHost.translatesAutoresizingMaskIntoConstraints = false
-        sidebarHost.wantsLayer = true
-        sidebarHost.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        self.sidebarHosting = sidebarHost
-
         let inspectorView = InspectorView(
             state: appState,
             onIssueClick: { [weak self] issue in
@@ -759,16 +754,31 @@ final class WorkspaceViewController: NSViewController {
                 self.appState.applyLayoutPlan(plan)
             }
         )
-        let inspectorHost = NSHostingView(rootView: inspectorView)
-        inspectorHost.translatesAutoresizingMaskIntoConstraints = false
-        inspectorHost.wantsLayer = true
-        inspectorHost.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        self.inspectorHosting = inspectorHost
-
         let toolbarView = ToolbarView(state: appState)
         let toolbarHost = NSHostingView(rootView: toolbarView)
         toolbarHost.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(toolbarHost)
+
+        // InDesign 式顶部控制面板：横贯窗口、上下文敏感（选中帧显示 X/Y/宽/高）。
+        let controlPanelHost = NSHostingView(rootView: ControlPanelView(state: appState))
+        controlPanelHost.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(controlPanelHost)
+
+        // InDesign 式底部状态栏：页码导航 + 预检状态灯 + 缩放。
+        let statusBarView = StatusBarView(
+            state: appState,
+            onGoToPage: { [weak self] page in self?.goToPage(page) },
+            onZoomIn: { [weak self] in self?.zoomIn() },
+            onZoomOut: { [weak self] in self?.zoomOut() },
+            onFitWidth: { [weak self] in self?.fitWidth() }
+        )
+        let statusBarHost = NSHostingView(rootView: statusBarView)
+        statusBarHost.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(statusBarHost)
+
+        canvas.onZoomChanged = { [weak self] scale in
+            self?.appState.zoomPercent = Int((scale * 100).rounded())
+        }
 
         let canvasScroll = NSScrollView()
         canvasScroll.documentView = canvas
@@ -776,32 +786,48 @@ final class WorkspaceViewController: NSViewController {
         canvasScroll.hasHorizontalScroller = true
         canvasScroll.translatesAutoresizingMaskIntoConstraints = false
 
-        // Sidebar and inspector manage their own scrolling via SwiftUI ScrollView,
-        // so they are hosted directly in the split view (no enclosing NSScrollView).
-        // Wrapping them previously left the inner ScrollView with no defined height,
-        // collapsing the panels to empty dark space.
+        // InDesign 式右侧面板坞：面板（页面/属性/图层/资产/色板）与检查器合并为
+        // 一列分段切换；两个 SwiftUI 面板自带滚动，由坞直接托管。
+        let dockHost = NSHostingView(rootView: PanelDockView(sidebar: sidebarView, inspector: inspectorView))
+        dockHost.translatesAutoresizingMaskIntoConstraints = false
+        dockHost.wantsLayer = true
+        dockHost.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+
         splitView.addArrangedSubview(canvasScroll)
-        splitView.addArrangedSubview(sidebarHost)
-        splitView.addArrangedSubview(inspectorHost)
+        splitView.addArrangedSubview(dockHost)
 
         splitView.setHoldingPriority(.defaultLow, forSubviewAt: 0)
         splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 1)
-        splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 2)
 
         NSLayoutConstraint.activate([
+            controlPanelHost.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            controlPanelHost.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            controlPanelHost.topAnchor.constraint(equalTo: view.topAnchor),
+
             toolbarHost.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            toolbarHost.topAnchor.constraint(equalTo: view.topAnchor),
-            toolbarHost.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            toolbarHost.topAnchor.constraint(equalTo: controlPanelHost.bottomAnchor),
+            toolbarHost.bottomAnchor.constraint(equalTo: statusBarHost.topAnchor),
             toolbarHost.widthAnchor.constraint(equalToConstant: 42),
 
             splitView.leadingAnchor.constraint(equalTo: toolbarHost.trailingAnchor),
             splitView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            splitView.topAnchor.constraint(equalTo: view.topAnchor),
-            splitView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            splitView.topAnchor.constraint(equalTo: controlPanelHost.bottomAnchor),
+            splitView.bottomAnchor.constraint(equalTo: statusBarHost.topAnchor),
 
-            sidebarHost.widthAnchor.constraint(equalToConstant: 250),
-            inspectorHost.widthAnchor.constraint(equalToConstant: 310)
+            statusBarHost.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            statusBarHost.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            statusBarHost.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            dockHost.widthAnchor.constraint(equalToConstant: 320)
         ])
+    }
+
+    /// Status-bar page navigation: clamp, sync state, scroll the canvas.
+    func goToPage(_ page: Int) {
+        let pageCount = appState.laidOutDocument?.pages.count ?? 1
+        let target = min(max(page, 1), max(pageCount, 1))
+        appState.currentPageNumber = target
+        canvas.scrollToPage(number: target)
     }
 
     func openProject() {
@@ -1372,17 +1398,10 @@ extension WorkspaceViewController: NSToolbarDelegate {
     }
     
     public func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        // InDesign 式精简：翻页/缩放已移到底部状态栏，窗口工具条只留文档级动作。
         return [
             .openProject,
             .saveProject,
-            .space,
-            .prevPage,
-            .nextPage,
-            .space,
-            .zoomOut,
-            .zoomActual,
-            .zoomIn,
-            .fitWidth,
             .flexibleSpace,
             .lockPage,
             .resetPage,
