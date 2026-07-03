@@ -37,6 +37,9 @@ final class AppState: ObservableObject {
     /// preflight report) reflect the prepress consequences of the user's chosen
     /// PDF/X / crop-mark settings instead of always assuming defaults.
     @Published var pdfExportOptions = PrepressExportOptions()
+
+    /// Mirror of the canvas zoom scale for the status bar readout (percent).
+    @Published var zoomPercent: Int = 115
     
     private var undoStack: [BookProject] = []
     private var redoStack: [BookProject] = []

@@ -96,10 +96,24 @@ final class CanvasView: NSView {
 
     override var isFlipped: Bool { true }
 
+    /// Notifies the workspace when the zoom scale changes (status-bar readout).
+    var onZoomChanged: ((CGFloat) -> Void)?
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(calibratedWhite: 0.84, alpha: 1).cgColor
+        updatePasteboardColor()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updatePasteboardColor()
+    }
+
+    /// InDesign-style pasteboard: dark charcoal in dark appearance, light gray otherwise.
+    private func updatePasteboardColor() {
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer?.backgroundColor = NSColor(calibratedWhite: isDark ? 0.25 : 0.84, alpha: 1).cgColor
     }
 
     required init?(coder: NSCoder) {
@@ -147,6 +161,7 @@ final class CanvasView: NSView {
 
     private func setZoomScale(_ scale: CGFloat) {
         zoomScale = min(max(scale, 0.35), 3.0)
+        onZoomChanged?(zoomScale)
         updateFrame()
         needsDisplay = true
     }
