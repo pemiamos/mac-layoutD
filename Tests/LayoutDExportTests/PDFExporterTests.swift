@@ -130,7 +130,8 @@ final class PDFExporterTests: XCTestCase {
     }
 
     func testExportsPNGPageRangeAndScale() throws {
-        let project = BookProject.sample
+        var project = BookProject.sample
+        project.pageSetup.facingPages = false
         let document = LayoutEngine().layout(project: project)
         let directoryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("layoutd-png-range-test-\(UUID().uuidString)")
@@ -156,7 +157,8 @@ final class PDFExporterTests: XCTestCase {
     }
 
     func testPDFExportWithBleedAndCropMarks() throws {
-        let project = BookProject.sample
+        var project = BookProject.sample
+        project.pageSetup.facingPages = false
         let document = LayoutEngine().layout(project: project)
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("layoutd-pdf-crop-test-\(UUID().uuidString)")
@@ -551,5 +553,71 @@ final class PDFExporterTests: XCTestCase {
         for url in pngURLs {
             XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
         }
+    }
+
+    func testFacingPagesSpreadsPDFAndPNG() throws {
+        var project = BookProject.sample
+        project.pageSetup.facingPages = true
+        let document = LayoutEngine().layout(project: project)
+        
+        // 1. PDF Export Spreads Check
+        let pdfURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-pdf-facing-test-\(UUID().uuidString)")
+            .appendingPathExtension("pdf")
+        defer {
+            try? FileManager.default.removeItem(at: pdfURL)
+        }
+        
+        try PDFExporter().export(
+            document: document,
+            project: project,
+            to: pdfURL,
+            pageRange: "1-3",
+            drawCropMarks: true
+        )
+        
+        let pdf = try XCTUnwrap(CGPDFDocument(pdfURL as CFURL))
+        // Page 1 is Spread 0 (1 page). Page 2 & 3 is Spread 1 (double page spread).
+        // Total spreads exported: 2.
+        XCTAssertEqual(pdf.numberOfPages, 2)
+        
+        // Spread 0 (Page 1): single page size + crop margins
+        let p1 = try XCTUnwrap(pdf.page(at: 1))
+        let mediaBox1 = p1.getBoxRect(.mediaBox)
+        let singleExpectedWidth = project.pageSetup.pageSize.width + 2 * (8.5039 + 20.0)
+        XCTAssertEqual(Double(mediaBox1.width), singleExpectedWidth, accuracy: 0.1)
+        
+        // Spread 1 (Page 2 & 3): double page size + crop margins
+        let p2 = try XCTUnwrap(pdf.page(at: 2))
+        let mediaBox2 = p2.getBoxRect(.mediaBox)
+        let doubleExpectedWidth = project.pageSetup.pageSize.width * 2 + 2 * (8.5039 + 20.0)
+        XCTAssertEqual(Double(mediaBox2.width), doubleExpectedWidth, accuracy: 0.1)
+        
+        // 2. PNG Export Spreads Check
+        let pngDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-png-facing-test-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: pngDir)
+        }
+        
+        let pngURLs = try PNGExporter().export(
+            document: document,
+            project: project,
+            to: pngDir,
+            pageRange: "1-3",
+            scale: 1.0,
+            drawCropMarks: true
+        )
+        
+        // Expected exported files: page-001.png, page-002-003.png
+        XCTAssertEqual(pngURLs.map(\.lastPathComponent).sorted(), ["page-001.png", "page-002-003.png"])
+        
+        let img1 = try XCTUnwrap(NSImage(contentsOf: pngURLs.first(where: { $0.lastPathComponent == "page-001.png" })!))
+        let rep1 = try XCTUnwrap(img1.representations.compactMap { $0 as? NSBitmapImageRep }.first)
+        XCTAssertEqual(Double(rep1.pixelsWide), singleExpectedWidth, accuracy: 1.0)
+        
+        let img2 = try XCTUnwrap(NSImage(contentsOf: pngURLs.first(where: { $0.lastPathComponent == "page-002-003.png" })!))
+        let rep2 = try XCTUnwrap(img2.representations.compactMap { $0 as? NSBitmapImageRep }.first)
+        XCTAssertEqual(Double(rep2.pixelsWide), doubleExpectedWidth, accuracy: 1.0)
     }
 }

@@ -101,35 +101,70 @@ public struct PDFExporter {
             throw PDFExportError.couldNotCreateContext
         }
 
-        let sortedPages = document.pages.sorted(by: { $0.number < $1.number })
-
         func cgRectToData(_ rect: CGRect) -> CFData {
             var r = rect
             return Data(bytes: &r, count: MemoryLayout<CGRect>.size) as CFData
         }
 
-        for page in sortedPages {
-            guard pagesToExport.contains(page.number) else {
+        struct PDFSpread {
+            let index: Int
+            let leftPage: LaidOutPage?
+            let rightPage: LaidOutPage?
+            
+            var pages: [LaidOutPage] {
+                [leftPage, rightPage].compactMap { $0 }
+            }
+        }
+        
+        var spreads: [PDFSpread] = []
+        if project.pageSetup.facingPages {
+            let pagesByNumber = Dictionary(uniqueKeysWithValues: document.pages.map { ($0.number, $0) })
+            if let p1 = pagesByNumber[1] {
+                spreads.append(PDFSpread(index: 0, leftPage: nil, rightPage: p1))
+            }
+            let maxPageNum = document.pages.map(\.number).max() ?? 1
+            if maxPageNum >= 2 {
+                for startEven in stride(from: 2, through: maxPageNum, by: 2) {
+                    let left = pagesByNumber[startEven]
+                    let right = pagesByNumber[startEven + 1]
+                    if left != nil || right != nil {
+                        spreads.append(PDFSpread(index: startEven / 2, leftPage: left, rightPage: right))
+                    }
+                }
+            }
+        } else {
+            for page in document.pages.sorted(by: { $0.number < $1.number }) {
+                spreads.append(PDFSpread(index: page.number, leftPage: page, rightPage: nil))
+            }
+        }
+
+        for spread in spreads {
+            let containsExportPage = spread.pages.contains { pagesToExport.contains($0.number) }
+            guard containsExportPage else {
                 continue
             }
             
+            let isDoublePage = project.pageSetup.facingPages && spread.index > 0
+            let spreadWidth = isDoublePage ? pageSize.width * 2 : pageSize.width
+            let spreadHeight = pageSize.height
+            
             let pageInfo = NSMutableDictionary()
-            let mediaBoxRect = CGRect(x: 0, y: 0, width: mediaWidth, height: mediaHeight)
+            let mediaBoxRect = CGRect(x: 0, y: 0, width: spreadWidth + 2 * extraOffset, height: spreadHeight + 2 * extraOffset)
             pageInfo[kCGPDFContextMediaBox] = cgRectToData(mediaBoxRect)
             
             let trimBoxRect = CGRect(
                 x: extraOffset,
                 y: extraOffset,
-                width: pageSize.width,
-                height: pageSize.height
+                width: spreadWidth,
+                height: spreadHeight
             )
             pageInfo[kCGPDFContextTrimBox] = cgRectToData(trimBoxRect)
             
             let bleedBoxRect = CGRect(
                 x: drawCropMarks ? cropMarkMargin : 0,
                 y: drawCropMarks ? cropMarkMargin : 0,
-                width: pageSize.width + 2 * bleedPoints,
-                height: pageSize.height + 2 * bleedPoints
+                width: spreadWidth + 2 * bleedPoints,
+                height: spreadHeight + 2 * bleedPoints
             )
             pageInfo[kCGPDFContextBleedBox] = cgRectToData(bleedBoxRect)
             pageInfo[kCGPDFContextCropBox] = cgRectToData(mediaBoxRect)
@@ -141,12 +176,28 @@ public struct PDFExporter {
                 context.translateBy(x: extraOffset, y: extraOffset)
             }
             
-            draw(page: page, project: project, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0)
+            if isDoublePage {
+                if let leftPage = spread.leftPage {
+                    context.saveGState()
+                    draw(page: leftPage, project: project, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0)
+                    context.restoreGState()
+                }
+                
+                if let rightPage = spread.rightPage {
+                    context.saveGState()
+                    context.translateBy(x: pageSize.width, y: 0)
+                    draw(page: rightPage, project: project, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0)
+                    context.restoreGState()
+                }
+            } else {
+                let page = spread.leftPage ?? spread.rightPage!
+                draw(page: page, project: project, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0)
+            }
             
             context.restoreGState()
             
             if drawCropMarks {
-                drawCropMarksAndBleeds(in: context, trimSize: pageSize, bleedPoints: bleedPoints, cropMargin: cropMarkMargin)
+                drawCropMarksAndBleeds(in: context, trimSize: CGSize(width: spreadWidth, height: spreadHeight), bleedPoints: bleedPoints, cropMargin: cropMarkMargin)
             }
             
             if drawGridGuides {
@@ -154,7 +205,22 @@ public struct PDFExporter {
                 if extraOffset > 0 {
                     context.translateBy(x: extraOffset, y: extraOffset)
                 }
-                drawGridAndMarginGuides(in: context, pageNumber: page.number, project: project, pageSize: pageSize)
+                if isDoublePage {
+                    if let leftPage = spread.leftPage {
+                        context.saveGState()
+                        drawGridAndMarginGuides(in: context, pageNumber: leftPage.number, project: project, pageSize: pageSize)
+                        context.restoreGState()
+                    }
+                    if let rightPage = spread.rightPage {
+                        context.saveGState()
+                        context.translateBy(x: pageSize.width, y: 0)
+                        drawGridAndMarginGuides(in: context, pageNumber: rightPage.number, project: project, pageSize: pageSize)
+                        context.restoreGState()
+                    }
+                } else {
+                    let page = spread.leftPage ?? spread.rightPage!
+                    drawGridAndMarginGuides(in: context, pageNumber: page.number, project: project, pageSize: pageSize)
+                }
                 context.restoreGState()
             }
             
