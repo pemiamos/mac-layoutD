@@ -77,6 +77,9 @@ final class CanvasView: NSView {
     private var activeResizeHandleIndex: Int?
     private var dragStartFrameRect: Rect?
     private var dragStartLocalPoint: CGPoint? // absolute canvas point
+    private var previewFrameRects: [UUID: Rect] = [:]
+    private var pendingFrameDragUpdate: (id: UUID, rect: Rect)?
+    private var pendingGapDragUpdate: (firstId: UUID, firstRect: Rect, secondId: UUID, secondRect: Rect)?
     
     // Hand tool panning
     private var dragStartPoint: NSPoint?
@@ -354,11 +357,12 @@ final class CanvasView: NSView {
 
         let extraWidth = (frame.kind == .text || frame.kind == .footnote || frame.kind == .sideNote || frame.kind == .runningHeader) ? CGFloat(style.fontSize * 0.5) : 0.0
 
+        let effectiveFrameRect = previewFrameRects[frame.id] ?? frame.rect
         let rect = CGRect(
-            x: pageRect.minX + CGFloat(frame.rect.x) * zoomScale,
-            y: pageRect.minY + CGFloat(frame.rect.y) * zoomScale,
-            width: (CGFloat(frame.rect.width) + extraWidth) * zoomScale,
-            height: CGFloat(frame.rect.height) * zoomScale
+            x: pageRect.minX + CGFloat(effectiveFrameRect.x) * zoomScale,
+            y: pageRect.minY + CGFloat(effectiveFrameRect.y) * zoomScale,
+            width: (CGFloat(effectiveFrameRect.width) + extraWidth) * zoomScale,
+            height: CGFloat(effectiveFrameRect.height) * zoomScale
         )
 
         if frame.kind == .footnoteDivider {
@@ -405,11 +409,24 @@ final class CanvasView: NSView {
                         textColorOverride: componentTextColor,
                         applyDefaultInset: false,
                         sourceParagraphId: frame.sourceParagraphId,
-                        tableOfContentsEntries: frame.tableOfContentsEntries
+                        tableOfContentsEntries: frame.tableOfContentsEntries,
+                        exclusionRects: frame.exclusionRects,
+                        frameRect: frame.rect
                     )
                 }
             } else {
-                drawText(text, styleId: frame.styleId, project: project, rect: rect, kind: frame.kind, textColorOverride: textColor, sourceParagraphId: frame.sourceParagraphId, tableOfContentsEntries: frame.tableOfContentsEntries)
+                drawText(
+                    text,
+                    styleId: frame.styleId,
+                    project: project,
+                    rect: rect,
+                    kind: frame.kind,
+                    textColorOverride: textColor,
+                    sourceParagraphId: frame.sourceParagraphId,
+                    tableOfContentsEntries: frame.tableOfContentsEntries,
+                    exclusionRects: frame.exclusionRects,
+                    frameRect: frame.rect
+                )
             }
         case .asset(let assetId):
             drawAssetPlaceholder(assetId: assetId, isLeftHalf: nil, project: project, rect: rect, maskShape: frame.maskShape)
@@ -656,7 +673,9 @@ final class CanvasView: NSView {
         textColorOverride: NSColor? = nil,
         applyDefaultInset: Bool = true,
         sourceParagraphId: UUID? = nil,
-        tableOfContentsEntries: [TableOfContentsEntry]? = nil
+        tableOfContentsEntries: [TableOfContentsEntry]? = nil,
+        exclusionRects: [Rect]? = nil,
+        frameRect: Rect? = nil
     ) {
         let style: ParagraphStyle
         if kind == .footnote {
@@ -726,15 +745,48 @@ final class CanvasView: NSView {
         let path = CGPath(rect: CGRect(x: 0, y: 0, width: drawingRect.width, height: drawingRect.height), transform: nil)
         let framesetter = CTFramesetterCreateWithAttributedString(attrString)
         
-        let frame: CTFrame
+        var frameAttributes: [CFString: Any] = [:]
         if style.layoutDirection == .vertical {
-            let frameAttributes: [CFString: Any] = [
-                kCTFrameProgressionAttributeName: CTFrameProgression.rightToLeft.rawValue as CFNumber
-            ]
-            frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, frameAttributes as CFDictionary)
-        } else {
-            frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
+            frameAttributes[kCTFrameProgressionAttributeName] = CTFrameProgression.rightToLeft.rawValue as CFNumber
         }
+        
+        if let exclusionRects = exclusionRects, !exclusionRects.isEmpty, let frameRect = frameRect {
+            let compStyle = project.styles.componentStyle(for: kind)
+            let insetX = applyDefaultInset ? 4.0 : (compStyle?.textInsetX ?? 0.0)
+            let insetY = applyDefaultInset ? 2.0 : (compStyle?.textInsetY ?? 0.0)
+            let extraWidth = (kind == .text || kind == .footnote || kind == .sideNote || kind == .runningHeader) ? (style.fontSize * 0.5) : 0.0
+            
+            let textRectPageInset = Rect(
+                x: frameRect.x + insetX,
+                y: frameRect.y + insetY,
+                width: max(0, frameRect.width + extraWidth - insetX * 2),
+                height: max(0, frameRect.height - insetY * 2)
+            )
+            
+            var exclusionPaths: [CGPath] = []
+            for img in exclusionRects {
+                let overlap = textRectPageInset.intersection(img)
+                guard overlap.width > 0 && overlap.height > 0 else { continue }
+                
+                let localMinX = overlap.x - textRectPageInset.x
+                let localMinY = textRectPageInset.y + textRectPageInset.height - (overlap.y + overlap.height)
+                
+                let scaledRect = CGRect(
+                    x: CGFloat(localMinX) * zoomScale,
+                    y: CGFloat(localMinY) * zoomScale,
+                    width: CGFloat(overlap.width) * zoomScale,
+                    height: CGFloat(overlap.height) * zoomScale
+                )
+                exclusionPaths.append(CGPath(rect: scaledRect, transform: nil))
+            }
+            
+            if !exclusionPaths.isEmpty {
+                let clippingPaths = exclusionPaths.map { [kCTFramePathClippingPathAttributeName: $0] }
+                frameAttributes[kCTFrameClippingPathsAttributeName] = clippingPaths
+            }
+        }
+        
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, frameAttributes as CFDictionary)
         
         cgContext.textMatrix = .identity
         CTFrameDraw(frame, cgContext)
@@ -1181,16 +1233,19 @@ final class CanvasView: NSView {
             }
         }
 
-        // 6. Selection or Direct Selection click selection and drag start
+        // 6. Selection or Direct Selection click selection. Direct Selection is
+        // intentionally select-only until image crop/focal-point editing exists.
         if activeTool == .selection || activeTool == .directSelection {
             if let frame = hitFrame {
                 selectedFrameId = frame.id
                 onFrameSelected?(frame.id)
-                
-                isDraggingFrame = true
-                onDragStarted?()
-                dragStartFrameRect = frame.rect
-                dragStartLocalPoint = point
+
+                if activeTool == .selection {
+                    isDraggingFrame = true
+                    onDragStarted?()
+                    dragStartFrameRect = frame.rect
+                    dragStartLocalPoint = point
+                }
             } else {
                 selectedFrameId = nil
                 onFrameSelected?(nil)
@@ -1230,8 +1285,10 @@ final class CanvasView: NSView {
         if isDraggingFrame, let selId = selectedFrameId, let startRect = dragStartFrameRect, let startPt = dragStartLocalPoint {
             let dx = Double((point.x - startPt.x) / zoomScale)
             let dy = Double((point.y - startPt.y) / zoomScale)
-            
-            onFrameDragged?(selId, startRect.x + dx, startRect.y + dy, startRect.width, startRect.height)
+            let nextRect = Rect(x: startRect.x + dx, y: startRect.y + dy, width: startRect.width, height: startRect.height)
+            previewFrameRects[selId] = nextRect
+            pendingFrameDragUpdate = (selId, nextRect)
+            needsDisplay = true
             return
         }
 
@@ -1315,7 +1372,10 @@ final class CanvasView: NSView {
                 break
             }
             
-            onFrameDragged?(selId, newX, newY, newW, newH)
+            let nextRect = Rect(x: newX, y: newY, width: newW, height: newH)
+            previewFrameRects[selId] = nextRect
+            pendingFrameDragUpdate = (selId, nextRect)
+            needsDisplay = true
             return
         }
 
@@ -1331,7 +1391,10 @@ final class CanvasView: NSView {
                 if targetW1 >= minW && targetW2 >= minW {
                     let firstRect = Rect(x: startFirst.x, y: startFirst.y, width: targetW1, height: startFirst.height)
                     let secondRect = Rect(x: startSecond.x + dx, y: startSecond.y, width: targetW2, height: startSecond.height)
-                    onGapDragged?(gap.firstFrameId, firstRect, gap.secondFrameId, secondRect)
+                    previewFrameRects[gap.firstFrameId] = firstRect
+                    previewFrameRects[gap.secondFrameId] = secondRect
+                    pendingGapDragUpdate = (gap.firstFrameId, firstRect, gap.secondFrameId, secondRect)
+                    needsDisplay = true
                 }
             } else {
                 let minH = 10.0
@@ -1340,13 +1403,23 @@ final class CanvasView: NSView {
                 if targetH1 >= minH && targetH2 >= minH {
                     let firstRect = Rect(x: startFirst.x, y: startFirst.y, width: startFirst.width, height: targetH1)
                     let secondRect = Rect(x: startSecond.x, y: startSecond.y + dy, width: startSecond.width, height: targetH2)
-                    onGapDragged?(gap.firstFrameId, firstRect, gap.secondFrameId, secondRect)
+                    previewFrameRects[gap.firstFrameId] = firstRect
+                    previewFrameRects[gap.secondFrameId] = secondRect
+                    pendingGapDragUpdate = (gap.firstFrameId, firstRect, gap.secondFrameId, secondRect)
+                    needsDisplay = true
                 }
             }
         }
     }
 
     override func mouseUp(with event: NSEvent) {
+        if let pending = pendingFrameDragUpdate {
+            onFrameDragged?(pending.id, pending.rect.x, pending.rect.y, pending.rect.width, pending.rect.height)
+        }
+        if let pending = pendingGapDragUpdate {
+            onGapDragged?(pending.firstId, pending.firstRect, pending.secondId, pending.secondRect)
+        }
+
         isDraggingFrame = false
         isResizingFrame = false
         isDraggingGap = false
@@ -1357,6 +1430,10 @@ final class CanvasView: NSView {
         dragStartSecondFrameRect = nil
         dragStartPoint = nil
         scrollStartOrigin = nil
+        previewFrameRects.removeAll()
+        pendingFrameDragUpdate = nil
+        pendingGapDragUpdate = nil
+        needsDisplay = true
         
         if activeTool == .hand {
             NSCursor.openHand.set()

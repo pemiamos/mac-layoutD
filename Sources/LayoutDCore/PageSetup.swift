@@ -192,6 +192,22 @@ public struct Rect: Codable, Equatable, Sendable {
     }
 }
 
+public extension Rect {
+    var cgRect: CGRect {
+        CGRect(x: x, y: y, width: width, height: height)
+    }
+    func intersects(_ other: Rect) -> Bool {
+        cgRect.intersects(other.cgRect)
+    }
+    func intersection(_ other: Rect) -> Rect {
+        let intersectionRect = cgRect.intersection(other.cgRect)
+        if intersectionRect.isNull {
+            return Rect(x: 0, y: 0, width: 0, height: 0)
+        }
+        return Rect(x: intersectionRect.origin.x, y: intersectionRect.origin.y, width: intersectionRect.size.width, height: intersectionRect.size.height)
+    }
+}
+
 public extension String {
     var trimmedForLayout: String {
         trimmingCharacters(in: .whitespacesAndNewlines)

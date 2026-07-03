@@ -42,6 +42,13 @@ final class AppState: ObservableObject {
     private var redoStack: [BookProject] = []
     private var isPerformingUndoRedo = false
     private var isPerformingRecalculation = false
+
+    /// The stripped project the current `baselineDocument` was laid out from.
+    /// Plan-only edits (apply/clear a LayoutPlan, quality-history bookkeeping)
+    /// leave this value unchanged, so the second full-book layout is skipped.
+    private var baselineSource: BookProject?
+    /// How many times the baseline document was actually laid out (test hook).
+    private(set) var baselineLayoutCount = 0
     
     let engine = LayoutEngine()
     let inspectorEngine = ProjectInspector()
@@ -108,7 +115,14 @@ final class AppState: ObservableObject {
         
         var baselineProj = project
         baselineProj.appliedLayoutPlans = nil
-        self.baselineDocument = engine.layout(project: baselineProj)
+        // Quality history is bookkeeping appended after every recalculation; it has
+        // no effect on layout but would defeat the equality check below.
+        baselineProj.qualityMetricsHistory = nil
+        if baselineDocument == nil || baselineSource != baselineProj {
+            self.baselineDocument = engine.layout(project: baselineProj)
+            baselineSource = baselineProj
+            baselineLayoutCount += 1
+        }
         
         let report = inspectorEngine.preflight(project: project, document: doc, exportOptions: pdfExportOptions)
         self.report = report
@@ -304,6 +318,27 @@ final class AppState: ObservableObject {
             currentProject.safeAppliedLayoutPlans = plans
             self.project = currentProject
         }
+    }
+
+    func updateSelectedFrameText(_ text: String) {
+        commitState()
+        guard let frameId = selectedFrameId,
+              let pageNum = findPageNumber(for: frameId) else { return }
+
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+
+        guard let idx = plan.blocks.firstIndex(where: { $0.id == frameId }) else { return }
+        guard plan.blocks[idx].kind == .text || plan.blocks[idx].kind == .caption else {
+            return
+        }
+
+        plan.blocks[idx].contentReference = .generated(text)
+        plan.notes = ["手动修改元素文字"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
     }
 
     func clearCustomLayoutForPage(number: Int) {
@@ -833,6 +868,10 @@ final class AppState: ObservableObject {
     }
 
     func updateFrameCoordinate(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {
+        updateFrameCoordinatesWithoutUndo(id: id, x: x, y: y, width: width, height: height)
+    }
+
+    private func updateFrameCoordinatesWithoutUndo(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {
         guard let pageNum = findPageNumber(for: id) else { return }
         var currentProject = project
         var plans = currentProject.safeAppliedLayoutPlans

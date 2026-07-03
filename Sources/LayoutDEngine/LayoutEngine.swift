@@ -282,7 +282,7 @@ private struct LayoutContext {
             )
             height = heights.reduce(0.0, +)
         } else {
-            height = estimatedTextHeight(text: text, style: style, width: columnWidth, inlineRuns: paragraphRuns)
+            height = estimatedTextHeightWithExclusions(text: text, style: style, width: columnWidth, x: cursorX, y: cursorY, inlineRuns: paragraphRuns)
         }
         
         if shouldKeepHeadingWithNext(style: style, height: height) {
@@ -520,7 +520,16 @@ private struct LayoutContext {
         advanceIfNeeded(height + spaceBefore + style.spaceAfter)
         cursorY += spaceBefore
         let rect = Rect(x: cursorX, y: cursorY, width: columnWidth, height: height)
-        currentPage.frames.append(PageFrame(kind: kind, rect: rect, styleId: style.id, content: .text(text), sourceParagraphId: sourceParagraphId))
+        let imageRects = getImageRectsOnCurrentPage()
+        let overlaps = imageRects.filter { $0.intersects(rect) }
+        currentPage.frames.append(PageFrame(
+            kind: kind,
+            rect: rect,
+            styleId: style.id,
+            content: .text(text),
+            sourceParagraphId: sourceParagraphId,
+            exclusionRects: overlaps.isEmpty ? nil : overlaps
+        ))
         
         for snId in anchoredSideNoteIds {
             if let snParagraph = findParagraph(id: snId) {
@@ -532,29 +541,78 @@ private struct LayoutContext {
         snapToBaseline()
     }
 
-    private func fittingPrefix(of text: String, style: ParagraphStyle, maxHeight: Double, width: Double, inlineRuns: [InlineRun]? = nil) -> String {
-        if estimatedTextHeight(text: text, style: style, width: width, inlineRuns: inlineRuns) <= maxHeight {
+    private func fittingPrefix(
+        of text: String,
+        style: ParagraphStyle,
+        maxHeight: Double,
+        width: Double,
+        x: Double,
+        y: Double,
+        inlineRuns: [InlineRun]? = nil
+    ) -> String {
+        let imageRects = getImageRectsOnCurrentPage()
+        let tentativeRect = Rect(x: x, y: y, width: width, height: maxHeight)
+        let overlaps = imageRects.filter { $0.intersects(tentativeRect) }
+        
+        if overlaps.isEmpty {
+            if estimatedTextHeight(text: text, style: style, width: width, inlineRuns: inlineRuns) <= maxHeight {
+                return text
+            }
+
+            var lowerBound = 1
+            var upperBound = text.count
+            var bestCount = 1
+
+            while lowerBound <= upperBound {
+                let mid = (lowerBound + upperBound) / 2
+                let candidate = String(text.prefix(mid)).trimmedForLayout
+                let mappedRuns = InlineRun.mapRuns(inlineRuns ?? [], toSubstringFrom: 0, length: mid)
+                let height = estimatedTextHeight(text: candidate, style: style, width: width, inlineRuns: mappedRuns)
+                if height <= maxHeight {
+                    bestCount = max(mid, 1)
+                    lowerBound = mid + 1
+                } else {
+                    upperBound = mid - 1
+                }
+            }
+
+            let broken = smartBreakPrefix(of: text, maximumCount: bestCount)
+            let kinsokuPrefix = applyChineseTypesettingRules(candidatePrefix: broken, fullText: text, style: style, maxHeight: maxHeight, width: width, inlineRuns: inlineRuns)
+            return applyWidowOrphanControls(prefix: kinsokuPrefix, fullText: text, style: style, maxHeight: maxHeight, width: width, inlineRuns: inlineRuns)
+        }
+        
+        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, inlineRuns: inlineRuns)
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
+        
+        let path = CGMutablePath()
+        path.addRect(CGRect(x: 0, y: 0, width: width, height: maxHeight))
+        
+        var exclusionPaths: [CGPath] = []
+        for img in overlaps {
+            let overlap = tentativeRect.intersection(img)
+            guard overlap.width > 0 && overlap.height > 0 else { continue }
+            
+            let localMinX = overlap.x - x
+            let localMinY = (y + maxHeight) - (overlap.y + overlap.height)
+            let localRect = CGRect(x: localMinX, y: localMinY, width: overlap.width, height: overlap.height)
+            exclusionPaths.append(CGPath(rect: localRect, transform: nil))
+        }
+        
+        var frameAttrs: [CFString: Any] = [:]
+        if !exclusionPaths.isEmpty {
+            let clippingPaths = exclusionPaths.map { [kCTFramePathClippingPathAttributeName: $0] }
+            frameAttrs[kCTFrameClippingPathsAttributeName] = clippingPaths
+        }
+        
+        let ctFrame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: attributedString.length), path, frameAttrs as CFDictionary)
+        let visibleRange = CTFrameGetVisibleStringRange(ctFrame)
+        let fitLength = visibleRange.length
+        
+        if fitLength >= text.count {
             return text
         }
-
-        var lowerBound = 1
-        var upperBound = text.count
-        var bestCount = 1
-
-        while lowerBound <= upperBound {
-            let mid = (lowerBound + upperBound) / 2
-            let candidate = String(text.prefix(mid)).trimmedForLayout
-            let mappedRuns = InlineRun.mapRuns(inlineRuns ?? [], toSubstringFrom: 0, length: mid)
-            let height = estimatedTextHeight(text: candidate, style: style, width: width, inlineRuns: mappedRuns)
-            if height <= maxHeight {
-                bestCount = max(mid, 1)
-                lowerBound = mid + 1
-            } else {
-                upperBound = mid - 1
-            }
-        }
-
-        let broken = smartBreakPrefix(of: text, maximumCount: bestCount)
+        
+        let broken = smartBreakPrefix(of: text, maximumCount: fitLength)
         let kinsokuPrefix = applyChineseTypesettingRules(candidatePrefix: broken, fullText: text, style: style, maxHeight: maxHeight, width: width, inlineRuns: inlineRuns)
         return applyWidowOrphanControls(prefix: kinsokuPrefix, fullText: text, style: style, maxHeight: maxHeight, width: width, inlineRuns: inlineRuns)
     }
@@ -971,6 +1029,93 @@ private struct LayoutContext {
     private func shouldInsertSpaceBetween(_ left: Character, _ right: Character) -> Bool {
         (left.isCJKIdeograph && right.isWesternAlphanumeric)
             || (left.isWesternAlphanumeric && right.isCJKIdeograph)
+    }
+
+    private func getImageRectsOnCurrentPage() -> [Rect] {
+        var rects: [Rect] = []
+        for frame in currentPage.frames {
+            if frame.kind == .image {
+                rects.append(frame.rect)
+            }
+        }
+        let actualPageNumber = currentAbsolutePageNumber
+        if let plans = project.appliedLayoutPlans,
+           let plan = plans[actualPageNumber] {
+            let pageSize = project.pageSetup.pageSize
+            for block in plan.blocks {
+                if block.kind == .image {
+                    let rect = Rect(
+                        x: block.frame.x * pageSize.width,
+                        y: block.frame.y * pageSize.height,
+                        width: block.frame.width * pageSize.width,
+                        height: block.frame.height * pageSize.height
+                    )
+                    if !rects.contains(where: { abs($0.x - rect.x) < 0.1 && abs($0.y - rect.y) < 0.1 && abs($0.width - rect.width) < 0.1 && abs($0.height - rect.height) < 0.1 }) {
+                        rects.append(rect)
+                    }
+                }
+            }
+        }
+        return rects
+    }
+
+    private func estimatedTextHeightWithExclusions(
+        text: String,
+        style: ParagraphStyle,
+        width: Double,
+        x: Double,
+        y: Double,
+        inlineRuns: [InlineRun]? = nil
+    ) -> Double {
+        let imageRects = getImageRectsOnCurrentPage()
+        let maxPossibleHeight = 2000.0
+        let tentativeRect = Rect(x: x, y: y, width: width, height: maxPossibleHeight)
+        let overlaps = imageRects.filter { $0.intersects(tentativeRect) }
+        
+        if overlaps.isEmpty {
+            return estimatedTextHeight(text: text, style: style, width: width, inlineRuns: inlineRuns)
+        }
+        
+        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, inlineRuns: inlineRuns)
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
+        
+        let path = CGMutablePath()
+        path.addRect(CGRect(x: 0, y: 0, width: width, height: maxPossibleHeight))
+        
+        var exclusionPaths: [CGPath] = []
+        for img in overlaps {
+            let overlap = tentativeRect.intersection(img)
+            guard overlap.width > 0 && overlap.height > 0 else { continue }
+            
+            let localMinX = overlap.x - x
+            let localMinY = (y + maxPossibleHeight) - (overlap.y + overlap.height)
+            let localRect = CGRect(x: localMinX, y: localMinY, width: overlap.width, height: overlap.height)
+            exclusionPaths.append(CGPath(rect: localRect, transform: nil))
+        }
+        
+        var frameAttrs: [CFString: Any] = [:]
+        if !exclusionPaths.isEmpty {
+            let clippingPaths = exclusionPaths.map { [kCTFramePathClippingPathAttributeName: $0] }
+            frameAttrs[kCTFrameClippingPathsAttributeName] = clippingPaths
+        }
+        
+        let ctFrame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: attributedString.length), path, frameAttrs as CFDictionary)
+        
+        let lines = CTFrameGetLines(ctFrame) as! [CTLine]
+        guard !lines.isEmpty else { return style.lineHeight }
+        
+        var origins = [CGPoint](repeating: .zero, count: lines.count)
+        CTFrameGetLineOrigins(ctFrame, CFRange(location: 0, length: 0), &origins)
+        
+        let lastOriginY = origins.last?.y ?? 0.0
+        
+        var lastLineAscent: CGFloat = 0
+        var lastLineDescent: CGFloat = 0
+        var lastLineLeading: CGFloat = 0
+        CTLineGetTypographicBounds(lines.last!, &lastLineAscent, &lastLineDescent, &lastLineLeading)
+        
+        let textHeight = maxPossibleHeight - Double(lastOriginY) + Double(lastLineDescent + lastLineLeading)
+        return max(ceil(textHeight), style.lineHeight)
     }
 
     private func estimatedTextHeight(text: String, style: ParagraphStyle, width: Double, inlineRuns: [InlineRun]? = nil) -> Double {
@@ -1510,7 +1655,7 @@ private struct LayoutContext {
                 content = .asset(assetId)
             } else {
                 if block.kind == .text && (block.nextThreadedBlockId != nil || block.previousThreadedBlockId != nil) {
-                    let fittedText = fittingPrefix(of: normalizedTextToPlace, style: resolvedStyle, maxHeight: rect.height, width: rect.width, inlineRuns: blockRuns)
+                    let fittedText = fittingPrefix(of: normalizedTextToPlace, style: resolvedStyle, maxHeight: rect.height, width: rect.width, x: rect.x, y: rect.y, inlineRuns: blockRuns)
                     content = .text(fittedText)
                     if let nextId = block.nextThreadedBlockId {
                         let remaining = String(normalizedTextToPlace.dropFirst(fittedText.count)).trimmedForLayout
@@ -1523,6 +1668,9 @@ private struct LayoutContext {
                 }
             }
             
+            let imageRects = getImageRectsOnCurrentPage()
+            let overlaps = imageRects.filter { $0.intersects(rect) }
+            
             currentPage.frames.append(PageFrame(
                 id: block.id,
                 kind: kind,
@@ -1534,7 +1682,8 @@ private struct LayoutContext {
                 strokeWidth: block.strokeWidth,
                 textColorHex: block.textColorHex,
                 sourceParagraphId: sourceParagraphId,
-                maskShape: block.maskShape
+                maskShape: block.maskShape,
+                exclusionRects: overlaps.isEmpty ? nil : overlaps
             ))
         }
         

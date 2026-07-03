@@ -204,11 +204,23 @@ public struct PNGExporter {
                         context: context,
                         textColorHex: frame.textColorHex ?? componentStyle.resolvedTextColorHex(project: project),
                         sourceParagraphId: frame.sourceParagraphId,
-                        tableOfContentsEntries: frame.tableOfContentsEntries
+                        tableOfContentsEntries: frame.tableOfContentsEntries,
+                        exclusionRects: frame.exclusionRects
                     )
                 }
             } else {
-                drawText(text, styleId: frame.styleId, kind: frame.kind, project: project, in: rect.insetBy(dx: 4, dy: 2), context: context, textColorHex: frame.textColorHex, sourceParagraphId: frame.sourceParagraphId, tableOfContentsEntries: frame.tableOfContentsEntries)
+                drawText(
+                    text,
+                    styleId: frame.styleId,
+                    kind: frame.kind,
+                    project: project,
+                    in: rect.insetBy(dx: 4, dy: 2),
+                    context: context,
+                    textColorHex: frame.textColorHex,
+                    sourceParagraphId: frame.sourceParagraphId,
+                    tableOfContentsEntries: frame.tableOfContentsEntries,
+                    exclusionRects: frame.exclusionRects
+                )
             }
         case .asset(let assetId):
             drawAsset(assetId: assetId, isLeftHalf: nil, project: project, in: rect, context: context, maskShape: frame.maskShape)
@@ -384,7 +396,18 @@ public struct PNGExporter {
         context.restoreGState()
     }
 
-    private func drawText(_ text: String, styleId: String?, kind: PageFrameKind = .text, project: BookProject, in rect: CGRect, context: CGContext, textColorHex: String? = nil, sourceParagraphId: UUID? = nil, tableOfContentsEntries: [TableOfContentsEntry]? = nil) {
+    private func drawText(
+        _ text: String,
+        styleId: String?,
+        kind: PageFrameKind = .text,
+        project: BookProject,
+        in rect: CGRect,
+        context: CGContext,
+        textColorHex: String? = nil,
+        sourceParagraphId: UUID? = nil,
+        tableOfContentsEntries: [TableOfContentsEntry]? = nil,
+        exclusionRects: [Rect]? = nil
+    ) {
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -452,12 +475,27 @@ public struct PNGExporter {
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
         path.addRect(rect)
-        let frameAttrs: [CFString: Any]?
+        
+        var frameAttrs: [CFString: Any] = [:]
         if style.layoutDirection == .vertical {
-            frameAttrs = [kCTFrameProgressionAttributeName: CTFrameProgression.rightToLeft.rawValue as CFNumber]
-        } else {
-            frameAttrs = nil
+            frameAttrs[kCTFrameProgressionAttributeName] = CTFrameProgression.rightToLeft.rawValue as CFNumber
         }
+        
+        if let exclusionRects = exclusionRects, !exclusionRects.isEmpty {
+            var exclusionPaths: [CGPath] = []
+            for img in exclusionRects {
+                let imgRect = CGRect(x: img.x, y: img.y, width: img.width, height: img.height)
+                let overlap = rect.intersection(imgRect)
+                guard overlap.width > 0 && overlap.height > 0 else { continue }
+                
+                exclusionPaths.append(CGPath(rect: overlap, transform: nil))
+            }
+            if !exclusionPaths.isEmpty {
+                let clippingPaths = exclusionPaths.map { [kCTFramePathClippingPathAttributeName: $0] }
+                frameAttrs[kCTFrameClippingPathsAttributeName] = clippingPaths
+            }
+        }
+        
         let frame = CTFramesetterCreateFrame(
             framesetter,
             CFRange(location: 0, length: attributedString.length),

@@ -327,6 +327,19 @@ struct InspectorView: View {
                             Text("类型: \(frame.kind.rawValue.capitalized)  (第 \(pageNum) 页)")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
+
+                            if (frame.kind == .text || frame.kind == .caption),
+                               case .text(let editableText) = frame.content {
+                                SelectedFrameTextEditor(
+                                    frameId: frame.id,
+                                    initialText: editableText,
+                                    isPageLocked: isPageLocked,
+                                    state: state
+                                )
+                                .id(frame.id)
+
+                                Divider()
+                            }
                             
                             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                                 GridRow {
@@ -1362,6 +1375,55 @@ struct InspectorView: View {
             }
         }
         .padding(.vertical, 8)
+    }
+}
+
+private struct SelectedFrameTextEditor: View {
+    let frameId: UUID
+    let initialText: String
+    let isPageLocked: Bool
+    @ObservedObject var state: AppState
+
+    @State private var draftText: String
+
+    init(frameId: UUID, initialText: String, isPageLocked: Bool, state: AppState) {
+        self.frameId = frameId
+        self.initialText = initialText
+        self.isPageLocked = isPageLocked
+        self.state = state
+        _draftText = State(initialValue: initialText)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("文字内容")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            TextEditor(text: $draftText)
+                .font(.system(size: 12))
+                .frame(minHeight: 82)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                )
+                .disabled(isPageLocked)
+
+            HStack {
+                Button("应用文字") {
+                    state.selectedFrameId = frameId
+                    state.updateSelectedFrameText(draftText)
+                }
+                .buttonStyle(.bordered)
+                .disabled(isPageLocked || draftText == initialText)
+
+                Button("还原") {
+                    draftText = initialText
+                }
+                .buttonStyle(.bordered)
+                .disabled(draftText == initialText)
+            }
+        }
     }
 }
 

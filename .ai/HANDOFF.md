@@ -3,6 +3,34 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-04 03:51 | claude | 执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自
+- **分支**：dev
+- **概述**：执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自 lane 并快进到最新 dev；③ 删 11 条已合并 feature 分支 + 强删被 AG 版取代的 feature/codex-imp2-docx-images(b4d83d8,reflog 可救)；④ QUEUE.md 瘦身：已完成项归档到新建 .ai/QUEUE-ARCHIVE.md，登记性能批 PERF-1~4(Claude)/GUARD-1+SPLIT-IMPORT(Codex)/GUARD-2+E2-4p补完+SPLIT-GUI(AG)/B1-IDML 新任务，铁律加「生成产物不进仓库」；⑤ 简报更新到 07-04(8e253dd)。【B1 集成】审核 AG feature/ag-b1-text-wrap(CoreText 挖洞绕排)：/tmp 隔离 worktree 合并复验 swift test 226/0 + review-idml 6/0 PASS；剔除 AG 误提交的 20 个 Samples/output-* 样张；PNG 视觉样张确认绕图行变窄/图占区无字(~/Desktop/B1绕排验收-0704)；合 dev(09b8cc4) 已推。【第1批·性能】feature/claude-perf-baseline 合 dev(23df697)：PERF-1 全书基准 161 页/本机 ≈1179ms/次全量排版(坐实"每次改动排两遍≈2.5s"问题)；PERF-2 baseline 布局缓存(纯 plan 操作不再二次全书排版,约省一半)。228 测试 + review-idml.sh 全 PASS。
+- **改动文件**：.ai/HANDOFF.md, .ai/QUEUE.md, .ai/QUEUE-ARCHIVE.md(新), docs/项目简报.md, Sources/LayoutDApp/AppState.swift, Tests/LayoutDAppTests/AppStateTests.swift, Tests/LayoutDCoreTests/PerformanceBenchmarkTests.swift(新), (B1 合并带入: CanvasView/LaidOutPage/PageSetup/LayoutEngine/PDFExporter/PNGExporter/LayoutDCoreTests)
+- **检查**：review-idml.sh 6/0 PASS × 3 轮(B1 隔离复验 226/0、性能批 228/0)。dev=23df697 已推 origin。main 仍在 ba74f65,等用户视觉复验后合并。
+- **下一步**：①【用户·视觉复验，阻塞合 main】三项一起验：基础工具热修 GUI 四项 + B1 绕排样张(~/Desktop/B1绕排验收-0704/page-003.png) + 行内格式 InDesign 终验(非阻塞)。OK → Claude 合 dev→main 并 push。②【Claude 下一棒】PERF-3 排版异步化+防抖(等复验后做,避免叠加未验收的 GUI 行为改动)；之后 PERF-4 引擎测量改造(用 1179ms 基线对比)。③【Codex 可领】GUARD-1 角色标签探针、SPLIT-IMPORT。④【AG 可领】GUARD-2 字形覆盖 rule⑥、E2-4p 补完、SPLIT-GUI。⑤ 队列已瘦身,活任务见 QUEUE.md,历史见 QUEUE-ARCHIVE.md。
+
+## 2026-07-04 03:32 | claude | 全项目 review（只读，未改代码）。总体健康：模块分层清晰、零外部依赖、225 测试 + CI(macOS runner)、真实书稿试跑收官。主要发现：① 
+- **分支**：dev
+- **概述**：全项目 review（只读，未改代码）。总体健康：模块分层清晰、零外部依赖、225 测试 + CI(macOS runner)、真实书稿试跑收官。主要发现：① 性能是最大隐患——AppState.recalculateLayout 每次改动同步全书排版两遍(主排+baseline)+preflight，书稿变大会卡；引擎 fittingPrefix 二分测高每段反复建 framesetter，建议改 CTTypesetter 逐行填充+测量缓存+baseline 缓存+异步化，并加全书规模 benchmark。② 可维护性——5 个 1400~1650 行巨型文件(LayoutEngine/InspectorView/MarkdownBookImporter/main.swift/CanvasView)建议按车道分批拆分，降低三 AI 协作冲突面。③ 仓库卫生——dev 领先 main 3 commits 等用户 GUI 视觉复验(06-29 至今)；约 10 条已合并 feature 分支未删；codex/ag worktree 停在已合并分支上未归位 lane；QUEUE.md 334 行大半是已完成项应归档；简报停在 06-24。④ 护栏——review-idml.sh 探针只覆盖行内强调，建议补角色标签 docx 端到端探针；断言闸第③层字形覆盖检查(路线图已有)待做。⑤ 遗留小项：IMP-2 图片落 docx 旁 images/ 目录、正文默认字体仍 Songti/PingFang、undo 栈存全量快照。已向用户提交四批次优化计划(卫生→性能→拆文件→护栏)。
+- **改动文件**：(未填)
+- **检查**：未跑（只读 review，无代码改动）。工作区仅 .ai/HANDOFF.md 有一处会话前遗留未提交改动。
+- **下一步**：① 用户先做 06-29 那批 GUI 视觉复验（拖拽/缩放顺滑、间隔工具一次覆写、Inspector 文字内容、无假渐变按钮），OK 后 Claude 合 dev→main 并 push。② 仓库卫生一批：删已合并 feature 分支、codex/ag worktree 归位各自 lane、QUEUE.md 已完成项归档、简报更新到 07-04。③ 盘点 AG 的 B1 图文绕排进度（分支 feature/ag-b1-text-wrap 在但 AG worktree 没停在上面）。④ 性能批：先加全书规模 benchmark 拿基线数字，再做 baseline 布局缓存+防抖异步+测量缓存。
+
+## 2026-06-29 23:56 | claude | 审核并集成 Codex「基础工具可用性热修(GUI)」到 dev(用户 2026-06-29 临时插单,事后补登记)。Codex 在 feature/codex
+- **分支**：dev
+- **概述**：审核并集成 Codex「基础工具可用性热修(GUI)」到 dev(用户 2026-06-29 临时插单,事后补登记)。Codex 在 feature/codex-basic-tools-usability(共享 .git,未推 origin)做了一条 GUI 修复:① 画布拖拽/缩放/调间距改本地预览(previewFrameRects)+ mouseUp 一次性提交,消除每次 mouseDragged 全量 layout/preflight 卡顿;② Direct Selection 暂改 select-only(无图片裁切模型前不假装可调图内部);③ Inspector 给 text/caption 帧加「文字内容」编辑框 → updateSelectedFrameText 写 LayoutPlan .generated override(顶部 commitState 撑 undo);④ 删工具栏假「渐变」按钮(实际写纯色)。新增 AppStateTests 覆盖文字覆写持久化。Claude 在 /tmp 隔离 detached worktree 复验(守 N1/N2/N3)后快进合 dev。
+- **改动文件**：Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/InspectorView.swift, Sources/LayoutDApp/ToolbarView.swift, Tests/LayoutDAppTests/AppStateTests.swift（以上为 Codex 783f96f）; .ai/HANDOFF.md(Codex 9773fe7); .ai/QUEUE.md(Claude c1e2b28 登记插单)
+- **检查**：/tmp 隔离 worktree: swift build PASS; swift test 225/0 PASS; bash scripts/review-idml.sh 6/0 PASS。快进合并 ba74f65..9773fe7 → dev,再 push 队列登记 c1e2b28。dev=c1e2b28 已 push origin。main 暂未动。
+- **下一步**：①【用户·GUI 视觉复验】这是 GUI 改动,无头测不出渲染/交互对错,须人看:选择工具拖拽/缩放是否顺滑、间隔工具松手只产生一次覆写、文字工具选中文本/图注后 Inspector「文字内容」可应用、工具栏不再有假渐变。验收 OK → Claude 合 dev→main 并 push;有问题直接在 Claude 这边改。②【Codex 收尾】feature/codex-basic-tools-usability 已合 dev,可在 codex worktree 删本地分支(还被 checkout 着,Claude 删不掉)。③ 守 N1/N2/N3。无其他紧急待办。
+
+## 2026-06-29 23:45 | codex | 临时修复基础工具体验，未列入 Claude 计划，待 Claude 补登记/集成审核
+- **分支**：`feature/codex-basic-tools-usability`
+- **概述**：用户反馈“基本工具不好用”，本轮未经过 Claude 预先拆队列，按用户明确授权在 Codex 工作副本做一条临时 GUI 修复并报备。改动聚焦基础可用性：Canvas 拖拽/缩放 frame 与 gap 调整改为本地预览、`mouseUp` 一次性提交，避免每个 `mouseDragged` 写 `project` 触发完整 layout/preflight；Direct Selection 在没有图片裁切模型前改为 select-only，避免伪装成可调内部图片；Inspector 给 text/caption frame 增加“文字内容”草稿编辑框，应用后写入 LayoutPlan generated text override；移除工具栏“渐变”假按钮（此前显示渐变但实际写入固定纯色）。新增 AppState 回归测试覆盖文字覆写持久化。
+- **改动文件**：`Sources/LayoutDApp/AppState.swift`、`Sources/LayoutDApp/CanvasView.swift`、`Sources/LayoutDApp/InspectorView.swift`、`Sources/LayoutDApp/ToolbarView.swift`、`Tests/LayoutDAppTests/AppStateTests.swift`。
+- **检查**：`swift test --filter AppStateTests` 18/0 PASS；`swift test` 225/0 PASS；`bash scripts/review-idml.sh` PASS（6/0，第一次沙箱内失败为 SwiftPM 写 `~/.cache/clang/ModuleCache` 权限问题，已用提升权限重跑通过）。代码提交：`783f96f fix(app): improve basic tool interactions`。
+- **下一步**：Claude 集成前请补登记到队列/计划或在审核记录注明“用户 2026-06-29 临时插单”；建议视觉复验 App：选择工具拖拽/缩放是否顺滑、间隔工具松手后是否只产生一次覆写、文字工具选中文本/图注后 Inspector 应可应用文字、工具栏不再出现假渐变。
+
 ## 2026-06-23 15:06 | codex | IMP-1 多段 frontmatter 止血完成，待 Claude 集成审核
 - **分支**：`feature/codex-imp1-frontmatter`
 - **概述**：后续位于段/章边界、内容完整为 `key: value` 的 `--- ... ---` 块现在会在 Markdown 导入前被消费，不再作为正文输出；其中 `title` 转为一级标题并交给既有解析器创建新 section。`layout_direction`、`columns` 等后续元数据静默忽略，未实现分段横竖混排。普通草稿分隔线及非元数据块保持原行为。
@@ -15,6 +43,22 @@
 - **改动文件**：Sources/LayoutDExport/IDMLInvariants.swift, Tests/LayoutDExportTests/IDMLInvariantsTests.swift
 - **检查**：swift test: 222/222 PASS, review-idml.sh: 6/6 PASS
 - **下一步**：1. 审核并集成分支 feature/ag-invariants-font-weight 至 dev 分支；2. 确认该字体字重检查规则对其他复杂物理字体的有效拦截性。
+
+## 2026-06-24 00:30 | antigravity | 完成 IMP-2 DOCX 内嵌图导入。解析 relationships 映射关系（rId 到 media 路径），解析 w:drawing 下的 a:blip
+- **分支**：feature/ag-imp2-docx-images
+- **概述**：完成 IMP-2 DOCX 内嵌图导入。解析 relationships 映射关系（rId 到 media 路径），解析 w:drawing 下的 a:blip (r:embed) 和 wp:extent (cx, cy)；从 docx zip 中抽出 media 数据写入到文档同目录下的 images 目录；创建对应的 Asset 与 Paragraph（figure kind），支持 CGImageSource 提取像素宽、高、DPI 并在失败时使用 EMU fallback；添加了对应的单元测试 testImportsEmbeddedImages。已对真实书稿 layoutD村落.docx 完成了导入与 IDML 导出验证，成功在 Link 目录中生成 3 图且无残留。
+- **改动文件**：Sources/LayoutDImport/DOCXBookImporter.swift, Tests/LayoutDImportTests/DOCXBookImporterTests.swift
+- **检查**：swift test: PASS (219/219 tests), review-idml.sh: PASS (6/6 checks)
+- **下一步**：1. 请 Claude 审核并集成分支 feature/ag-imp2-docx-images 至 dev 分支。
+2. 等用户在 InDesign 视觉验收通过后合入 main 并在 QUEUE.md 中标记为完成。
+（注：本条为 AG 副本内未提交的历史记录，Claude 2026-07-04 卫生清理时补录归档。）
+## 2026-06-23 14:29 | antigravity | 完成 B1 图文绕排（横排、单图、矩形）的预览侧开发与校验。修正了 testTextWrapOverlapExclusions 单元测试中对毫米坐标的误断言，统
+- **分支**：feature/ag-b1-text-wrap
+- **概述**：完成 B1 图文绕排（横排、单图、矩形）的预览侧开发与校验。修正了 testTextWrapOverlapExclusions 单元测试中对毫米坐标的误断言，统一为正确的点（points）坐标断言。经全量运行，Package 217 个单元测试全部通过，IDML 探针检查完全绿灯，已成功在 Samples/output-demo-png 中生成流式布局 PNG 视觉图。
+- **改动文件**：Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDCore/LaidOutPage.swift, Sources/LayoutDCore/PageSetup.swift, Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift
+- **检查**：swift test: PASS (217/217 tests), review-idml.sh: PASS, golden-check: PASS
+- **下一步**：1. 请 Claude 将开发分支 feature/ag-b1-text-wrap 合并并集成至 dev。
+2. 请 Claude 进行 IDML 导出逻辑的安全验证，确保 IDML 导出不受 B1 绕排预览影响（因按设计我们不应修改 IDML 导出的 text wrap 属性）。
 
 ## 2026-06-22 07:08 | antigravity | 完成所有当前在排任务并由 Claude 成功合并至 dev。同步了 ag-lane 停靠分支到最新 dev (dad96a5)，并清理了已合并的本地 featu
 - **分支**：ag-lane

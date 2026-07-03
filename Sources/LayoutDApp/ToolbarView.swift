@@ -200,17 +200,6 @@ struct ToolbarView: View {
             .help("应用颜色")
             
             Button(action: {
-                let gradientColor = Color(nsColor: NSColor(calibratedRed: 0.18, green: 0.48, blue: 0.46, alpha: 1))
-                state.applyColorToSelectedFrame(gradientColor)
-            }) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(LinearGradient(gradient: Gradient(colors: [.blue, .green]), startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 10, height: 10)
-            }
-            .buttonStyle(.plain)
-            .help("应用渐变")
-            
-            Button(action: {
                 state.removeColorFromSelectedFrame()
             }) {
                 ZStack {
