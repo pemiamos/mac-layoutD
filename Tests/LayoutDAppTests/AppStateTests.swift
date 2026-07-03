@@ -671,4 +671,26 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(decoded.safeQualityMetricsHistory.count, 30)
         XCTAssertEqual(decoded.safeQualityMetricsHistory.last?.pageCount, state.project.safeQualityMetricsHistory.last?.pageCount)
     }
+
+    // PERF-2: the baseline (plans-stripped) document is only re-laid-out when
+    // content actually changes; plan-only edits reuse the cached baseline.
+    func testBaselineLayoutCacheSkipsPlanOnlyChanges() {
+        let state = AppState(project: BookProject.sample)
+        XCTAssertEqual(state.baselineLayoutCount, 1)
+        XCTAssertNotNil(state.baselineDocument)
+
+        // Applying a layout plan must not trigger a second baseline layout…
+        state.applyPageLayoutTemplate(.textLedPage, toPage: 2)
+        XCTAssertEqual(state.baselineLayoutCount, 1)
+        // …and neither must undo/redo of that plan-only edit.
+        state.undo()
+        state.redo()
+        XCTAssertEqual(state.baselineLayoutCount, 1)
+
+        // A content edit must recompute the baseline.
+        state.updateProject { project in
+            project.sections[0].stories[0].paragraphs[0].text += "（内容变更）"
+        }
+        XCTAssertEqual(state.baselineLayoutCount, 2)
+    }
 }
