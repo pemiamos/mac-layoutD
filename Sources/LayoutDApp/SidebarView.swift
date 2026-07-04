@@ -102,57 +102,12 @@ struct SidebarView: View {
     }
     
     // MARK: - Properties Tab
-    
+
+    /// InDesign 式上下文属性：随画布选择而变——选中对象显示对象属性，未选中显示文档属性。
     private var propertiesTabContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("项目属性")
-                    .font(.headline)
-                    .padding(.bottom, 2)
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    infoRow(label: "书稿名称", value: state.project.metadata.title)
-                    infoRow(label: "主编作者", value: state.project.metadata.author)
-                    if let publisher = state.project.metadata.publisher {
-                        infoRow(label: "出版社", value: publisher)
-                    }
-                    if let isbn = state.project.metadata.isbn {
-                        infoRow(label: "ISBN", value: isbn)
-                    }
-                }
-                
-                Divider()
-                
-                Text("版心网格属性")
-                    .font(.headline)
-                    .padding(.bottom, 2)
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    infoRow(label: "开本规格", value: state.project.pageSetup.pageSize.label)
-                    infoRow(label: "双页对开", value: state.project.pageSetup.facingPages ? "启用" : "禁用")
-                    infoRow(label: "栏数设置", value: "\(state.project.pageSetup.columns) 栏")
-                    infoRow(label: "天头地脚 (页边距)", value: "\(state.project.pageSetup.margins.top) / \(state.project.pageSetup.margins.bottom) pt")
-                    infoRow(label: "内侧外侧 (页边距)", value: "\(state.project.pageSetup.margins.left) / \(state.project.pageSetup.margins.right) pt")
-                    infoRow(label: "印刷出血", value: "\(state.project.pageSetup.bleedMM ?? 3.0) mm")
-                }
-            }
-            .padding(.all, 12)
-        }
+        ObjectPropertiesView(state: state, onPageClick: onPageClick)
     }
-    
-    private func infoRow(label: String, value: String) -> some View {
-        HStack {
-            Text(label)
-                .foregroundColor(.secondary)
-                .font(.caption)
-            Spacer()
-            Text(value)
-                .foregroundColor(.primary)
-                .font(.caption)
-                .fontWeight(.semibold)
-        }
-    }
-    
+
     // MARK: - Pages Tab
     
     private var pagesTabContent: some View {
