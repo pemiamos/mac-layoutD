@@ -44,6 +44,68 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.project.safeAppliedLayoutPlans[4]?.strategy, .knowledgeCard) // shifted from 3
     }
 
+    func testCreateDrawnTextFrameWritesNormalizedBlock() {
+        let state = AppState(project: BookProject.sample)
+        let pageSize = state.project.pageSetup.pageSize
+
+        // Draw a text frame at page-local (100,120) sized 200×80 on page 2.
+        // Drawing on a page with no explicit plan first freezes the page's existing
+        // auto-laid frames into a plan, then appends the new block on top.
+        let frozenCount = state.freezePageToPlan(pageNum: 2).blocks.count
+        let created = state.createDrawnFrame(
+            kind: .text,
+            onPage: 2,
+            rect: Rect(x: 100, y: 120, width: 200, height: 80)
+        )
+        XCTAssertTrue(created)
+
+        let plan = state.project.safeAppliedLayoutPlans[2]
+        XCTAssertNotNil(plan)
+        XCTAssertEqual(plan?.blocks.count, frozenCount + 1)
+
+        let block = try! XCTUnwrap(plan?.blocks.last)
+        XCTAssertEqual(block.kind, .text)
+        // Frame is stored normalized to the page size.
+        XCTAssertEqual(block.frame.x, 100 / pageSize.width, accuracy: 0.0001)
+        XCTAssertEqual(block.frame.y, 120 / pageSize.height, accuracy: 0.0001)
+        XCTAssertEqual(block.frame.width, 200 / pageSize.width, accuracy: 0.0001)
+        XCTAssertEqual(block.frame.height, 80 / pageSize.height, accuracy: 0.0001)
+        // Empty generated content, ready for the inspector's text editor.
+        if case .generated(let text) = block.contentReference {
+            XCTAssertEqual(text, "")
+        } else {
+            XCTFail("drawn text frame should carry generated content")
+        }
+        // The new frame is selected and the action is undoable.
+        XCTAssertEqual(state.selectedFrameId, block.id)
+        XCTAssertTrue(state.canUndo)
+    }
+
+    func testCreateDrawnImageFrameNeedsAsset() {
+        // sample project has assets → image frame creates and references one.
+        let withAssets = AppState(project: BookProject.sample)
+        XCTAssertFalse(withAssets.project.assets.isEmpty, "sample project should ship assets")
+        let ok = withAssets.createDrawnFrame(kind: .image, onPage: 2, rect: Rect(x: 10, y: 10, width: 120, height: 90))
+        XCTAssertTrue(ok)
+        let block = withAssets.project.safeAppliedLayoutPlans[2]?.blocks.last
+        XCTAssertEqual(block?.kind, .image)
+        if case .asset(let id)? = block?.contentReference {
+            XCTAssertTrue(withAssets.project.assets.contains { $0.id == id })
+        } else {
+            XCTFail("drawn image frame should reference an asset")
+        }
+
+        // No assets → refuses, writes nothing.
+        var emptyProject = BookProject.sample
+        emptyProject.assets = []
+        emptyProject.appliedLayoutPlans = nil
+        let noAssets = AppState(project: emptyProject)
+        let planCountBefore = noAssets.project.safeAppliedLayoutPlans[2]?.blocks.count ?? 0
+        let refused = noAssets.createDrawnFrame(kind: .image, onPage: 2, rect: Rect(x: 10, y: 10, width: 120, height: 90))
+        XCTAssertFalse(refused)
+        XCTAssertEqual(noAssets.project.safeAppliedLayoutPlans[2]?.blocks.count ?? 0, planCountBefore)
+    }
+
     func testDeletePageShiftsLayoutPlans() {
         let project = BookProject.sample
         let state = AppState(project: project)

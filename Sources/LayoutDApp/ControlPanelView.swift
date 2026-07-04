@@ -38,8 +38,8 @@ struct ControlPanelView: View {
         .frame(height: 34)
         .background(Color(NSColor.windowBackgroundColor))
         .overlay(Rectangle().frame(height: 0.5).foregroundColor(Color(NSColor.separatorColor)), alignment: .bottom)
-        .onChange(of: state.selectedFrameId) { _ in syncFields() }
-        .onChange(of: selectedFrame?.rect) { _ in syncFields() }
+        .onChange(of: state.selectedFrameId) { syncFields() }
+        .onChange(of: selectedFrame?.rect) { syncFields() }
         .onAppear { syncFields() }
     }
 

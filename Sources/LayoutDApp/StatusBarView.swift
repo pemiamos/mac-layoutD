@@ -32,7 +32,7 @@ struct StatusBarView: View {
         .frame(height: 26)
         .background(Color(NSColor.windowBackgroundColor))
         .overlay(Rectangle().frame(height: 0.5).foregroundColor(Color(NSColor.separatorColor)), alignment: .top)
-        .onChange(of: state.currentPageNumber) { newValue in
+        .onChange(of: state.currentPageNumber) { _, newValue in
             pageText = String(newValue)
         }
         .onAppear { pageText = String(state.currentPageNumber) }

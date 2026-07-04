@@ -272,6 +272,49 @@ final class AppState: ObservableObject {
         return LayoutPlan(target: .page(pageNum), strategy: .balanced, blocks: blocks, notes: ["手动自定义版式页"])
     }
 
+    /// Creates a new text or image frame from a drawn rectangle. Writes a
+    /// LayoutPlan block (structured override) on the target page so the frame is
+    /// undoable, coexists with AI plans, and exports to IDML like any other block.
+    /// `rect` is in page-local points and gets normalized to the page size.
+    /// Image frames reference the first project asset (re-pickable in the
+    /// inspector); returns false without creating anything if none exists.
+    @discardableResult
+    func createDrawnFrame(kind: LayoutBlockKind, onPage pageNum: Int, rect: Rect) -> Bool {
+        let pageSize = project.pageSetup.pageSize
+
+        let contentRef: ContentReference
+        let role: String
+        switch kind {
+        case .image:
+            guard let firstAsset = project.assets.first else { return false }
+            contentRef = .asset(firstAsset.id)
+            role = PageFrameKind.image.rawValue
+        default:
+            contentRef = .generated("")
+            role = PageFrameKind.text.rawValue
+        }
+
+        commitState()
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+
+        let normRect = Rect(
+            x: rect.x / pageSize.width,
+            y: rect.y / pageSize.height,
+            width: rect.width / pageSize.width,
+            height: rect.height / pageSize.height
+        )
+        let block = LayoutPlanBlock(kind: kind, role: role, frame: normRect, contentReference: contentRef)
+        plan.blocks.append(block)
+        plan.notes = [kind == .image ? "手动绘制图像框" : "手动绘制文本框"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
+        self.selectedFrameId = block.id
+        return true
+    }
+
     func updateSelectedFrameCoordinate(x: Double?, y: Double?, width: Double?, height: Double?) {
         commitState()
         guard let frameId = selectedFrameId,

@@ -50,6 +50,10 @@ final class CanvasView: NSView {
     var onGapDragged: ((UUID, Rect, UUID, Rect) -> Void)?
     var onPageSelected: ((Int) -> Void)?
     var onDragStarted: (() -> Void)?
+    /// A text/image frame was drawn (rubber-band). Payload: page number + page-local rect.
+    var onFrameDrawn: ((Int, Rect) -> Void)?
+    /// A single-key toolbox shortcut was pressed while the canvas had focus.
+    var onToolShortcut: ((LayoutTool) -> Void)?
     var baselineDocument: LaidOutDocument? {
         didSet {
             needsDisplay = true
@@ -89,6 +93,12 @@ final class CanvasView: NSView {
     private var isDraggingGap = false
     private var dragStartFirstFrameRect: Rect?
     private var dragStartSecondFrameRect: Rect?
+
+    // Frame drawing tools (textFrame / imageFrame) rubber-band state
+    private var isDrawingFrame = false
+    private var drawFrameStartLocal: CGPoint?
+    private var drawFramePageNumber: Int?
+    private var drawFrameCurrentRect: Rect?  // page-local points
 
     private(set) var zoomScale: CGFloat = 1.15
     private let pageGap: CGFloat = 36
@@ -178,10 +188,46 @@ final class CanvasView: NSView {
             NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.45).setFill()
             let path = NSBezierPath(rect: gap.rect)
             path.fill()
-            
+
             NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.8).setStroke()
             path.lineWidth = 1.0
             path.stroke()
+        }
+
+        drawRubberBandFrameIfNeeded()
+    }
+
+    /// Renders the in-progress rubber-band rectangle for the frame drawing tools.
+    /// Image frames get an InDesign-style diagonal-cross placeholder mark.
+    private func drawRubberBandFrameIfNeeded() {
+        guard isDrawingFrame,
+              let rect = drawFrameCurrentRect,
+              let pageNum = drawFramePageNumber,
+              let pRect = pageRect(number: pageNum) else { return }
+
+        let screenRect = CGRect(
+            x: pRect.minX + CGFloat(rect.x) * zoomScale,
+            y: pRect.minY + CGFloat(rect.y) * zoomScale,
+            width: CGFloat(rect.width) * zoomScale,
+            height: CGFloat(rect.height) * zoomScale
+        )
+        let color = activeTool == .imageFrame
+            ? NSColor(calibratedRed: 0.88, green: 0.38, blue: 0.08, alpha: 1)
+            : NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1)
+        color.setStroke()
+        let path = NSBezierPath(rect: screenRect)
+        path.lineWidth = 1.0
+        path.setLineDash([4, 3], count: 2, phase: 0)
+        path.stroke()
+
+        if activeTool == .imageFrame {
+            let cross = NSBezierPath()
+            cross.move(to: CGPoint(x: screenRect.minX, y: screenRect.minY))
+            cross.line(to: CGPoint(x: screenRect.maxX, y: screenRect.maxY))
+            cross.move(to: CGPoint(x: screenRect.maxX, y: screenRect.minY))
+            cross.line(to: CGPoint(x: screenRect.minX, y: screenRect.maxY))
+            cross.lineWidth = 0.75
+            cross.stroke()
         }
     }
 
@@ -1047,6 +1093,28 @@ final class CanvasView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
+    override func keyDown(with event: NSEvent) {
+        guard let chars = event.charactersIgnoringModifiers?.lowercased(),
+              let ch = chars.first else {
+            super.keyDown(with: event)
+            return
+        }
+        let shift = event.modifierFlags.contains(.shift)
+        let hasOtherModifier = event.modifierFlags.intersection([.command, .control, .option]).isEmpty == false
+
+        // Shift+P → page tool (InDesign). All other shortcuts are bare single keys.
+        if shift && ch == "p" && !hasOtherModifier {
+            onToolShortcut?(.page)
+            return
+        }
+        if !shift && !hasOtherModifier,
+           let tool = LayoutTool.allCases.first(where: { $0.shortcutKey == ch }) {
+            onToolShortcut?(tool)
+            return
+        }
+        super.keyDown(with: event)
+    }
+
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         
@@ -1059,7 +1127,12 @@ final class CanvasView: NSView {
             NSCursor.crosshair.set()
             return
         }
-        
+
+        if activeTool == .textFrame || activeTool == .imageFrame {
+            NSCursor.crosshair.set()
+            return
+        }
+
         if activeTool == .gap {
             detectGap(at: point)
             if let gap = activeGap {
@@ -1202,7 +1275,19 @@ final class CanvasView: NSView {
             }
         }
 
-        // 3. Page tool selection
+        // 3. Frame drawing tools: begin a rubber-band rectangle on the clicked page.
+        if activeTool == .textFrame || activeTool == .imageFrame {
+            if let pageNum = clickedPageNumber, let localPt = localPoint {
+                isDrawingFrame = true
+                drawFramePageNumber = pageNum
+                drawFrameStartLocal = localPt
+                drawFrameCurrentRect = Rect(x: localPt.x, y: localPt.y, width: 0, height: 0)
+                needsDisplay = true
+            }
+            return
+        }
+
+        // 4. Page tool selection
         if activeTool == .page, let pageNum = clickedPageNumber {
             onPageSelected?(pageNum)
             return
@@ -1276,7 +1361,22 @@ final class CanvasView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        
+
+        // 0. Frame drawing tools: grow the rubber-band rectangle (clamped to its page).
+        if isDrawingFrame, let start = drawFrameStartLocal, let pageNum = drawFramePageNumber,
+           let pRect = pageRect(number: pageNum) {
+            let localX = (point.x - pRect.minX) / zoomScale
+            let localY = (point.y - pRect.minY) / zoomScale
+            drawFrameCurrentRect = Rect(
+                x: Double(min(start.x, localX)),
+                y: Double(min(start.y, localY)),
+                width: Double(abs(localX - start.x)),
+                height: Double(abs(localY - start.y))
+            )
+            needsDisplay = true
+            return
+        }
+
         // 1. Hand tool panning
         if activeTool == .hand, let startPt = dragStartPoint, let startOrigin = scrollStartOrigin, let scrollView = enclosingScrollView {
             let dx = event.locationInWindow.x - startPt.x
@@ -1428,6 +1528,20 @@ final class CanvasView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        // Frame drawing tools: commit the rubber-band rectangle if it has real size.
+        if isDrawingFrame {
+            if let rect = drawFrameCurrentRect, let pageNum = drawFramePageNumber,
+               rect.width > 8, rect.height > 8 {
+                onFrameDrawn?(pageNum, rect)
+            }
+            isDrawingFrame = false
+            drawFrameStartLocal = nil
+            drawFramePageNumber = nil
+            drawFrameCurrentRect = nil
+            needsDisplay = true
+            return
+        }
+
         if let pending = pendingFrameDragUpdate {
             onFrameDragged?(pending.id, pending.rect.x, pending.rect.y, pending.rect.width, pending.rect.height)
         }
