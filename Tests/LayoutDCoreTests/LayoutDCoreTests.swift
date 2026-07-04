@@ -1910,6 +1910,40 @@ private struct StaticPlanProvider: LayoutPlanProvider {
     }
 }
 
+extension LayoutDCoreTests {
+    func testAlignedFrameOriginSnapsToRegionEdges() {
+        // A 100×40 frame inside a 200×300 region offset at (10, 20).
+        let region = Rect(x: 10, y: 20, width: 200, height: 300)
+        let frame = Rect(x: 55, y: 130, width: 100, height: 40)
+
+        // Horizontal alignments move X only, preserve Y.
+        let left = alignedFrameOrigin(frame: frame, region: region, alignment: .left)
+        XCTAssertEqual(left.x, 10, accuracy: 0.0001)
+        XCTAssertEqual(left.y, 130, accuracy: 0.0001)
+
+        let hCenter = alignedFrameOrigin(frame: frame, region: region, alignment: .horizontalCenter)
+        XCTAssertEqual(hCenter.x, 10 + (200 - 100) / 2, accuracy: 0.0001) // 60
+        XCTAssertEqual(hCenter.y, 130, accuracy: 0.0001)
+
+        let right = alignedFrameOrigin(frame: frame, region: region, alignment: .right)
+        XCTAssertEqual(right.x, 10 + 200 - 100, accuracy: 0.0001) // 110
+        XCTAssertEqual(right.y, 130, accuracy: 0.0001)
+
+        // Vertical alignments move Y only, preserve X.
+        let top = alignedFrameOrigin(frame: frame, region: region, alignment: .top)
+        XCTAssertEqual(top.y, 20, accuracy: 0.0001)
+        XCTAssertEqual(top.x, 55, accuracy: 0.0001)
+
+        let vCenter = alignedFrameOrigin(frame: frame, region: region, alignment: .verticalCenter)
+        XCTAssertEqual(vCenter.y, 20 + (300 - 40) / 2, accuracy: 0.0001) // 150
+        XCTAssertEqual(vCenter.x, 55, accuracy: 0.0001)
+
+        let bottom = alignedFrameOrigin(frame: frame, region: region, alignment: .bottom)
+        XCTAssertEqual(bottom.y, 20 + 300 - 40, accuracy: 0.0001) // 280
+        XCTAssertEqual(bottom.x, 55, accuracy: 0.0001)
+    }
+}
+
 private struct FailingPlanProvider: LayoutPlanProvider {
     enum Failure: Error {
         case unavailable

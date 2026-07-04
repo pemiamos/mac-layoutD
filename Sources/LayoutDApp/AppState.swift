@@ -371,6 +371,63 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Aligns the selected frame to the page or its (facing-page-aware) margin box.
+    /// Reuses the same LayoutPlan-override + undo path as manual X/Y edits, so an
+    /// alignment is undoable and exports to IDML like any other coordinate change.
+    /// Only moves the frame — size is preserved.
+    func alignSelectedFrame(_ alignment: FrameAlignment, reference: AlignmentReference) {
+        guard let frameId = selectedFrameId,
+              let pageNum = findPageNumber(for: frameId) else { return }
+
+        let region = alignmentRegion(reference: reference, pageNum: pageNum)
+        let pageSize = project.pageSetup.pageSize
+
+        commitState()
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+
+        guard let idx = plan.blocks.firstIndex(where: { $0.id == frameId }) else { return }
+        var block = plan.blocks[idx]
+        let current = block.absoluteFrame(pageSize: pageSize)
+        let origin = alignedFrameOrigin(frame: current, region: region, alignment: alignment)
+        block.updateAbsoluteFrame(pageSize: pageSize, x: origin.x, y: origin.y)
+
+        plan.blocks[idx] = block
+        plan.notes = ["手动对齐元素（\(reference.displayName)·\(alignment.displayName)）"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
+    }
+
+    /// The reference rectangle (absolute page points) alignment snaps to. Margin
+    /// mode mirrors the canvas guides: on facing-page spreads the inner/outer
+    /// margins swap per odd/even page, so the box matches what the user sees.
+    private func alignmentRegion(reference: AlignmentReference, pageNum: Int) -> Rect {
+        let pageSize = project.pageSetup.pageSize
+        switch reference {
+        case .page:
+            return Rect(x: 0, y: 0, width: pageSize.width, height: pageSize.height)
+        case .margin:
+            let margins = project.resolvedMargins(for: pageNum)
+            let leftM: Double
+            let rightM: Double
+            if project.pageSetup.facingPages {
+                leftM = pageNum % 2 == 1 ? margins.left : margins.right
+                rightM = pageNum % 2 == 1 ? margins.right : margins.left
+            } else {
+                leftM = margins.left
+                rightM = margins.right
+            }
+            return Rect(
+                x: leftM,
+                y: margins.top,
+                width: max(pageSize.width - leftM - rightM, 0),
+                height: max(pageSize.height - margins.top - margins.bottom, 0)
+            )
+        }
+    }
+
     func updateSelectedFrameImage(assetId: UUID) {
         commitState()
         guard let frameId = selectedFrameId,
