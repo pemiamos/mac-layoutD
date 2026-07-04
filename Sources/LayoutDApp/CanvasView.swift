@@ -140,6 +140,8 @@ final class CanvasView: NSView {
     private(set) var zoomScale: CGFloat = 1.15
     private let pageGap: CGFloat = 36
     private let canvasInset: CGFloat = 42
+    /// Default rule weight (page points) for the line tool's thin dimension.
+    private let lineToolThickness: Double = 2
 
     override var isFlipped: Bool { true }
 
@@ -1438,7 +1440,8 @@ final class CanvasView: NSView {
         }
 
         // 3. Frame drawing tools: begin a rubber-band rectangle on the clicked page.
-        if activeTool == .textFrame || activeTool == .imageFrame {
+        if activeTool == .textFrame || activeTool == .imageFrame
+            || activeTool == .rectangle || activeTool == .line {
             if let pageNum = clickedPageNumber, let localPt = localPoint {
                 isDrawingFrame = true
                 drawFramePageNumber = pageNum
@@ -1578,12 +1581,31 @@ final class CanvasView: NSView {
            let pRect = pageRect(number: pageNum) {
             let localX = (point.x - pRect.minX) / zoomScale
             let localY = (point.y - pRect.minY) / zoomScale
-            drawFrameCurrentRect = Rect(
-                x: Double(min(start.x, localX)),
-                y: Double(min(start.y, localY)),
-                width: Double(abs(localX - start.x)),
-                height: Double(abs(localY - start.y))
-            )
+            if activeTool == .line {
+                // Snap the line to whichever axis the drag is longer along, and pin the
+                // thin dimension to a fixed rule weight so it reads as a line, not a box.
+                let dx = localX - start.x
+                let dy = localY - start.y
+                let thickness = lineToolThickness
+                if abs(dx) >= abs(dy) {
+                    drawFrameCurrentRect = Rect(
+                        x: Double(min(start.x, localX)), y: Double(start.y),
+                        width: Double(abs(dx)), height: thickness
+                    )
+                } else {
+                    drawFrameCurrentRect = Rect(
+                        x: Double(start.x), y: Double(min(start.y, localY)),
+                        width: thickness, height: Double(abs(dy))
+                    )
+                }
+            } else {
+                drawFrameCurrentRect = Rect(
+                    x: Double(min(start.x, localX)),
+                    y: Double(min(start.y, localY)),
+                    width: Double(abs(localX - start.x)),
+                    height: Double(abs(localY - start.y))
+                )
+            }
             needsDisplay = true
             return
         }
@@ -1755,10 +1777,13 @@ final class CanvasView: NSView {
 
     override func mouseUp(with event: NSEvent) {
         // Frame drawing tools: commit the rubber-band rectangle if it has real size.
+        // A line is intentionally thin on one axis, so it only needs real length.
         if isDrawingFrame {
-            if let rect = drawFrameCurrentRect, let pageNum = drawFramePageNumber,
-               rect.width > 8, rect.height > 8 {
-                onFrameDrawn?(pageNum, rect)
+            if let rect = drawFrameCurrentRect, let pageNum = drawFramePageNumber {
+                let bigEnough = activeTool == .line
+                    ? max(rect.width, rect.height) > 8
+                    : (rect.width > 8 && rect.height > 8)
+                if bigEnough { onFrameDrawn?(pageNum, rect) }
             }
             isDrawingFrame = false
             drawFrameStartLocal = nil

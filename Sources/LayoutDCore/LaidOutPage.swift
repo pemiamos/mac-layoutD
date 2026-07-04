@@ -99,6 +99,10 @@ public enum PageFrameKind: String, Codable, Sendable {
     /// carries its semantic role so tooling (e.g. freezing a page into a plan)
     /// can identify it without inspecting its geometry.
     case runningHeader
+    /// A drawn decorative rectangle (fill + stroke, no content).
+    case rectangle
+    /// A drawn horizontal/vertical rule, stored as a thin filled rectangle.
+    case line
 }
 
 public enum FrameContent: Codable, Equatable, Sendable {

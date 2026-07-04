@@ -216,6 +216,15 @@ public struct IDMLExporter {
                                            packagedFileName: packagedLinks[asset.id]?.fileName,
                                            rect: frame.rect, maskShape: frame.maskShape, pageW: pageW, pageH: pageH, dx: dx))
                 case .empty:
+                    // Drawn shapes (rectangle / line) have no content but carry a fill
+                    // (and, for rectangles, a stroke) → export as an Unassigned Rectangle.
+                    if frame.kind == .rectangle || frame.kind == .line,
+                       let fill = frame.backgroundColorHex {
+                        items.append(colorRectangleItem(
+                            self: "uShape\(pi)_\(fi)", rect: frame.rect, fillColor: fill,
+                            strokeColor: frame.strokeColorHex, strokeWidth: frame.strokeWidth ?? 0,
+                            pageW: pageW, pageH: pageH, dx: dx))
+                    }
                     continue
                 }
             }
@@ -547,9 +556,12 @@ public struct IDMLExporter {
     }
 
     private func colorRectangleItem(self id: String, rect: Rect, fillColor: String,
+                                    strokeColor: String? = nil, strokeWidth: Double = 0,
                                     pageW: Double, pageH: Double, dx: Double = 0) -> String {
-        """
-        \t\t<Rectangle Self="\(id)" ContentType="Unassigned" FillColor="\(colorRef(fillColor))" StrokeColor="Swatch/None" StrokeWeight="0" ItemTransform="1 0 0 1 0 0">
+        let strokeRef = strokeColor.map { colorRef($0) } ?? "Swatch/None"
+        let weight = strokeColor != nil ? max(strokeWidth, 0) : 0
+        return """
+        \t\t<Rectangle Self="\(id)" ContentType="Unassigned" FillColor="\(colorRef(fillColor))" StrokeColor="\(strokeRef)" StrokeWeight="\(fmt(weight))" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH, dx: dx))
         \t\t</Rectangle>
         """

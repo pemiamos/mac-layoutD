@@ -371,6 +371,8 @@ struct ObjectPropertiesView: View {
         case .callout: return "rectangle.inset.filled"
         case .table: return "tablecells"
         case .footnoteDivider: return "minus"
+        case .rectangle: return "rectangle"
+        case .line: return "line.diagonal"
         }
     }
 
@@ -385,6 +387,8 @@ struct ObjectPropertiesView: View {
         case .footnoteDivider: return "脚注分界线"
         case .sideNote: return "旁注信息"
         case .runningHeader: return "页眉"
+        case .rectangle: return "矩形"
+        case .line: return "直线"
         }
     }
 }

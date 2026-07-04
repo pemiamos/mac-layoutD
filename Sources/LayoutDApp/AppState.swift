@@ -302,6 +302,8 @@ final class AppState: ObservableObject {
             case .footnoteDivider: kind = .component
             case .sideNote: kind = .text
             case .runningHeader: kind = .text
+            case .rectangle: kind = .rectangle
+            case .line: kind = .line
             }
             
             let ref: ContentReference
@@ -351,11 +353,27 @@ final class AppState: ObservableObject {
 
         let contentRef: ContentReference
         let role: String
+        // Shapes carry the current fill/stroke so they're visible the moment they're
+        // drawn (a colorless box would be invisible). A rectangle takes both fill and
+        // stroke; a line (a thin rule) is filled with the stroke colour, no border.
+        var backgroundColorHex: String? = nil
+        var strokeColorHex: String? = nil
+        var strokeWidth: Double? = nil
         switch kind {
         case .image:
             guard let firstAsset = project.assets.first else { return false }
             contentRef = .asset(firstAsset.id)
             role = PageFrameKind.image.rawValue
+        case .rectangle:
+            contentRef = .generated("")
+            role = PageFrameKind.rectangle.rawValue
+            if isFillActive { backgroundColorHex = Self.printColor(from: activeFillColor).storageString }
+            strokeColorHex = Self.printColor(from: activeStrokeColor).storageString
+            strokeWidth = 1.0
+        case .line:
+            contentRef = .generated("")
+            role = PageFrameKind.line.rawValue
+            backgroundColorHex = Self.printColor(from: activeStrokeColor).storageString
         default:
             contentRef = .generated("")
             role = PageFrameKind.text.rawValue
@@ -372,9 +390,24 @@ final class AppState: ObservableObject {
             width: rect.width / pageSize.width,
             height: rect.height / pageSize.height
         )
-        let block = LayoutPlanBlock(kind: kind, role: role, frame: normRect, contentReference: contentRef)
+        let block = LayoutPlanBlock(
+            kind: kind,
+            role: role,
+            frame: normRect,
+            contentReference: contentRef,
+            backgroundColorHex: backgroundColorHex,
+            strokeColorHex: strokeColorHex,
+            strokeWidth: strokeWidth
+        )
         plan.blocks.append(block)
-        plan.notes = [kind == .image ? "手动绘制图像框" : "手动绘制文本框"]
+        let noteName: String
+        switch kind {
+        case .image: noteName = "手动绘制图像框"
+        case .rectangle: noteName = "手动绘制矩形"
+        case .line: noteName = "手动绘制直线"
+        default: noteName = "手动绘制文本框"
+        }
+        plan.notes = [noteName]
         plans[pageNum] = plan
         currentProject.safeAppliedLayoutPlans = plans
         self.project = currentProject

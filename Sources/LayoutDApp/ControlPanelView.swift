@@ -262,6 +262,8 @@ struct ControlPanelView: View {
         case .footnoteDivider: return "脚注分隔线"
         case .sideNote: return "旁注"
         case .runningHeader: return "页眉"
+        case .rectangle: return "矩形"
+        case .line: return "直线"
         }
     }
 
@@ -275,6 +277,8 @@ struct ControlPanelView: View {
         case .footnote, .footnoteDivider: return "text.append"
         case .sideNote: return "note.text"
         case .runningHeader: return "textformat.abc"
+        case .rectangle: return "rectangle"
+        case .line: return "line.diagonal"
         }
     }
 }

@@ -298,6 +298,43 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(centers[1] - centers[0], centers[2] - centers[1], accuracy: 0.0001)
     }
 
+    func testCreateDrawnRectangleCarriesFillAndStroke() {
+        let state = AppState(project: BookProject.sample)
+        state.isFillActive = true
+        XCTAssertTrue(state.createDrawnFrame(
+            kind: .rectangle,
+            onPage: 2,
+            rect: Rect(x: 60, y: 80, width: 150, height: 100)
+        ))
+        let id = try! XCTUnwrap(state.selectedFrameId)
+        let block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first { $0.id == id })
+        XCTAssertEqual(block.kind, .rectangle)
+        // A rectangle is visible immediately: it carries fill + stroke, no content.
+        XCTAssertNotNil(block.backgroundColorHex)
+        XCTAssertNotNil(block.strokeColorHex)
+        if case .generated(let text) = block.contentReference {
+            XCTAssertEqual(text, "")
+        } else {
+            XCTFail("rectangle should carry empty generated content")
+        }
+        XCTAssertTrue(state.canUndo)
+    }
+
+    func testCreateDrawnLineFilledWithStrokeColorNoBorder() {
+        let state = AppState(project: BookProject.sample)
+        XCTAssertTrue(state.createDrawnFrame(
+            kind: .line,
+            onPage: 2,
+            rect: Rect(x: 40, y: 200, width: 220, height: 2)
+        ))
+        let id = try! XCTUnwrap(state.selectedFrameId)
+        let block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first { $0.id == id })
+        XCTAssertEqual(block.kind, .line)
+        // A rule is a thin filled rectangle (fill = the line colour), no separate border.
+        XCTAssertNotNil(block.backgroundColorHex)
+        XCTAssertNil(block.strokeColorHex)
+    }
+
     func testCreateDrawnImageFrameNeedsAsset() {
         // sample project has assets → image frame creates and references one.
         let withAssets = AppState(project: BookProject.sample)

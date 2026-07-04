@@ -1285,17 +1285,23 @@ private struct LayoutContext {
             case .image: kind = .image
             case .caption: kind = .caption
             case .component: kind = .callout
+            case .rectangle: kind = .rectangle
+            case .line: kind = .line
             }
             let content: FrameContent
-            switch block.contentReference {
-            case .generated(let str):
-                content = .text(str)
-            case .paragraph(let id):
-                content = .text(findParagraph(id: id)?.text ?? "")
-            case .asset(let id):
-                content = .asset(id)
-            case .storyRange(let sid, let start, let end):
-                content = .text(collectParagraphTexts(storyId: sid, startId: start, endId: end))
+            if block.kind == .rectangle || block.kind == .line {
+                content = .empty
+            } else {
+                switch block.contentReference {
+                case .generated(let str):
+                    content = .text(str)
+                case .paragraph(let id):
+                    content = .text(findParagraph(id: id)?.text ?? "")
+                case .asset(let id):
+                    content = .asset(id)
+                case .storyRange(let sid, let start, let end):
+                    content = .text(collectParagraphTexts(storyId: sid, startId: start, endId: end))
+                }
             }
             let styleId = block.styleId ?? defaultStyleId(for: block.kind)
             return PageFrame(
@@ -1319,7 +1325,7 @@ private struct LayoutContext {
         case .text: return StyleID.body.rawValue
         case .caption: return StyleID.caption.rawValue
         case .component: return StyleID.callout.rawValue
-        case .image: return nil
+        case .image, .rectangle, .line: return nil
         }
     }
 
@@ -1673,8 +1679,10 @@ private struct LayoutContext {
             case .image: kind = .image
             case .caption: kind = .caption
             case .component: kind = .callout
+            case .rectangle: kind = .rectangle
+            case .line: kind = .line
             }
-            
+
             let textToPlace: String
             if block.previousThreadedBlockId != nil {
                 textToPlace = threadedRemainingText[block.id] ?? ""

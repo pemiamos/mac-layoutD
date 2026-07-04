@@ -719,6 +719,12 @@ final class WorkspaceViewController: NSViewController {
                     self.appState.createDrawnFrame(kind: .image, onPage: pageNum, rect: rect)
                     self.appState.activeTool = .selection
                 }
+            case .rectangle:
+                self.appState.createDrawnFrame(kind: .rectangle, onPage: pageNum, rect: rect)
+                self.appState.activeTool = .selection
+            case .line:
+                self.appState.createDrawnFrame(kind: .line, onPage: pageNum, rect: rect)
+                self.appState.activeTool = .selection
             default:
                 break
             }
@@ -731,7 +737,7 @@ final class WorkspaceViewController: NSViewController {
             switch tool {
             case .selection, .directSelection:
                 break
-            case .textFrame, .imageFrame:
+            case .textFrame, .imageFrame, .rectangle, .line:
                 // Drawn via rubber-band drag (onFrameDrawn), not a plain click.
                 break
             case .page:

@@ -337,6 +337,37 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(try imageFramePointCount(.fan), 16, "扇面图框应多段弧近似（≥16 点）")
     }
 
+    func testDrawnRectangleExportsAsUnassignedRectangleWithFillAndStroke() throws {
+        // A drawn rectangle (fill + stroke, no content) must reach InDesign as an
+        // Unassigned <Rectangle> carrying its fill and stroke — not vanish.
+        var project = BookProject.sample
+        let plan = LayoutPlan(target: .page(3), strategy: .balanced, blocks: [
+            LayoutPlanBlock(kind: .rectangle, role: "rectangle",
+                            frame: Rect(x: 0.1, y: 0.1, width: 0.5, height: 0.3),
+                            contentReference: .generated(""),
+                            backgroundColorHex: "#3366CC",
+                            strokeColorHex: "#101010",
+                            strokeWidth: 1.5)
+        ])
+        project.safeAppliedLayoutPlans[3] = plan
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-rect-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let spread = try XCTUnwrap(try zipEntries(output)
+            .filter { $0.hasPrefix("Spreads/Spread_") }
+            .map { try entry(output, $0) }
+            .first { $0.contains("ContentType=\"Unassigned\"") }, "应有含矩形的 spread")
+        // The rectangle keeps a real stroke weight (not the 0 used for accent fills).
+        XCTAssertTrue(spread.contains("StrokeWeight=\"1.500\""), "矩形应保留描边粗细")
+        // With a stroke set, its colour is a real swatch, not None.
+        let rectTag = try XCTUnwrap(spread.components(separatedBy: "ContentType=\"Unassigned\"").dropFirst().first)
+        let rectOpenTag = String(rectTag.prefix(while: { $0 != ">" }))
+        XCTAssertFalse(rectOpenTag.contains("StrokeColor=\"Swatch/None\""), "有描边时 StrokeColor 不应为 None")
+    }
+
     func testFacingPagesSpreadImposition() throws {
         // E2-4：facingPages 开 → FacingPages=true + 首页单独成 spread、其后每 2 页一 spread；
         //        关 → FacingPages=false + 每页独占 spread（无回归）。
