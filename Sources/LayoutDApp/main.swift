@@ -654,6 +654,14 @@ final class WorkspaceViewController: NSViewController {
             self?.appState.activeTool = tool
         }
 
+        canvas.onFrameTextEdited = { [weak self] frameId, newText in
+            guard let self else { return }
+            // In-place editor commits against the frame it opened on; make sure that
+            // frame is the selection target before writing the generated override.
+            self.appState.selectedFrameId = frameId
+            self.appState.updateSelectedFrameText(newText)
+        }
+
         canvas.onFrameDrawn = { [weak self] pageNum, rect in
             guard let self else { return }
             switch self.appState.activeTool {
