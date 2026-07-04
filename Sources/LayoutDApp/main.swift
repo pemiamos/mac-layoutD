@@ -1009,6 +1009,27 @@ final class WorkspaceViewController: NSViewController {
         canvas.scrollToPage(number: appState.currentPageNumber)
     }
 
+    /// Wraps a SwiftUI settings view for use as an `NSSavePanel`/`NSOpenPanel`
+    /// `accessoryView`. A bare `NSHostingView` assigned directly as an accessory
+    /// renders correctly but frequently won't receive mouse clicks — the
+    /// checkboxes look frozen (exactly the IDML export symptom). Embedding it in a
+    /// plain, concretely-sized `NSView` container with pinning constraints
+    /// restores hit-testing.
+    private func makeExportAccessoryView<Content: View>(_ content: Content) -> NSView {
+        let hosting = NSHostingView(rootView: content)
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        let size = hosting.fittingSize
+        let container = NSView(frame: NSRect(origin: .zero, size: size))
+        container.addSubview(hosting)
+        NSLayoutConstraint.activate([
+            hosting.topAnchor.constraint(equalTo: container.topAnchor),
+            hosting.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            hosting.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            hosting.widthAnchor.constraint(equalToConstant: size.width)
+        ])
+        return container
+    }
+
     func exportPDF() {
         let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
         let savePanel = NSSavePanel()
@@ -1019,8 +1040,7 @@ final class WorkspaceViewController: NSViewController {
 
         let settingsState = PDFExportSettingsState()
         let settingsView = PDFExportSettingsView(state: settingsState)
-        let hostingView = NSHostingView(rootView: settingsView)
-        savePanel.accessoryView = hostingView
+        savePanel.accessoryView = makeExportAccessoryView(settingsView)
 
         savePanel.beginSheetModal(for: view.window!) { [weak self] response in
             guard response == .OK, let url = savePanel.url, let self else {
@@ -1065,7 +1085,7 @@ final class WorkspaceViewController: NSViewController {
 
         let settingsState = PNGExportSettingsState()
         let settingsView = PNGExportSettingsView(state: settingsState)
-        openPanel.accessoryView = NSHostingView(rootView: settingsView)
+        openPanel.accessoryView = makeExportAccessoryView(settingsView)
 
         guard let window = view.window else {
             return
@@ -1103,7 +1123,7 @@ final class WorkspaceViewController: NSViewController {
         savePanel.canCreateDirectories = true
 
         let settingsState = IDMLExportSettingsState()
-        savePanel.accessoryView = NSHostingView(rootView: IDMLExportSettingsView(state: settingsState))
+        savePanel.accessoryView = makeExportAccessoryView(IDMLExportSettingsView(state: settingsState))
 
         guard let window = view.window else { return }
         savePanel.beginSheetModal(for: window) { [weak self] response in
