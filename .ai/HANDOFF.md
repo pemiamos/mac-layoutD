@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-04 20:51 | claude | 修复:标准色块通路不再把 CMYK 压成 RGB。用户人工验收发现——用标准色块弹出的系统 Colors 面板 CMYK 滑块调的绿,导出 InDesign 后
+- **分支**：dev
+- **概述**：修复:标准色块通路不再把 CMYK 压成 RGB。用户人工验收发现——用标准色块弹出的系统 Colors 面板 CMYK 滑块调的绿,导出 InDesign 后是 RGB 色板(C8FC087);而纯黑 K100 正确折叠到内建 CMYK [黑色](棒1 核心成立)。根因:吃 SwiftUI Color 的老通路无条件 Color→sRGB hex 丢了色彩空间。实测确认 SwiftUI↔NSColor 桥接保留 CMYK(model 仍 .cmyk),遂新增 AppState.printColor(from: Color):componentBased 且 CMYK 空间→提取 c/m/y/k 存 cmyk(...),否则退 sRGB;三个 Color setter + applyColorToSelectedFrame 统一走它,删除只压平的 hexString。commit 76b63f5 已推 origin/dev。
+- **改动文件**：Sources/LayoutDApp/AppState.swift, Tests/LayoutDAppTests/AppStateTests.swift
+- **检查**：build: pass; test: pass。commit 76b63f5(标准色块保 CMYK)推 origin/dev。累计本特性 commit: 6abf946(棒1)+7bf4c5b(棒3+4 面板+色板库)+76b63f5(修复)。
+- **下一步**：①【用户·复测】重跑 App,重复上次流程(选框→标准色块→系统面板 CMYK 滑块调 C37 M4 Y44 K0 绿)→导出 IDML→InDesign 看色板:预期现在是 Process CMYK(不再是 C8FC087 RGB)。若仍为 RGB,说明 SwiftUI ColorPicker 在 binding 处已先行压平,则改用「多套系」按钮那条自绘通路(已单测确保存 cmyk)。②GUI 视觉:顺便试「多套系」面板本体(RGB/HSB/CMYK 切换、加入色板)。③两点 OK 后 Claude 合 dev→main。注:因 .git 共享,本特性所有 commit 已在 dev 并推 origin。
+
 ## 2026-07-04 20:29 | claude | 多套系拾色器 + CMYK 原生色板管线(C 方案,棒1+棒3+棒4)。用户指着 InDesign 拾色器截图问「能不能加多套系选色板」。评估后走 C:让颜色字
 - **分支**：dev
 - **概述**：多套系拾色器 + CMYK 原生色板管线(C 方案,棒1+棒3+棒4)。用户指着 InDesign 拾色器截图问「能不能加多套系选色板」。评估后走 C:让颜色字符串除 #RRGGBB 外还能装 cmyk(C,M,Y,K),CMYK 一路保持到 IDML 印刷不再压回 RGB;不改任何字段类型→旧 .layoutd 免迁移。实现:①Core 新增 PrintColor 值类型(rgb/cmyk 解析、canonical 与旧 normalizeHex 字节一致、idmlSpaceValue、idmlSwatchSelf、displayRGB)+ PrintSwatch + BookProject.customSwatches(可选,decodeIfPresent)。②IDML 导出 4 处口子(color/colorRef/graphic/段落填充)统一走 PrintColor:CMYK→Space=CMYK ColorValue;纯黑(#000000 或 cmyk(0,0,0,100))复用内建 Color/Black。③渲染 3 解码器(PDF/PNG/Canvas)识别 cmyk 按 device-CMYK 屏显近似。④GUI:ColorPickerPanel(RGB/HSB/CMYK 三套系切换、数值+滑块联动、实时预览、#hex、加入色板)+ InspectorView 三处 ColorPicker 旁「多套系」按钮 popover + AppState PrintColor setter/色板库增删。Lab 按约定不做原生存储。测试:PrintColorTests + IDML CMYK 导出/K100 复用 Black + 色板 codable 往返/旧文件 nil。golden 快照未动→RGB 输出字节不变。注:因 .git 共享,本轮两 commit 最终落在 dev(在 multi-select 合并 d98fa1f 之上),已推 origin/dev,HEAD 同步。origin/feature/claude-cmyk-color 仅含棒1,已被 dev 涵盖(可删,留给用户决定)。
