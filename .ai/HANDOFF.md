@@ -3,6 +3,44 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-04 15:00 | claude | 审核并集成 Codex/AG 三个分支到 dev（用户让盘点两边提交）。① GUARD-1 角色标签端到端探针（Codex feature/codex-guar
+- **分支**：dev
+- **概述**：审核并集成 Codex/AG 三个分支到 dev（用户让盘点两边提交）。① GUARD-1 角色标签端到端探针（Codex feature/codex-guard-role-tags bdd1ac2）：review-idml.sh 加角色标签 fixture(章名/开节概述/抽言/参考文献+正文)→导 IDML 解包断言标签零漏出+Styles.xml 含中文命名样式+内容映射到 heading1/introduction/pullQuote/bibliography/body；隔离 worktree 复验 8/0 PASS。② GUARD-2 断言闸 rule⑥ CJK 字形覆盖（AG feature/ag-guard-2 b3a2e97，+393行 IDMLInvariants+151行测试）：解析 Fonts.xml 复合字体+Styles.xml 样式字体映射→对每 Story 前 100 个 CJK 字符 CoreText 查字形覆盖(带缓存+去重)，缺字形即 FAIL 报字体名+字符；isCJK 提为 public；单测含正反例；导出 gate 无误报（review 6/0）。③ E2-4p 补完对开左右页并排（AG feature/ag-e2-4p 77c595c）：PDF/PNG facingPages 时首页单独+偶奇页配对左右并排渲染、文件名 page-NNN-MMM，非对开路径零回归；单测过。三分支各自隔离 worktree review 全绿→按 script/exporter/invariants 顺序合 dev。集成后全套复验：swift build+239 测试+8/8 探针 PASS。三分支已删，codex/ag worktree 已归位各自 lane 并 ff 到 dev。dev=8389c9c 已推。
+- **改动文件**：scripts/review-idml.sh(GUARD-1), Sources/LayoutDExport/IDMLInvariants.swift + Tests/LayoutDExportTests/IDMLInvariantsTests.swift(GUARD-2), Sources/LayoutDExport/PDFExporter.swift + PNGExporter.swift + Tests/LayoutDExportTests/PDFExporterTests.swift(E2-4p), .ai/QUEUE.md, .ai/HANDOFF.md
+- **检查**：三分支隔离 worktree 各自 review-idml.sh PASS(GUARD-1 8/0、GUARD-2 6/0、E2-4p 6/0)；集成 dev 复验 swift build + 239 测试 + 8/8 探针 PASS。dev=8389c9c 已推 origin。main 仍=6b12271。
+- **下一步**：①【用户·视觉验收，非阻塞】E2-4p 对开左右页并排属渲染，宜用对开稿导 PNG 肉眼看并排定位（page-NNN-MMM）。GUARD-1/GUARD-2 是探针/断言（可测），无需视觉验。②【待用户 GUI 视觉验收，阻塞合 main】仍是本轮 GUI 大批：工作区骨架+框工具+双击改字+颜色选择器+封面/目录可编辑。OK→Claude 合 dev→main。③【Claude 后续】GUI 验收稳定后做 PERF-3 排版异步化+防抖。④【Codex/AG 可继续领】SPLIT-IMPORT(Codex)、SPLIT-GUI/E3-9(注意 SPLIT-GUI 要先 merge origin/dev 拿本轮 GUI 骨架+框工具+颜色改动再拆)。
+
+## 2026-07-04 13:57 | claude | 左侧工具栏按 InDesign 重规划(用户 2026-07-04 审核提案通过后实现,dev=facadbf)。① 新增文本框工具/图像框工具:CanvasV
+- **分支**：dev
+- **概述**：左侧工具栏按 InDesign 重规划(用户 2026-07-04 审核提案通过后实现,dev=facadbf)。① 新增文本框工具/图像框工具:CanvasView 橡皮筋矩形拖拽建框(图像框带对角叉占位标记、crosshair 光标、min 8pt 门槛)→ AppState.createDrawnFrame(kind:onPage:rect:) 归一化写 LayoutPlan block(文本=.generated 空内容待检查器填字;图像=引用首个资产、检查器可换、无资产弹窗拒绝不建空引用)——全程走既有覆写路径,结构化/可撤销/与 AI 方案共存/IDML 导出零改动;建完自动切回选择工具。② InDesign 单键快捷键经 CanvasView.keyDown+LayoutTool.shortcutKey 集中映射:V/A/T/F/U/H/Z 单键 + ⇧P 页面,画布获焦时生效、面板文本框编辑时自动让位(viewDidAppear makeFirstResponder(canvas));工具提示带快捷键。③ 工具栏分组顺序对齐 InDesign(选择→文字与框→版面→批注→导航)。不做清单(自由矢量/钢笔/渐变/旋转切变/吸管/内容收集器)维持裁掉。新增 2 单测,顺带修 ControlPanel/StatusBar onChange 弃用告警。文本框渲染数值验证 drew y=110→placed y=110 恒等。230 测试+review-idml.sh 6/0 PASS。App 已用新构建启动(pid 29225, demo.md)。截图权限通道仍打不开,GUI 视觉交互对错须用户肉眼验。遗留观察:在纯生成页(目录/封面等引擎生成页)上画框会被忽略(这些页引擎每次重建),仅内容页有效——可接受,必要时后续提示。
+- **改动文件**：Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/ToolbarView.swift, Sources/LayoutDApp/main.swift, Sources/LayoutDApp/ControlPanelView.swift, Sources/LayoutDApp/StatusBarView.swift, Tests/LayoutDAppTests/AppStateTests.swift, .ai/QUEUE.md
+- **检查**：review-idml.sh 6/0 PASS(swift build + swift test 230/0)。dev=facadbf 已推 origin。main 仍=6b12271,等 GUI 两批(骨架+框工具)一并视觉验收后再合。
+- **下一步**：①【用户·GUI 视觉验收，阻塞合 main】两批一起看:工作区骨架(顶部控制面板/底部状态栏/右侧面板坞分段/深色)+ 框工具(拖拽建文本框/图像框、单键快捷键 V/A/T/F/U/H/Z/⇧P)。App 已启动。OK→Claude 合 main;要调→反馈 Claude 迭代(GUI 预期多轮)。②【Claude 后续】GUI 验收稳定后:PERF-3 排版异步化+防抖;或按用户反馈继续迭代 GUI。③【Codex/AG 可领】GUARD-1/SPLIT-IMPORT、GUARD-2/E2-4p补完/SPLIT-GUI(SPLIT-GUI 需先 merge origin/dev 拿到本轮工具栏+骨架改动再拆)。
+
+## 2026-07-04 04:15 | claude | 用户验收回执处理 + GUI 按 InDesign 布局重做(第一步)。① 用户确认 B1 绕排样张与行内格式 InDesign 终验 OK → dev 合 m
+- **分支**：dev
+- **概述**：用户验收回执处理 + GUI 按 InDesign 布局重做(第一步)。① 用户确认 B1 绕排样张与行内格式 InDesign 终验 OK → dev 合 main(6b12271, merge commit 惯例)并推送;基础工具热修不单独验收——用户要求 GUI 整体按 InDesign UI 布局重做。② Claude 实现 InDesign 式工作区骨架(feature/claude-gui-indesign-layout f40154d,合 dev 72590f8):顶部上下文控制面板(选中帧可编辑 X/Y/宽/高,写 LayoutPlan 覆写可撤销;未选中显示文档概要)、底部状态栏(页码导航/输入跳页+预检状态灯(绿无错/红N错误)+缩放百分比与适合页宽)、右侧面板坞(原侧栏+检查器两列合并为一列 320pt「面板/检查器」分段切换,两面板保持挂载切换不丢状态,画布显著变宽)、整窗 darkAqua 深色(画布台面深灰随外观自适应,页面纸张仍显式白)、窗口工具条精简为文档级动作图标模式(翻页/缩放移到状态栏)、CanvasView 加 onZoomChanged 回调。swift build+test+review-idml.sh 全 PASS。computer-use 截图权限通道打不开(request_access 两次 stream closed),视觉自查未做成,已启动新 UI 的 App(pid 97832, demo.md)交用户肉眼验收。
+- **改动文件**：Sources/LayoutDApp/ControlPanelView.swift(新), Sources/LayoutDApp/StatusBarView.swift(新), Sources/LayoutDApp/PanelDockView.swift(新), Sources/LayoutDApp/main.swift, Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/CanvasView.swift, .ai/QUEUE.md
+- **检查**：review-idml.sh 6/0 PASS(含 swift build + swift test 228/0)。main=6b12271、dev=72590f8 均已推 origin。
+- **下一步**：①【用户·GUI 视觉验收】新 UI 已启动(也可 swift run layoutD Samples/demo.md):顶部控制面板、底部状态栏(页码/预检灯/缩放)、右侧面板坞分段切换、深色工作区。OK→合 main;不满意处直接反馈 Claude 迭代(这是「第一步」,预期有迭代)。②【Claude 下一棒】用户验收后:PERF-3 排版异步化+防抖;GUI 若有反馈优先迭代。③【Codex/AG 可领】GUARD-1/SPLIT-IMPORT、GUARD-2/E2-4p补完/SPLIT-GUI(注意 SPLIT-GUI 需在本次 GUI 骨架之上拆,先 merge origin/dev)。
+## 2026-07-04 04:35 | codex | GUARD-1 角色标签端到端探针完成，待 Claude 集成审核
+- **分支**：`feature/codex-guard-role-tags`
+- **概述**：在 `scripts/review-idml.sh` 的 IDML 端到端探针中新增角色标签 fixture：覆盖 `一级标题/章名`、`开节概述`、`抽言`、`参考文献` 与普通正文。脚本导出 IDML 后解包检查：角色标签字面不漏进 Story；`Resources/Styles.xml` 含中文命名段落样式；对应内容段落分别挂到 `ParagraphStyle/heading1`、`ParagraphStyle/introduction`、`ParagraphStyle/pullQuote`、`ParagraphStyle/bibliography`、`ParagraphStyle/body`。已在 `/private/tmp` 临时副本把 `ContentRole.tag` 改为返回 nil 做负向验证，新增探针按预期 FAIL（标签漏出、角色样式引用丢失），工作副本源码未改。代码提交：`bdd1ac2 test: guard role tag idml review probe`。
+- **改动文件**：`scripts/review-idml.sh`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
+- **检查**：`bash scripts/review-idml.sh` PASS（swift build PASS；swift test 228/0；IDML 探针 8/0）。负向验证：临时副本禁用 `ContentRole.tag` 后 `review-idml.sh` FAIL，新增角色标签断言命中失败。
+- **下一步**：Claude 在主仓库审核 `feature/codex-guard-role-tags`，复跑 `bash scripts/review-idml.sh` 后合入 `dev`。Codex 可继续领 `SPLIT-IMPORT MarkdownBookImporter.swift 拆分`。
+## 2026-07-04 04:13 | antigravity | 连续作业交付两项任务：GUARD-2 断言闸字形覆盖检查（rule⑥，CoreText API 物理字体 CJK 字形缺失校验），E2-4p 补完对开左右页并排
+- **分支**：feature/ag-e2-4p
+- **概述**：连续作业交付两项任务：GUARD-2 断言闸字形覆盖检查（rule⑥，CoreText API 物理字体 CJK 字形缺失校验），E2-4p 补完对开左右页并排 PDF/PNG 导出与版心镜像。全部测试通过，review-idml.sh 顺利 PASS。
+- **改动文件**：Sources/LayoutDExport/IDMLInvariants.swift
+Tests/LayoutDExportTests/IDMLInvariantsTests.swift
+Sources/LayoutDExport/PDFExporter.swift
+Sources/LayoutDExport/PNGExporter.swift
+Tests/LayoutDExportTests/PDFExporterTests.swift
+- **检查**：swift build: pass, swift test: pass, review-idml.sh: pass
+- **下一步**：1. 审核并合并 feature/ag-guard-2 与 feature/ag-e2-4p 分支；
+2. 接续 AG 道的下一个任务 SPLIT-GUI（对巨型 GUI 文件 main.swift/InspectorView.swift/CanvasView.swift 进行按职责分拆）。
+
 ## 2026-07-04 03:51 | claude | 执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自
 - **分支**：dev
 - **概述**：执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自 lane 并快进到最新 dev；③ 删 11 条已合并 feature 分支 + 强删被 AG 版取代的 feature/codex-imp2-docx-images(b4d83d8,reflog 可救)；④ QUEUE.md 瘦身：已完成项归档到新建 .ai/QUEUE-ARCHIVE.md，登记性能批 PERF-1~4(Claude)/GUARD-1+SPLIT-IMPORT(Codex)/GUARD-2+E2-4p补完+SPLIT-GUI(AG)/B1-IDML 新任务，铁律加「生成产物不进仓库」；⑤ 简报更新到 07-04(8e253dd)。【B1 集成】审核 AG feature/ag-b1-text-wrap(CoreText 挖洞绕排)：/tmp 隔离 worktree 合并复验 swift test 226/0 + review-idml 6/0 PASS；剔除 AG 误提交的 20 个 Samples/output-* 样张；PNG 视觉样张确认绕图行变窄/图占区无字(~/Desktop/B1绕排验收-0704)；合 dev(09b8cc4) 已推。【第1批·性能】feature/claude-perf-baseline 合 dev(23df697)：PERF-1 全书基准 161 页/本机 ≈1179ms/次全量排版(坐实"每次改动排两遍≈2.5s"问题)；PERF-2 baseline 布局缓存(纯 plan 操作不再二次全书排版,约省一半)。228 测试 + review-idml.sh 全 PASS。

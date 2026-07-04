@@ -6,27 +6,30 @@ struct ToolbarView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            // Group 1: Selection & Pointer tools
+            // Group 1: Selection & Pointer tools (V / A)
             VStack(spacing: 4) {
                 toolButton(.selection)
                 toolButton(.directSelection)
             }
-            
+
             Divider()
                 .padding(.horizontal, 4)
-            
-            // Group 2: Document & Structure tools
+
+            // Group 2: Type & Frame authoring — edit existing text (T), draw new
+            // text / image frames (F). All write structured LayoutPlan blocks.
+            VStack(spacing: 4) {
+                toolButton(.type)
+                toolButton(.textFrame)
+                toolButton(.imageFrame)
+            }
+
+            Divider()
+                .padding(.horizontal, 4)
+
+            // Group 3: Layout & Structure tools (Shift+P / U)
             VStack(spacing: 4) {
                 toolButton(.page)
                 toolButton(.gap)
-            }
-            
-            Divider()
-                .padding(.horizontal, 4)
-            
-            // Group 3: Text editing (pick a text frame to edit; no free authoring)
-            VStack(spacing: 4) {
-                toolButton(.type)
             }
 
             Divider()
@@ -40,7 +43,7 @@ struct ToolbarView: View {
             Divider()
                 .padding(.horizontal, 4)
 
-            // Group 5: Navigation tools
+            // Group 5: Navigation tools (H / Z)
             VStack(spacing: 4) {
                 toolButton(.hand)
                 toolButton(.zoom)
@@ -89,7 +92,17 @@ struct ToolbarView: View {
             .frame(width: 32, height: 32)
         }
         .buttonStyle(.plain)
-        .help(tool.displayName)
+        .help(toolHelp(tool))
+    }
+
+    private func toolHelp(_ tool: LayoutTool) -> String {
+        if tool == .page {
+            return "\(tool.displayName) (⇧P)"
+        }
+        if let key = tool.shortcutKey {
+            return "\(tool.displayName) (\(String(key).uppercased()))"
+        }
+        return tool.displayName
     }
     
     private var colorIndicatorSection: some View {

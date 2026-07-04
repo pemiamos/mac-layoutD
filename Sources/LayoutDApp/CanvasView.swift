@@ -8,6 +8,9 @@ final class CanvasView: NSView {
 
     var document: LaidOutDocument? {
         didSet {
+            // A relayout (e.g. after committing an edit) invalidates the overlay's
+            // position; drop it rather than let it float over stale geometry.
+            teardownInlineEditor()
             updateFrame()
             needsDisplay = true
         }
@@ -28,6 +31,7 @@ final class CanvasView: NSView {
     var activeTool: LayoutTool = .selection {
         didSet {
             activeGap = nil
+            if activeTool != oldValue { commitInlineEditor() }
             needsDisplay = true
         }
     }
@@ -50,6 +54,17 @@ final class CanvasView: NSView {
     var onGapDragged: ((UUID, Rect, UUID, Rect) -> Void)?
     var onPageSelected: ((Int) -> Void)?
     var onDragStarted: (() -> Void)?
+    /// A text/image frame was drawn (rubber-band). Payload: page number + page-local rect.
+    var onFrameDrawn: ((Int, Rect) -> Void)?
+    /// A single-key toolbox shortcut was pressed while the canvas had focus.
+    var onToolShortcut: ((LayoutTool) -> Void)?
+    /// In-place text editing finished (double-click a text/caption frame). Payload:
+    /// frame id + the new text. Wired to AppState.updateSelectedFrameText.
+    var onFrameTextEdited: ((UUID, String) -> Void)?
+
+    // In-place (double-click) text editor overlay
+    private var inlineEditor: InlineTextEditorView?
+    private var inlineEditingFrameId: UUID?
     var baselineDocument: LaidOutDocument? {
         didSet {
             needsDisplay = true
@@ -90,16 +105,36 @@ final class CanvasView: NSView {
     private var dragStartFirstFrameRect: Rect?
     private var dragStartSecondFrameRect: Rect?
 
+    // Frame drawing tools (textFrame / imageFrame) rubber-band state
+    private var isDrawingFrame = false
+    private var drawFrameStartLocal: CGPoint?
+    private var drawFramePageNumber: Int?
+    private var drawFrameCurrentRect: Rect?  // page-local points
+
     private(set) var zoomScale: CGFloat = 1.15
     private let pageGap: CGFloat = 36
     private let canvasInset: CGFloat = 42
 
     override var isFlipped: Bool { true }
 
+    /// Notifies the workspace when the zoom scale changes (status-bar readout).
+    var onZoomChanged: ((CGFloat) -> Void)?
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(calibratedWhite: 0.84, alpha: 1).cgColor
+        updatePasteboardColor()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updatePasteboardColor()
+    }
+
+    /// InDesign-style pasteboard: dark charcoal in dark appearance, light gray otherwise.
+    private func updatePasteboardColor() {
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer?.backgroundColor = NSColor(calibratedWhite: isDark ? 0.25 : 0.84, alpha: 1).cgColor
     }
 
     required init?(coder: NSCoder) {
@@ -146,7 +181,11 @@ final class CanvasView: NSView {
     }
 
     private func setZoomScale(_ scale: CGFloat) {
+        // The overlay is positioned in zoomed canvas coordinates; commit it before
+        // the scale changes so the edited text isn't lost and no stale box lingers.
+        commitInlineEditor()
         zoomScale = min(max(scale, 0.35), 3.0)
+        onZoomChanged?(zoomScale)
         updateFrame()
         needsDisplay = true
     }
@@ -163,10 +202,46 @@ final class CanvasView: NSView {
             NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.45).setFill()
             let path = NSBezierPath(rect: gap.rect)
             path.fill()
-            
+
             NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.8).setStroke()
             path.lineWidth = 1.0
             path.stroke()
+        }
+
+        drawRubberBandFrameIfNeeded()
+    }
+
+    /// Renders the in-progress rubber-band rectangle for the frame drawing tools.
+    /// Image frames get an InDesign-style diagonal-cross placeholder mark.
+    private func drawRubberBandFrameIfNeeded() {
+        guard isDrawingFrame,
+              let rect = drawFrameCurrentRect,
+              let pageNum = drawFramePageNumber,
+              let pRect = pageRect(number: pageNum) else { return }
+
+        let screenRect = CGRect(
+            x: pRect.minX + CGFloat(rect.x) * zoomScale,
+            y: pRect.minY + CGFloat(rect.y) * zoomScale,
+            width: CGFloat(rect.width) * zoomScale,
+            height: CGFloat(rect.height) * zoomScale
+        )
+        let color = activeTool == .imageFrame
+            ? NSColor(calibratedRed: 0.88, green: 0.38, blue: 0.08, alpha: 1)
+            : NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1)
+        color.setStroke()
+        let path = NSBezierPath(rect: screenRect)
+        path.lineWidth = 1.0
+        path.setLineDash([4, 3], count: 2, phase: 0)
+        path.stroke()
+
+        if activeTool == .imageFrame {
+            let cross = NSBezierPath()
+            cross.move(to: CGPoint(x: screenRect.minX, y: screenRect.minY))
+            cross.line(to: CGPoint(x: screenRect.maxX, y: screenRect.maxY))
+            cross.move(to: CGPoint(x: screenRect.maxX, y: screenRect.minY))
+            cross.line(to: CGPoint(x: screenRect.minX, y: screenRect.maxY))
+            cross.lineWidth = 0.75
+            cross.stroke()
         }
     }
 
@@ -1032,6 +1107,92 @@ final class CanvasView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
+    // MARK: - In-place text editing (double-click)
+
+    private func beginInlineEdit(frame: PageFrame, pageRect pRect: CGRect, currentText: String) {
+        teardownInlineEditor()
+        guard let project else { return }
+
+        let editorRect = CGRect(
+            x: pRect.minX + CGFloat(frame.rect.x) * zoomScale,
+            y: pRect.minY + CGFloat(frame.rect.y) * zoomScale,
+            width: max(CGFloat(frame.rect.width) * zoomScale, 24),
+            height: max(CGFloat(frame.rect.height) * zoomScale, 18)
+        )
+
+        let editor = InlineTextEditorView(frame: editorRect)
+        let style = project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue)
+        editor.font = NSFont.systemFont(ofSize: max(style.fontSize * zoomScale, 6))
+        editor.string = currentText
+        editor.textContainerInset = NSSize(width: 2, height: 2)
+        editor.isRichText = false
+        editor.drawsBackground = true
+        editor.backgroundColor = NSColor.white
+        editor.textColor = NSColor.black
+        editor.wantsLayer = true
+        editor.layer?.borderColor = NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).cgColor
+        editor.layer?.borderWidth = 1.5
+
+        editor.onCommit = { [weak self] text in
+            self?.finishInlineEdit(commit: true, text: text)
+        }
+        editor.onCancel = { [weak self] in
+            self?.finishInlineEdit(commit: false, text: nil)
+        }
+
+        addSubview(editor)
+        inlineEditor = editor
+        inlineEditingFrameId = frame.id
+        window?.makeFirstResponder(editor)
+        editor.selectAll(nil)
+    }
+
+    /// Commits the current inline edit (if any) — used when focus context changes
+    /// (tool switch, zoom) so the typed text is preserved rather than dropped.
+    private func commitInlineEditor() {
+        inlineEditor?.commitIfEditing()
+    }
+
+    private func finishInlineEdit(commit: Bool, text: String?) {
+        let frameId = inlineEditingFrameId
+        teardownInlineEditor()
+        if commit, let frameId, let text {
+            onFrameTextEdited?(frameId, text)
+        }
+    }
+
+    private func teardownInlineEditor() {
+        guard let editor = inlineEditor else { return }
+        inlineEditor = nil
+        inlineEditingFrameId = nil
+        if editor.window?.firstResponder === editor {
+            window?.makeFirstResponder(self)
+        }
+        editor.removeFromSuperview()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard let chars = event.charactersIgnoringModifiers?.lowercased(),
+              let ch = chars.first else {
+            super.keyDown(with: event)
+            return
+        }
+        let shift = event.modifierFlags.contains(.shift)
+        let hasOtherModifier = event.modifierFlags.intersection([.command, .control, .option]).isEmpty == false
+
+        // Shift+P → page tool (InDesign). All other shortcuts are bare single keys.
+        if shift && ch == "p" && !hasOtherModifier {
+            onToolShortcut?(.page)
+            return
+        }
+        if !shift && !hasOtherModifier,
+           let tool = LayoutTool.allCases.first(where: { $0.shortcutKey == ch }) {
+            onToolShortcut?(tool)
+            return
+        }
+        super.keyDown(with: event)
+    }
+
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         
@@ -1044,7 +1205,12 @@ final class CanvasView: NSView {
             NSCursor.crosshair.set()
             return
         }
-        
+
+        if activeTool == .textFrame || activeTool == .imageFrame {
+            NSCursor.crosshair.set()
+            return
+        }
+
         if activeTool == .gap {
             detectGap(at: point)
             if let gap = activeGap {
@@ -1139,6 +1305,10 @@ final class CanvasView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        // A click reaching the canvas means the click was outside the inline editor
+        // (clicks inside it are consumed by the editor). Commit any active edit first.
+        commitInlineEditor()
+
         let point = convert(event.locationInWindow, from: nil)
         guard let project, let document else { return }
 
@@ -1187,7 +1357,35 @@ final class CanvasView: NSView {
             }
         }
 
-        // 3. Page tool selection
+        // 2.5 Double-click a text/caption frame → edit its text in place (InDesign-style),
+        // as long as the page isn't locked. Works with the selection and type tools.
+        if event.clickCount == 2,
+           (activeTool == .selection || activeTool == .type),
+           let frame = hitFrame,
+           frame.kind == .text || frame.kind == .caption,
+           case .text(let currentText) = frame.content,
+           let pageNum = clickedPageNumber,
+           !(project.lockedPages ?? []).contains(pageNum),
+           let pRect = pageRect(number: pageNum) {
+            selectedFrameId = frame.id
+            onFrameSelected?(frame.id)
+            beginInlineEdit(frame: frame, pageRect: pRect, currentText: currentText)
+            return
+        }
+
+        // 3. Frame drawing tools: begin a rubber-band rectangle on the clicked page.
+        if activeTool == .textFrame || activeTool == .imageFrame {
+            if let pageNum = clickedPageNumber, let localPt = localPoint {
+                isDrawingFrame = true
+                drawFramePageNumber = pageNum
+                drawFrameStartLocal = localPt
+                drawFrameCurrentRect = Rect(x: localPt.x, y: localPt.y, width: 0, height: 0)
+                needsDisplay = true
+            }
+            return
+        }
+
+        // 4. Page tool selection
         if activeTool == .page, let pageNum = clickedPageNumber {
             onPageSelected?(pageNum)
             return
@@ -1261,7 +1459,22 @@ final class CanvasView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        
+
+        // 0. Frame drawing tools: grow the rubber-band rectangle (clamped to its page).
+        if isDrawingFrame, let start = drawFrameStartLocal, let pageNum = drawFramePageNumber,
+           let pRect = pageRect(number: pageNum) {
+            let localX = (point.x - pRect.minX) / zoomScale
+            let localY = (point.y - pRect.minY) / zoomScale
+            drawFrameCurrentRect = Rect(
+                x: Double(min(start.x, localX)),
+                y: Double(min(start.y, localY)),
+                width: Double(abs(localX - start.x)),
+                height: Double(abs(localY - start.y))
+            )
+            needsDisplay = true
+            return
+        }
+
         // 1. Hand tool panning
         if activeTool == .hand, let startPt = dragStartPoint, let startOrigin = scrollStartOrigin, let scrollView = enclosingScrollView {
             let dx = event.locationInWindow.x - startPt.x
@@ -1413,6 +1626,20 @@ final class CanvasView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        // Frame drawing tools: commit the rubber-band rectangle if it has real size.
+        if isDrawingFrame {
+            if let rect = drawFrameCurrentRect, let pageNum = drawFramePageNumber,
+               rect.width > 8, rect.height > 8 {
+                onFrameDrawn?(pageNum, rect)
+            }
+            isDrawingFrame = false
+            drawFrameStartLocal = nil
+            drawFramePageNumber = nil
+            drawFrameCurrentRect = nil
+            needsDisplay = true
+            return
+        }
+
         if let pending = pendingFrameDragUpdate {
             onFrameDragged?(pending.id, pending.rect.x, pending.rect.y, pending.rect.width, pending.rect.height)
         }
@@ -1437,6 +1664,50 @@ final class CanvasView: NSView {
         
         if activeTool == .hand {
             NSCursor.openHand.set()
+        }
+    }
+}
+
+/// A minimal in-place text editor for double-click frame editing. Escape cancels,
+/// ⌘Return or clicking away commits, plain Return inserts a newline (frames may hold
+/// multi-line paragraph text). Guards against double-firing its callbacks.
+final class InlineTextEditorView: NSTextView {
+    var onCommit: ((String) -> Void)?
+    var onCancel: (() -> Void)?
+    private var finished = false
+
+    override func keyDown(with event: NSEvent) {
+        // Escape (keyCode 53) → cancel.
+        if event.keyCode == 53 {
+            finish(commit: false)
+            return
+        }
+        // ⌘Return (keyCode 36) → commit.
+        if event.keyCode == 36 && event.modifierFlags.contains(.command) {
+            finish(commit: true)
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override func resignFirstResponder() -> Bool {
+        // Clicking away / switching focus commits what was typed.
+        finish(commit: true)
+        return super.resignFirstResponder()
+    }
+
+    /// Commits if still actively editing (used on tool-switch / zoom teardown).
+    func commitIfEditing() {
+        finish(commit: true)
+    }
+
+    private func finish(commit: Bool) {
+        guard !finished else { return }
+        finished = true
+        if commit {
+            onCommit?(string)
+        } else {
+            onCancel?()
         }
     }
 }

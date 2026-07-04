@@ -20,7 +20,22 @@ final class AppState: ObservableObject {
             updateAIPlans()
         }
     }
-    @Published var selectedFrameId: UUID?
+    @Published var selectedFrameId: UUID? {
+        didSet {
+            // Keep the "current page" pointed at whatever the user is actually
+            // working on. Page-scoped controls (lock/unlock, reset page, save as
+            // template) all key off currentPageNumber; without this sync, selecting
+            // a frame by scrolling+clicking would leave those controls targeting a
+            // different page — e.g. you could be blocked from editing a locked frame
+            // while the unlock toggle silently acts on page 1.
+            if let id = selectedFrameId,
+               let page = findPageNumber(for: id),
+               page != currentPageNumber {
+                currentPageNumber = page
+            }
+            colorEditBurstFrame = nil
+        }
+    }
     @Published var activeTool: LayoutTool = .selection
     
     @Published var activeFormattingTarget: FormattingTarget = .container
@@ -37,6 +52,9 @@ final class AppState: ObservableObject {
     /// preflight report) reflect the prepress consequences of the user's chosen
     /// PDF/X / crop-mark settings instead of always assuming defaults.
     @Published var pdfExportOptions = PrepressExportOptions()
+
+    /// Mirror of the canvas zoom scale for the status bar readout (percent).
+    @Published var zoomPercent: Int = 115
     
     private var undoStack: [BookProject] = []
     private var redoStack: [BookProject] = []
@@ -61,8 +79,14 @@ final class AppState: ObservableObject {
         recalculateLayout()
     }
 
+    /// Frame currently mid color-adjust. Continuous color-picker changes on this
+    /// frame coalesce into a single undo entry (see setSelectedFrame*Color); any
+    /// other committed action ends the burst.
+    private var colorEditBurstFrame: UUID?
+
     func commitState() {
         guard !isPerformingUndoRedo else { return }
+        colorEditBurstFrame = nil
         undoStack.append(project)
         redoStack.removeAll()
         if undoStack.count > 50 {
@@ -261,12 +285,61 @@ final class AppState: ObservableObject {
                 kind: kind,
                 role: frame.kind.rawValue,
                 frame: Rect(x: normX, y: normY, width: normW, height: normH),
-                contentReference: ref
+                contentReference: ref,
+                backgroundColorHex: frame.backgroundColorHex,
+                strokeColorHex: frame.strokeColorHex,
+                strokeWidth: frame.strokeWidth,
+                textColorHex: frame.textColorHex,
+                maskShape: frame.maskShape,
+                styleId: frame.styleId
             )
             blocks.append(block)
         }
         
         return LayoutPlan(target: .page(pageNum), strategy: .balanced, blocks: blocks, notes: ["手动自定义版式页"])
+    }
+
+    /// Creates a new text or image frame from a drawn rectangle. Writes a
+    /// LayoutPlan block (structured override) on the target page so the frame is
+    /// undoable, coexists with AI plans, and exports to IDML like any other block.
+    /// `rect` is in page-local points and gets normalized to the page size.
+    /// Image frames reference the first project asset (re-pickable in the
+    /// inspector); returns false without creating anything if none exists.
+    @discardableResult
+    func createDrawnFrame(kind: LayoutBlockKind, onPage pageNum: Int, rect: Rect) -> Bool {
+        let pageSize = project.pageSetup.pageSize
+
+        let contentRef: ContentReference
+        let role: String
+        switch kind {
+        case .image:
+            guard let firstAsset = project.assets.first else { return false }
+            contentRef = .asset(firstAsset.id)
+            role = PageFrameKind.image.rawValue
+        default:
+            contentRef = .generated("")
+            role = PageFrameKind.text.rawValue
+        }
+
+        commitState()
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+
+        let normRect = Rect(
+            x: rect.x / pageSize.width,
+            y: rect.y / pageSize.height,
+            width: rect.width / pageSize.width,
+            height: rect.height / pageSize.height
+        )
+        let block = LayoutPlanBlock(kind: kind, role: role, frame: normRect, contentReference: contentRef)
+        plan.blocks.append(block)
+        plan.notes = [kind == .image ? "手动绘制图像框" : "手动绘制文本框"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
+        self.selectedFrameId = block.id
+        return true
     }
 
     func updateSelectedFrameCoordinate(x: Double?, y: Double?, width: Double?, height: Double?) {
@@ -825,6 +898,62 @@ final class AppState: ObservableObject {
             textColorHex: activeFormattingTarget == .text ? "" : nil,
             shouldClear: true
         )
+    }
+
+    // MARK: - Direct per-channel color editing (inspector color pickers)
+    //
+    // These drive fill / stroke / text independently of the toolbar's
+    // container-vs-text target, so the inspector can offer three plain color
+    // pickers. Continuous picker changes on one frame coalesce into a single
+    // undo entry via `colorEditBurstFrame`.
+
+    private func beginColorEditBurst(_ frameId: UUID) {
+        if colorEditBurstFrame != frameId {
+            commitState()               // resets colorEditBurstFrame to nil
+            colorEditBurstFrame = frameId
+        }
+    }
+
+    func setSelectedFrameFillColor(_ color: Color) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameBackgroundColors[frameId] = color
+        updateSelectedFrameColors(backgroundColorHex: color.hexString, strokeColorHex: nil, textColorHex: nil, shouldClear: false)
+    }
+
+    func clearSelectedFrameFillColor() {
+        commitState()
+        guard let frameId = selectedFrameId else { return }
+        frameBackgroundColors.removeValue(forKey: frameId)
+        updateSelectedFrameColors(backgroundColorHex: "", strokeColorHex: nil, textColorHex: nil, shouldClear: true)
+    }
+
+    func setSelectedFrameStrokeColor(_ color: Color) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameStrokeColors[frameId] = color
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: color.hexString, textColorHex: nil, shouldClear: false)
+    }
+
+    func clearSelectedFrameStrokeColor() {
+        commitState()
+        guard let frameId = selectedFrameId else { return }
+        frameStrokeColors.removeValue(forKey: frameId)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: "", textColorHex: nil, shouldClear: true)
+    }
+
+    func setSelectedFrameTextColor(_ color: Color) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameTextColors[frameId] = color
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: color.hexString, shouldClear: false)
+    }
+
+    func clearSelectedFrameTextColor() {
+        commitState()
+        guard let frameId = selectedFrameId else { return }
+        frameTextColors.removeValue(forKey: frameId)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: "", shouldClear: true)
     }
 
     private func updateSelectedFrameColors(

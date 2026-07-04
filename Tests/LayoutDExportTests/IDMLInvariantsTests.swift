@@ -252,4 +252,155 @@ final class IDMLInvariantsTests: XCTestCase {
         ]
         XCTAssertTrue(IDMLInvariants.check(files: files).isEmpty)
     }
+
+    // MARK: - 规则⑥：CoreText 抽查文档实际用到的 CJK 字符集样本能否出字形
+
+    private func makeTestFiles(fontsXML: String, stylesXML: String, storyContent: String) -> [String: String] {
+        [
+            "Resources/Fonts.xml": fontsXML,
+            "Resources/Styles.xml": stylesXML,
+            "Stories/Story_x.xml": """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+            \t<Story Self="x">
+            \t\t\(storyContent)
+            \t</Story>
+            </idPkg:Story>
+            """
+        ]
+    }
+
+    func testCJKFontWithCJKContentPasses() {
+        let fonts = """
+        <Fonts>
+        <FontFamily Name="PingFang SC">
+            <Font FontFamily="PingFang SC" FontStyleName="Regular" PostScriptName="PingFangSC-Regular" Name="PingFang SC Regular" Status="Installed"/>
+        </FontFamily>
+        </Fonts>
+        """
+        let styles = """
+        <Styles>
+        <ParagraphStyle Self="ParagraphStyle/body" FontStyle="Regular">
+            <Properties>
+                <AppliedFont type="string">PingFang SC</AppliedFont>
+            </Properties>
+        </ParagraphStyle>
+        </Styles>
+        """
+        let story = """
+        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">
+            <CharacterStyleRange>
+                <Content>中文排版测试</Content>
+            </CharacterStyleRange>
+        </ParagraphStyleRange>
+        """
+        let files = makeTestFiles(fontsXML: fonts, stylesXML: styles, storyContent: story)
+        XCTAssertTrue(IDMLInvariants.check(files: files).isEmpty)
+    }
+
+    func testLatinFontWithCJKContentFails() {
+        let fonts = """
+        <Fonts>
+        <FontFamily Name="Times New Roman">
+            <Font FontFamily="Times New Roman" FontStyleName="Regular" PostScriptName="TimesNewRomanPSMT" Name="Times New Roman Regular" Status="Installed"/>
+        </FontFamily>
+        </Fonts>
+        """
+        let styles = """
+        <Styles>
+        <ParagraphStyle Self="ParagraphStyle/body" FontStyle="Regular">
+            <Properties>
+                <AppliedFont type="string">Times New Roman</AppliedFont>
+            </Properties>
+        </ParagraphStyle>
+        </Styles>
+        """
+        let story = """
+        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">
+            <CharacterStyleRange>
+                <Content>中文排版测试</Content>
+            </CharacterStyleRange>
+        </ParagraphStyleRange>
+        """
+        let files = makeTestFiles(fontsXML: fonts, stylesXML: styles, storyContent: story)
+        let violations = IDMLInvariants.check(files: files)
+        XCTAssertEqual(rules(violations), ["font-missing-cjk-glyph"])
+        if let violation = violations.first {
+            XCTAssertTrue(violation.detail.contains("Times New Roman"))
+            XCTAssertTrue(violation.detail.contains("Regular"))
+            XCTAssertTrue(violation.detail.contains("中"))
+        }
+    }
+
+    func testCompositeFontWithCJKContentPasses() {
+        let fonts = """
+        <Fonts>
+        <FontFamily Name="PingFang SC">
+            <Font FontFamily="PingFang SC" FontStyleName="Regular" PostScriptName="PingFangSC-Regular" Name="PingFang SC Regular" Status="Installed"/>
+        </FontFamily>
+        <CompositeFont Name="CF_body">
+            <CompositeFontEntry FontStyle="Regular" Name="漢字">
+                <Properties><AppliedFont type="string">PingFang SC</AppliedFont></Properties>
+            </CompositeFontEntry>
+        </CompositeFont>
+        </Fonts>
+        """
+        let styles = """
+        <Styles>
+        <ParagraphStyle Self="ParagraphStyle/body">
+            <Properties>
+                <AppliedFont type="string">CF_body</AppliedFont>
+            </Properties>
+        </ParagraphStyle>
+        </Styles>
+        """
+        let story = """
+        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">
+            <CharacterStyleRange>
+                <Content>中文复合字体测试</Content>
+            </CharacterStyleRange>
+        </ParagraphStyleRange>
+        """
+        let files = makeTestFiles(fontsXML: fonts, stylesXML: styles, storyContent: story)
+        XCTAssertTrue(IDMLInvariants.check(files: files).isEmpty)
+    }
+
+    func testCompositeFontWithMissingCJKGlyphFails() {
+        let fonts = """
+        <Fonts>
+        <FontFamily Name="Times New Roman">
+            <Font FontFamily="Times New Roman" FontStyleName="Regular" PostScriptName="TimesNewRomanPSMT" Name="Times New Roman Regular" Status="Installed"/>
+        </FontFamily>
+        <CompositeFont Name="CF_body">
+            <CompositeFontEntry FontStyle="Regular" Name="漢字">
+                <Properties><AppliedFont type="string">Times New Roman</AppliedFont></Properties>
+            </CompositeFontEntry>
+        </CompositeFont>
+        </Fonts>
+        """
+        let styles = """
+        <Styles>
+        <ParagraphStyle Self="ParagraphStyle/body">
+            <Properties>
+                <AppliedFont type="string">CF_body</AppliedFont>
+            </Properties>
+        </ParagraphStyle>
+        </Styles>
+        """
+        let story = """
+        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">
+            <CharacterStyleRange>
+                <Content>中文</Content>
+            </CharacterStyleRange>
+        </ParagraphStyleRange>
+        """
+        let files = makeTestFiles(fontsXML: fonts, stylesXML: styles, storyContent: story)
+        let violations = IDMLInvariants.check(files: files)
+        XCTAssertEqual(rules(violations), ["font-missing-cjk-glyph"])
+        if let violation = violations.first {
+            XCTAssertTrue(violation.detail.contains("Times New Roman"))
+            XCTAssertTrue(violation.detail.contains("Regular"))
+            XCTAssertTrue(violation.detail.contains("中"))
+        }
+    }
 }
