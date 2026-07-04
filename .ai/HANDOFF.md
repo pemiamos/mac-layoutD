@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-04 20:16 | claude | 对齐功能方案 B:多选 + 多框对齐/分布。①选择模型升级:selectedFrameId 保留为锚点(向后兼容所有单框动作),新增 @Published se
+- **分支**：dev
+- **概述**：对齐功能方案 B:多选 + 多框对齐/分布。①选择模型升级:selectedFrameId 保留为锚点(向后兼容所有单框动作),新增 @Published selectedFrameIds:Set<UUID> + toggleFrameSelection/setSelection;不变式=空⟺锚点nil、锚点∈集合;普通单选自动塌缩为单元素集(didSet 里 isMutatingSelectionSet 守卫)。②画布(CanvasView):Shift/⌘点选加减(onToggleSelection)、框选marquee橡皮筋(onMarqueeSelected+framesIntersecting)、多框蓝色高亮(handles 仅单选)、多框整体拖动(beginGroupDrag+onFramesDragged,单次撤销由 applyFrameOrigins 提交,不再叠加 onDragStarted)。③顶部控制栏(ControlPanelView):≥2 选中切「N个对象」=对齐对象六键+分布对象六键+分布间距两键(≥3启用),参照 选区/页面/页边距;单选仍 X/Y/宽高+对齐(页面/页边距)。④算法全为 Core 纯函数可单测:boundingBox、alignedFrameOrigin、distributedOrigins(6分布对象+2分布间距,两端固定中间等距/等间距,<3返回空)。⑤AppState alignSelection/distributeSelection/applyFrameOrigins(批量写 override,按页分组冻结,单撤销)/marginRegion(对开页奇偶换边)。SF Symbol 已逐个验证存在。swift build+249 测试全绿(方案A 5个+方案B 7个新测)。已合 dev=d98fa1f 推送。方案A(单选对齐页面/页边距)先前已合 dev=a587683。
+- **改动文件**：Sources/LayoutDCore/LayoutPlanEditing.swift, Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/ControlPanelView.swift, Sources/LayoutDApp/main.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift, Tests/LayoutDAppTests/AppStateTests.swift
+- **检查**：build: pass; test: pass (249/0，含对齐/分布/多选新测)。已合 dev=d98fa1f 推 origin。main 未动(GUI 待用户视觉验收)。注意:工作区里有别的对话未提交的 PrintColor.swift(新)与 IDMLExporter.swift(改)——非本轮改动，我未纳入提交，留给对应对话处理。
+- **下一步**：①【用户·视觉验收】跑 App:Shift/⌘点多个框 或 空白处框选→顶部栏出现「N个对象」+对齐/分布键;试左右对齐、水平居中分布、等间距(≥3);拖动多框应整体移动;Cmd+Z 可撤销。满意后 Claude 合 dev→main(A+B 一起)。②【已知取舍,可选增强】多框「群组缩放」未做(多选时不画缩放手柄);分布默认在选区范围内(未支持 页面/页边距 范围分布);跨页多选对齐用同一坐标系,极少用可能结果怪。③【他人对话】PrintColor.swift/IDMLExporter.swift 是并行未提交改动,提醒对应对话别丢。④【方案 A/B 之后】GUI 稳定后 PERF-3 排版异步化+防抖。
+
 ## 2026-07-04 20:01 | claude | 对齐功能(方案 A:单选对齐到页面/页边距)。用户给的 InDesign「对齐」面板截图,确认先做 A(不动选择模型),多框互相对齐+分布(方案 B)待多选地基
 - **分支**：dev
 - **概述**：对齐功能(方案 A:单选对齐到页面/页边距)。用户给的 InDesign「对齐」面板截图,确认先做 A(不动选择模型),多框互相对齐+分布(方案 B)待多选地基后再做。实现:①Core 新增 FrameAlignment(左/中/右·上/中/下)+AlignmentReference(页面/页边距)枚举 + 纯函数 alignedFrameOrigin(frame,region,alignment)——只移动不缩放,可单测。②AppState.alignSelectedFrame(_:reference:) 复用 LayoutPlan override+撤销通路(同手改 X/Y),alignmentRegion 算参照框:页面=整页,页边距=resolvedMargins 且对开页按奇偶换左右(与画布参考线一致)。③ControlPanelView 顶部栏选中框时新增六键+「页面/页边距」参照菜单(默认页边距)。SF Symbol align.horizontal/vertical.*。测试:Core 六向纯函数 + AppState 端到端(页面左/水平居中、页边距对开左侧、可撤销)。swift build + 242 测试全绿。已合 dev 推送 a587683。

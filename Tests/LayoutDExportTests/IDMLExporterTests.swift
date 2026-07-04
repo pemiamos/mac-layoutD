@@ -566,6 +566,61 @@ final class IDMLExporterTests: XCTestCase {
         }
     }
 
+    // MARK: - CMYK swatches (印刷路线 A：CMYK 原生色板)
+
+    func testExportsCMYKBackgroundAsProcessCMYKSwatch() throws {
+        let paragraph = Paragraph(kind: .body, text: "颜色", styleId: StyleID.body.rawValue)
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "CMYK", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])]
+        )
+        let frame = PageFrame(
+            kind: .text, rect: Rect(x: 20, y: 20, width: 200, height: 100),
+            styleId: StyleID.body.rawValue, content: .text("颜色"),
+            backgroundColorHex: "cmyk(20,0,80,0)", sourceParagraphId: paragraph.id
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-cmyk-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let graphic = try entry(output, "Resources/Graphic.xml")
+        XCTAssertTrue(graphic.contains("Self=\"Color/CMYK_20_0_80_0\""), "应生成 CMYK 色板 Self")
+        XCTAssertTrue(graphic.contains("Space=\"CMYK\" ColorValue=\"20 0 80 0\""),
+                      "CMYK 底色应导出为 Process CMYK 20 0 80 0，而非压回 RGB")
+        // 页面项应引用这块 CMYK 色板。
+        let spreads = try zipEntries(output).filter { $0.hasPrefix("Spreads/") }
+            .map { try entry(output, $0) }.joined()
+        XCTAssertTrue(spreads.contains("FillColor=\"Color/CMYK_20_0_80_0\""), "文本框应引用 CMYK 色板")
+    }
+
+    func testCMYKPureBlackReusesBuiltinBlackSwatch() throws {
+        let paragraph = Paragraph(kind: .body, text: "黑", styleId: StyleID.body.rawValue)
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "K100", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])]
+        )
+        let frame = PageFrame(
+            kind: .text, rect: Rect(x: 20, y: 20, width: 200, height: 100),
+            styleId: StyleID.body.rawValue, content: .text("黑"),
+            backgroundColorHex: "cmyk(0,0,0,100)", sourceParagraphId: paragraph.id
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-k100-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let graphic = try entry(output, "Resources/Graphic.xml")
+        XCTAssertFalse(graphic.contains("Color/CMYK_0_0_0_100"), "纯黑 CMYK 应复用内建 Black，不再新建色板")
+        let spreads = try zipEntries(output).filter { $0.hasPrefix("Spreads/") }
+            .map { try entry(output, $0) }.joined()
+        XCTAssertTrue(spreads.contains("FillColor=\"Color/Black\""), "纯黑 CMYK 底色应引用内建 Black")
+    }
+
     // MARK: - helpers
 
     private func zipEntries(_ url: URL) throws -> [String] {

@@ -1863,24 +1863,16 @@ final class InlineTextEditorView: NSTextView {
 
 extension NSColor {
     static func fromHex(_ hex: String) -> NSColor? {
-        var cleanHex = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if cleanHex.hasPrefix("#") {
-            cleanHex.remove(at: cleanHex.startIndex)
+        // "hex" now also carries CMYK (`cmyk(c,m,y,k)`); CMYK renders via the
+        // device-CMYK space as a screen approximation on the canvas.
+        guard let color = PrintColor(string: hex) else { return nil }
+        switch color {
+        case let .rgb(r, g, b):
+            return NSColor(calibratedRed: CGFloat(r) / 255, green: CGFloat(g) / 255,
+                           blue: CGFloat(b) / 255, alpha: 1.0)
+        case let .cmyk(c, m, y, k):
+            return NSColor(deviceCyan: CGFloat(c) / 100, magenta: CGFloat(m) / 100,
+                           yellow: CGFloat(y) / 100, black: CGFloat(k) / 100, alpha: 1.0)
         }
-
-        guard cleanHex.count == 6 else {
-            return nil
-        }
-
-        var rgbValue: UInt64 = 0
-        guard Scanner(string: cleanHex).scanHexInt64(&rgbValue) else {
-            return nil
-        }
-
-        let red = CGFloat((rgbValue & 0xFF0000) >> 16) / 255.0
-        let green = CGFloat((rgbValue & 0x00FF00) >> 8) / 255.0
-        let blue = CGFloat(rgbValue & 0x0000FF) / 255.0
-
-        return NSColor(calibratedRed: red, green: green, blue: blue, alpha: 1.0)
     }
 }

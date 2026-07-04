@@ -340,13 +340,21 @@ public struct IDMLExporter {
             colorName = ["000000": "Color/Black"]
         }
 
-        mutating func color(_ hex: String) -> String {
-            let norm = Self.normalizeHex(hex)
-            if let n = colorName[norm] { return n }
-            let n = "Color/C\(norm)"
-            colorName[norm] = n
-            colorOrder.append(norm)
-            return n
+        mutating func color(_ raw: String) -> String {
+            // RGB canonicalizes to the same 6-hex key as the legacy path, so
+            // existing RGB swatches keep their exact Self / order. CMYK colors
+            // key on their own canonical string and emit a Space="CMYK" swatch.
+            let parsed = PrintColor(string: raw) ?? .rgb(r: 0, g: 0, b: 0)
+            let key = parsed.canonicalString
+            if let n = colorName[key] { return n }
+            let name = parsed.idmlSwatchSelf
+            colorName[key] = name
+            // Built-in Black (RGB #000000 or CMYK 0,0,0,100) reuses the seeded
+            // Color/Black swatch and is never re-emitted in Graphic.xml.
+            if name != "Color/Black" {
+                colorOrder.append(key)
+            }
+            return name
         }
 
         mutating func font(_ name: String) {
@@ -521,10 +529,10 @@ public struct IDMLExporter {
 
     // MARK: - 页面项
 
-    private func colorRef(_ hex: String?) -> String {
-        guard let hex else { return "Swatch/None" }
-        let normalized = BuildContext.normalizeHex(hex)
-        return normalized == "000000" ? "Color/Black" : "Color/C\(normalized)"
+    private func colorRef(_ raw: String?) -> String {
+        guard let raw else { return "Swatch/None" }
+        guard let color = PrintColor(string: raw) else { return "Color/Black" }
+        return color.idmlSwatchSelf
     }
 
     private func textFrameItem(self id: String, story: String, rect: Rect,
@@ -611,11 +619,10 @@ public struct IDMLExporter {
 
     private func graphic(ctx: BuildContext) -> String {
         var colors = ""
-        for hex in ctx.colorOrder where hex != "000000" {
-            let r = Int(hex.prefix(2), radix: 16) ?? 0
-            let g = Int(hex.dropFirst(2).prefix(2), radix: 16) ?? 0
-            let b = Int(hex.dropFirst(4).prefix(2), radix: 16) ?? 0
-            colors += "\t<Color Self=\"Color/C\(hex)\" Model=\"Process\" Space=\"RGB\" ColorValue=\"\(r) \(g) \(b)\" ColorOverride=\"Normal\" AlternateSpace=\"NoAlternateColor\" AlternateColorValue=\"\" Name=\"C\(hex)\" ColorEditable=\"true\" ColorRemovable=\"true\" Visible=\"true\" SwatchCreatorID=\"7937\"/>\n"
+        for key in ctx.colorOrder where key != "000000" {
+            guard let color = PrintColor(string: key) else { continue }
+            let (space, value) = color.idmlSpaceValue
+            colors += "\t<Color Self=\"\(color.idmlSwatchSelf)\" Model=\"Process\" Space=\"\(space)\" ColorValue=\"\(value)\" ColorOverride=\"Normal\" AlternateSpace=\"NoAlternateColor\" AlternateColorValue=\"\" Name=\"\(esc(color.idmlSwatchName))\" ColorEditable=\"true\" ColorRemovable=\"true\" Visible=\"true\" SwatchCreatorID=\"7937\"/>\n"
         }
         return """
         \(header)
@@ -690,8 +697,7 @@ public struct IDMLExporter {
         var paras = ""
         for style in ctx.paragraphStyles {
             let colorHex = ctx.project.resolvedColorHex(style.colorToken) ?? "#000000"
-            let norm = BuildContext.normalizeHex(colorHex)
-            let fill = norm == "000000" ? "Color/Black" : "Color/C\(norm)"
+            let fill = PrintColor(string: colorHex)?.idmlSwatchSelf ?? "Color/Black"
             let isComposite = style.compositeFont?.isEmpty == false
             let famFallback = ctx.appliedFamily[style.fontName] ?? BuildContext.splitFont(style.fontName).0
             let styleFallback = ctx.appliedStyle[style.fontName] ?? BuildContext.splitFont(style.fontName).1
