@@ -80,7 +80,7 @@ struct ColorPickerPanel: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .onChange(of: mode) { syncFromRGB() }
+            .onChange(of: mode) { syncFromRGB(emit: false) }
 
             channels
 
@@ -92,7 +92,7 @@ struct ColorPickerPanel: View {
         }
         .padding(12)
         .frame(width: 288)
-        .onAppear { syncFromRGB() }
+        .onAppear { syncFromRGB(emit: false) }
     }
 
     // MARK: - Preview
@@ -113,18 +113,18 @@ struct ColorPickerPanel: View {
     @ViewBuilder private var channels: some View {
         switch mode {
         case .rgb:
-            channelRow("R", value: $r, range: 0...255, decimals: 0, onEdit: syncFromRGB)
-            channelRow("G", value: $g, range: 0...255, decimals: 0, onEdit: syncFromRGB)
-            channelRow("B", value: $b, range: 0...255, decimals: 0, onEdit: syncFromRGB)
+            channelRow("R", value: $r, range: 0...255, decimals: 0) { syncFromRGB() }
+            channelRow("G", value: $g, range: 0...255, decimals: 0) { syncFromRGB() }
+            channelRow("B", value: $b, range: 0...255, decimals: 0) { syncFromRGB() }
         case .hsb:
-            channelRow("H", value: $h, range: 0...360, decimals: 0, suffix: "°", onEdit: syncFromHSB)
-            channelRow("S", value: $s, range: 0...100, decimals: 0, suffix: "%", onEdit: syncFromHSB)
-            channelRow("B", value: $br, range: 0...100, decimals: 0, suffix: "%", onEdit: syncFromHSB)
+            channelRow("H", value: $h, range: 0...360, decimals: 0, suffix: "°") { syncFromHSB() }
+            channelRow("S", value: $s, range: 0...100, decimals: 0, suffix: "%") { syncFromHSB() }
+            channelRow("B", value: $br, range: 0...100, decimals: 0, suffix: "%") { syncFromHSB() }
         case .cmyk:
-            channelRow("C", value: $c, range: 0...100, decimals: 0, suffix: "%", onEdit: syncFromCMYK)
-            channelRow("M", value: $m, range: 0...100, decimals: 0, suffix: "%", onEdit: syncFromCMYK)
-            channelRow("Y", value: $y, range: 0...100, decimals: 0, suffix: "%", onEdit: syncFromCMYK)
-            channelRow("K", value: $k, range: 0...100, decimals: 0, suffix: "%", onEdit: syncFromCMYK)
+            channelRow("C", value: $c, range: 0...100, decimals: 0, suffix: "%") { syncFromCMYK() }
+            channelRow("M", value: $m, range: 0...100, decimals: 0, suffix: "%") { syncFromCMYK() }
+            channelRow("Y", value: $y, range: 0...100, decimals: 0, suffix: "%") { syncFromCMYK() }
+            channelRow("K", value: $k, range: 0...100, decimals: 0, suffix: "%") { syncFromCMYK() }
         }
     }
 
@@ -240,31 +240,35 @@ struct ColorPickerPanel: View {
     //
     // 每次编辑只改「自己」那组通道，回算其余两组以保持预览与切换一致。
 
-    private func syncFromRGB() {
+    // `emit` defaults to true for user edits. Mode-switch / onAppear pass
+    // `emit: false` — switching tabs must only re-derive the displayed channels,
+    // never mutate the document during a view update (that dismisses the popover).
+
+    private func syncFromRGB(emit shouldEmit: Bool = true) {
         clampRGB()
         let cmyk = Self.rgbToCMYK(r, g, b)
         c = cmyk.0; m = cmyk.1; y = cmyk.2; k = cmyk.3
         let hsb = Self.rgbToHSB(r, g, b)
         h = hsb.0; s = hsb.1; br = hsb.2
-        emit()
+        if shouldEmit { emit() }
     }
 
-    private func syncFromCMYK() {
+    private func syncFromCMYK(emit shouldEmit: Bool = true) {
         clampCMYK()
         let rgb = Self.cmykToRGB(c, m, y, k)
         r = rgb.0; g = rgb.1; b = rgb.2
         let hsb = Self.rgbToHSB(r, g, b)
         h = hsb.0; s = hsb.1; br = hsb.2
-        emit()
+        if shouldEmit { emit() }
     }
 
-    private func syncFromHSB() {
+    private func syncFromHSB(emit shouldEmit: Bool = true) {
         h = h.clamped(to: 0...360); s = s.clamped(to: 0...100); br = br.clamped(to: 0...100)
         let rgb = Self.hsbToRGB(h, s, br)
         r = rgb.0; g = rgb.1; b = rgb.2
         let cmyk = Self.rgbToCMYK(r, g, b)
         c = cmyk.0; m = cmyk.1; y = cmyk.2; k = cmyk.3
-        emit()
+        if shouldEmit { emit() }
     }
 
     private func clampRGB() {
