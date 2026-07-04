@@ -11,6 +11,9 @@ struct ControlPanelView: View {
     @State private var yText = ""
     @State private var wText = ""
     @State private var hText = ""
+    /// What「对齐」snaps the selected frame to. Defaults to the margin box, which is
+    /// what book pages are laid out against; toggle to the full page via the menu.
+    @State private var alignReference: AlignmentReference = .margin
 
     private var selectedFrame: PageFrame? {
         guard let id = state.selectedFrameId, let doc = state.laidOutDocument else { return nil }
@@ -71,12 +74,60 @@ struct ControlPanelView: View {
             state.updateSelectedFrameCoordinate(x: nil, y: nil, width: nil, height: value)
         }
 
+        Divider().frame(height: 18)
+
+        alignmentControls
+
         if let page = state.findPageNumber(for: frame.id) {
             Divider().frame(height: 18)
             Text("第 \(page) 页")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
+    }
+
+    /// InDesign 式「对齐对象」：左中右 + 上中下六键，配一个「页面/页边距」参照菜单。
+    /// 单选把当前框贴到参照框，写入该页 override，可撤销。多框互相对齐/分布待多选后再做。
+    private var alignmentControls: some View {
+        HStack(spacing: 4) {
+            Menu {
+                ForEach(AlignmentReference.allCases, id: \.self) { ref in
+                    Button {
+                        alignReference = ref
+                    } label: {
+                        if alignReference == ref {
+                            Label(ref.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(ref.displayName)
+                        }
+                    }
+                }
+            } label: {
+                Text(alignReference == .margin ? "页边距" : "页面")
+                    .font(.system(size: 10))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("对齐参照：页面或页边距")
+
+            ForEach(FrameAlignment.allCases, id: \.self) { alignment in
+                alignButton(alignment)
+                if alignment == .right {
+                    Divider().frame(height: 14)
+                }
+            }
+        }
+    }
+
+    private func alignButton(_ alignment: FrameAlignment) -> some View {
+        Button {
+            state.alignSelectedFrame(alignment, reference: alignReference)
+        } label: {
+            Image(systemName: alignment.iconName)
+                .font(.system(size: 12))
+        }
+        .buttonStyle(.borderless)
+        .help(alignment.displayName)
     }
 
     private var documentSummary: some View {

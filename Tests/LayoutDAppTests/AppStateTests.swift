@@ -131,6 +131,52 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(state.canUndo)
     }
 
+    func testAlignSelectedFrameToPageWritesUndoableOverride() {
+        let state = AppState(project: BookProject.sample)
+        let pageSize = state.project.pageSetup.pageSize
+
+        // Draw a 200×80 frame somewhere off-edge on page 2, then align it.
+        XCTAssertTrue(state.createDrawnFrame(
+            kind: .text,
+            onPage: 2,
+            rect: Rect(x: 100, y: 120, width: 200, height: 80)
+        ))
+        let frameId = try! XCTUnwrap(state.selectedFrameId)
+
+        // Left → page edge (x = 0).
+        state.alignSelectedFrame(.left, reference: .page)
+        var block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first(where: { $0.id == frameId }))
+        XCTAssertEqual(block.absoluteFrame(pageSize: pageSize).x, 0, accuracy: 0.0001)
+
+        // Horizontal center on the page keeps the 200-wide frame centered.
+        state.alignSelectedFrame(.horizontalCenter, reference: .page)
+        block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first(where: { $0.id == frameId }))
+        XCTAssertEqual(block.absoluteFrame(pageSize: pageSize).x, (pageSize.width - 200) / 2, accuracy: 0.0001)
+
+        // Alignment is undoable (each call commits one undo step).
+        XCTAssertTrue(state.canUndo)
+    }
+
+    func testAlignSelectedFrameToMarginRespectsFacingPageSide() {
+        let state = AppState(project: BookProject.sample)
+        let pageSize = state.project.pageSetup.pageSize
+
+        XCTAssertTrue(state.createDrawnFrame(
+            kind: .text,
+            onPage: 3,
+            rect: Rect(x: 300, y: 120, width: 120, height: 60)
+        ))
+        let frameId = try! XCTUnwrap(state.selectedFrameId)
+
+        state.alignSelectedFrame(.left, reference: .margin)
+        let block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[3]?.blocks.first(where: { $0.id == frameId }))
+
+        // Page 3 is odd → on a facing-page spread its left edge is the (inner) left
+        // margin, matching the canvas guide.
+        let margins = state.project.resolvedMargins(for: 3)
+        XCTAssertEqual(block.absoluteFrame(pageSize: pageSize).x, margins.left, accuracy: 0.0001)
+    }
+
     func testCreateDrawnImageFrameNeedsAsset() {
         // sample project has assets → image frame creates and references one.
         let withAssets = AppState(project: BookProject.sample)
