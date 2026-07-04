@@ -1092,6 +1092,72 @@ final class AppState: ObservableObject {
         updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: "", shouldClear: true)
     }
 
+    // MARK: - PrintColor 通路（CMYK 原生）
+    //
+    // 与上面吃 SwiftUI `Color` 的快捷 setter 并存：多套系拾色器提交的是
+    // `PrintColor`，其 storageString(可能是 `cmyk(...)`)直接写进模型，从而
+    // 一路保持到 IDML 导出;画布即时预览用 displayRGB 近似色覆盖。
+
+    private func previewColor(_ pc: PrintColor) -> Color {
+        let c = pc.displayRGB
+        return Color(.sRGB, red: c.r, green: c.g, blue: c.b, opacity: 1)
+    }
+
+    func setSelectedFrameFillColor(_ printColor: PrintColor) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameBackgroundColors[frameId] = previewColor(printColor)
+        updateSelectedFrameColors(backgroundColorHex: printColor.storageString, strokeColorHex: nil, textColorHex: nil, shouldClear: false)
+    }
+
+    func setSelectedFrameStrokeColor(_ printColor: PrintColor) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameStrokeColors[frameId] = previewColor(printColor)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: printColor.storageString, textColorHex: nil, shouldClear: false)
+    }
+
+    func setSelectedFrameTextColor(_ printColor: PrintColor) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameTextColors[frameId] = previewColor(printColor)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: printColor.storageString, shouldClear: false)
+    }
+
+    // MARK: - 色板库（自定义 swatch）
+
+    var customSwatches: [PrintSwatch] { project.customSwatches ?? [] }
+
+    /// 把一个颜色存进项目色板库。重复颜色(相同 storageString)不再新增。
+    @discardableResult
+    func addCustomSwatch(_ color: PrintColor, name: String? = nil) -> PrintSwatch? {
+        var currentProject = project
+        var list = currentProject.safeCustomSwatches
+        guard !list.contains(where: { $0.colorString == color.storageString }) else { return nil }
+        commitState()
+        let swatch = PrintSwatch(name: name ?? Self.defaultSwatchName(for: color), color: color)
+        list.append(swatch)
+        currentProject.safeCustomSwatches = list
+        self.project = currentProject
+        return swatch
+    }
+
+    func removeCustomSwatch(id: UUID) {
+        commitState()
+        var currentProject = project
+        currentProject.safeCustomSwatches.removeAll { $0.id == id }
+        self.project = currentProject
+    }
+
+    private static func defaultSwatchName(for color: PrintColor) -> String {
+        switch color {
+        case let .rgb(r, g, b):
+            return String(format: "R=%d G=%d B=%d", r, g, b)
+        case .cmyk:
+            return color.idmlSwatchName
+        }
+    }
+
     private func updateSelectedFrameColors(
         backgroundColorHex: String?,
         strokeColorHex: String?,

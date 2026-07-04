@@ -142,6 +142,44 @@ struct InspectorView: View {
         return Color(nsColor: ns)
     }
 
+    /// Resolves a stored color string to a `PrintColor` for the multi-space
+    /// picker, falling back when absent/malformed.
+    private func printColor(_ hex: String?, fallback: PrintColor) -> PrintColor {
+        guard let hex, let color = PrintColor(string: hex) else { return fallback }
+        return color
+    }
+
+    /// The "多套系" trigger next to a quick ColorPicker: opens the RGB/HSB/CMYK
+    /// panel in a popover and routes its output to the given apply closure.
+    private func multiSpaceButton(
+        isPresented: Binding<Bool>,
+        title: String,
+        current: PrintColor,
+        apply: @escaping (PrintColor) -> Void
+    ) -> some View {
+        Button {
+            isPresented.wrappedValue.toggle()
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+        .buttonStyle(.borderless)
+        .help("多套系拾色器 (RGB / HSB / CMYK)")
+        .popover(isPresented: isPresented, arrowEdge: .trailing) {
+            ColorPickerPanel(
+                title: title,
+                color: current,
+                swatches: state.customSwatches,
+                onChange: apply,
+                onAddSwatch: { state.addCustomSwatch($0) },
+                onRemoveSwatch: { state.removeCustomSwatch(id: $0) }
+            )
+        }
+    }
+
+    @State private var showFillPicker = false
+    @State private var showStrokePicker = false
+    @State private var showTextPicker = false
+
     @State private var selectedElement = true
     @State private var selectedMetadata = true
     @State private var selectedAssets = true
@@ -398,6 +436,9 @@ struct InspectorView: View {
                                         get: { colorFromHex(frame.backgroundColorHex) ?? Color.white },
                                         set: { state.setSelectedFrameFillColor($0) }
                                     ), supportsOpacity: false)
+                                    multiSpaceButton(isPresented: $showFillPicker, title: "填充",
+                                        current: printColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
+                                        apply: { state.setSelectedFrameFillColor($0) })
                                     Spacer()
                                     Button("无填充") { state.clearSelectedFrameFillColor() }
                                         .buttonStyle(.borderless)
@@ -409,6 +450,9 @@ struct InspectorView: View {
                                         get: { colorFromHex(frame.strokeColorHex) ?? Color.black },
                                         set: { state.setSelectedFrameStrokeColor($0) }
                                     ), supportsOpacity: false)
+                                    multiSpaceButton(isPresented: $showStrokePicker, title: "描边",
+                                        current: printColor(frame.strokeColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
+                                        apply: { state.setSelectedFrameStrokeColor($0) })
                                     Spacer()
                                     Button("无描边") { state.clearSelectedFrameStrokeColor() }
                                         .buttonStyle(.borderless)
@@ -421,6 +465,9 @@ struct InspectorView: View {
                                             get: { colorFromHex(frame.textColorHex) ?? Color.primary },
                                             set: { state.setSelectedFrameTextColor($0) }
                                         ), supportsOpacity: false)
+                                        multiSpaceButton(isPresented: $showTextPicker, title: "文字",
+                                            current: printColor(frame.textColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
+                                            apply: { state.setSelectedFrameTextColor($0) })
                                         Spacer()
                                         Button("默认") { state.clearSelectedFrameTextColor() }
                                             .buttonStyle(.borderless)

@@ -120,6 +120,24 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(decoded.assets.count, 1)
     }
 
+    func testCustomSwatchesRoundTripAndLegacyDecode() throws {
+        var project = BookProject.sample
+        project.safeCustomSwatches = [
+            PrintSwatch(name: "品牌绿", color: .cmyk(c: 80, m: 20, y: 60, k: 5)),
+            PrintSwatch(name: "标题墨", color: .rgb(r: 23, g: 32, b: 42))
+        ]
+        let data = try ProjectFile.encode(project)
+        let decoded = try ProjectFile.decode(data)
+        XCTAssertEqual(decoded.safeCustomSwatches.count, 2)
+        XCTAssertEqual(decoded.customSwatches?.first?.color, .cmyk(c: 80, m: 20, y: 60, k: 5))
+
+        // 旧文件(无 customSwatches 键)应解出 nil，不报错。
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "customSwatches")
+        let legacyData = try JSONSerialization.data(withJSONObject: json)
+        XCTAssertNil(try ProjectFile.decode(legacyData).customSwatches)
+    }
+
     func testTableParsingAndAllocation() throws {
         let tableText = """
         结构    类比    主要作用
