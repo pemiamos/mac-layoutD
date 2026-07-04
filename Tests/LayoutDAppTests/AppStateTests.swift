@@ -44,6 +44,29 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.project.safeAppliedLayoutPlans[4]?.strategy, .knowledgeCard) // shifted from 3
     }
 
+    func testSelectingFrameSyncsCurrentPage() {
+        let state = AppState(project: BookProject.sample)
+        state.currentPageNumber = 1
+
+        // Find a frame that lives on a page other than 1.
+        guard let doc = state.laidOutDocument,
+              let otherPage = doc.pages.first(where: { $0.number > 1 && !$0.frames.isEmpty }),
+              let frame = otherPage.frames.first else {
+            return XCTFail("sample should have frames on a page beyond page 1")
+        }
+
+        state.selectedFrameId = frame.id
+        // currentPageNumber must follow the selection so page-scoped controls
+        // (lock/unlock, reset, save-as-template) act on the right page.
+        XCTAssertEqual(state.currentPageNumber, otherPage.number)
+
+        // Lock/unlock now targets the page the selected frame is actually on.
+        state.lockPage(number: state.currentPageNumber)
+        XCTAssertTrue(state.project.safeLockedPages.contains(otherPage.number))
+        state.unlockPage(number: state.currentPageNumber)
+        XCTAssertFalse(state.project.safeLockedPages.contains(otherPage.number))
+    }
+
     func testCreateDrawnTextFrameWritesNormalizedBlock() {
         let state = AppState(project: BookProject.sample)
         let pageSize = state.project.pageSetup.pageSize
