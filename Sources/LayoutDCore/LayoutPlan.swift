@@ -183,9 +183,17 @@ public enum ContentReference: Codable, Equatable, Sendable {
 public enum LayoutTool: String, CaseIterable, Sendable {
     case selection
     case directSelection
+    case type
+    /// Draw a new text frame by dragging a rectangle. Unlike `type` (which selects
+    /// an existing structured text frame for editing), this authors a fresh `.text`
+    /// LayoutPlan block on the page — still structured, still undoable, no free
+    /// vector drawing.
+    case textFrame
+    /// Draw a new image frame by dragging a rectangle → a `.image` LayoutPlan block
+    /// referencing a project asset (re-pickable in the inspector).
+    case imageFrame
     case page
     case gap
-    case type
     case hand
     case zoom
     case annotation
@@ -194,9 +202,11 @@ public enum LayoutTool: String, CaseIterable, Sendable {
         switch self {
         case .selection: return "选择工具"
         case .directSelection: return "直接选择工具"
+        case .type: return "文字工具"
+        case .textFrame: return "文本框工具"
+        case .imageFrame: return "图像框工具"
         case .page: return "页面工具"
         case .gap: return "间隔工具"
-        case .type: return "文字工具"
         case .hand: return "手形工具"
         case .zoom: return "缩放工具"
         case .annotation: return "批注工具"
@@ -207,12 +217,30 @@ public enum LayoutTool: String, CaseIterable, Sendable {
         switch self {
         case .selection: return "arrow.up.left.pointer.fill"
         case .directSelection: return "cursorarrow"
+        case .type: return "textformat"
+        case .textFrame: return "character.textbox"
+        case .imageFrame: return "photo.badge.plus"
         case .page: return "doc.plaintext"
         case .gap: return "arrow.left.and.right.pattern.ratio"
-        case .type: return "textformat"
         case .hand: return "hand.raised.fill"
         case .zoom: return "magnifyingglass"
         case .annotation: return "bubble.left.fill"
+        }
+    }
+
+    /// Single-key toolbox shortcut, aligned with InDesign muscle memory. `page`
+    /// uses Shift+P (a modifier combo, handled separately). `textFrame` has no
+    /// InDesign single-key equivalent and is reached from the toolbox.
+    public var shortcutKey: Character? {
+        switch self {
+        case .selection: return "v"
+        case .directSelection: return "a"
+        case .type: return "t"
+        case .imageFrame: return "f"
+        case .gap: return "u"
+        case .hand: return "h"
+        case .zoom: return "z"
+        case .textFrame, .page, .annotation: return nil
         }
     }
 }

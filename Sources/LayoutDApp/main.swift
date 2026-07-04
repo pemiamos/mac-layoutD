@@ -609,6 +609,14 @@ final class WorkspaceViewController: NSViewController {
         appState.redo()
     }
 
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        // Focus the canvas so single-key toolbox shortcuts (V/A/T/F/U/H/Z, ⇧P) fire.
+        // Text fields in the panels take focus while editing, which correctly
+        // suppresses the shortcuts until focus returns to the canvas.
+        view.window?.makeFirstResponder(canvas)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         buildInterface()
@@ -641,6 +649,33 @@ final class WorkspaceViewController: NSViewController {
             guard let self else { return }
             self.appState.currentPageNumber = pageNum
         }
+
+        canvas.onToolShortcut = { [weak self] tool in
+            self?.appState.activeTool = tool
+        }
+
+        canvas.onFrameDrawn = { [weak self] pageNum, rect in
+            guard let self else { return }
+            switch self.appState.activeTool {
+            case .textFrame:
+                self.appState.createDrawnFrame(kind: .text, onPage: pageNum, rect: rect)
+                // Switch to selection so the freshly drawn frame is ready to adjust,
+                // and the inspector's text-content editor is in reach.
+                self.appState.activeTool = .selection
+            case .imageFrame:
+                if self.appState.project.assets.isEmpty {
+                    let alert = NSAlert()
+                    alert.messageText = "没有可用图片"
+                    alert.informativeText = "请先在「面板 → 资产」里导入图片，再绘制图像框。绘制后可在检查器「更换图片」重新指定。"
+                    alert.runModal()
+                } else {
+                    self.appState.createDrawnFrame(kind: .image, onPage: pageNum, rect: rect)
+                    self.appState.activeTool = .selection
+                }
+            default:
+                break
+            }
+        }
         
         canvas.onCanvasClick = { [weak self] pageNum, localPoint in
             guard let self else { return }
@@ -648,6 +683,9 @@ final class WorkspaceViewController: NSViewController {
 
             switch tool {
             case .selection, .directSelection:
+                break
+            case .textFrame, .imageFrame:
+                // Drawn via rubber-band drag (onFrameDrawn), not a plain click.
                 break
             case .page:
                 break
