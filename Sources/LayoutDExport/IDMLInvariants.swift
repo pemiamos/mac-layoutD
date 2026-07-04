@@ -38,9 +38,36 @@ public enum IDMLInvariants {
         var violations: [IDMLInvariantViolation] = []
         // 排版器真值挂在段落样式上：先解析出哪些样式是 World-Ready，供 Story 解析时跨部件查。
         let worldReadyStyles = worldReadyParagraphStyles(files: files)
+
+        // 1. 从 Fonts.xml 中解析复合字体映射
+        let compositeFonts: [String: (family: String, style: String)]
+        if let fontsXML = files["Resources/Fonts.xml"] {
+            let fontParser = FontsXMLParser()
+            let parser = XMLParser(data: Data(fontsXML.utf8))
+            parser.shouldProcessNamespaces = false
+            parser.delegate = fontParser
+            parser.parse()
+            compositeFonts = fontParser.compositeFonts
+        } else {
+            compositeFonts = [:]
+        }
+
+        // 2. 从 Styles.xml 中解析样式的字体映射
+        let styleFonts: [String: (family: String, style: String?)]
+        if let stylesXML = files["Resources/Styles.xml"] {
+            let styleParser = StylesXMLParser()
+            let parser = XMLParser(data: Data(stylesXML.utf8))
+            parser.shouldProcessNamespaces = false
+            parser.delegate = styleParser
+            parser.parse()
+            styleFonts = styleParser.styleFonts
+        } else {
+            styleFonts = [:]
+        }
+
         for (part, xml) in files.sorted(by: { $0.key < $1.key }) {
             if part.hasPrefix("Stories/") || part == "XML/BackingStory.xml" {
-                violations += checkStory(part: part, xml: xml, worldReadyStyles: worldReadyStyles)
+                violations += checkStory(part: part, xml: xml, worldReadyStyles: worldReadyStyles, styleFonts: styleFonts, compositeFonts: compositeFonts)
             }
         }
         violations += checkFontReferences(files: files)
@@ -79,8 +106,8 @@ public enum IDMLInvariants {
 
     // MARK: - Story 级断言（KentenKind / 脚注豆腐 / CJK 粗斜体）
 
-    private static func checkStory(part: String, xml: String, worldReadyStyles: Set<String>) -> [IDMLInvariantViolation] {
-        let walker = StoryInvariantWalker(part: part, worldReadyStyles: worldReadyStyles)
+    private static func checkStory(part: String, xml: String, worldReadyStyles: Set<String>, styleFonts: [String: (family: String, style: String?)], compositeFonts: [String: (family: String, style: String)]) -> [IDMLInvariantViolation] {
+        let walker = StoryInvariantWalker(part: part, worldReadyStyles: worldReadyStyles, styleFonts: styleFonts, compositeFonts: compositeFonts)
         let parser = XMLParser(data: Data(xml.utf8))
         parser.shouldProcessNamespaces = false
         parser.delegate = walker
@@ -139,18 +166,21 @@ public enum IDMLInvariants {
         }
     }
 
-    /// 是否含 CJK（统一表意文字 / 假名 / CJK 标点 / 扩展 A / 全角）。
+    /// 判断 scalar 是否为 CJK（统一表意文字 / 假名 / CJK 标点 / 扩展 A / 全角 / 扩展 B）。
+    public static func isCJK(_ scalar: UnicodeScalar) -> Bool {
+        let v = scalar.value
+        return (0x3000...0x303F).contains(v)   // CJK 标点
+            || (0x3040...0x30FF).contains(v)   // 平/片假名
+            || (0x3400...0x4DBF).contains(v)   // 扩展 A
+            || (0x4E00...0x9FFF).contains(v)   // 基本区
+            || (0xF900...0xFAFF).contains(v)   // 兼容表意
+            || (0xFF00...0xFFEF).contains(v)   // 全角/半角
+            || (0x20000...0x2A6DF).contains(v) // 扩展 B
+    }
+
+    /// 是否含 CJK。
     static func containsCJK(_ s: String) -> Bool {
-        s.unicodeScalars.contains { scalar in
-            let v = scalar.value
-            return (0x3000...0x303F).contains(v)   // CJK 标点
-                || (0x3040...0x30FF).contains(v)   // 平/片假名
-                || (0x3400...0x4DBF).contains(v)   // 扩展 A
-                || (0x4E00...0x9FFF).contains(v)   // 基本区
-                || (0xF900...0xFAFF).contains(v)   // 兼容表意
-                || (0xFF00...0xFFEF).contains(v)   // 全角/半角
-                || (0x20000...0x2A6DF).contains(v) // 扩展 B
-        }
+        s.unicodeScalars.contains(where: isCJK)
     }
 
     /// 规则⑤：通过 CoreText 动态检查所有物理字体的字重存在性（防范 silent Helvetica fallback 豆腐）。
@@ -231,39 +261,63 @@ private final class StoryInvariantWalker: NSObject, XMLParserDelegate {
         let paragraphStyle: String?
         let inFootnote: Bool
         var content: String = ""
+        var localAppliedFont: String?
+        var localFontStyle: String?
     }
 
     let part: String
     let worldReadyStyles: Set<String>
+    let styleFonts: [String: (family: String, style: String?)]
+    let compositeFonts: [String: (family: String, style: String)]
+
     var violations: [IDMLInvariantViolation] = []
     private var psrStack: [PSRFrame] = []
     private var footnoteDepth = 0
     private var currentCSRContent: String?      // 非 nil 表示正在 CharacterStyleRange 内
     private var currentCSRFontStyle: String?
+    private var currentCSRAppliedFont: String?
+    private var currentCSRAppliedStyle: String?
 
-    init(part: String, worldReadyStyles: Set<String>) {
+    // 辅助 XML 解析状态
+    private var inContent = false
+    private var inProperties = false
+    private var readingAppliedFont = false
+    private var readingFontStyle = false
+    private var appliedFontBuffer = ""
+    private var fontStyleBuffer = ""
+
+    // CJK 字形校验上限与缓存，避免大量字符重复调用 CoreText 匹配
+    private var cjkCheckedCount = 0
+    private let cjkLimit = 100
+    private var glyphSupportCache: [String: [UInt32: Bool]] = [:]
+    private var reportedViolations = Set<String>()
+
+    init(part: String, worldReadyStyles: Set<String>, styleFonts: [String: (family: String, style: String?)], compositeFonts: [String: (family: String, style: String)]) {
         self.part = part
         self.worldReadyStyles = worldReadyStyles
+        self.styleFonts = styleFonts
+        self.compositeFonts = compositeFonts
     }
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
                 qualifiedName qName: String?, attributes attrs: [String: String]) {
         switch elementName {
         case "ParagraphStyleRange":
-            // 真值属性名是 Composer（旧代码错用 AppliedComposer，InDesign 会忽略）。
-            // 段落内联通常没有；排版器主要由 AppliedParagraphStyle 解析（见 worldReadyStyles）。
             psrStack.append(PSRFrame(
                 composer: attrs["Composer"],
                 paragraphStyle: attrs["AppliedParagraphStyle"],
-                inFootnote: footnoteDepth > 0
+                inFootnote: footnoteDepth > 0,
+                localAppliedFont: nil,
+                localFontStyle: nil
             ))
         case "Footnote":
             footnoteDepth += 1
         case "CharacterStyleRange":
             currentCSRContent = ""
             currentCSRFontStyle = attrs["FontStyle"]
+            currentCSRAppliedStyle = attrs["AppliedCharacterStyle"]
+            currentCSRAppliedFont = nil
             // 规则①：着重号必须配 CJK/World-Ready 排版器，否则 KentenKind 被静默忽略。
-            // 排版器真值挂在段落样式上：段落自带 Composer 时以其为准；否则看所引样式是否 WR。
             if let kenten = attrs["KentenKind"], !isNoneKenten(kenten) {
                 let frame = psrStack.last
                 let ownComposerWR = frame?.composer.map(IDMLInvariants.isWorldReadyComposer) ?? false
@@ -278,22 +332,101 @@ private final class StoryInvariantWalker: NSObject, XMLParserDelegate {
                     ))
                 }
             }
+        case "Properties":
+            inProperties = true
+        case "AppliedFont":
+            if inProperties {
+                readingAppliedFont = true
+                appliedFontBuffer = ""
+            }
+        case "FontStyle":
+            if inProperties {
+                readingFontStyle = true
+                fontStyleBuffer = ""
+            }
+        case "Content":
+            inContent = true
         default:
             break
         }
     }
 
     func parser(_ parser: XMLParser, foundCharacters string: String) {
-        if currentCSRContent != nil { currentCSRContent! += string }
-        if !psrStack.isEmpty { psrStack[psrStack.count - 1].content += string }
+        if readingAppliedFont {
+            appliedFontBuffer += string
+        } else if readingFontStyle {
+            fontStyleBuffer += string
+        } else if inContent {
+            if currentCSRContent != nil { currentCSRContent! += string }
+            if !psrStack.isEmpty { psrStack[psrStack.count - 1].content += string }
+
+            // 规则⑥：对 Story 内前 N 个 CJK 字符执行物理字体字形覆盖率校验
+            if cjkCheckedCount < cjkLimit {
+                for scalar in string.unicodeScalars {
+                    if IDMLInvariants.isCJK(scalar) {
+                        cjkCheckedCount += 1
+                        let resolved = resolvePhysicalFont(
+                            charStyle: currentCSRAppliedStyle,
+                            paraStyle: psrStack.last?.paragraphStyle,
+                            csrAppliedFont: currentCSRAppliedFont,
+                            csrFontStyle: currentCSRFontStyle,
+                            psrAppliedFont: psrStack.last?.localAppliedFont,
+                            psrFontStyle: psrStack.last?.localFontStyle
+                        )
+                        let family = resolved.family
+                        let style = resolved.style
+                        
+                        let violationKey = "\(part)|\(family)|\(style)|\(scalar.value)"
+                        if !reportedViolations.contains(violationKey) {
+                            let supported = checkGlyphSupport(family: family, style: style, scalar: scalar)
+                            if !supported {
+                                reportedViolations.insert(violationKey)
+                                violations.append(IDMLInvariantViolation(
+                                    part: part,
+                                    rule: "font-missing-cjk-glyph",
+                                    detail: "字体 \"\(family)\" (字重 \"\(style)\") 缺少字符 \"\(scalar)\" (U+\(String(scalar.value, radix: 16).uppercased())) 的 CJK 字形，会导致 InDesign 渲染出豆腐块。"
+                                ))
+                            }
+                        }
+                        
+                        if cjkCheckedCount >= cjkLimit {
+                            break
+                        }
+                    }
+                }
+            }
+        }
     }
 
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?,
                 qualifiedName qName: String?) {
         switch elementName {
+        case "AppliedFont":
+            readingAppliedFont = false
+            let val = appliedFontBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !val.isEmpty {
+                if currentCSRContent != nil {
+                    currentCSRAppliedFont = val
+                } else if !psrStack.isEmpty {
+                    psrStack[psrStack.count - 1].localAppliedFont = val
+                }
+            }
+        case "FontStyle":
+            readingFontStyle = false
+            let val = fontStyleBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !val.isEmpty {
+                if currentCSRContent != nil {
+                    currentCSRFontStyle = val
+                } else if !psrStack.isEmpty {
+                    psrStack[psrStack.count - 1].localFontStyle = val
+                }
+            }
+        case "Properties":
+            inProperties = false
+        case "Content":
+            inContent = false
         case "CharacterStyleRange":
-            // 规则③：CJK 粗/斜体必须走 FauxBold/Skew，不能用 FontStyle="Bold"/"Italic"——
-            // 后者要求 Fonts.xml 里真有同名字重资源，CJK 字体通常没有→替代字形（粉色）。
+            // 规则③：CJK 粗/斜体必须走 FauxBold/Skew，不能用 FontStyle="Bold"/"Italic"
             if let fs = currentCSRFontStyle, isBoldOrItalic(fs),
                let content = currentCSRContent, IDMLInvariants.containsCJK(content) {
                 violations.append(IDMLInvariantViolation(
@@ -305,9 +438,11 @@ private final class StoryInvariantWalker: NSObject, XMLParserDelegate {
             }
             currentCSRContent = nil
             currentCSRFontStyle = nil
+            currentCSRAppliedFont = nil
+            currentCSRAppliedStyle = nil
         case "ParagraphStyleRange":
             let frame = psrStack.removeLast()
-            // 规则②：脚注正文段落不能挂 [No paragraph style]——它没有中文复合字体，CJK 变豆腐。
+            // 规则②：脚注正文段落不能挂 [No paragraph style]
             if frame.inFootnote,
                frame.paragraphStyle == IDMLInvariants.noParagraphStyle,
                IDMLInvariants.containsCJK(frame.content) {
@@ -317,7 +452,7 @@ private final class StoryInvariantWalker: NSObject, XMLParserDelegate {
                     detail: "脚注正文段落用 \(IDMLInvariants.noParagraphStyle) 且含 CJK，该样式无中文复合字体→脚注豆腐。"
                 ))
             }
-            // 把已结束段落的文本并入父段落（脚注算父正文段的一部分），保证父段 CJK 判定不丢。
+            // 把已结束段落的文本并入父段落，保证父段 CJK 判定不丢
             if !psrStack.isEmpty { psrStack[psrStack.count - 1].content += frame.content }
         case "Footnote":
             footnoteDepth -= 1
@@ -334,5 +469,211 @@ private final class StoryInvariantWalker: NSObject, XMLParserDelegate {
     private func isBoldOrItalic(_ v: String) -> Bool {
         let n = v.lowercased()
         return n.contains("bold") || n.contains("italic") || n.contains("oblique")
+    }
+
+    private func resolvePhysicalFont(
+        charStyle: String?,
+        paraStyle: String?,
+        csrAppliedFont: String?,
+        csrFontStyle: String?,
+        psrAppliedFont: String?,
+        psrFontStyle: String?
+    ) -> (family: String, style: String) {
+        // 1. Local CSR override
+        var family = csrAppliedFont
+        var style = csrFontStyle
+
+        // 2. Character Style
+        if (family == nil || family!.isEmpty) && charStyle != nil {
+            if let sf = styleFonts[charStyle!] {
+                family = sf.family
+                if style == nil { style = sf.style }
+            }
+        }
+
+        // 3. Local PSR override
+        if family == nil || family!.isEmpty {
+            family = psrAppliedFont
+            if style == nil { style = psrFontStyle }
+        }
+
+        // 4. Paragraph Style
+        if (family == nil || family!.isEmpty) && paraStyle != nil {
+            if let sf = styleFonts[paraStyle!] {
+                family = sf.family
+                if style == nil { style = sf.style }
+            }
+        }
+
+        // Default fallback if still empty
+        let resolvedFamily = family ?? "Minion Pro"
+        let resolvedStyle = style ?? "Regular"
+
+        // If composite font, map it to CJK physical font
+        if resolvedFamily.hasPrefix("CF_") {
+            if let comp = compositeFonts[resolvedFamily] {
+                return comp
+            }
+        }
+
+        return (resolvedFamily, resolvedStyle)
+    }
+
+    private func checkGlyphSupport(family: String, style: String, scalar: UnicodeScalar) -> Bool {
+        if family.hasPrefix("CF_") || family.hasPrefix("$ID/") {
+            return true
+        }
+
+        let cacheKey = "\(family)|\(style)"
+        if let charCache = glyphSupportCache[cacheKey], let supported = charCache[scalar.value] {
+            return supported
+        }
+
+        let attrs: [CFString: Any] = [
+            kCTFontFamilyNameAttribute: family as CFString,
+            kCTFontStyleNameAttribute: style as CFString
+        ]
+        let desc = CTFontDescriptorCreateWithAttributes(attrs as CFDictionary)
+        let matches = CTFontDescriptorCreateMatchingFontDescriptors(desc, nil) as? [CTFontDescriptor] ?? []
+
+        guard let matchedDesc = matches.first else {
+            // Font weight/family not found, rule 5 will catch it or skip
+            if glyphSupportCache[cacheKey] == nil {
+                glyphSupportCache[cacheKey] = [:]
+            }
+            glyphSupportCache[cacheKey]![scalar.value] = true
+            return true
+        }
+
+        let font = CTFontCreateWithFontDescriptor(matchedDesc, 0.0, nil)
+        let utf16 = Array(String(scalar).utf16)
+        var glyphs = [CGGlyph](repeating: 0, count: utf16.count)
+        let success = CTFontGetGlyphsForCharacters(font, utf16, &glyphs, utf16.count)
+
+        let supported = success && !glyphs.isEmpty && glyphs[0] != 0
+
+        if glyphSupportCache[cacheKey] == nil {
+            glyphSupportCache[cacheKey] = [:]
+        }
+        glyphSupportCache[cacheKey]![scalar.value] = supported
+        return supported
+    }
+}
+
+// MARK: - XML Parsers for Resources
+
+private final class FontsXMLParser: NSObject, XMLParserDelegate {
+    var compositeFonts: [String: (family: String, style: String)] = [:]
+    
+    private var currentCompositeFont: String?
+    private var currentEntryName: String?
+    private var currentEntryStyle: String?
+    private var inProperties = false
+    private var currentAppliedFont: String?
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
+                qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
+        switch elementName {
+        case "CompositeFont":
+            currentCompositeFont = attributeDict["Name"]
+        case "CompositeFontEntry":
+            currentEntryName = attributeDict["Name"]
+            currentEntryStyle = attributeDict["FontStyle"]
+        case "Properties":
+            if currentEntryName != nil {
+                inProperties = true
+            }
+        case "AppliedFont":
+            if inProperties {
+                currentAppliedFont = ""
+            }
+        default:
+            break
+        }
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        if inProperties, currentAppliedFont != nil {
+            currentAppliedFont! += string
+        }
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+        switch elementName {
+        case "Properties":
+            inProperties = false
+        case "CompositeFontEntry":
+            if let comp = currentCompositeFont,
+               let entryName = currentEntryName,
+               entryName == "漢字",
+               let style = currentEntryStyle,
+               let family = currentAppliedFont?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !family.isEmpty {
+                compositeFonts[comp] = (family, style)
+            }
+            currentEntryName = nil
+            currentEntryStyle = nil
+            currentAppliedFont = nil
+        case "CompositeFont":
+            currentCompositeFont = nil
+        default:
+            break
+        }
+    }
+}
+
+private final class StylesXMLParser: NSObject, XMLParserDelegate {
+    var styleFonts: [String: (family: String, style: String?)] = [:]
+
+    private var currentStyleSelf: String?
+    private var currentFontStyle: String?
+    private var inProperties = false
+    private var currentAppliedFont: String?
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
+                qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
+        switch elementName {
+        case "ParagraphStyle", "CharacterStyle":
+            if let self_ = attributeDict["Self"] {
+                currentStyleSelf = self_
+                currentFontStyle = attributeDict["FontStyle"]
+            }
+        case "Properties":
+            if currentStyleSelf != nil {
+                inProperties = true
+            }
+        case "AppliedFont":
+            if inProperties {
+                currentAppliedFont = ""
+            }
+        default:
+            break
+        }
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        if inProperties, currentAppliedFont != nil {
+            currentAppliedFont! += string
+        }
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+        switch elementName {
+        case "Properties":
+            inProperties = false
+        case "ParagraphStyle", "CharacterStyle":
+            if let self_ = currentStyleSelf,
+               let family = currentAppliedFont?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !family.isEmpty {
+                styleFonts[self_] = (family, currentFontStyle)
+            } else if let self_ = currentStyleSelf, let fontStyle = currentFontStyle {
+                styleFonts[self_] = ("", fontStyle)
+            }
+            currentStyleSelf = nil
+            currentFontStyle = nil
+            currentAppliedFont = nil
+        default:
+            break
+        }
     }
 }
