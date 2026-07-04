@@ -1942,6 +1942,57 @@ extension LayoutDCoreTests {
         XCTAssertEqual(bottom.y, 20 + 300 - 40, accuracy: 0.0001) // 280
         XCTAssertEqual(bottom.x, 55, accuracy: 0.0001)
     }
+
+    func testBoundingBoxEnclosesAllRects() {
+        let box = boundingBox(of: [
+            Rect(x: 10, y: 20, width: 30, height: 40),   // → maxX 40, maxY 60
+            Rect(x: 100, y: 5, width: 20, height: 10),   // → maxX 120, minY 5
+            Rect(x: 50, y: 200, width: 10, height: 10)   // → maxY 210
+        ])
+        XCTAssertEqual(box.x, 10, accuracy: 0.0001)
+        XCTAssertEqual(box.y, 5, accuracy: 0.0001)
+        XCTAssertEqual(box.width, 120 - 10, accuracy: 0.0001)
+        XCTAssertEqual(box.height, 210 - 5, accuracy: 0.0001)
+    }
+
+    func testDistributeHorizontalCentersEqualizesSpacing() {
+        let a = UUID(), b = UUID(), c = UUID()
+        // Centers at 10, 15, 100 → after distribution the middle center is the average.
+        let frames: [(id: UUID, rect: Rect)] = [
+            (a, Rect(x: 0, y: 0, width: 20, height: 10)),    // center 10
+            (b, Rect(x: 10, y: 0, width: 10, height: 10)),   // center 15
+            (c, Rect(x: 90, y: 0, width: 20, height: 10))    // center 100
+        ]
+        let out = distributedOrigins(frames: frames, mode: .horizontalCenters)
+        // Extremes unchanged.
+        XCTAssertEqual(out[a]!.x, 0, accuracy: 0.0001)
+        XCTAssertEqual(out[c]!.x, 90, accuracy: 0.0001)
+        // Middle center becomes (10 + 100)/2 = 55 → x = 55 - width/2 = 50.
+        XCTAssertEqual(out[b]!.x, 50, accuracy: 0.0001)
+    }
+
+    func testDistributeHorizontalSpacingEqualizesGaps() {
+        let a = UUID(), b = UUID(), c = UUID()
+        // Widths 10/20/10 across span [0, 100]: free = 100-40 = 60, gap = 30.
+        let frames: [(id: UUID, rect: Rect)] = [
+            (a, Rect(x: 0, y: 0, width: 10, height: 10)),
+            (b, Rect(x: 40, y: 0, width: 20, height: 10)),
+            (c, Rect(x: 90, y: 0, width: 10, height: 10))
+        ]
+        let out = distributedOrigins(frames: frames, mode: .horizontalSpacing)
+        XCTAssertEqual(out[a]!.x, 0, accuracy: 0.0001)        // leftmost fixed
+        XCTAssertEqual(out[b]!.x, 10 + 30, accuracy: 0.0001)  // after a (10) + gap (30)
+        XCTAssertEqual(out[c]!.x, 40 + 20 + 30, accuracy: 0.0001) // ends at 90 → right edge 100
+    }
+
+    func testDistributeNeedsThreeFrames() {
+        let a = UUID(), b = UUID()
+        let frames: [(id: UUID, rect: Rect)] = [
+            (a, Rect(x: 0, y: 0, width: 10, height: 10)),
+            (b, Rect(x: 50, y: 0, width: 10, height: 10))
+        ]
+        XCTAssertTrue(distributedOrigins(frames: frames, mode: .horizontalCenters).isEmpty)
+    }
 }
 
 private struct FailingPlanProvider: LayoutPlanProvider {

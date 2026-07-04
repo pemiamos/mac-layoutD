@@ -144,12 +144,12 @@ final class AppStateTests: XCTestCase {
         let frameId = try! XCTUnwrap(state.selectedFrameId)
 
         // Left → page edge (x = 0).
-        state.alignSelectedFrame(.left, reference: .page)
+        state.alignSelection(.left, reference: .page)
         var block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first(where: { $0.id == frameId }))
         XCTAssertEqual(block.absoluteFrame(pageSize: pageSize).x, 0, accuracy: 0.0001)
 
         // Horizontal center on the page keeps the 200-wide frame centered.
-        state.alignSelectedFrame(.horizontalCenter, reference: .page)
+        state.alignSelection(.horizontalCenter, reference: .page)
         block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first(where: { $0.id == frameId }))
         XCTAssertEqual(block.absoluteFrame(pageSize: pageSize).x, (pageSize.width - 200) / 2, accuracy: 0.0001)
 
@@ -168,13 +168,84 @@ final class AppStateTests: XCTestCase {
         ))
         let frameId = try! XCTUnwrap(state.selectedFrameId)
 
-        state.alignSelectedFrame(.left, reference: .margin)
+        state.alignSelection(.left, reference: .margin)
         let block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[3]?.blocks.first(where: { $0.id == frameId }))
 
         // Page 3 is odd → on a facing-page spread its left edge is the (inner) left
         // margin, matching the canvas guide.
         let margins = state.project.resolvedMargins(for: 3)
         XCTAssertEqual(block.absoluteFrame(pageSize: pageSize).x, margins.left, accuracy: 0.0001)
+    }
+
+    func testToggleAndSetSelectionMaintainAnchorInvariant() {
+        let state = AppState(project: BookProject.sample)
+        let a = UUID(), b = UUID(), c = UUID()
+
+        // Plain single-select collapses the set to one.
+        state.selectedFrameId = a
+        XCTAssertEqual(state.selectedFrameIds, [a])
+
+        // Toggle adds and moves the anchor.
+        state.toggleFrameSelection(b)
+        XCTAssertEqual(state.selectedFrameIds, [a, b])
+        XCTAssertEqual(state.selectedFrameId, b)
+
+        // Toggling the anchor off picks a remaining member as the new anchor.
+        state.toggleFrameSelection(b)
+        XCTAssertEqual(state.selectedFrameIds, [a])
+        XCTAssertEqual(state.selectedFrameId, a)
+
+        // setSelection replaces wholesale.
+        state.setSelection([a, b, c], anchor: c)
+        XCTAssertEqual(state.selectedFrameIds, [a, b, c])
+        XCTAssertEqual(state.selectedFrameId, c)
+
+        // Assigning nil clears everything.
+        state.selectedFrameId = nil
+        XCTAssertTrue(state.selectedFrameIds.isEmpty)
+    }
+
+    func testAlignSelectionToSelectionBoundingBox() {
+        let state = AppState(project: BookProject.sample)
+        let pageSize = state.project.pageSetup.pageSize
+
+        // Two frames on page 2 at different X.
+        XCTAssertTrue(state.createDrawnFrame(kind: .text, onPage: 2, rect: Rect(x: 40, y: 60, width: 100, height: 50)))
+        let first = try! XCTUnwrap(state.selectedFrameId)
+        XCTAssertTrue(state.createDrawnFrame(kind: .text, onPage: 2, rect: Rect(x: 220, y: 300, width: 80, height: 40)))
+        let second = try! XCTUnwrap(state.selectedFrameId)
+
+        state.setSelection([first, second])
+        // Left-align to the selection box → both share the leftmost X (40).
+        state.alignSelection(.left, reference: .selection)
+
+        let plan = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2])
+        let f1 = try! XCTUnwrap(plan.blocks.first { $0.id == first })
+        let f2 = try! XCTUnwrap(plan.blocks.first { $0.id == second })
+        XCTAssertEqual(f1.absoluteFrame(pageSize: pageSize).x, 40, accuracy: 0.0001)
+        XCTAssertEqual(f2.absoluteFrame(pageSize: pageSize).x, 40, accuracy: 0.0001)
+        XCTAssertTrue(state.canUndo)
+    }
+
+    func testDistributeSelectionRequiresThreeFrames() {
+        let state = AppState(project: BookProject.sample)
+        let pageSize = state.project.pageSetup.pageSize
+
+        var ids: [UUID] = []
+        for x in [0.0, 100.0, 400.0] {
+            XCTAssertTrue(state.createDrawnFrame(kind: .text, onPage: 2, rect: Rect(x: x, y: 50, width: 40, height: 30)))
+            ids.append(try! XCTUnwrap(state.selectedFrameId))
+        }
+        state.setSelection(Set(ids))
+        state.distributeSelection(.horizontalCenters)
+
+        let plan = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2])
+        let centers = ids.map { id -> Double in
+            let r = plan.blocks.first { $0.id == id }!.absoluteFrame(pageSize: pageSize)
+            return r.x + r.width / 2
+        }.sorted()
+        // Three evenly spaced centers: middle gap equals outer gap.
+        XCTAssertEqual(centers[1] - centers[0], centers[2] - centers[1], accuracy: 0.0001)
     }
 
     func testCreateDrawnImageFrameNeedsAsset() {
