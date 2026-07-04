@@ -1260,7 +1260,73 @@ private struct LayoutContext {
 
 
 
-    private func makeCoverPage(number: Int) -> LaidOutPage {
+    /// Renders a front-matter page (cover / contents) from its LayoutPlan when the
+    /// user has manually edited it, so color / position / text / style overrides
+    /// take effect. These pages are otherwise regenerated every layout and would
+    /// silently discard edits. Returns nil when there's no valid plan, letting the
+    /// caller fall back to default generation (no behavior change for untouched books).
+    private mutating func frontMatterPageFromPlan(number: Int) -> LaidOutPage? {
+        guard let plan = project.appliedLayoutPlans?[number],
+              !plan.blocks.isEmpty,
+              planValidationFailures(plan).isEmpty else {
+            return nil
+        }
+        let pageSize = project.pageSetup.pageSize
+        let frames: [PageFrame] = plan.blocks.map { block in
+            let rect = Rect(
+                x: block.frame.x * pageSize.width,
+                y: block.frame.y * pageSize.height,
+                width: block.frame.width * pageSize.width,
+                height: block.frame.height * pageSize.height
+            )
+            let kind: PageFrameKind
+            switch block.kind {
+            case .text: kind = .text
+            case .image: kind = .image
+            case .caption: kind = .caption
+            case .component: kind = .callout
+            }
+            let content: FrameContent
+            switch block.contentReference {
+            case .generated(let str):
+                content = .text(str)
+            case .paragraph(let id):
+                content = .text(findParagraph(id: id)?.text ?? "")
+            case .asset(let id):
+                content = .asset(id)
+            case .storyRange(let sid, let start, let end):
+                content = .text(collectParagraphTexts(storyId: sid, startId: start, endId: end))
+            }
+            let styleId = block.styleId ?? defaultStyleId(for: block.kind)
+            return PageFrame(
+                id: block.id,
+                kind: kind,
+                rect: rect,
+                styleId: styleId,
+                content: content,
+                backgroundColorHex: block.backgroundColorHex,
+                strokeColorHex: block.strokeColorHex,
+                strokeWidth: block.strokeWidth,
+                textColorHex: block.textColorHex,
+                maskShape: block.maskShape
+            )
+        }
+        return LaidOutPage(number: number, frames: frames)
+    }
+
+    private func defaultStyleId(for kind: LayoutBlockKind) -> String? {
+        switch kind {
+        case .text: return StyleID.body.rawValue
+        case .caption: return StyleID.caption.rawValue
+        case .component: return StyleID.callout.rawValue
+        case .image: return nil
+        }
+    }
+
+    private mutating func makeCoverPage(number: Int) -> LaidOutPage {
+        if let planned = frontMatterPageFromPlan(number: number) {
+            return planned
+        }
         let setup = project.pageSetup
         let margins = project.resolvedMargins(for: number)
         let contentWidth = setup.pageSize.width - margins.left - margins.right
@@ -1308,7 +1374,10 @@ private struct LayoutContext {
         return LaidOutPage(number: number, frames: frames)
     }
 
-    private func makeContentsPage(number: Int, entries: [TableOfContentsEntry]) -> LaidOutPage {
+    private mutating func makeContentsPage(number: Int, entries: [TableOfContentsEntry]) -> LaidOutPage {
+        if let planned = frontMatterPageFromPlan(number: number) {
+            return planned
+        }
         let setup = project.pageSetup
         let margins = project.resolvedMargins(for: number)
         let contentWidth = setup.pageSize.width - margins.left - margins.right

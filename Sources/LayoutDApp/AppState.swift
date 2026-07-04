@@ -285,7 +285,13 @@ final class AppState: ObservableObject {
                 kind: kind,
                 role: frame.kind.rawValue,
                 frame: Rect(x: normX, y: normY, width: normW, height: normH),
-                contentReference: ref
+                contentReference: ref,
+                backgroundColorHex: frame.backgroundColorHex,
+                strokeColorHex: frame.strokeColorHex,
+                strokeWidth: frame.strokeWidth,
+                textColorHex: frame.textColorHex,
+                maskShape: frame.maskShape,
+                styleId: frame.styleId
             )
             blocks.append(block)
         }
