@@ -33,6 +33,7 @@ final class AppState: ObservableObject {
                page != currentPageNumber {
                 currentPageNumber = page
             }
+            colorEditBurstFrame = nil
         }
     }
     @Published var activeTool: LayoutTool = .selection
@@ -78,8 +79,14 @@ final class AppState: ObservableObject {
         recalculateLayout()
     }
 
+    /// Frame currently mid color-adjust. Continuous color-picker changes on this
+    /// frame coalesce into a single undo entry (see setSelectedFrame*Color); any
+    /// other committed action ends the burst.
+    private var colorEditBurstFrame: UUID?
+
     func commitState() {
         guard !isPerformingUndoRedo else { return }
+        colorEditBurstFrame = nil
         undoStack.append(project)
         redoStack.removeAll()
         if undoStack.count > 50 {
@@ -885,6 +892,62 @@ final class AppState: ObservableObject {
             textColorHex: activeFormattingTarget == .text ? "" : nil,
             shouldClear: true
         )
+    }
+
+    // MARK: - Direct per-channel color editing (inspector color pickers)
+    //
+    // These drive fill / stroke / text independently of the toolbar's
+    // container-vs-text target, so the inspector can offer three plain color
+    // pickers. Continuous picker changes on one frame coalesce into a single
+    // undo entry via `colorEditBurstFrame`.
+
+    private func beginColorEditBurst(_ frameId: UUID) {
+        if colorEditBurstFrame != frameId {
+            commitState()               // resets colorEditBurstFrame to nil
+            colorEditBurstFrame = frameId
+        }
+    }
+
+    func setSelectedFrameFillColor(_ color: Color) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameBackgroundColors[frameId] = color
+        updateSelectedFrameColors(backgroundColorHex: color.hexString, strokeColorHex: nil, textColorHex: nil, shouldClear: false)
+    }
+
+    func clearSelectedFrameFillColor() {
+        commitState()
+        guard let frameId = selectedFrameId else { return }
+        frameBackgroundColors.removeValue(forKey: frameId)
+        updateSelectedFrameColors(backgroundColorHex: "", strokeColorHex: nil, textColorHex: nil, shouldClear: true)
+    }
+
+    func setSelectedFrameStrokeColor(_ color: Color) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameStrokeColors[frameId] = color
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: color.hexString, textColorHex: nil, shouldClear: false)
+    }
+
+    func clearSelectedFrameStrokeColor() {
+        commitState()
+        guard let frameId = selectedFrameId else { return }
+        frameStrokeColors.removeValue(forKey: frameId)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: "", textColorHex: nil, shouldClear: true)
+    }
+
+    func setSelectedFrameTextColor(_ color: Color) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameTextColors[frameId] = color
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: color.hexString, shouldClear: false)
+    }
+
+    func clearSelectedFrameTextColor() {
+        commitState()
+        guard let frameId = selectedFrameId else { return }
+        frameTextColors.removeValue(forKey: frameId)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: "", shouldClear: true)
     }
 
     private func updateSelectedFrameColors(

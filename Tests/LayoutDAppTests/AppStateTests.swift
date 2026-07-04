@@ -44,6 +44,33 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.project.safeAppliedLayoutPlans[4]?.strategy, .knowledgeCard) // shifted from 3
     }
 
+    func testFillColorWritesHexAndCoalescesUndo() {
+        let state = AppState(project: BookProject.sample)
+        guard let doc = state.laidOutDocument,
+              let page = doc.pages.first(where: { $0.frames.contains { $0.kind == .text || $0.kind == .image } }),
+              let frame = page.frames.first(where: { $0.kind == .text || $0.kind == .image }) else {
+            return XCTFail("sample should have a text or image frame")
+        }
+        state.selectedFrameId = frame.id
+        XCTAssertFalse(state.canUndo, "selecting a frame must not create an undo step")
+
+        // Three consecutive picker changes on the same frame = one undo burst.
+        state.setSelectedFrameFillColor(.red)
+        state.setSelectedFrameFillColor(.green)
+        state.setSelectedFrameFillColor(.blue)
+
+        let pageNum = state.currentPageNumber
+        let block = state.project.safeAppliedLayoutPlans[pageNum]?.blocks.first { $0.id == frame.id }
+        XCTAssertNotNil(block?.backgroundColorHex, "fill color must persist as a plan-block override")
+        XCTAssertTrue(state.canUndo)
+
+        // A single undo reverts the whole color burst back to no fill.
+        state.undo()
+        let reverted = state.project.safeAppliedLayoutPlans[pageNum]?.blocks.first { $0.id == frame.id }
+        XCTAssertNil(reverted?.backgroundColorHex)
+        XCTAssertFalse(state.canUndo, "the three changes should have collapsed to one undo entry")
+    }
+
     func testSelectingFrameSyncsCurrentPage() {
         let state = AppState(project: BookProject.sample)
         state.currentPageNumber = 1
