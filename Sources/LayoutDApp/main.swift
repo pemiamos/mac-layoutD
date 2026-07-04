@@ -554,6 +554,7 @@ final class WorkspaceViewController: NSViewController {
     private var sourceDescription: String
     private let canvas = CanvasView()
     private var selectedFrameCancellable: AnyCancellable?
+    private var selectedFrameIdsCancellable: AnyCancellable?
     private var screenModeCancellable: AnyCancellable?
     private var backgroundColorsCancellable: AnyCancellable?
     private var strokeColorsCancellable: AnyCancellable?
@@ -576,7 +577,11 @@ final class WorkspaceViewController: NSViewController {
         self.selectedFrameCancellable = appState.$selectedFrameId.sink { [weak self] frameId in
             self?.canvas.selectedFrameId = frameId
         }
-        
+
+        self.selectedFrameIdsCancellable = appState.$selectedFrameIds.sink { [weak self] ids in
+            self?.canvas.selectedFrameIds = ids
+        }
+
         self.screenModeCancellable = appState.$activeScreenMode.sink { [weak self] mode in
             self?.canvas.activeScreenMode = mode
         }
@@ -646,7 +651,27 @@ final class WorkspaceViewController: NSViewController {
             guard let self else { return }
             self.appState.updateFrameCoordinate(id: frameId, x: x, y: y, width: w, height: h)
         }
-        
+
+        canvas.onToggleSelection = { [weak self] frameId in
+            guard let self else { return }
+            if self.appState.activeTool == .selection || self.appState.activeTool == .directSelection {
+                self.appState.toggleFrameSelection(frameId)
+            }
+        }
+
+        canvas.onMarqueeSelected = { [weak self] ids in
+            guard let self else { return }
+            if self.appState.activeTool == .selection || self.appState.activeTool == .directSelection {
+                self.appState.setSelection(ids)
+            }
+        }
+
+        canvas.onFramesDragged = { [weak self] updates in
+            guard let self else { return }
+            let origins = Dictionary(uniqueKeysWithValues: updates.map { ($0.id, (x: $0.rect.x, y: $0.rect.y)) })
+            self.appState.applyFrameOrigins(origins, note: "手动移动多个元素")
+        }
+
         canvas.onGapDragged = { [weak self] firstId, firstRect, secondId, secondRect in
             guard let self else { return }
             self.appState.updateGapFrames(firstId: firstId, firstRect: firstRect, secondId: secondId, secondRect: secondRect)

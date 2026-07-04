@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-04 20:01 | claude | 对齐功能(方案 A:单选对齐到页面/页边距)。用户给的 InDesign「对齐」面板截图,确认先做 A(不动选择模型),多框互相对齐+分布(方案 B)待多选地基
+- **分支**：dev
+- **概述**：对齐功能(方案 A:单选对齐到页面/页边距)。用户给的 InDesign「对齐」面板截图,确认先做 A(不动选择模型),多框互相对齐+分布(方案 B)待多选地基后再做。实现:①Core 新增 FrameAlignment(左/中/右·上/中/下)+AlignmentReference(页面/页边距)枚举 + 纯函数 alignedFrameOrigin(frame,region,alignment)——只移动不缩放,可单测。②AppState.alignSelectedFrame(_:reference:) 复用 LayoutPlan override+撤销通路(同手改 X/Y),alignmentRegion 算参照框:页面=整页,页边距=resolvedMargins 且对开页按奇偶换左右(与画布参考线一致)。③ControlPanelView 顶部栏选中框时新增六键+「页面/页边距」参照菜单(默认页边距)。SF Symbol align.horizontal/vertical.*。测试:Core 六向纯函数 + AppState 端到端(页面左/水平居中、页边距对开左侧、可撤销)。swift build + 242 测试全绿。已合 dev 推送 a587683。
+- **改动文件**：Sources/LayoutDCore/LayoutPlanEditing.swift, Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/ControlPanelView.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift, Tests/LayoutDAppTests/AppStateTests.swift
+- **检查**：build: pass; test: pass (242/0)。已合 dev=a587683 推 origin。main 未动(GUI 特性待用户视觉验收)。
+- **下一步**：①【用户·视觉验收】跑 App 选中一个框,顶部栏点六个对齐键、切「页面/页边距」看效果,确认后 Claude 合 dev→main。②【方案 B,待领】多框对齐+分布需先加多选(框选/Shift 点选):selectedFrameId→Set<UUID>,CanvasView 多选高亮+marquee,再做多框互相对齐/分布间距(InDesign「分布对象」需≥3)。改动面大(选择模型/画布/检查器),建议单独一棒。③对齐按钮目前只在 ControlPanelView 顶部栏;若要浮动面板(如截图)可另做 PanelDock。
+
 ## 2026-07-04 15:00 | claude | 审核并集成 Codex/AG 三个分支到 dev（用户让盘点两边提交）。① GUARD-1 角色标签端到端探针（Codex feature/codex-guar
 - **分支**：dev
 - **概述**：审核并集成 Codex/AG 三个分支到 dev（用户让盘点两边提交）。① GUARD-1 角色标签端到端探针（Codex feature/codex-guard-role-tags bdd1ac2）：review-idml.sh 加角色标签 fixture(章名/开节概述/抽言/参考文献+正文)→导 IDML 解包断言标签零漏出+Styles.xml 含中文命名样式+内容映射到 heading1/introduction/pullQuote/bibliography/body；隔离 worktree 复验 8/0 PASS。② GUARD-2 断言闸 rule⑥ CJK 字形覆盖（AG feature/ag-guard-2 b3a2e97，+393行 IDMLInvariants+151行测试）：解析 Fonts.xml 复合字体+Styles.xml 样式字体映射→对每 Story 前 100 个 CJK 字符 CoreText 查字形覆盖(带缓存+去重)，缺字形即 FAIL 报字体名+字符；isCJK 提为 public；单测含正反例；导出 gate 无误报（review 6/0）。③ E2-4p 补完对开左右页并排（AG feature/ag-e2-4p 77c595c）：PDF/PNG facingPages 时首页单独+偶奇页配对左右并排渲染、文件名 page-NNN-MMM，非对开路径零回归；单测过。三分支各自隔离 worktree review 全绿→按 script/exporter/invariants 顺序合 dev。集成后全套复验：swift build+239 测试+8/8 探针 PASS。三分支已删，codex/ag worktree 已归位各自 lane 并 ff 到 dev。dev=8389c9c 已推。

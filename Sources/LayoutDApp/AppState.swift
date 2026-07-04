@@ -20,6 +20,11 @@ final class AppState: ObservableObject {
             updateAIPlans()
         }
     }
+    /// The "primary" / anchor selection. Kept for backward compatibility: the
+    /// inspector, coordinate fields, colour edits and every single-frame action key
+    /// off this. Assigning it (the plain-click path) *replaces* the whole selection
+    /// with just this frame; multi-selection goes through `selectedFrameIds` and the
+    /// `toggleFrameSelection` / `setSelection` helpers below.
     @Published var selectedFrameId: UUID? {
         didSet {
             // Keep the "current page" pointed at whatever the user is actually
@@ -34,7 +39,42 @@ final class AppState: ObservableObject {
                 currentPageNumber = page
             }
             colorEditBurstFrame = nil
+            // A bare anchor assignment means "select only this" — collapse any
+            // multi-selection. Multi-select helpers set this flag so they can move
+            // the anchor without wiping the set they just built.
+            if !isMutatingSelectionSet {
+                selectedFrameIds = selectedFrameId.map { [$0] } ?? []
+            }
         }
+    }
+
+    /// The full multi-selection (superset of `selectedFrameId`). Alignment and
+    /// distribution operate on this. Invariant: empty iff `selectedFrameId == nil`,
+    /// and the anchor is always a member when non-nil.
+    @Published var selectedFrameIds: Set<UUID> = []
+    private var isMutatingSelectionSet = false
+
+    /// Shift/⌘-click: add the frame to the selection (becoming the new anchor) or
+    /// remove it if already selected.
+    func toggleFrameSelection(_ id: UUID) {
+        isMutatingSelectionSet = true
+        defer { isMutatingSelectionSet = false }
+        if selectedFrameIds.contains(id) {
+            selectedFrameIds.remove(id)
+            if selectedFrameId == id { selectedFrameId = selectedFrameIds.first }
+        } else {
+            selectedFrameIds.insert(id)
+            selectedFrameId = id
+        }
+    }
+
+    /// Replace the whole selection at once (marquee rubber-band). `anchor` becomes
+    /// the primary; defaults to any member.
+    func setSelection(_ ids: Set<UUID>, anchor: UUID? = nil) {
+        isMutatingSelectionSet = true
+        defer { isMutatingSelectionSet = false }
+        selectedFrameIds = ids
+        selectedFrameId = anchor ?? ids.first
     }
     @Published var activeTool: LayoutTool = .selection
     
@@ -371,61 +411,100 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Aligns the selected frame to the page or its (facing-page-aware) margin box.
-    /// Reuses the same LayoutPlan-override + undo path as manual X/Y edits, so an
-    /// alignment is undoable and exports to IDML like any other coordinate change.
-    /// Only moves the frame — size is preserved.
-    func alignSelectedFrame(_ alignment: FrameAlignment, reference: AlignmentReference) {
-        guard let frameId = selectedFrameId,
-              let pageNum = findPageNumber(for: frameId) else { return }
+    /// Absolute page rects (points) of every frame in the current selection, with
+    /// the page each lives on — the input to alignment/distribution. Read from the
+    /// laid-out document, whose `PageFrame.rect` is already in absolute page points.
+    private func selectedAbsoluteRects() -> [(id: UUID, pageNumber: Int, rect: Rect)] {
+        guard let doc = laidOutDocument else { return [] }
+        var result: [(id: UUID, pageNumber: Int, rect: Rect)] = []
+        for page in doc.pages {
+            for frame in page.frames where selectedFrameIds.contains(frame.id) {
+                result.append((frame.id, page.number, frame.rect))
+            }
+        }
+        return result
+    }
 
-        let region = alignmentRegion(reference: reference, pageNum: pageNum)
+    /// Aligns every selected frame. `.selection` snaps each to the shared bounding
+    /// box (multi-frame「对齐对象」); `.page` / `.margin` snap each to its own page's
+    /// box independently. Reuses the LayoutPlan-override + undo path, so it's
+    /// undoable and exports to IDML like any manual coordinate change. Only moves
+    /// frames — sizes are preserved.
+    func alignSelection(_ alignment: FrameAlignment, reference: AlignmentReference) {
+        let items = selectedAbsoluteRects()
+        guard !items.isEmpty else { return }
+
+        let selectionBox = boundingBox(of: items.map { $0.rect })
+        let pageSize = project.pageSetup.pageSize
+
+        var origins: [UUID: (x: Double, y: Double)] = [:]
+        for item in items {
+            let region: Rect
+            switch reference {
+            case .selection: region = selectionBox
+            case .page: region = Rect(x: 0, y: 0, width: pageSize.width, height: pageSize.height)
+            case .margin: region = marginRegion(pageNum: item.pageNumber)
+            }
+            origins[item.id] = alignedFrameOrigin(frame: item.rect, region: region, alignment: alignment)
+        }
+        applyFrameOrigins(origins, note: "手动对齐元素（\(reference.displayName)·\(alignment.displayName)）")
+    }
+
+    /// Distributes the selected frames (3+ required). Extremes stay fixed; the rest
+    /// are repositioned so the chosen edge/center — or the gaps — become even.
+    func distributeSelection(_ mode: DistributionMode) {
+        let items = selectedAbsoluteRects()
+        guard items.count >= 3 else { return }
+        let origins = distributedOrigins(frames: items.map { (id: $0.id, rect: $0.rect) }, mode: mode)
+        applyFrameOrigins(origins, note: "手动分布元素（\(mode.displayName)）")
+    }
+
+    /// Writes new top-left origins for a batch of frames in one undoable step,
+    /// freezing each touched page to a plan as needed. Shared by alignment,
+    /// distribution and group-drag.
+    func applyFrameOrigins(_ origins: [UUID: (x: Double, y: Double)], note: String) {
+        guard !origins.isEmpty else { return }
         let pageSize = project.pageSetup.pageSize
 
         commitState()
         var currentProject = project
         var plans = currentProject.safeAppliedLayoutPlans
-        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
 
-        guard let idx = plan.blocks.firstIndex(where: { $0.id == frameId }) else { return }
-        var block = plan.blocks[idx]
-        let current = block.absoluteFrame(pageSize: pageSize)
-        let origin = alignedFrameOrigin(frame: current, region: region, alignment: alignment)
-        block.updateAbsoluteFrame(pageSize: pageSize, x: origin.x, y: origin.y)
+        for (id, origin) in origins {
+            guard let pageNum = findPageNumber(for: id) else { continue }
+            var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+            guard let idx = plan.blocks.firstIndex(where: { $0.id == id }) else { continue }
+            var block = plan.blocks[idx]
+            block.updateAbsoluteFrame(pageSize: pageSize, x: origin.x, y: origin.y)
+            plan.blocks[idx] = block
+            plan.notes = [note]
+            plans[pageNum] = plan
+        }
 
-        plan.blocks[idx] = block
-        plan.notes = ["手动对齐元素（\(reference.displayName)·\(alignment.displayName)）"]
-        plans[pageNum] = plan
         currentProject.safeAppliedLayoutPlans = plans
         self.project = currentProject
     }
 
-    /// The reference rectangle (absolute page points) alignment snaps to. Margin
-    /// mode mirrors the canvas guides: on facing-page spreads the inner/outer
-    /// margins swap per odd/even page, so the box matches what the user sees.
-    private func alignmentRegion(reference: AlignmentReference, pageNum: Int) -> Rect {
+    /// The (facing-page-aware) margin box of a page in absolute points. Mirrors the
+    /// canvas guides: on facing-page spreads the inner/outer margins swap per parity.
+    private func marginRegion(pageNum: Int) -> Rect {
         let pageSize = project.pageSetup.pageSize
-        switch reference {
-        case .page:
-            return Rect(x: 0, y: 0, width: pageSize.width, height: pageSize.height)
-        case .margin:
-            let margins = project.resolvedMargins(for: pageNum)
-            let leftM: Double
-            let rightM: Double
-            if project.pageSetup.facingPages {
-                leftM = pageNum % 2 == 1 ? margins.left : margins.right
-                rightM = pageNum % 2 == 1 ? margins.right : margins.left
-            } else {
-                leftM = margins.left
-                rightM = margins.right
-            }
-            return Rect(
-                x: leftM,
-                y: margins.top,
-                width: max(pageSize.width - leftM - rightM, 0),
-                height: max(pageSize.height - margins.top - margins.bottom, 0)
-            )
+        let margins = project.resolvedMargins(for: pageNum)
+        let leftM: Double
+        let rightM: Double
+        if project.pageSetup.facingPages {
+            leftM = pageNum % 2 == 1 ? margins.left : margins.right
+            rightM = pageNum % 2 == 1 ? margins.right : margins.left
+        } else {
+            leftM = margins.left
+            rightM = margins.right
         }
+        return Rect(
+            x: leftM,
+            y: margins.top,
+            width: max(pageSize.width - leftM - rightM, 0),
+            height: max(pageSize.height - margins.top - margins.bottom, 0)
+        )
     }
 
     func updateSelectedFrameImage(assetId: UUID) {
