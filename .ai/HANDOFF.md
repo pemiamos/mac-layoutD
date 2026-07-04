@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-04 15:00 | claude | 审核并集成 Codex/AG 三个分支到 dev（用户让盘点两边提交）。① GUARD-1 角色标签端到端探针（Codex feature/codex-guar
+- **分支**：dev
+- **概述**：审核并集成 Codex/AG 三个分支到 dev（用户让盘点两边提交）。① GUARD-1 角色标签端到端探针（Codex feature/codex-guard-role-tags bdd1ac2）：review-idml.sh 加角色标签 fixture(章名/开节概述/抽言/参考文献+正文)→导 IDML 解包断言标签零漏出+Styles.xml 含中文命名样式+内容映射到 heading1/introduction/pullQuote/bibliography/body；隔离 worktree 复验 8/0 PASS。② GUARD-2 断言闸 rule⑥ CJK 字形覆盖（AG feature/ag-guard-2 b3a2e97，+393行 IDMLInvariants+151行测试）：解析 Fonts.xml 复合字体+Styles.xml 样式字体映射→对每 Story 前 100 个 CJK 字符 CoreText 查字形覆盖(带缓存+去重)，缺字形即 FAIL 报字体名+字符；isCJK 提为 public；单测含正反例；导出 gate 无误报（review 6/0）。③ E2-4p 补完对开左右页并排（AG feature/ag-e2-4p 77c595c）：PDF/PNG facingPages 时首页单独+偶奇页配对左右并排渲染、文件名 page-NNN-MMM，非对开路径零回归；单测过。三分支各自隔离 worktree review 全绿→按 script/exporter/invariants 顺序合 dev。集成后全套复验：swift build+239 测试+8/8 探针 PASS。三分支已删，codex/ag worktree 已归位各自 lane 并 ff 到 dev。dev=8389c9c 已推。
+- **改动文件**：scripts/review-idml.sh(GUARD-1), Sources/LayoutDExport/IDMLInvariants.swift + Tests/LayoutDExportTests/IDMLInvariantsTests.swift(GUARD-2), Sources/LayoutDExport/PDFExporter.swift + PNGExporter.swift + Tests/LayoutDExportTests/PDFExporterTests.swift(E2-4p), .ai/QUEUE.md, .ai/HANDOFF.md
+- **检查**：三分支隔离 worktree 各自 review-idml.sh PASS(GUARD-1 8/0、GUARD-2 6/0、E2-4p 6/0)；集成 dev 复验 swift build + 239 测试 + 8/8 探针 PASS。dev=8389c9c 已推 origin。main 仍=6b12271。
+- **下一步**：①【用户·视觉验收，非阻塞】E2-4p 对开左右页并排属渲染，宜用对开稿导 PNG 肉眼看并排定位（page-NNN-MMM）。GUARD-1/GUARD-2 是探针/断言（可测），无需视觉验。②【待用户 GUI 视觉验收，阻塞合 main】仍是本轮 GUI 大批：工作区骨架+框工具+双击改字+颜色选择器+封面/目录可编辑。OK→Claude 合 dev→main。③【Claude 后续】GUI 验收稳定后做 PERF-3 排版异步化+防抖。④【Codex/AG 可继续领】SPLIT-IMPORT(Codex)、SPLIT-GUI/E3-9(注意 SPLIT-GUI 要先 merge origin/dev 拿本轮 GUI 骨架+框工具+颜色改动再拆)。
+
 ## 2026-07-04 13:57 | claude | 左侧工具栏按 InDesign 重规划(用户 2026-07-04 审核提案通过后实现,dev=facadbf)。① 新增文本框工具/图像框工具:CanvasV
 - **分支**：dev
 - **概述**：左侧工具栏按 InDesign 重规划(用户 2026-07-04 审核提案通过后实现,dev=facadbf)。① 新增文本框工具/图像框工具:CanvasView 橡皮筋矩形拖拽建框(图像框带对角叉占位标记、crosshair 光标、min 8pt 门槛)→ AppState.createDrawnFrame(kind:onPage:rect:) 归一化写 LayoutPlan block(文本=.generated 空内容待检查器填字;图像=引用首个资产、检查器可换、无资产弹窗拒绝不建空引用)——全程走既有覆写路径,结构化/可撤销/与 AI 方案共存/IDML 导出零改动;建完自动切回选择工具。② InDesign 单键快捷键经 CanvasView.keyDown+LayoutTool.shortcutKey 集中映射:V/A/T/F/U/H/Z 单键 + ⇧P 页面,画布获焦时生效、面板文本框编辑时自动让位(viewDidAppear makeFirstResponder(canvas));工具提示带快捷键。③ 工具栏分组顺序对齐 InDesign(选择→文字与框→版面→批注→导航)。不做清单(自由矢量/钢笔/渐变/旋转切变/吸管/内容收集器)维持裁掉。新增 2 单测,顺带修 ControlPanel/StatusBar onChange 弃用告警。文本框渲染数值验证 drew y=110→placed y=110 恒等。230 测试+review-idml.sh 6/0 PASS。App 已用新构建启动(pid 29225, demo.md)。截图权限通道仍打不开,GUI 视觉交互对错须用户肉眼验。遗留观察:在纯生成页(目录/封面等引擎生成页)上画框会被忽略(这些页引擎每次重建),仅内容页有效——可接受,必要时后续提示。
