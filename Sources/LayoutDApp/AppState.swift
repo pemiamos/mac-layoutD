@@ -20,7 +20,21 @@ final class AppState: ObservableObject {
             updateAIPlans()
         }
     }
-    @Published var selectedFrameId: UUID?
+    @Published var selectedFrameId: UUID? {
+        didSet {
+            // Keep the "current page" pointed at whatever the user is actually
+            // working on. Page-scoped controls (lock/unlock, reset page, save as
+            // template) all key off currentPageNumber; without this sync, selecting
+            // a frame by scrolling+clicking would leave those controls targeting a
+            // different page — e.g. you could be blocked from editing a locked frame
+            // while the unlock toggle silently acts on page 1.
+            if let id = selectedFrameId,
+               let page = findPageNumber(for: id),
+               page != currentPageNumber {
+                currentPageNumber = page
+            }
+        }
+    }
     @Published var activeTool: LayoutTool = .selection
     
     @Published var activeFormattingTarget: FormattingTarget = .container
