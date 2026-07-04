@@ -8,6 +8,9 @@ final class CanvasView: NSView {
 
     var document: LaidOutDocument? {
         didSet {
+            // A relayout (e.g. after committing an edit) invalidates the overlay's
+            // position; drop it rather than let it float over stale geometry.
+            teardownInlineEditor()
             updateFrame()
             needsDisplay = true
         }
@@ -28,6 +31,7 @@ final class CanvasView: NSView {
     var activeTool: LayoutTool = .selection {
         didSet {
             activeGap = nil
+            if activeTool != oldValue { commitInlineEditor() }
             needsDisplay = true
         }
     }
@@ -54,6 +58,13 @@ final class CanvasView: NSView {
     var onFrameDrawn: ((Int, Rect) -> Void)?
     /// A single-key toolbox shortcut was pressed while the canvas had focus.
     var onToolShortcut: ((LayoutTool) -> Void)?
+    /// In-place text editing finished (double-click a text/caption frame). Payload:
+    /// frame id + the new text. Wired to AppState.updateSelectedFrameText.
+    var onFrameTextEdited: ((UUID, String) -> Void)?
+
+    // In-place (double-click) text editor overlay
+    private var inlineEditor: InlineTextEditorView?
+    private var inlineEditingFrameId: UUID?
     var baselineDocument: LaidOutDocument? {
         didSet {
             needsDisplay = true
@@ -170,6 +181,9 @@ final class CanvasView: NSView {
     }
 
     private func setZoomScale(_ scale: CGFloat) {
+        // The overlay is positioned in zoomed canvas coordinates; commit it before
+        // the scale changes so the edited text isn't lost and no stale box lingers.
+        commitInlineEditor()
         zoomScale = min(max(scale, 0.35), 3.0)
         onZoomChanged?(zoomScale)
         updateFrame()
@@ -1093,6 +1107,70 @@ final class CanvasView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
+    // MARK: - In-place text editing (double-click)
+
+    private func beginInlineEdit(frame: PageFrame, pageRect pRect: CGRect, currentText: String) {
+        teardownInlineEditor()
+        guard let project else { return }
+
+        let editorRect = CGRect(
+            x: pRect.minX + CGFloat(frame.rect.x) * zoomScale,
+            y: pRect.minY + CGFloat(frame.rect.y) * zoomScale,
+            width: max(CGFloat(frame.rect.width) * zoomScale, 24),
+            height: max(CGFloat(frame.rect.height) * zoomScale, 18)
+        )
+
+        let editor = InlineTextEditorView(frame: editorRect)
+        let style = project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue)
+        editor.font = NSFont.systemFont(ofSize: max(style.fontSize * zoomScale, 6))
+        editor.string = currentText
+        editor.textContainerInset = NSSize(width: 2, height: 2)
+        editor.isRichText = false
+        editor.drawsBackground = true
+        editor.backgroundColor = NSColor.white
+        editor.textColor = NSColor.black
+        editor.wantsLayer = true
+        editor.layer?.borderColor = NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).cgColor
+        editor.layer?.borderWidth = 1.5
+
+        editor.onCommit = { [weak self] text in
+            self?.finishInlineEdit(commit: true, text: text)
+        }
+        editor.onCancel = { [weak self] in
+            self?.finishInlineEdit(commit: false, text: nil)
+        }
+
+        addSubview(editor)
+        inlineEditor = editor
+        inlineEditingFrameId = frame.id
+        window?.makeFirstResponder(editor)
+        editor.selectAll(nil)
+    }
+
+    /// Commits the current inline edit (if any) — used when focus context changes
+    /// (tool switch, zoom) so the typed text is preserved rather than dropped.
+    private func commitInlineEditor() {
+        inlineEditor?.commitIfEditing()
+    }
+
+    private func finishInlineEdit(commit: Bool, text: String?) {
+        let frameId = inlineEditingFrameId
+        teardownInlineEditor()
+        if commit, let frameId, let text {
+            onFrameTextEdited?(frameId, text)
+        }
+    }
+
+    private func teardownInlineEditor() {
+        guard let editor = inlineEditor else { return }
+        inlineEditor = nil
+        inlineEditingFrameId = nil
+        if editor.window?.firstResponder === editor {
+            window?.makeFirstResponder(self)
+        }
+        editor.removeFromSuperview()
+    }
+
     override func keyDown(with event: NSEvent) {
         guard let chars = event.charactersIgnoringModifiers?.lowercased(),
               let ch = chars.first else {
@@ -1227,6 +1305,10 @@ final class CanvasView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        // A click reaching the canvas means the click was outside the inline editor
+        // (clicks inside it are consumed by the editor). Commit any active edit first.
+        commitInlineEditor()
+
         let point = convert(event.locationInWindow, from: nil)
         guard let project, let document else { return }
 
@@ -1273,6 +1355,22 @@ final class CanvasView: NSView {
                     break
                 }
             }
+        }
+
+        // 2.5 Double-click a text/caption frame → edit its text in place (InDesign-style),
+        // as long as the page isn't locked. Works with the selection and type tools.
+        if event.clickCount == 2,
+           (activeTool == .selection || activeTool == .type),
+           let frame = hitFrame,
+           frame.kind == .text || frame.kind == .caption,
+           case .text(let currentText) = frame.content,
+           let pageNum = clickedPageNumber,
+           !(project.lockedPages ?? []).contains(pageNum),
+           let pRect = pageRect(number: pageNum) {
+            selectedFrameId = frame.id
+            onFrameSelected?(frame.id)
+            beginInlineEdit(frame: frame, pageRect: pRect, currentText: currentText)
+            return
         }
 
         // 3. Frame drawing tools: begin a rubber-band rectangle on the clicked page.
@@ -1566,6 +1664,50 @@ final class CanvasView: NSView {
         
         if activeTool == .hand {
             NSCursor.openHand.set()
+        }
+    }
+}
+
+/// A minimal in-place text editor for double-click frame editing. Escape cancels,
+/// ⌘Return or clicking away commits, plain Return inserts a newline (frames may hold
+/// multi-line paragraph text). Guards against double-firing its callbacks.
+final class InlineTextEditorView: NSTextView {
+    var onCommit: ((String) -> Void)?
+    var onCancel: (() -> Void)?
+    private var finished = false
+
+    override func keyDown(with event: NSEvent) {
+        // Escape (keyCode 53) → cancel.
+        if event.keyCode == 53 {
+            finish(commit: false)
+            return
+        }
+        // ⌘Return (keyCode 36) → commit.
+        if event.keyCode == 36 && event.modifierFlags.contains(.command) {
+            finish(commit: true)
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override func resignFirstResponder() -> Bool {
+        // Clicking away / switching focus commits what was typed.
+        finish(commit: true)
+        return super.resignFirstResponder()
+    }
+
+    /// Commits if still actively editing (used on tool-switch / zoom teardown).
+    func commitIfEditing() {
+        finish(commit: true)
+    }
+
+    private func finish(commit: Bool) {
+        guard !finished else { return }
+        finished = true
+        if commit {
+            onCommit?(string)
+        } else {
+            onCancel?()
         }
     }
 }
