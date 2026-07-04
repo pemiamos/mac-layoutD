@@ -11,10 +11,6 @@ struct ObjectPropertiesView: View {
     @ObservedObject var state: AppState
     var onPageClick: (Int) -> Void
 
-    @State private var showFillPicker = false
-    @State private var showStrokePicker = false
-    @State private var showTextPicker = false
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -140,7 +136,7 @@ struct ObjectPropertiesView: View {
                     get: { colorFromHex(frame.backgroundColorHex) ?? Color.white },
                     set: { state.setSelectedFrameFillColor($0) }
                 ), supportsOpacity: false)
-                multiSpaceButton(isPresented: $showFillPicker, title: "填充",
+                multiSpaceButton(title: "填充",
                     current: printColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
                     apply: { state.setSelectedFrameFillColor($0) })
                 Spacer()
@@ -154,7 +150,7 @@ struct ObjectPropertiesView: View {
                     get: { colorFromHex(frame.strokeColorHex) ?? Color.black },
                     set: { state.setSelectedFrameStrokeColor($0) }
                 ), supportsOpacity: false)
-                multiSpaceButton(isPresented: $showStrokePicker, title: "描边",
+                multiSpaceButton(title: "描边",
                     current: printColor(frame.strokeColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
                     apply: { state.setSelectedFrameStrokeColor($0) })
                 Spacer()
@@ -169,7 +165,7 @@ struct ObjectPropertiesView: View {
                         get: { colorFromHex(frame.textColorHex) ?? Color.primary },
                         set: { state.setSelectedFrameTextColor($0) }
                     ), supportsOpacity: false)
-                    multiSpaceButton(isPresented: $showTextPicker, title: "文字",
+                    multiSpaceButton(title: "文字",
                         current: printColor(frame.textColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
                         apply: { state.setSelectedFrameTextColor($0) })
                     Spacer()
@@ -342,30 +338,25 @@ struct ObjectPropertiesView: View {
     }
 
     /// The "多套系" trigger next to a quick ColorPicker: opens the RGB/HSB/CMYK
-    /// panel in a popover and routes its output to the given apply closure.
+    /// picker in a floating panel (separate window) so applying a color — and the
+    /// full-book relayout it triggers — can't tear the picker down mid-edit.
     private func multiSpaceButton(
-        isPresented: Binding<Bool>,
         title: String,
         current: PrintColor,
         apply: @escaping (PrintColor) -> Void
     ) -> some View {
         Button {
-            isPresented.wrappedValue.toggle()
+            MultiSpaceColorPanelController.shared.toggle(
+                title: title,
+                initial: current,
+                state: state,
+                apply: apply
+            )
         } label: {
             Image(systemName: "slider.horizontal.3")
         }
         .buttonStyle(.borderless)
         .help("多套系拾色器 (RGB / HSB / CMYK)")
-        .popover(isPresented: isPresented, arrowEdge: .trailing) {
-            ColorPickerPanel(
-                title: title,
-                color: current,
-                swatches: state.customSwatches,
-                onChange: apply,
-                onAddSwatch: { state.addCustomSwatch($0) },
-                onRemoveSwatch: { state.removeCustomSwatch(id: $0) }
-            )
-        }
     }
 
     private func pointsToMillimeters(_ points: Double) -> Double {

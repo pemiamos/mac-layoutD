@@ -91,6 +91,36 @@ final class AppStateTests: XCTestCase {
         XCTAssertFalse(state.canUndo, "the three changes should have collapsed to one undo entry")
     }
 
+    func testCMYKFillKeepsPlanValidSoSelectionSurvives() {
+        let state = AppState(project: BookProject.sample)
+        // The cover page (front matter) is regenerated every layout unless its
+        // frozen plan validates — the exact path the bug struck.
+        guard let doc = state.laidOutDocument,
+              let cover = doc.pages.first(where: { $0.number == 1 }),
+              let frame = cover.frames.first(where: { $0.kind == .text }) else {
+            return XCTFail("sample cover page should have a text frame")
+        }
+        state.selectedFrameId = frame.id
+
+        // Apply a print-native CMYK fill (storage form `cmyk(C,M,Y,K)`).
+        state.setSelectedFrameFillColor(PrintColor.cmyk(c: 37, m: 4, y: 44, k: 0))
+
+        let pageNum = state.currentPageNumber
+        let block = state.project.safeAppliedLayoutPlans[pageNum]?.blocks.first { $0.id == frame.id }
+        XCTAssertEqual(block?.backgroundColorHex, "cmyk(37,4,44,0)",
+                       "CMYK fill must persist in its native form, not flatten to RGB")
+
+        // Regression: a `cmyk(...)` value must not fail plan validation. If it did,
+        // the engine would discard the frozen plan and regenerate the page with
+        // fresh frame ids — silently dropping the selection (and the color). So the
+        // selected frame's id must survive the relayout.
+        let stillPresent = state.laidOutDocument?.pages.contains {
+            $0.frames.contains { $0.id == frame.id }
+        } ?? false
+        XCTAssertTrue(stillPresent,
+                      "selection (frame id) must survive relayout after a CMYK fill")
+    }
+
     func testSelectingFrameSyncsCurrentPage() {
         let state = AppState(project: BookProject.sample)
         state.currentPageNumber = 1

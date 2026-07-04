@@ -303,16 +303,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = "layoutD - \(launchProject.project.metadata.title)"
-        // Open filling the screen so the canvas has room (the panel dock + toolbar
-        // take a fixed ~360pt; a small window squeezes the canvas to a sliver).
+        // Open at a comfortable default size (not maximized), centered on screen.
+        // The whole app stays visible without filling the display; the user can
+        // zoom the window manually if they want more canvas. Cap to the visible
+        // frame so it always fits on smaller screens.
         window.minSize = NSSize(width: 1024, height: 700)
         window.contentViewController = controller
         window.acceptsMouseMovedEvents = true
+        let preferredSize = NSSize(width: 1280, height: 860)
         if let visibleFrame = NSScreen.main?.visibleFrame {
-            window.setFrame(visibleFrame, display: true)
+            window.setContentSize(NSSize(
+                width: min(preferredSize.width, visibleFrame.width),
+                height: min(preferredSize.height, visibleFrame.height)
+            ))
         } else {
-            window.center()
+            window.setContentSize(preferredSize)
         }
+        window.center()
         
         let toolbar = NSToolbar(identifier: "LayoutDMainToolbar")
         toolbar.delegate = controller

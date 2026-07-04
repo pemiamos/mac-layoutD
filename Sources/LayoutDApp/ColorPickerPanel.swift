@@ -113,40 +113,46 @@ struct ColorPickerPanel: View {
     @ViewBuilder private var channels: some View {
         switch mode {
         case .rgb:
-            channelRow("R", value: $r, range: 0...255, decimals: 0) { syncFromRGB() }
-            channelRow("G", value: $g, range: 0...255, decimals: 0) { syncFromRGB() }
-            channelRow("B", value: $b, range: 0...255, decimals: 0) { syncFromRGB() }
+            channelRow("R", value: $r, range: 0...255, decimals: 0, live: { syncFromRGB(emit: false) })
+            channelRow("G", value: $g, range: 0...255, decimals: 0, live: { syncFromRGB(emit: false) })
+            channelRow("B", value: $b, range: 0...255, decimals: 0, live: { syncFromRGB(emit: false) })
         case .hsb:
-            channelRow("H", value: $h, range: 0...360, decimals: 0, suffix: "°") { syncFromHSB() }
-            channelRow("S", value: $s, range: 0...100, decimals: 0, suffix: "%") { syncFromHSB() }
-            channelRow("B", value: $br, range: 0...100, decimals: 0, suffix: "%") { syncFromHSB() }
+            channelRow("H", value: $h, range: 0...360, decimals: 0, suffix: "°", live: { syncFromHSB(emit: false) })
+            channelRow("S", value: $s, range: 0...100, decimals: 0, suffix: "%", live: { syncFromHSB(emit: false) })
+            channelRow("B", value: $br, range: 0...100, decimals: 0, suffix: "%", live: { syncFromHSB(emit: false) })
         case .cmyk:
-            channelRow("C", value: $c, range: 0...100, decimals: 0, suffix: "%") { syncFromCMYK() }
-            channelRow("M", value: $m, range: 0...100, decimals: 0, suffix: "%") { syncFromCMYK() }
-            channelRow("Y", value: $y, range: 0...100, decimals: 0, suffix: "%") { syncFromCMYK() }
-            channelRow("K", value: $k, range: 0...100, decimals: 0, suffix: "%") { syncFromCMYK() }
+            channelRow("C", value: $c, range: 0...100, decimals: 0, suffix: "%", live: { syncFromCMYK(emit: false) })
+            channelRow("M", value: $m, range: 0...100, decimals: 0, suffix: "%", live: { syncFromCMYK(emit: false) })
+            channelRow("Y", value: $y, range: 0...100, decimals: 0, suffix: "%", live: { syncFromCMYK(emit: false) })
+            channelRow("K", value: $k, range: 0...100, decimals: 0, suffix: "%", live: { syncFromCMYK(emit: false) })
         }
     }
 
+    /// 一路滑块 + 数值框。关键：拖动**过程中**只在本地回算通道与预览(`live`,
+    /// 不写文档),只有**拖动结束**(`onEditingChanged == false`)才 `emit()` 一次
+    /// 提交到文档。否则每一帧滑动都触发全书重排,把承载本 popover 的按钮子树重建、
+    /// 进而顶掉 popover 甚至丢掉画布选择——正是之前「一点滑块就跳掉」的根因。
     private func channelRow(
         _ label: String,
         value: Binding<Double>,
         range: ClosedRange<Double>,
         decimals: Int,
         suffix: String = "",
-        onEdit: @escaping () -> Void
+        live: @escaping () -> Void
     ) -> some View {
         HStack(spacing: 8) {
             Text(label)
                 .font(.system(.caption, design: .monospaced))
                 .frame(width: 16, alignment: .leading)
-            Slider(value: value, in: range)
-                .onChange(of: value.wrappedValue) { onEdit() }
+            Slider(value: value, in: range, onEditingChanged: { editing in
+                if !editing { emit() }
+            })
+            .onChange(of: value.wrappedValue) { live() }
             TextField("", value: value, formatter: Self.formatter(decimals: decimals))
                 .frame(width: 44)
                 .textFieldStyle(.roundedBorder)
                 .multilineTextAlignment(.trailing)
-                .onSubmit(onEdit)
+                .onSubmit { live(); emit() }
             Text(suffix).font(.caption2).foregroundColor(.secondary).frame(width: 10, alignment: .leading)
         }
     }
