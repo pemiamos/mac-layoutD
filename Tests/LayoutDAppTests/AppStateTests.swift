@@ -7,6 +7,26 @@ import LayoutDExport
 @testable import LayoutDApp
 
 final class AppStateTests: XCTestCase {
+    func testPrintColorFromSwiftUIColorPreservesCMYK() {
+        // 标准色块通路:系统面板 CMYK 滑块给出的 CMYK 色必须保持 CMYK,不被压回 RGB。
+        let cmyk = Color(nsColor: NSColor(deviceCyan: 0.37, magenta: 0.04, yellow: 0.44, black: 0, alpha: 1))
+        guard case let .cmyk(c, m, y, k) = AppState.printColor(from: cmyk) else {
+            return XCTFail("CMYK Color 应解析为 .cmyk,而非压平为 RGB")
+        }
+        XCTAssertEqual(c, 37, accuracy: 0.5)
+        XCTAssertEqual(m, 4, accuracy: 0.5)
+        XCTAssertEqual(y, 44, accuracy: 0.5)
+        XCTAssertEqual(k, 0, accuracy: 0.5)
+    }
+
+    func testPrintColorFromSwiftUIColorKeepsRGB() {
+        let rgb = Color(.sRGB, red: 143.0 / 255, green: 192.0 / 255, blue: 135.0 / 255, opacity: 1)
+        guard case let .rgb(r, g, b) = AppState.printColor(from: rgb) else {
+            return XCTFail("sRGB Color 应解析为 .rgb")
+        }
+        XCTAssertEqual(r, 143); XCTAssertEqual(g, 192); XCTAssertEqual(b, 135)
+    }
+
     func testApplyPageLayoutTemplate() {
         let project = BookProject.sample
         let state = AppState(project: project)

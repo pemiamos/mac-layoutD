@@ -998,7 +998,7 @@ final class AppState: ObservableObject {
     func applyColorToSelectedFrame(_ color: Color) {
         commitState()
         guard let frameId = selectedFrameId else { return }
-        let hex = color.hexString
+        let hex = Self.printColor(from: color).storageString
         if activeFormattingTarget == .container {
             if isFillActive {
                 frameBackgroundColors[frameId] = color
@@ -1050,11 +1050,29 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Converts a SwiftUI `Color` to a `PrintColor`, **preserving CMYK** when the
+    /// color still carries a CMYK color space — e.g. picked via the standard
+    /// ColorPicker's system panel "CMYK Sliders". SwiftUI↔NSColor bridging keeps
+    /// the CMYK space (verified: model stays .cmyk), so the quick color well no
+    /// longer silently flattens CMYK to RGB. Falls back to sRGB otherwise.
+    static func printColor(from color: Color) -> PrintColor {
+        let ns = NSColor(color)
+        // `.colorSpace`/component access is only safe on component-based colors.
+        if ns.type == .componentBased, ns.colorSpace.colorSpaceModel == .cmyk {
+            return .cmyk(c: Double(ns.cyanComponent) * 100, m: Double(ns.magentaComponent) * 100,
+                         y: Double(ns.yellowComponent) * 100, k: Double(ns.blackComponent) * 100)
+        }
+        let rgb = ns.usingColorSpace(.sRGB) ?? ns
+        return .rgb(r: Int((Double(rgb.redComponent) * 255).rounded()),
+                    g: Int((Double(rgb.greenComponent) * 255).rounded()),
+                    b: Int((Double(rgb.blueComponent) * 255).rounded()))
+    }
+
     func setSelectedFrameFillColor(_ color: Color) {
         guard let frameId = selectedFrameId else { return }
         beginColorEditBurst(frameId)
         frameBackgroundColors[frameId] = color
-        updateSelectedFrameColors(backgroundColorHex: color.hexString, strokeColorHex: nil, textColorHex: nil, shouldClear: false)
+        updateSelectedFrameColors(backgroundColorHex: Self.printColor(from: color).storageString, strokeColorHex: nil, textColorHex: nil, shouldClear: false)
     }
 
     func clearSelectedFrameFillColor() {
@@ -1068,7 +1086,7 @@ final class AppState: ObservableObject {
         guard let frameId = selectedFrameId else { return }
         beginColorEditBurst(frameId)
         frameStrokeColors[frameId] = color
-        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: color.hexString, textColorHex: nil, shouldClear: false)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: Self.printColor(from: color).storageString, textColorHex: nil, shouldClear: false)
     }
 
     func clearSelectedFrameStrokeColor() {
@@ -1082,7 +1100,7 @@ final class AppState: ObservableObject {
         guard let frameId = selectedFrameId else { return }
         beginColorEditBurst(frameId)
         frameTextColors[frameId] = color
-        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: color.hexString, shouldClear: false)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: Self.printColor(from: color).storageString, shouldClear: false)
     }
 
     func clearSelectedFrameTextColor() {
@@ -1265,12 +1283,3 @@ final class AppState: ObservableObject {
     }
 }
 
-private extension Color {
-    var hexString: String {
-        let nsColor = NSColor(self).usingColorSpace(.sRGB) ?? NSColor(self)
-        let red = Int(round(nsColor.redComponent * 255))
-        let green = Int(round(nsColor.greenComponent * 255))
-        let blue = Int(round(nsColor.blueComponent * 255))
-        return String(format: "#%02X%02X%02X", red, green, blue)
-    }
-}
