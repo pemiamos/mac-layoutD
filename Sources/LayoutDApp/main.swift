@@ -303,9 +303,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = "layoutD - \(launchProject.project.metadata.title)"
-        window.center()
+        // Open filling the screen so the canvas has room (the panel dock + toolbar
+        // take a fixed ~360pt; a small window squeezes the canvas to a sliver).
+        window.minSize = NSSize(width: 1024, height: 700)
         window.contentViewController = controller
         window.acceptsMouseMovedEvents = true
+        if let visibleFrame = NSScreen.main?.visibleFrame {
+            window.setFrame(visibleFrame, display: true)
+        } else {
+            window.center()
+        }
         
         let toolbar = NSToolbar(identifier: "LayoutDMainToolbar")
         toolbar.delegate = controller
