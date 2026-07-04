@@ -136,6 +136,12 @@ struct InspectorView: View {
     var onIssueClick: (LayoutIssue) -> Void
     var onApplyPlan: (LayoutPlan) -> Void
 
+    /// Resolves a stored hex color to a SwiftUI Color for the picker bindings.
+    private func colorFromHex(_ hex: String?) -> Color? {
+        guard let hex, let ns = NSColor.fromHex(hex) else { return nil }
+        return Color(nsColor: ns)
+    }
+
     @State private var selectedElement = true
     @State private var selectedMetadata = true
     @State private var selectedAssets = true
@@ -376,7 +382,54 @@ struct InspectorView: View {
                                 }
                             }
                             .disabled(isPageLocked)
-                            
+
+                            Divider()
+
+                            // Color controls: fill / stroke for any frame, plus text
+                            // color for text frames. Full pickers (not just swatches),
+                            // right where the selected element is shown.
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("颜色")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                HStack {
+                                    ColorPicker("填充", selection: Binding(
+                                        get: { colorFromHex(frame.backgroundColorHex) ?? Color.white },
+                                        set: { state.setSelectedFrameFillColor($0) }
+                                    ), supportsOpacity: false)
+                                    Spacer()
+                                    Button("无填充") { state.clearSelectedFrameFillColor() }
+                                        .buttonStyle(.borderless)
+                                        .font(.caption)
+                                }
+
+                                HStack {
+                                    ColorPicker("描边", selection: Binding(
+                                        get: { colorFromHex(frame.strokeColorHex) ?? Color.black },
+                                        set: { state.setSelectedFrameStrokeColor($0) }
+                                    ), supportsOpacity: false)
+                                    Spacer()
+                                    Button("无描边") { state.clearSelectedFrameStrokeColor() }
+                                        .buttonStyle(.borderless)
+                                        .font(.caption)
+                                }
+
+                                if frame.kind == .text || frame.kind == .caption {
+                                    HStack {
+                                        ColorPicker("文字", selection: Binding(
+                                            get: { colorFromHex(frame.textColorHex) ?? Color.primary },
+                                            set: { state.setSelectedFrameTextColor($0) }
+                                        ), supportsOpacity: false)
+                                        Spacer()
+                                        Button("默认") { state.clearSelectedFrameTextColor() }
+                                            .buttonStyle(.borderless)
+                                            .font(.caption)
+                                    }
+                                }
+                            }
+                            .disabled(isPageLocked)
+
                             if frame.kind == .image, case .asset(let currentAssetId) = frame.content {
                                 Divider()
                                 Picker("更换图片", selection: Binding(
