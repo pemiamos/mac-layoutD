@@ -22,6 +22,17 @@
 - **改动文件**：`scripts/review-idml.sh`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
 - **检查**：`bash scripts/review-idml.sh` PASS（swift build PASS；swift test 228/0；IDML 探针 8/0）。负向验证：临时副本禁用 `ContentRole.tag` 后 `review-idml.sh` FAIL，新增角色标签断言命中失败。
 - **下一步**：Claude 在主仓库审核 `feature/codex-guard-role-tags`，复跑 `bash scripts/review-idml.sh` 后合入 `dev`。Codex 可继续领 `SPLIT-IMPORT MarkdownBookImporter.swift 拆分`。
+## 2026-07-04 04:13 | antigravity | 连续作业交付两项任务：GUARD-2 断言闸字形覆盖检查（rule⑥，CoreText API 物理字体 CJK 字形缺失校验），E2-4p 补完对开左右页并排
+- **分支**：feature/ag-e2-4p
+- **概述**：连续作业交付两项任务：GUARD-2 断言闸字形覆盖检查（rule⑥，CoreText API 物理字体 CJK 字形缺失校验），E2-4p 补完对开左右页并排 PDF/PNG 导出与版心镜像。全部测试通过，review-idml.sh 顺利 PASS。
+- **改动文件**：Sources/LayoutDExport/IDMLInvariants.swift
+Tests/LayoutDExportTests/IDMLInvariantsTests.swift
+Sources/LayoutDExport/PDFExporter.swift
+Sources/LayoutDExport/PNGExporter.swift
+Tests/LayoutDExportTests/PDFExporterTests.swift
+- **检查**：swift build: pass, swift test: pass, review-idml.sh: pass
+- **下一步**：1. 审核并合并 feature/ag-guard-2 与 feature/ag-e2-4p 分支；
+2. 接续 AG 道的下一个任务 SPLIT-GUI（对巨型 GUI 文件 main.swift/InspectorView.swift/CanvasView.swift 进行按职责分拆）。
 
 ## 2026-07-04 03:51 | claude | 执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自
 - **分支**：dev
