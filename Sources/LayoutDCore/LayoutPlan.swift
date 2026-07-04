@@ -131,6 +131,11 @@ public struct LayoutPlanBlock: Codable, Equatable, Sendable, Identifiable {
     public var nextThreadedBlockId: UUID?
     public var previousThreadedBlockId: UUID?
     public var maskShape: ImageMaskShape?
+    /// Paragraph style to render this block with. Captured when a page is frozen
+    /// into a plan so manual edits keep the original heading/caption look instead
+    /// of collapsing to body style. Optional & additive — old plans decode as nil
+    /// and fall back to the kind-derived default.
+    public var styleId: String?
 
     public init(
         id: UUID = UUID(),
@@ -144,7 +149,8 @@ public struct LayoutPlanBlock: Codable, Equatable, Sendable, Identifiable {
         textColorHex: String? = nil,
         nextThreadedBlockId: UUID? = nil,
         previousThreadedBlockId: UUID? = nil,
-        maskShape: ImageMaskShape? = nil
+        maskShape: ImageMaskShape? = nil,
+        styleId: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -158,6 +164,7 @@ public struct LayoutPlanBlock: Codable, Equatable, Sendable, Identifiable {
         self.nextThreadedBlockId = nextThreadedBlockId
         self.previousThreadedBlockId = previousThreadedBlockId
         self.maskShape = maskShape
+        self.styleId = styleId
     }
 }
 

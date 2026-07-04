@@ -1862,6 +1862,44 @@ final class LayoutDCoreTests: XCTestCase {
             XCTAssertEqual(exclusion.height, 147.402, accuracy: 0.01)
         }
     }
+
+    // The cover (page 1) and contents (page 2) are otherwise regenerated every
+    // layout; once a user edits them, the engine must render from their plan so
+    // color / text / style overrides take effect — and preserve the heading style
+    // rather than collapsing to body.
+    func testCoverPageHonorsAppliedPlanWithStyleAndColor() {
+        var project = BookProject.sample
+        let block = LayoutPlanBlock(
+            kind: .text,
+            role: "text",
+            frame: Rect(x: 0.1, y: 0.2, width: 0.8, height: 0.12),
+            contentReference: .generated("自定义封面标题"),
+            backgroundColorHex: "#FFEB00",
+            styleId: StyleID.heading1.rawValue
+        )
+        project.appliedLayoutPlans = [1: LayoutPlan(target: .page(1), strategy: .balanced, blocks: [block])]
+
+        let doc = LayoutEngine().layout(project: project)
+        guard let cover = doc.pages.first(where: { $0.number == 1 }),
+              let frame = cover.frames.first(where: { $0.id == block.id }) else {
+            return XCTFail("cover must render the manually planned block")
+        }
+        XCTAssertEqual(frame.styleId, StyleID.heading1.rawValue, "planned style must survive, not collapse to body")
+        XCTAssertEqual(frame.backgroundColorHex, "#FFEB00")
+        if case .text(let t) = frame.content {
+            XCTAssertEqual(t, "自定义封面标题")
+        } else {
+            XCTFail("planned cover block should carry its generated text")
+        }
+    }
+
+    func testCoverPageWithoutPlanStillGenerates() {
+        // No plan on page 1 → default generated cover (no behavior change).
+        let doc = LayoutEngine().layout(project: BookProject.sample)
+        let cover = doc.pages.first(where: { $0.number == 1 })
+        XCTAssertNotNil(cover)
+        XCTAssertFalse(cover?.frames.isEmpty ?? true, "cover must still generate default frames when unedited")
+    }
 }
 
 private struct StaticPlanProvider: LayoutPlanProvider {
