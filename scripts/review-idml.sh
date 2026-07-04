@@ -92,6 +92,64 @@ sys.exit(1 if fails else 0)
 PY
 [ $? -eq 0 ] && ok "行内强调断言全过" || bad "行内强调断言有失败（见上）"
 
+# 2d. 角色标签导入：标签字面必须被消费，正文段落必须挂到对应中文命名样式。
+ROLE_FIX="$TMP/role-tags.md"
+printf '一级标题/章名\n越山脉\n\n开节概述\n这里是章节概述。\n\n抽言\n山高水长。\n\n普通正文段落。\n\n参考文献\n[1] 王某. 山地研究.\n' > "$ROLE_FIX"
+ROLE_OUT="$TMP/out/role-tags.idml"
+if swift run layoutD -- "$ROLE_FIX" --export-idml "$ROLE_OUT" >"$TMP/role-export.log" 2>&1; then
+  ok "角色标签 fixture 导出成功"
+  unzip -oq "$ROLE_OUT" -d "$TMP/role-u"
+  python3 - "$TMP/role-u" <<'PY'
+import glob, html, os, re, sys
+root=sys.argv[1]
+styles_path=os.path.join(root,'Resources','Styles.xml')
+styles=open(styles_path,encoding='utf-8').read()
+stories=[]
+for f in glob.glob(os.path.join(root,'Stories','*.xml')):
+    stories.append(open(f,encoding='utf-8').read())
+story='\n'.join(stories)
+
+def content_text(body):
+    return html.unescape(''.join(re.findall(r'<Content>(.*?)</Content>', body, re.S)))
+
+style_ranges=[]
+for m in re.finditer(r'<ParagraphStyleRange([^>]*)>(.*?)</ParagraphStyleRange>', story, re.S):
+    attr, body = m.groups()
+    style_match = re.search(r'AppliedParagraphStyle="([^"]+)"', attr)
+    if style_match:
+        style_ranges.append((style_match.group(1), content_text(body)))
+
+def has_style_display_name(name):
+    return re.search(r'<ParagraphStyle\b[^>]*\bName="%s"' % re.escape(name), styles) is not None
+
+def paragraph_uses(text, style):
+    return any(text in body and applied == style for applied, body in style_ranges)
+
+checks=[
+    ("标签字面 一级标题/章名 零漏出", "一级标题" not in story and "章名" not in story),
+    ("标签字面 开节概述 零漏出", "开节概述\n" not in ''.join(text for _, text in style_ranges)),
+    ("标签字面 抽言 零漏出", not any(text.strip() == "抽言" for _, text in style_ranges)),
+    ("标签字面 参考文献 零漏出", not any(text.strip() == "参考文献" for _, text in style_ranges)),
+    ("Styles.xml 含中文样式 一级标题", has_style_display_name("一级标题")),
+    ("Styles.xml 含中文样式 开节概述", has_style_display_name("开节概述")),
+    ("Styles.xml 含中文样式 抽言", has_style_display_name("抽言")),
+    ("Styles.xml 含中文样式 参考文献", has_style_display_name("参考文献")),
+    ("章名内容→heading1", paragraph_uses("越山脉", "ParagraphStyle/heading1")),
+    ("概述内容→introduction", paragraph_uses("这里是章节概述。", "ParagraphStyle/introduction")),
+    ("抽言内容→pullQuote", paragraph_uses("山高水长。", "ParagraphStyle/pullQuote")),
+    ("参考文献内容→bibliography", paragraph_uses("[1] 王某. 山地研究.", "ParagraphStyle/bibliography")),
+    ("后续普通正文→body", paragraph_uses("普通正文段落。", "ParagraphStyle/body")),
+]
+fails=[name for name, ok in checks if not ok]
+for name, ok in checks:
+    print(("  ✅ " if ok else "  ❌ ")+name)
+sys.exit(1 if fails else 0)
+PY
+  [ $? -eq 0 ] && ok "角色标签断言全过" || bad "角色标签断言有失败（见上）"
+else
+  bad "角色标签 fixture 导出失败（见 $TMP/role-export.log）"
+fi
+
 sec "结论"
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" -eq 0 ] && echo "REVIEW: PASS ✅" || echo "REVIEW: FAIL ❌"

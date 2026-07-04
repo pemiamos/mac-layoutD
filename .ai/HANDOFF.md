@@ -16,6 +16,12 @@
 - **改动文件**：Sources/LayoutDApp/ControlPanelView.swift(新), Sources/LayoutDApp/StatusBarView.swift(新), Sources/LayoutDApp/PanelDockView.swift(新), Sources/LayoutDApp/main.swift, Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/CanvasView.swift, .ai/QUEUE.md
 - **检查**：review-idml.sh 6/0 PASS(含 swift build + swift test 228/0)。main=6b12271、dev=72590f8 均已推 origin。
 - **下一步**：①【用户·GUI 视觉验收】新 UI 已启动(也可 swift run layoutD Samples/demo.md):顶部控制面板、底部状态栏(页码/预检灯/缩放)、右侧面板坞分段切换、深色工作区。OK→合 main;不满意处直接反馈 Claude 迭代(这是「第一步」,预期有迭代)。②【Claude 下一棒】用户验收后:PERF-3 排版异步化+防抖;GUI 若有反馈优先迭代。③【Codex/AG 可领】GUARD-1/SPLIT-IMPORT、GUARD-2/E2-4p补完/SPLIT-GUI(注意 SPLIT-GUI 需在本次 GUI 骨架之上拆,先 merge origin/dev)。
+## 2026-07-04 04:35 | codex | GUARD-1 角色标签端到端探针完成，待 Claude 集成审核
+- **分支**：`feature/codex-guard-role-tags`
+- **概述**：在 `scripts/review-idml.sh` 的 IDML 端到端探针中新增角色标签 fixture：覆盖 `一级标题/章名`、`开节概述`、`抽言`、`参考文献` 与普通正文。脚本导出 IDML 后解包检查：角色标签字面不漏进 Story；`Resources/Styles.xml` 含中文命名段落样式；对应内容段落分别挂到 `ParagraphStyle/heading1`、`ParagraphStyle/introduction`、`ParagraphStyle/pullQuote`、`ParagraphStyle/bibliography`、`ParagraphStyle/body`。已在 `/private/tmp` 临时副本把 `ContentRole.tag` 改为返回 nil 做负向验证，新增探针按预期 FAIL（标签漏出、角色样式引用丢失），工作副本源码未改。代码提交：`bdd1ac2 test: guard role tag idml review probe`。
+- **改动文件**：`scripts/review-idml.sh`、`.ai/QUEUE.md`、`.ai/HANDOFF.md`。
+- **检查**：`bash scripts/review-idml.sh` PASS（swift build PASS；swift test 228/0；IDML 探针 8/0）。负向验证：临时副本禁用 `ContentRole.tag` 后 `review-idml.sh` FAIL，新增角色标签断言命中失败。
+- **下一步**：Claude 在主仓库审核 `feature/codex-guard-role-tags`，复跑 `bash scripts/review-idml.sh` 后合入 `dev`。Codex 可继续领 `SPLIT-IMPORT MarkdownBookImporter.swift 拆分`。
 
 ## 2026-07-04 03:51 | claude | 执行 review 计划第 0+1 批。【第0批·卫生】① 补录 AG IMP-2 历史交接(5989f30)；② codex/ag worktree 归位各自
 - **分支**：dev
