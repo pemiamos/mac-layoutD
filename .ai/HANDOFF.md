@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-04 13:57 | claude | 左侧工具栏按 InDesign 重规划(用户 2026-07-04 审核提案通过后实现,dev=facadbf)。① 新增文本框工具/图像框工具:CanvasV
+- **分支**：dev
+- **概述**：左侧工具栏按 InDesign 重规划(用户 2026-07-04 审核提案通过后实现,dev=facadbf)。① 新增文本框工具/图像框工具:CanvasView 橡皮筋矩形拖拽建框(图像框带对角叉占位标记、crosshair 光标、min 8pt 门槛)→ AppState.createDrawnFrame(kind:onPage:rect:) 归一化写 LayoutPlan block(文本=.generated 空内容待检查器填字;图像=引用首个资产、检查器可换、无资产弹窗拒绝不建空引用)——全程走既有覆写路径,结构化/可撤销/与 AI 方案共存/IDML 导出零改动;建完自动切回选择工具。② InDesign 单键快捷键经 CanvasView.keyDown+LayoutTool.shortcutKey 集中映射:V/A/T/F/U/H/Z 单键 + ⇧P 页面,画布获焦时生效、面板文本框编辑时自动让位(viewDidAppear makeFirstResponder(canvas));工具提示带快捷键。③ 工具栏分组顺序对齐 InDesign(选择→文字与框→版面→批注→导航)。不做清单(自由矢量/钢笔/渐变/旋转切变/吸管/内容收集器)维持裁掉。新增 2 单测,顺带修 ControlPanel/StatusBar onChange 弃用告警。文本框渲染数值验证 drew y=110→placed y=110 恒等。230 测试+review-idml.sh 6/0 PASS。App 已用新构建启动(pid 29225, demo.md)。截图权限通道仍打不开,GUI 视觉交互对错须用户肉眼验。遗留观察:在纯生成页(目录/封面等引擎生成页)上画框会被忽略(这些页引擎每次重建),仅内容页有效——可接受,必要时后续提示。
+- **改动文件**：Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/ToolbarView.swift, Sources/LayoutDApp/main.swift, Sources/LayoutDApp/ControlPanelView.swift, Sources/LayoutDApp/StatusBarView.swift, Tests/LayoutDAppTests/AppStateTests.swift, .ai/QUEUE.md
+- **检查**：review-idml.sh 6/0 PASS(swift build + swift test 230/0)。dev=facadbf 已推 origin。main 仍=6b12271,等 GUI 两批(骨架+框工具)一并视觉验收后再合。
+- **下一步**：①【用户·GUI 视觉验收，阻塞合 main】两批一起看:工作区骨架(顶部控制面板/底部状态栏/右侧面板坞分段/深色)+ 框工具(拖拽建文本框/图像框、单键快捷键 V/A/T/F/U/H/Z/⇧P)。App 已启动。OK→Claude 合 main;要调→反馈 Claude 迭代(GUI 预期多轮)。②【Claude 后续】GUI 验收稳定后:PERF-3 排版异步化+防抖;或按用户反馈继续迭代 GUI。③【Codex/AG 可领】GUARD-1/SPLIT-IMPORT、GUARD-2/E2-4p补完/SPLIT-GUI(SPLIT-GUI 需先 merge origin/dev 拿到本轮工具栏+骨架改动再拆)。
+
 ## 2026-07-04 04:15 | claude | 用户验收回执处理 + GUI 按 InDesign 布局重做(第一步)。① 用户确认 B1 绕排样张与行内格式 InDesign 终验 OK → dev 合 m
 - **分支**：dev
 - **概述**：用户验收回执处理 + GUI 按 InDesign 布局重做(第一步)。① 用户确认 B1 绕排样张与行内格式 InDesign 终验 OK → dev 合 main(6b12271, merge commit 惯例)并推送;基础工具热修不单独验收——用户要求 GUI 整体按 InDesign UI 布局重做。② Claude 实现 InDesign 式工作区骨架(feature/claude-gui-indesign-layout f40154d,合 dev 72590f8):顶部上下文控制面板(选中帧可编辑 X/Y/宽/高,写 LayoutPlan 覆写可撤销;未选中显示文档概要)、底部状态栏(页码导航/输入跳页+预检状态灯(绿无错/红N错误)+缩放百分比与适合页宽)、右侧面板坞(原侧栏+检查器两列合并为一列 320pt「面板/检查器」分段切换,两面板保持挂载切换不丢状态,画布显著变宽)、整窗 darkAqua 深色(画布台面深灰随外观自适应,页面纸张仍显式白)、窗口工具条精简为文档级动作图标模式(翻页/缩放移到状态栏)、CanvasView 加 onZoomChanged 回调。swift build+test+review-idml.sh 全 PASS。computer-use 截图权限通道打不开(request_access 两次 stream closed),视觉自查未做成,已启动新 UI 的 App(pid 97832, demo.md)交用户肉眼验收。
