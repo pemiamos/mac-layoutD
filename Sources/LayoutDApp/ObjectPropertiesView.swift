@@ -131,18 +131,21 @@ struct ObjectPropertiesView: View {
         // Appearance (fill / stroke, plus text color for text frames)
         sectionLabel("外观")
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                ColorPicker("填充", selection: Binding(
-                    get: { colorFromHex(frame.backgroundColorHex) ?? Color.white },
-                    set: { state.setSelectedFrameFillColor($0) }
-                ), supportsOpacity: false)
-                multiSpaceButton(title: "填充",
-                    current: printColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
-                    apply: { state.setSelectedFrameFillColor($0) })
-                Spacer()
-                Button("无填充") { state.clearSelectedFrameFillColor() }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
+            // A line has no fill — only a stroke (its colour + weight). Hide 填充 for it.
+            if frame.kind != .line {
+                HStack {
+                    ColorPicker("填充", selection: Binding(
+                        get: { colorFromHex(frame.backgroundColorHex) ?? Color.white },
+                        set: { state.setSelectedFrameFillColor($0) }
+                    ), supportsOpacity: false)
+                    multiSpaceButton(title: "填充",
+                        current: printColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
+                        apply: { state.setSelectedFrameFillColor($0) })
+                    Spacer()
+                    Button("无填充") { state.clearSelectedFrameFillColor() }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                }
             }
 
             HStack {

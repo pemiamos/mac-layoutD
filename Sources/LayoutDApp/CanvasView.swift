@@ -65,6 +65,8 @@ final class CanvasView: NSView {
     /// Group-drag commit: new page-local rects for every moved frame, applied in one
     /// undoable step. Used when 2+ frames are dragged together.
     var onFramesDragged: (([(id: UUID, rect: Rect)]) -> Void)?
+    /// A line's endpoint was dragged → new page-local bounding rect for the line.
+    var onLineEndpointDragged: ((UUID, Rect) -> Void)?
     var onGapDragged: ((UUID, Rect, UUID, Rect) -> Void)?
     var onPageSelected: ((Int) -> Void)?
     var onDragStarted: (() -> Void)?
@@ -112,6 +114,14 @@ final class CanvasView: NSView {
     private var groupDragStartRects: [UUID: Rect] = [:]
     private var pendingGroupDragUpdate: [(id: UUID, rect: Rect)]?
 
+    // Line endpoint drag: stretch one end of a selected line along its axis.
+    private var isDraggingLineEndpoint = false
+    private var lineEndpointFrameId: UUID?
+    private var lineEndpointHorizontal = false
+    private var lineEndpointFixedCoord: Double = 0   // page-local along-axis coord of the fixed end
+    private var lineEndpointOrigRect: Rect?          // page-local rect at drag start (perpendicular dims)
+    private var pendingLineEndpointRect: Rect?
+
     // Marquee (rubber-band) selection state — canvas coordinates.
     private var isMarqueeSelecting = false
     private var marqueeStartPoint: CGPoint?
@@ -140,8 +150,10 @@ final class CanvasView: NSView {
     private(set) var zoomScale: CGFloat = 1.15
     private let pageGap: CGFloat = 36
     private let canvasInset: CGFloat = 42
-    /// Default rule weight (page points) for the line tool's thin dimension.
-    private let lineToolThickness: Double = 2
+    /// Thin dimension (page points) of a line's bounding box. This is the click/hit
+    /// area, not the visible weight — the line is drawn as a centered stroke whose
+    /// width is the frame's strokeWidth, so it stays a true thin line.
+    private let lineToolThickness: Double = 6
 
     override var isFlipped: Bool { true }
 
@@ -270,6 +282,24 @@ final class CanvasView: NSView {
             ? NSColor(calibratedRed: 0.88, green: 0.38, blue: 0.08, alpha: 1)
             : NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1)
         color.setStroke()
+
+        // The line tool previews a dashed segment (anchor → drag point along the
+        // snapped axis), not a rectangle.
+        if activeTool == .line {
+            let path = NSBezierPath()
+            if screenRect.width >= screenRect.height {
+                path.move(to: CGPoint(x: screenRect.minX, y: screenRect.midY))
+                path.line(to: CGPoint(x: screenRect.maxX, y: screenRect.midY))
+            } else {
+                path.move(to: CGPoint(x: screenRect.midX, y: screenRect.minY))
+                path.line(to: CGPoint(x: screenRect.midX, y: screenRect.maxY))
+            }
+            path.lineWidth = 1.0
+            path.setLineDash([4, 3], count: 2, phase: 0)
+            path.stroke()
+            return
+        }
+
         let path = NSBezierPath(rect: screenRect)
         path.lineWidth = 1.0
         path.setLineDash([4, 3], count: 2, phase: 0)
@@ -480,6 +510,48 @@ final class CanvasView: NSView {
             width: (CGFloat(effectiveFrameRect.width) + extraWidth) * zoomScale,
             height: CGFloat(effectiveFrameRect.height) * zoomScale
         )
+
+        // A line is a true stroke, not a filled box: draw a centered segment along its
+        // long axis (weight = strokeWidth), and when selected show only two endpoint
+        // handles — no bounding rectangle, no 8 resize handles.
+        if frame.kind == .line {
+            let horizontal = rect.width >= rect.height
+            let lineColor = resolvedColor(memoryColor: frameStrokeColors[frame.id], persistedHex: frame.strokeColorHex)
+                ?? NSColor.black
+            let weightPx = max(CGFloat(frame.strokeWidth ?? 1) * zoomScale, 0.75)
+            let p0: CGPoint, p1: CGPoint
+            if horizontal {
+                p0 = CGPoint(x: rect.minX, y: rect.midY)
+                p1 = CGPoint(x: rect.maxX, y: rect.midY)
+            } else {
+                p0 = CGPoint(x: rect.midX, y: rect.minY)
+                p1 = CGPoint(x: rect.midX, y: rect.maxY)
+            }
+            lineColor.setStroke()
+            let path = NSBezierPath()
+            path.move(to: p0)
+            path.line(to: p1)
+            path.lineWidth = weightPx
+            path.stroke()
+
+            if activeScreenMode == .normal && selectedFrameIds.contains(frame.id) {
+                NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).setStroke()
+                let hl = NSBezierPath()
+                hl.move(to: p0); hl.line(to: p1)
+                hl.lineWidth = 1.0
+                hl.stroke()
+                if selectedFrameIds.count == 1 {
+                    NSColor.white.setFill()
+                    for pt in [p0, p1] {
+                        let h = CGRect(x: pt.x - 3, y: pt.y - 3, width: 6, height: 6)
+                        let hp = NSBezierPath(rect: h)
+                        hp.fill()
+                        hp.stroke()
+                    }
+                }
+            }
+            return
+        }
 
         if frame.kind == .footnoteDivider {
             NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).setFill()
@@ -1473,14 +1545,51 @@ final class CanvasView: NSView {
             return
         }
 
+        // 4.5 Line endpoint drag hit test: grabbing an end of a selected line stretches
+        // its length along the axis (the other end stays fixed).
+        if activeTool == .selection,
+           selectedFrameIds.count <= 1,
+           let selId = selectedFrameId,
+           let info = findFrame(id: selId, in: document),
+           info.frame.kind == .line,
+           let pRect = pageRect(number: info.pageNumber) {
+            let r = info.frame.rect
+            let horizontal = r.width >= r.height
+            let cx0 = pRect.minX + CGFloat(r.x) * zoomScale
+            let cy0 = pRect.minY + CGFloat(r.y) * zoomScale
+            let cw = CGFloat(r.width) * zoomScale
+            let ch = CGFloat(r.height) * zoomScale
+            let p0 = horizontal ? CGPoint(x: cx0, y: cy0 + ch / 2) : CGPoint(x: cx0 + cw / 2, y: cy0)
+            let p1 = horizontal ? CGPoint(x: cx0 + cw, y: cy0 + ch / 2) : CGPoint(x: cx0 + cw / 2, y: cy0 + ch)
+            let tol: CGFloat = 8
+            func near(_ p: CGPoint) -> Bool { abs(point.x - p.x) <= tol && abs(point.y - p.y) <= tol }
+            var hitIndex: Int? = nil
+            if near(p0) { hitIndex = 0 } else if near(p1) { hitIndex = 1 }
+            if let idx = hitIndex {
+                isDraggingLineEndpoint = true
+                onDragStarted?()
+                lineEndpointFrameId = selId
+                lineEndpointHorizontal = horizontal
+                lineEndpointOrigRect = r
+                if horizontal {
+                    lineEndpointFixedCoord = (idx == 0) ? (r.x + r.width) : r.x
+                } else {
+                    lineEndpointFixedCoord = (idx == 0) ? (r.y + r.height) : r.y
+                }
+                dragStartLocalPoint = point
+                return
+            }
+        }
+
         // 5. Selection resize handle hit test (single selection only — group resize
         // isn't supported, matching the handles we draw).
         if activeTool == .selection,
            selectedFrameIds.count <= 1,
            let selId = selectedFrameId,
            let selFrameInfo = findFrame(id: selId, in: document),
+           selFrameInfo.frame.kind != .line,
            let pRect = pageRect(number: selFrameInfo.pageNumber) {
-            
+
             let extraWidth = (selFrameInfo.frame.kind == .text || selFrameInfo.frame.kind == .footnote || selFrameInfo.frame.kind == .sideNote) ? CGFloat(project.styles.paragraphStyle(id: selFrameInfo.frame.styleId ?? StyleID.body.rawValue).fontSize * 0.5) : 0.0
             let rect = CGRect(
                 x: pRect.minX + CGFloat(selFrameInfo.frame.rect.x) * zoomScale,
@@ -1573,6 +1682,25 @@ final class CanvasView: NSView {
                 width: abs(point.x - start.x),
                 height: abs(point.y - start.y)
             )
+            return
+        }
+
+        // Line endpoint drag: move the grabbed end along the axis, other end fixed.
+        if isDraggingLineEndpoint, let id = lineEndpointFrameId, let orig = lineEndpointOrigRect,
+           let document, let info = findFrame(id: id, in: document),
+           let pRect = pageRect(number: info.pageNumber) {
+            let localX = Double((point.x - pRect.minX) / zoomScale)
+            let localY = Double((point.y - pRect.minY) / zoomScale)
+            let fixed = lineEndpointFixedCoord
+            let newRect: Rect
+            if lineEndpointHorizontal {
+                newRect = Rect(x: min(fixed, localX), y: orig.y, width: abs(localX - fixed), height: orig.height)
+            } else {
+                newRect = Rect(x: orig.x, y: min(fixed, localY), width: orig.width, height: abs(localY - fixed))
+            }
+            previewFrameRects[id] = newRect
+            pendingLineEndpointRect = newRect
+            needsDisplay = true
             return
         }
 
@@ -1776,6 +1904,21 @@ final class CanvasView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        // Line endpoint drag commit.
+        if isDraggingLineEndpoint {
+            if let id = lineEndpointFrameId, let rect = pendingLineEndpointRect {
+                onLineEndpointDragged?(id, rect)
+            }
+            isDraggingLineEndpoint = false
+            lineEndpointFrameId = nil
+            lineEndpointOrigRect = nil
+            pendingLineEndpointRect = nil
+            previewFrameRects.removeAll()
+            dragStartLocalPoint = nil
+            needsDisplay = true
+            return
+        }
+
         // Frame drawing tools: commit the rubber-band rectangle if it has real size.
         // A line is intentionally thin on one axis, so it only needs real length.
         if isDrawingFrame {

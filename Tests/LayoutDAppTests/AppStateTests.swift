@@ -330,9 +330,10 @@ final class AppStateTests: XCTestCase {
         let id = try! XCTUnwrap(state.selectedFrameId)
         let block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first { $0.id == id })
         XCTAssertEqual(block.kind, .line)
-        // A rule is a thin filled rectangle (fill = the line colour), no separate border.
-        XCTAssertNotNil(block.backgroundColorHex)
-        XCTAssertNil(block.strokeColorHex)
+        // A line is a true stroke: its colour/weight live in stroke, no fill.
+        XCTAssertNotNil(block.strokeColorHex)
+        XCTAssertNotNil(block.strokeWidth)
+        XCTAssertNil(block.backgroundColorHex)
     }
 
     func testSetSelectedFrameStrokeWidthPersistsAsOverride() {

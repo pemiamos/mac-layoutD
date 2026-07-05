@@ -216,13 +216,22 @@ public struct IDMLExporter {
                                            packagedFileName: packagedLinks[asset.id]?.fileName,
                                            rect: frame.rect, maskShape: frame.maskShape, pageW: pageW, pageH: pageH, dx: dx))
                 case .empty:
-                    // Drawn shapes (rectangle / line) have no content but carry a fill
-                    // (and, for rectangles, a stroke) → export as an Unassigned Rectangle.
-                    if frame.kind == .rectangle || frame.kind == .line,
-                       let fill = frame.backgroundColorHex {
+                    // Drawn shapes have no content → export as an Unassigned Rectangle.
+                    // Rectangle: fill (+ optional stroke). Line: a centered thin filled
+                    // rectangle whose thin dimension is the stroke weight.
+                    if frame.kind == .rectangle, let fill = frame.backgroundColorHex {
                         items.append(colorRectangleItem(
                             self: "uShape\(pi)_\(fi)", rect: frame.rect, fillColor: fill,
                             strokeColor: frame.strokeColorHex, strokeWidth: frame.strokeWidth ?? 0,
+                            pageW: pageW, pageH: pageH, dx: dx))
+                    } else if frame.kind == .line, let color = frame.strokeColorHex {
+                        let w = frame.strokeWidth ?? 1
+                        let r = frame.rect
+                        let thin: Rect = r.width >= r.height
+                            ? Rect(x: r.x, y: r.y + r.height / 2 - w / 2, width: r.width, height: w)
+                            : Rect(x: r.x + r.width / 2 - w / 2, y: r.y, width: w, height: r.height)
+                        items.append(colorRectangleItem(
+                            self: "uShape\(pi)_\(fi)", rect: thin, fillColor: color,
                             pageW: pageW, pageH: pageH, dx: dx))
                     }
                     continue

@@ -679,6 +679,10 @@ final class WorkspaceViewController: NSViewController {
             self.appState.applyFrameOrigins(origins, note: "手动移动多个元素")
         }
 
+        canvas.onLineEndpointDragged = { [weak self] id, rect in
+            self?.appState.updateLineGeometry(id: id, rect: rect)
+        }
+
         canvas.onGapDragged = { [weak self] firstId, firstRect, secondId, secondRect in
             guard let self else { return }
             self.appState.updateGapFrames(firstId: firstId, firstRect: firstRect, secondId: secondId, secondRect: secondRect)

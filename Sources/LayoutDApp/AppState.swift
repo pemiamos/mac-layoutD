@@ -355,7 +355,8 @@ final class AppState: ObservableObject {
         let role: String
         // Shapes carry the current fill/stroke so they're visible the moment they're
         // drawn (a colorless box would be invisible). A rectangle takes both fill and
-        // stroke; a line (a thin rule) is filled with the stroke colour, no border.
+        // stroke; a line is a true stroke — no fill, its colour and weight ARE the
+        // stroke, drawn as a centered segment (see CanvasView/exporters).
         var backgroundColorHex: String? = nil
         var strokeColorHex: String? = nil
         var strokeWidth: Double? = nil
@@ -373,7 +374,8 @@ final class AppState: ObservableObject {
         case .line:
             contentRef = .generated("")
             role = PageFrameKind.line.rawValue
-            backgroundColorHex = Self.printColor(from: activeStrokeColor).storageString
+            strokeColorHex = Self.printColor(from: activeStrokeColor).storageString
+            strokeWidth = 1.0
         default:
             contentRef = .generated("")
             role = PageFrameKind.text.rawValue
@@ -1269,6 +1271,28 @@ final class AppState: ObservableObject {
 
     func updateFrameCoordinate(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {
         updateFrameCoordinatesWithoutUndo(id: id, x: x, y: y, width: width, height: height)
+    }
+
+    /// Commits a line's new bounding rect from an endpoint drag. Uses a tiny minimum
+    /// size (lines are thin by nature) and relies on the drag's begin-grouping for
+    /// undo, so it doesn't push its own undo step.
+    func updateLineGeometry(id: UUID, rect: Rect) {
+        guard let pageNum = findPageNumber(for: id) else { return }
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+        guard let idx = plan.blocks.firstIndex(where: { $0.id == id }) else { return }
+        var block = plan.blocks[idx]
+        block.updateAbsoluteFrame(
+            pageSize: project.pageSetup.pageSize,
+            x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+            minimumSize: 1
+        )
+        plan.blocks[idx] = block
+        plan.notes = ["手动调整直线端点"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
     }
 
     private func updateFrameCoordinatesWithoutUndo(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {

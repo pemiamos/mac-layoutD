@@ -248,6 +248,26 @@ public struct PNGExporter {
             return
         }
 
+        // A line is a centered stroke along its long axis (weight = strokeWidth).
+        if frame.kind == .line {
+            let color = frame.strokeColorHex.flatMap { NSColor.from(hex: $0) } ?? .black
+            let weight = max(CGFloat(frame.strokeWidth ?? 1), 0.25)
+            let horizontal = rect.width >= rect.height
+            context.saveGState()
+            context.setStrokeColor(color.cgColor)
+            context.setLineWidth(weight)
+            if horizontal {
+                context.move(to: CGPoint(x: rect.minX, y: rect.midY))
+                context.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            } else {
+                context.move(to: CGPoint(x: rect.midX, y: rect.minY))
+                context.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+            }
+            context.strokePath()
+            context.restoreGState()
+            return
+        }
+
         switch frame.content {
         case .text(let text):
             if let componentStyle = project.styles.componentStyle(for: frame.kind) {
