@@ -101,7 +101,7 @@
 - [ ] **PERF-4 引擎测量改造（CTTypesetter 逐行填充 + 测量缓存）** — 2026-07-05 从 Claude 道转来。风险最高，**Claude 审过 AG 提交的方案后追加了两条硬约束（见下），必须照做**。拆成 4a/4b 两棒，先做低风险的 4a，量够不够再决定动不动 4b。
   - **背景（Claude review 结论）**：`estimatedTextHeight`（LayoutEngine.swift:1121）用完整 `CTFramesetterSuggestFrameSizeWithConstraints` 测高，是 `(text, style, width, inlineRuns)` 的纯函数，缓存它安全。但 `fittingPrefix`（:544）的二分查找里，`bestCount` 会喂给下游 kinsoku/避头尾/孤寡行处理，改写断点算法有让分页悄悄错位的风险；且当前 golden 语料（PerformanceBenchmarkTests，只有正文/标题的中英混排）没覆盖首行缩进/竖排/行内粗斜体/图片环绕，"golden 过了"给不了真信心。
 
-  ### 4a｜测高缓存（低风险，先做，很可能光这一步就够）
+  ### [x] 4a｜测高缓存（已由 AG 于 feature/ag-perf4a-cache 完成）
   - 目标：给 `estimatedTextHeight` 加线程安全缓存（NSLock 保护），命中即跳过 CoreText framesetter 构建。整段能放下的段落走 `fittingPrefix` 的 early-return（:558 测一次高就返回），重排时全是缓存命中——这是 80% 收益来源。
   - **⚠️ 硬约束①（缓存钥匙必须完整，配错会静默算错分页）**：钥匙**不能**只用 `(text, fontName, fontSize, lineHeight, firstLineIndent, layoutDirection, width, inlineRuns)`。`makeAttributedString` 逐字调 `style.fontMapping(for:)`，按字符套不同字体 + `sizeMultiplier` + `baselineOffset`（复合字体）。**钥匙必须再纳入该样式整套复合字体映射的指纹**（family/fallback/每段 sizeMultiplier/baselineOffset），否则两个只有复合字体配置不同、fontName/fontSize 相同的样式会撞键，取到旧高度→分页错且无声。`InlineRun`/`InlineEmphasis` 标 `Hashable` 时要含 emphasis。
   - 文件：`Sources/LayoutDEngine/LayoutEngine.swift`（`estimatedTextHeight` + 缓存类）；如需给样式加指纹计算可加到 `Sources/LayoutDCore/`。

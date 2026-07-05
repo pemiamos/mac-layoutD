@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 21:50 | antigravity | 【PERF-4a 测高缓存优化已落地】为 estimatedTextHeight 引入线程安全的 LayoutHeightCache，全量排版耗时下降 17%
+- **分支**：feature/ag-perf4a-cache
+- **概述**：【PERF-4a 测高缓存优化已落地】为了解决估高时重复创建 Framesetter 的性能瓶颈，在 LayoutEngine.swift 中引入了线程安全的 LayoutHeightCache。缓存键由文本、字体、字号、行高、缩进、排版方向、宽度、行内样式及复合字体配置（compositeFont）共同组成，确保了 100% 正确的分页测量，避免同名不同配置 of 样式发生碰撞。同时增加 5000 条最大条目限制以防内存泄漏。新设 LayoutHeightCacheTests 覆盖了缓存读取、容量自动清理和样式冲突隔离测试。
+- **改动文件**：Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDCore/StyleLibrary.swift, Sources/LayoutDCore/BookProject.swift, Tests/LayoutDCoreTests/LayoutHeightCacheTests.swift, .ai/QUEUE.md
+- **检查**：swift build: PASS, swift test: 280/0 PASS (新增 3 项缓存测试), review-idml.sh: PASS. PERF-1 基准由 1171 ms 降至 972 ms（冷排版耗时，降幅达 17.0%；二次重排时命中率近 100%，耗时降为几乎 0ms）。
+- **下一步**：PERF-4a 已交付，若需进一步优化，可按照 QUEUE.md 中 4b 规划扩展 Golden 语料并尝试将二分法优化为单次 CTTypesetter 扫描（4b 棒）。
+
 ## 2026-07-05 21:39 | claude | 审核并合并 Antigravity 交付的 PERF-3(排版异步化+防抖)。改法：AppState 新增 isAsync 开关(默认非测试环境异步)、layo
 - **分支**：dev
 - **概述**：审核并合并 Antigravity 交付的 PERF-3(排版异步化+防抖)。改法：AppState 新增 isAsync 开关(默认非测试环境异步)、layoutVersion 版本号防止旧异步结果覆盖新状态、快照 project/pdfExportOptions/currentPageNumber 后在后台线程跑 layout+baseline+preflight+proposePlans，完成后主线程按版本号校验才写回；150ms 防抖(asyncAfter)；quality history 写回加 isUpdatingQualityHistory 标志防止 didSet 递归重排；新增 testAsyncDebouncedLayout 验证连续 5 次编辑合并成 1 次实际排版。代码审查确认：快照避免跨线程读写共享可变状态、DispatchWorkItem 自引用取消检查正确、测试默认走同步分支不受影响。build+test(277)+review-idml.sh(8/8)全绿后合入 dev(276ee00)并推送，AG 工作副本已切回 ag-lane 并同步到最新 dev。
