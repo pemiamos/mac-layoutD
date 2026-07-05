@@ -3,6 +3,34 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 14:29 | claude | 实现全局 CMYK 模式并修一串颜色保真问题,均已人工验收。①全局色彩模式开关:PageSetup.colorSpace(可选,旧文件解为 nil=rgb),属
+- **分支**：dev
+- **概述**：实现全局 CMYK 模式并修一串颜色保真问题,均已人工验收。①全局色彩模式开关:PageSetup.colorSpace(可选,旧文件解为 nil=rgb),属性面板文档区 RGB/CMYK 分段控件;CMYK 下拾色器默认落 CMYK 页、文字默认 K100;导出对话框 cmykColors 默认跟随全局。②拾色器保值(关键 bug):ColorPickerPanel 打开 CMYK 色时 init 只存了 RGB、onAppear 又 syncFromRGB 反推 C/M/Y/K,富色 cmyk→rgb→cmyk round-trip 严重漂移(C61M75Y63K77→C62M88Y77K75)。修复:init 存 c/m/y/k 四通道 + onAppear 改 syncFromCurrentMode(按当前套系派生而非反推)。设定 CMYK 值现全程零转换。③近黑文字→K100:PrintColor.isNearBlack(最亮通道≤0.25);导出时近黑文字色折叠到内建 Color/Black(K100 单黑),彩色文字/色块照实转;画布 proofedText 同规则。④屏幕软打样:CanvasView.proofed/proofedText,CMYK 模式经 device CMYK 显示,与 InDesign 口径接近。⑤IDML 导出 CMYK:graphic() 按 cmykOutput 用 asCMYK 发 swatch,但 Self 仍按存储色键(引用不失配);cmykColors 由全局或勾选驱动。⑥手绘色块导出(老 bug):空文本框带填充/描边时导出为 Rectangle(原先 !isEmpty 直接跳过丢失),新增 drawnBoxItem;无填充无描边空框仍跳过。⑦PrintColor.asCMYK/isNearBlack 纯 Core 无 AppKit。commit eb80024 推 origin/dev,271 测试通过。
+- **改动文件**：Sources/LayoutDCore/PageSetup.swift, Sources/LayoutDCore/PrintColor.swift, Sources/LayoutDExport/IDMLExporter.swift, Sources/LayoutDApp/ColorPickerPanel.swift, Sources/LayoutDApp/ObjectPropertiesView.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/main.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift, Tests/LayoutDExportTests/IDMLExporterTests.swift
+- **检查**：build: pass; test: pass(271 tests,含 asCMYK/isNearBlack/colorSpace codable/CMYK 色板/手绘色块导出)。commit eb80024 推 origin/dev。本轮特性累计:627d504(属性面板 InDesign 上下文化)+94a42a9(CMYK 上色不丢选择+浮窗拾色器+默认窗口)+0c75245(导出勾选 hit-testing)+eb80024(全局CMYK+拾色器保值+近黑文字K100+软打样+手绘色块导出)。人工验收:C=30 M=40 Y=50 K=10 导出后 InDesign 一致;手绘色块导出为矩形。
+- **下一步**：①【可选·架构】用户倾向"切 CMYK 模式时即把模型颜色写成 CMYK、导出纯搬运"。当前实现是:设定的 CMYK 值零转换(拾色器保值)+ 未设的 RGB 默认色在导出时转 CMYK(asCMYK≈NSColor≈InDesign 三者口径基本一致,故无感)。若坚持严格"切模式即destructive转换",需改写 styles.colors/DesignTokens 令牌(多模式 light/dark)+ 组件直存 hex + plan override + swatch,较大且触及设计令牌系统,建议单独立项。②asCMYK 用的是朴素 device 公式;若将来要 ICC 精确 CMYK(印厂指定 profile),需引入色彩管理。③本轮全部人工验收通过,可考虑把本特性(627d504→eb80024)连同更早 CMYK 系列合 dev→main(需用户点头)。
+
+## 2026-07-05 01:48 | claude | 修了导出对话框勾选框点不动的问题,并顺带完成 CMYK 版式块 override 通路的导出人工验收。问题:IDML/PDF/PNG 导出把 SwiftUI 设
+- **分支**：dev
+- **概述**：修了导出对话框勾选框点不动的问题,并顺带完成 CMYK 版式块 override 通路的导出人工验收。问题:IDML/PDF/PNG 导出把 SwiftUI 设置视图直接作为裸 NSHostingView 塞进 NSSavePanel/NSOpenPanel.accessoryView——渲染正常但收不到鼠标点击(三个勾选框像卡死)。修复:新增 makeExportAccessoryView(content:) 把 hosting view 包进有确定尺寸(fittingSize)的普通 NSView 容器 + 约束钉住(top/bottom/centerX/width),恢复 hit-testing;IDML/PDF/PNG 三处附件视图统一走它。用户人工验收:勾选框现在能点了,勾上「CMYK 色板模式」导出 IDML→InDesign 色板面板出现 Process CMYK 色板「C=4 M=17 Y=0 K=0」(即副标题框粉色填充),证实上一轮 isValidColorValue 修复后,版式块 override 通路的 CMYK 一路保真到 InDesign(不再压回 RGB);同页 RGB 色块命名 C+hex 也正常。commit 0c75245 推 origin/dev。
+- **改动文件**：Sources/LayoutDApp/main.swift
+- **检查**：build: pass。commit 0c75245(导出对话框勾选框可点击)推 origin/dev。本轮特性累计:627d504(属性面板 InDesign 式上下文化)+94a42a9(CMYK 上色不丢选择+浮窗拾色器+默认窗口)+0c75245(导出勾选框 hit-testing)。CMYK 导出已在 InDesign 人工验收通过(Process CMYK 色板 C=4 M=17 Y=0 K=0)。
+- **下一步**：①本轮 UI/颜色链路(属性面板上下文化 + CMYK 上色保真 + 导出勾选可用)已端到端人工验收通过,可考虑把 627d504+94a42a9+0c75245 连同更早的 CMYK 系列一起合 dev→main(需用户点头合并)。②可选后续:isValidColorValue 之外,排查 PDFExporter/PNGExporter/canvas 直接渲染 backgroundColorHex 的静态路径是否也统一走 PrintColor 解析 cmyk(...)(画布靠 frameBackgroundColors 覆盖层已 OK,但导出静态色值值得过一眼)。③属性面板未选中态目前展示文档属性(开本/方向/对页/分栏/边距/页码),若后续想进一步向 InDesign 靠拢可加对象对齐/分布等常用操作入口。
+
+## 2026-07-05 01:41 | claude | 承接属性面板重构(627d504)后修了用户人工验收暴露的三个问题。核心是 CMYK 上色丢选择:根因在 LayoutDEngine.isValidColorV
+- **分支**：dev
+- **概述**：承接属性面板重构(627d504)后修了用户人工验收暴露的三个问题。核心是 CMYK 上色丢选择:根因在 LayoutDEngine.isValidColorValue 只认 #hex,把 cmyk(...) 判为无效 → frontMatterPageFromPlan/applyPlanIfPresent 的 planValidationFailures 失败 → 引擎丢弃冻结版式、退回默认重排封面页 → frame id 变化 → 选中和 CMYK 颜色一并丢失(表现:CMYK 改一次就跳,RGB 无事)。诊断用 NSLog 实锤(applied color... stillPresent=false),已定位后全部移除。修复:isValidColorValue 改用权威 PrintColor(string:) 校验,#hex/裸hex/cmyk(...) 全接受(token 仍走 colorHex 兜底)。顺带两处 UI:①多套系拾色器从检查器内的 .popover 改为独立浮动 NSPanel(新增 MultiSpaceColorPanel.swift + MultiSpaceColorPanelHost 观察 state 让色板实时刷新)——写文档触发全书重排会重建 popover 宿主把它顶掉,独立窗口免疫;②ColorPickerPanel 滑块改为拖动中只本地回算通道+预览、松手(onEditingChanged=false)才 emit 一次,避开每帧全书重排(PERF-1 约1s/次);③默认窗口 1280x860 居中(封顶可见屏),不再铺满。新增回归测试 testCMYKFillKeepsPlanValidSoSelectionSurvives。commit 94a42a9 推 origin/dev。用户已人工验收「这次可以了」。
+- **改动文件**：Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDApp/MultiSpaceColorPanel.swift (新增), Sources/LayoutDApp/ColorPickerPanel.swift, Sources/LayoutDApp/ObjectPropertiesView.swift, Sources/LayoutDApp/main.swift, Tests/LayoutDAppTests/AppStateTests.swift
+- **检查**：build: pass; test: pass(含新增 testCMYKFillKeepsPlanValidSoSelectionSurvives)。commit 94a42a9(CMYK 上色不丢选择+浮窗拾色器+默认窗口大小)推 origin/dev。本轮累计:627d504(属性面板 InDesign 式上下文化)+94a42a9(本修复)。
+- **下一步**：①【建议·导出验证】既然 isValidColorValue 现在放行 cmyk(...),应人工验证:选框→多套系→CMYK 调色→导出 IDML→InDesign 看是否为 Process CMYK 色板且色值正确(之前 76b63f5 修的是 SwiftUI 通路,这条是版式块 override 通路,值得单独过一眼)。②【可选·一致性】isValidColorValue 之外,若别处(PDFExporter/PNGExporter/canvas 直接渲染 backgroundColorHex)仍用 NSColor.fromHex 解析,遇到 cmyk(...) 可能画成默认色;画布靠 frameBackgroundColors 覆盖层(现 id 稳定故 OK),但导出静态色值路径值得排查一遍是否都走 PrintColor。③两点 OK 后可考虑把本特性(627d504+94a42a9)连同更早的 CMYK 系列一起合 dev→main。
+
+## 2026-07-04 21:11 | claude | 重构右栏「属性」标签为 InDesign 式上下文属性面板。原属性标签一成不变展示全书信息(项目属性+版心网格),现改为随画布选择而变:选中对象→显示该对象属性
+- **分支**：dev
+- **概述**：重构右栏「属性」标签为 InDesign 式上下文属性面板。原属性标签一成不变展示全书信息(项目属性+版心网格),现改为随画布选择而变:选中对象→显示该对象属性(类型/变换X·Y·宽·高/填充·描边·文字色含多套系拾色器/文本内容/换图/恢复流式排版);未选中→显示文档属性(开本/方向可切水平·竖排/对页/分栏/边距/当前页导航)+「在画布中选择对象」提示。新增 Sources/LayoutDApp/ObjectPropertiesView.swift 承载该逻辑(含内联 ObjectTextEditor + 颜色 helper)。对象级编辑从冗长的检查器抽离——删除 InspectorView 的 Section 1.5「选中元素属性」整块 + colorFromHex/printColor/multiSpaceButton helper + showFill/Stroke/TextPicker/selectedElement @State + SelectedFrameTextEditor struct,检查器回归项目/预检仪表盘,不再与属性标签重复。commit 627d504 已推 origin/dev。
+- **改动文件**：Sources/LayoutDApp/ObjectPropertiesView.swift (新增), Sources/LayoutDApp/SidebarView.swift, Sources/LayoutDApp/InspectorView.swift
+- **检查**：build: pass; test: pass。commit 627d504 推 origin/dev。
+- **下一步**：①【用户·视觉验收】重跑 App,点右栏「面板」→「属性」:未选中时应显示文档属性(开本/方向/对页/分栏/边距/页码)+ 提示;在画布点选任一框(文本/图片/图注)后属性标签应即时切为该对象属性(变换/颜色/文本)。确认切换流畅、无空白/闪烁。②可评估是否把「检查器」里剩下的重块(版面参数、段落样式)也做同样的上下文收敛,或是否需要在属性面板顶部加一个快速的填充/描边激活开关(呼应色板标签的 isFillActive)。③视觉 OK 后可考虑连同 CMYK 拾色器修复一起合 dev→main。
+
 ## 2026-07-04 20:51 | claude | 修复:标准色块通路不再把 CMYK 压成 RGB。用户人工验收发现——用标准色块弹出的系统 Colors 面板 CMYK 滑块调的绿,导出 InDesign 后
 - **分支**：dev
 - **概述**：修复:标准色块通路不再把 CMYK 压成 RGB。用户人工验收发现——用标准色块弹出的系统 Colors 面板 CMYK 滑块调的绿,导出 InDesign 后是 RGB 色板(C8FC087);而纯黑 K100 正确折叠到内建 CMYK [黑色](棒1 核心成立)。根因:吃 SwiftUI Color 的老通路无条件 Color→sRGB hex 丢了色彩空间。实测确认 SwiftUI↔NSColor 桥接保留 CMYK(model 仍 .cmyk),遂新增 AppState.printColor(from: Color):componentBased 且 CMYK 空间→提取 c/m/y/k 存 cmyk(...),否则退 sRGB;三个 Color setter + applyColorToSelectedFrame 统一走它,删除只压平的 hexString。commit 76b63f5 已推 origin/dev。
