@@ -10,6 +10,15 @@
 - **检查**：`swift test --filter DOCXBookImporterTests` PASS(5/0)；`bash scripts/review-idml.sh` PASS（swift build PASS；swift test 281/0；Markdown 行内强调、角色标签、DOCX 导入三类 IDML 探针全过）。
 - **提交**：`3f84c77 feat(import): cover DOCX footnotes and import guards`。
 - **下一步**：Claude 在主仓库审核 `feature/codex-docx-import-guards`，复跑 `bash scripts/review-idml.sh` 后合入 dev；若要做人工验收，可用含脚注/内嵌图 DOCX 导出 IDML，在 InDesign 中确认脚注为原生 Footnote 且图片链接正常。
+## 2026-07-05 22:15 | antigravity | 【SPLIT-GUI 巨型 GUI 文件拆分已完成】纯重构且行为零回归，分三个 commit 提交并推送
+- **分支**：feature/ag-split-gui
+- **概述**：完成了对三个巨型 GUI 文件的拆分，保证所有模块正常运行及排版一致性：
+  1. `main.swift`：拆分出 `AppDelegate.swift`、`AppDelegate+Menu.swift`、`WorkspaceViewController.swift`、`ExportSettingsViews.swift`，主入口仅保留 CLI 排版/导出与应用启动逻辑。
+  2. `InspectorView.swift`：按功能区拆分出 `InspectorView+Issues.swift`、`InspectorView+Styles.swift`、`InspectorView+Assets.swift`、`InspectorView+Quality.swift` 等 subview 扩展。
+  3. `CanvasView.swift`：拆分出 `CanvasView+Drawing.swift`（CoreGraphics/CoreText 绘制与 CMYK 软打样）和 `CanvasView+Interaction.swift`（鼠标键盘交互与内联文本编辑器）。
+- **改动文件**：`Sources/LayoutDApp/main.swift`、`Sources/LayoutDApp/InspectorView.swift`、`Sources/LayoutDApp/CanvasView.swift`，并在同目录下新建了 10 个对应的子 Swift 文件。
+- **检查**：编译通过 (`swift build`)，单元测试全部通过 (`swift test` 280/280)，IDML 端到端回归测试全部通过 (`review-idml.sh` 8/8 PASS)，全书排版冷基准无变化（161 页 / 1004 ms）。
+- **下一步**：本阶段 GUI 文件模块化拆分已完工，已生成三个 commit 并推送到 feature/ag-split-gui 分支，等待主车道/Claude 审核并合入 dev。
 
 ## 2026-07-05 22:04 | claude | 给 Codex 道补充下一批任务 + 处理 AG 道 PERF-4b 去留决定(commit b62e0f8)。Codex 队列此前已清空(仅 E3-8 暂缓)
 - **分支**：dev
