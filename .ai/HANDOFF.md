@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 21:54 | claude | 审核并合并 Codex 交付的两项(SPLIT-IMPORT + E3-9)。①feature/codex-split-import(4ca0db6):把 15
+- **分支**：dev
+- **概述**：审核并合并 Codex 交付的两项(SPLIT-IMPORT + E3-9)。①feature/codex-split-import(4ca0db6):把 1528 行 MarkdownBookImporter.swift 纯搬家拆成 MarkdownParserBlocks/Inline/FrontMatter/Images.swift 四个 extension 文件,对外 API 不变,行为不变。②feature/codex-e3-9-mojikumi-baseline(b4dbb3d+488c537,已先合最新 dev 含 PERF-3):IDML 导出补 MojikumiTable 声明、段落样式绑定 Mojikumi/MojikumiSet、GridAlignment=AlignAllLinesToGrid 基线网格绑定,保留既有 SimplifiedChineseKinsoku 与 CJK Composer,新增 IDMLExporterTests 覆盖 designmap/Styles.xml/Preferences.xml。两分支与 dev 均无冲突,merge 提交 a5b049b(split-import)+60104f1(e3-9)。合并后 build+test(277)+review-idml.sh(8/8)全绿,补提交 749f92b 把 .ai/QUEUE.md 里这两项标记完成,已推送 origin/dev。
+- **改动文件**：Merge a5b049b: Sources/LayoutDImport/MarkdownBookImporter.swift + 新增 MarkdownParserBlocks/Inline/FrontMatter/Images.swift。Merge 60104f1: Sources/LayoutDExport/IDMLExporter.swift, Tests/LayoutDExportTests/IDMLExporterTests.swift, .ai/HANDOFF.md。749f92b: .ai/QUEUE.md(SPLIT-IMPORT/E3-9 标记完成)。
+- **检查**：swift build: pass; swift test: pass(277 tests); review-idml.sh: 8/8 PASS(含角色标签探针)。均在合并后 dev 上跑。已推送 origin/dev(7c8405a..749f92b)。
+- **下一步**：①【用户·视觉验收,非阻塞】E3-9 是约物挤压/基线网格贴齐这类视觉排版属性,结构探针测不出对错,建议导出含中文标点段落的 IDML 在 InDesign 里肉眼确认标点挤压效果和基线对齐是否生效。②SPLIT-IMPORT 是纯重构无用户可见变化,无需验收。③Codex 道活跃队列已清空(E3-8 暂缓),下一批任务需 Claude 在 QUEUE.md 补充。④Antigravity 那边 PERF-4 已拆 4a/4b 且 4a(LayoutHeightCache)已完成(41ee1ad,本地可见但未合 dev),下次可一并审核合并。
+
 ## 2026-07-05 21:45 | codex | 完成 Codex 道队列两项：SPLIT-IMPORT 拆分 Markdown importer；E3-9 IDML 约物挤压 + 基线网格导出绑定。
 - **分支**：feature/codex-split-import；feature/codex-e3-9-mojikumi-baseline
 - **概述**：按队列完成 Codex 道剩余两项。① SPLIT-IMPORT：在 `feature/codex-split-import` 将 1528 行 `MarkdownBookImporter.swift` 纯搬家拆为主入口/状态 + `MarkdownParserBlocks.swift`、`MarkdownParserInline.swift`、`MarkdownParserFrontMatter.swift`、`MarkdownParserImages.swift` 四个 extension 文件；为跨文件 extension 访问，把 parser/辅助类型从 file-private 级别调整为模块内可见，对外 public API 不变。② E3-9：在 `feature/codex-e3-9-mojikumi-baseline`（已先合最新 origin/dev=790ac97，含 PERF-3）给 IDML 导出补 `MojikumiTable/$ID/kSimpChineseMojikumiName` 声明，段落样式绑定 `Mojikumi`/`MojikumiSet`，并在段落样式与 TextDefault 上写 `GridAlignment=AlignAllLinesToGrid`、`GridAlignFirstLineOnly=false`，保持既有 SimplifiedChineseKinsoku 与 CJK Composer。新增/扩展 IDMLExporterTests 覆盖 designmap、Styles.xml、Preferences.xml 中的约物/基线绑定。
