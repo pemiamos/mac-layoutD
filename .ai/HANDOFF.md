@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 21:59 | claude | 审核并合并 Antigravity 交付的 PERF-4a(测高缓存)。上一棒我 review AG 的 PERF-4 方案后拆成 4a/4b 并追加两条硬约束
+- **分支**：dev
+- **概述**：审核并合并 Antigravity 交付的 PERF-4a(测高缓存)。上一棒我 review AG 的 PERF-4 方案后拆成 4a/4b 并追加两条硬约束,4a 的硬约束①是"缓存键必须含完整复合字体映射指纹,否则 fontName/fontSize 相同但 compositeFont 不同的样式会撞键静默算错分页"。审核 AG 实现(feature/ag-perf4a-cache 41ee1ad):新增 LayoutHeightCache(NSLock 保护的线程安全单例),缓存键含 text/fontName/fontSize/lineHeight/firstLineIndent/layoutDirection/width/inlineRuns/compositeFont 全部字段,完整满足硬约束①;为使 Key 可 Hashable,顺带给 CompositeFontMapping/CompositeFontClass/InlineRun 补了 Hashable conformance(InlineRun 含 emphasis,符合约束里"标 Hashable 要含 emphasis"的要求);新增 testCompositeFontDifferenceDoesNotCollision 精确覆盖验收要求的"两个 fontName/fontSize 相同但复合字体映射不同的样式,缓存不互相污染";容量上限 5000 条超限整体清空。代码审查通过,合入 dev(merge 55af77a),独立复验(不只信 AG 自报):build+test(280/0)+review-idml.sh(8/8)全绿,并单独重跑 PerformanceBenchmarkTests 得 161页/992ms,相较基线(~1187ms)降约16%,与 AG 自报 17% 吻合,非假数据。
+- **改动文件**：Merge 55af77a: Sources/LayoutDEngine/LayoutEngine.swift(新增 LayoutHeightCache), Sources/LayoutDCore/StyleLibrary.swift(CompositeFontMapping/Class 加 Hashable), Sources/LayoutDCore/BookProject.swift(InlineRun 加 Hashable), Tests/LayoutDCoreTests/LayoutHeightCacheTests.swift(新增), .ai/QUEUE.md(4a 标记完成), .ai/HANDOFF.md。另在此之前补提交 8c3f597(补记上一棒 SPLIT-IMPORT/E3-9 交接日志,write_handoff 未走 git 需手动提交)。
+- **检查**：swift build: pass; swift test: pass(280 tests); review-idml.sh: 8/8 PASS。均在合并后 dev 上跑,独立复验非仅采信 AG 报告。PERF-1 独立重跑:161页/992ms(基线~1187ms,降幅~16%)。已推送 origin/dev(8c3f597..55af77a)。
+- **下一步**：①PERF-4a 是纯性能优化无用户可见变化,不阻塞视觉验收流程。②QUEUE.md 里 4b(fittingPrefix 二分改单次扫描)仍是高风险待办,硬约束②要求先扩 golden 语料覆盖首行缩进/竖排/行内格式/图片环绕四类、逐页坐标 100% 一致才能动,AG 可按需领取或视 4a 收益是否已经够用而搁置。③Codex 道队列已清空(仅 E3-8 暂缓),需要 Claude 补充下一批任务到 QUEUE.md。④当前 dev 已积累较多改动(GUARD/SPLIT/E3-9/PERF-3/PERF-4a),可考虑找个节点集中给用户过一轮视觉验收后合 main。
+
 ## 2026-07-05 21:54 | claude | 审核并合并 Codex 交付的两项(SPLIT-IMPORT + E3-9)。①feature/codex-split-import(4ca0db6):把 15
 - **分支**：dev
 - **概述**：审核并合并 Codex 交付的两项(SPLIT-IMPORT + E3-9)。①feature/codex-split-import(4ca0db6):把 1528 行 MarkdownBookImporter.swift 纯搬家拆成 MarkdownParserBlocks/Inline/FrontMatter/Images.swift 四个 extension 文件,对外 API 不变,行为不变。②feature/codex-e3-9-mojikumi-baseline(b4dbb3d+488c537,已先合最新 dev 含 PERF-3):IDML 导出补 MojikumiTable 声明、段落样式绑定 Mojikumi/MojikumiSet、GridAlignment=AlignAllLinesToGrid 基线网格绑定,保留既有 SimplifiedChineseKinsoku 与 CJK Composer,新增 IDMLExporterTests 覆盖 designmap/Styles.xml/Preferences.xml。两分支与 dev 均无冲突,merge 提交 a5b049b(split-import)+60104f1(e3-9)。合并后 build+test(277)+review-idml.sh(8/8)全绿,补提交 749f92b 把 .ai/QUEUE.md 里这两项标记完成,已推送 origin/dev。
