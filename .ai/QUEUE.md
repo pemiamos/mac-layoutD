@@ -67,11 +67,15 @@
 - [ ] ~~**BUG-1 跨段落脚注编号全错**~~ ⏸ **不修（用户 2026-07-06 决定）**——脚注使用频率极低，初排里属细枝末节，需要时 InDesign 补做很快；且 THREAD-1 落地后 story 结构整个会变，现在修是白修。根因存档：一框一 Story 零串接 → InDesign 原生脚注按 Story 各自从 1 编号（Markdown/DOCX 两路径均复现，非 IMP-4/SPLIT-GUI 回归）。
 - [x] **THREAD-1a 串接文流 spike** — ✅ **2026-07-06 用户 InDesign 人工验证通过**。手工生成脚本 `scratchpad/gen-thread-spike.py`：一个 Story 装 32 段正文 + 3 个页大小 TextFrame 用 Previous/NextTextFrame 串接（坐标沿用 demo 版心）。用户验证三点全过：① 文字跨页连续流（**第12段被从中间拆到第1→2页、第20段拆到第2→3页、段号 1→27 连续**——独立框永远做不到跨页拆段，铁证串接成立）；② 编辑顺移丝滑自动（删/插一段后文跨页自动重排）；③ 中文/复合字体/约物/两端对齐正常，漂移可接受。
   - **验证过的结构模板（THREAD-1b 照此实现）**：① 一章正文合成一个 `<Story Self="uStoryBodyN">`，每段一个 `<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">`，Content 末尾带 `\n`（最后一段不带）；② 每页一个 `<TextFrame>`，几何=引擎算好的版心框（PathGeometry 四角坐标），`ParentStory` 指向该章 Story；串接：首框 `PreviousTextFrame="n"`、末框 `NextTextFrame="n"`，中间各框 Prev/Next 互指兄弟框 `Self` id；③ designmap `StoryList` 列各章 Story，每 Spread 一页含其串接框；④ InDesign 打开自动灌流、编辑自动重排，无需额外属性。
-- [ ] **THREAD-1b 串接文流全量实现**（THREAD-1a 已过，模板见上；**设计岔路 2026-07-06 用户已拍板**）。
-  - **已定方案（B + 锚定对象）**：① 章名/节名/正文按阅读顺序进**同一章 Story**（各带自己段落样式），标题随文重排不掉队；② 图片/抽言/知识卡片作为**锚定对象（anchored object，`<Rectangle>`/`<TextFrame>` 嵌在文流锚点的 CharacterStyleRange 内）**挂在其所属段落上，正文重排时随文移动，交付物始终连贯；③ 每页一个版心 TextFrame 串接，几何用引擎算好的坐标。
-  - 实现要点：IDMLExporter 正文改按章出 Story、逐页框 Previous/NextTextFrame 串接；图/抽言从"独立定位框"改为文流内锚定对象（需查 IDML anchored object 的 `<Rectangle>`+`AnchoredObjectSetting` 写法）；LayoutEngine 提供"这一章占哪些页、每页版心框几何、各锚定对象挂在哪个段落"的分组信息。
-  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`、`Sources/LayoutDEngine/LayoutEngine.swift`。
-  - 验收：全书导出 story 数按章计不按段计；锚定对象随文；`review-idml.sh` GUARD-4 探针（串接链完整、无孤儿框、段落跨框连续、锚定对象挂在文流内）PASS；InDesign 人工验证灌版可编辑（插字跨页顺移、图跟着走）。
+- [x] **THREAD-1b 第一刀：正文+标题按章串接** — ✅ Claude（IDMLExporter.swift）。**待用户 InDesign 验收**（桌面文件 `thread-1b-cut1-test.idml`，10 页长章节）。
+  - 实现：`export()` 内先做一遍预扫描，把「章名标题（addSectionTitle 无 sourceParagraphId，按只增计数器认领）+ 正文流段落（`isBodyFlowParagraph` 排除 callout/table/footnote/sideNote/figure）」按 `project.sections` 索引分组；每章一个 `<Story Self="uStoryChapterN">`（内容直接取原始 `paragraph.text`+`inlineRuns`，不经 frame 拆分/归一化，天然对齐、无需二次映射脚注/行内样式偏移）；每页一个合并 `TextFrame`（几何=该章在该页所有原 frame 的并集矩形），`PreviousTextFrame`/`NextTextFrame` 首尾相连。前置页（封面/目录）与非 `.text` kind（图片/抽言/表格/脚注/旁注/运行页眉）不受影响，走原逐帧独立 Story。已验证：10 页合成长章节链完整（`uChapterTF0_0`…`uChapterTF0_9`，首尾 `n`、中间互指）；`swift test`(281 过)/`review-idml.sh`(全过)/golden 已更新(`scripts/golden-update.sh`，纯预期变化：故事数按章合并 + 早前已知的 Composer 属性移除漂移一并刷新)/两次导出逐字节确定性一致。
+  - **本刀范围**：只做正文+标题同流；图片/抽言/知识卡片仍是独立定位框（锚定对象是下一刀 THREAD-1b-cut2）。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
+  - **下一刀（cut 2）**：图片/抽言转锚定对象，随所属段落走。
+- [ ] **THREAD-1b cut 2：图片/抽言转锚定对象**（cut 1 之后）：图片/抽言/知识卡片从独立定位框改为文流内锚定对象（`<Rectangle>`/`<TextFrame>` 嵌在文流锚点的 CharacterStyleRange 内，`AnchoredObjectSetting`），挂在其所属段落上，正文重排时随文移动。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`、`Sources/LayoutDEngine/LayoutEngine.swift`（需提供"各锚定对象挂在哪个段落"的分组信息）。
+  - 验收：`review-idml.sh` 断言锚定对象挂在文流内；InDesign 人工验证图跟着文字走。
+- [ ] **THREAD-1b cut 3：收边**（cut 2 之后）：GUARD-4 串接探针（Codex 领，见下）+ 处理封面/目录/表格等不应被误并进文流的特例复核。
 - [ ] **MASTER-1 主页交付**（THREAD-1 之后，同文件避免冲突）：版心/栏参考、自动页码（CurrentPageNumber 变量）、页眉书名/章名放 A-主页，正文页应用主页——编辑改页码位置只动主页一处。现状疑似页码按静态文本逐页画，动手前先核实。文件：`IDMLExporter.swift`。验收：InDesign 里主页面板见 A-主页带自动页码，正文页页码随主页变。
 - [ ] **SPREAD-1 对页合并 Spread**（THREAD-1 之后）：per-page Spread 改真对页 spread（左右页同 spread、版心镜像），配合 MASTER-1。验收：InDesign 页面面板呈对页排列，与 layoutD 预览一致。
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。

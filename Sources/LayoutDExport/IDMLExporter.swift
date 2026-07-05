@@ -112,6 +112,104 @@ public struct IDMLExporter {
         var storyFiles: [String: String] = [:]
         var storyListIds: [String] = []
 
+        // THREAD-1b 第一刀：把「章名/节名 + 正文」按章合成一条串接 Story，逐页框
+        // Previous/NextTextFrame 首尾相连；图片/抽言/表格/脚注/旁注/运行页眉仍走原逐帧
+        // 独立 Story（本刀不动，留给后续几刀）。前置页（封面/目录，page.number ≤
+        // frontMatterPageCount）天然被排除，不参与串接。
+        let sectionIndexByParagraphId: [UUID: Int] = {
+            var map: [UUID: Int] = [:]
+            for (idx, section) in project.sections.enumerated() {
+                for story in section.stories {
+                    for paragraph in story.paragraphs {
+                        map[paragraph.id] = idx
+                    }
+                }
+            }
+            return map
+        }()
+
+        var frameSectionIndex: [FrameKey: Int] = [:]
+        var sectionsOnPage: [Int: [Int]] = [:]           // pageIndex -> 该页出现的章序号（去重，出现顺序）
+        var pagesForSection: [Int: [Int]] = [:]          // sectionIndex -> 该章跨越的页序号（去重，出现顺序）
+        var rectForSectionPage: [SectionPageKey: Rect] = [:]
+        var nextOrphanSectionIndex = 0
+        // 2 = LayoutEngine.frontMatterPageCount（封面+目录）；该私有常量不跨模块导出，
+        // 这里保持同步的字面量副本——前置页天然不参与章串接。
+        for (pi, page) in pages.enumerated() where page.number > 2 {
+            for (fi, frame) in page.frames.enumerated() {
+                guard frame.kind == .text, case .text(let raw) = frame.content,
+                      !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+                // 章名标题（addSectionTitle）没有 sourceParagraphId，但每章只出现一次、且
+                // 必定在该章第一个正文段落之前发出——用一个只增计数器即可精确认领，无需回看。
+                let sectionIndex: Int
+                if let pid = frame.sourceParagraphId, let idx = sectionIndexByParagraphId[pid] {
+                    sectionIndex = idx
+                } else {
+                    sectionIndex = nextOrphanSectionIndex
+                    nextOrphanSectionIndex += 1
+                }
+                frameSectionIndex[FrameKey(page: pi, frame: fi)] = sectionIndex
+                let key = SectionPageKey(section: sectionIndex, page: pi)
+                if let existing = rectForSectionPage[key] {
+                    rectForSectionPage[key] = unionRect(existing, frame.rect)
+                } else {
+                    rectForSectionPage[key] = frame.rect
+                    sectionsOnPage[pi, default: []].append(sectionIndex)
+                    pagesForSection[sectionIndex, default: []].append(pi)
+                }
+            }
+        }
+
+        var chainForSectionPage: [SectionPageKey: ChainInfo] = [:]
+        for (sectionIndex, pageList) in pagesForSection {
+            for (k, pi) in pageList.enumerated() {
+                let selfId = "uChapterTF\(sectionIndex)_\(k)"
+                let previous = k == 0 ? "n" : "uChapterTF\(sectionIndex)_\(k - 1)"
+                let next = k == pageList.count - 1 ? "n" : "uChapterTF\(sectionIndex)_\(k + 1)"
+                chainForSectionPage[SectionPageKey(section: sectionIndex, page: pi)] =
+                    ChainInfo(selfId: selfId, previous: previous, next: next)
+            }
+        }
+
+        // 章 Story 的内容直接取 project.sections 的原文（未经 normalizedText 折行），
+        // 与 frame 是否被拆分跨页无关——inlineRuns 天然对齐原文，无需二次映射。
+        let chapterVertical = project.pageSetup.layoutDirection == .vertical
+        var chapterStorySelf: [Int: String] = [:]
+        for sectionIndex in pagesForSection.keys.sorted() {
+            let section = project.sections[sectionIndex]
+            var chapterParagraphs: [ChapterParagraph] = []
+            let title = section.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !title.isEmpty {
+                let headingStyle = ctx.resolvedStyle(id: StyleID.heading1.rawValue)
+                chapterParagraphs.append(ChapterParagraph(
+                    styleRef: "ParagraphStyle/\(xmlSafe(headingStyle.id))",
+                    text: title, inlineRuns: nil, footnotes: [],
+                    footnoteStyleRef: "ParagraphStyle/$ID/[No paragraph style]"
+                ))
+            }
+            for story in section.stories {
+                for paragraph in story.paragraphs {
+                    guard isBodyFlowParagraph(paragraph.kind) else { continue }
+                    let text = paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else { continue }
+                    let style = ctx.resolvedStyle(id: paragraph.styleId)
+                    let footnotes = paragraph.safeAnchoredFootnoteIds.compactMap { paragraphsByID[$0] }
+                    chapterParagraphs.append(ChapterParagraph(
+                        styleRef: "ParagraphStyle/\(xmlSafe(style.id))",
+                        text: text, inlineRuns: paragraph.inlineRuns, footnotes: footnotes,
+                        footnoteStyleRef: footnoteStyleRef(for: footnotes, ctx: ctx)
+                    ))
+                }
+            }
+            guard !chapterParagraphs.isEmpty else { continue }
+            let storySelf = "uStoryChapter\(sectionIndex)"
+            storyFiles["Stories/Story_\(storySelf).xml"] = chapterStoryXML(
+                self: storySelf, vertical: chapterVertical, paragraphs: chapterParagraphs)
+            storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
+            storyListIds.append(storySelf)
+            chapterStorySelf[sectionIndex] = storySelf
+        }
+
         let facing = options.facingPages
         // 对开：首页(pi=0, recto 右)单独成 spread，其后每 2 页一 spread(verso 左 + recto 右)。
         // 每页内容按所在侧水平偏移 dx；非对开时 dx=0、每页独占一个 spread（现状不变）。
@@ -146,6 +244,11 @@ public struct IDMLExporter {
                                                       strokeWidth: boxStrokeWidth,
                                                       pageW: pageW, pageH: pageH, dx: dx))
                         }
+                        continue
+                    }
+                    // 已并入本章串接 Story；合并后的 TextFrame 在本页 frame 循环结束后统一追加一次。
+                    if let sectionIndex = frameSectionIndex[FrameKey(page: pi, frame: fi)],
+                       chapterStorySelf[sectionIndex] != nil {
                         continue
                     }
                     let storySelf = "uStory\(pi)_\(fi)"
@@ -210,23 +313,10 @@ public struct IDMLExporter {
                     } else {
                         frameFootnotes = []
                     }
-                    // 脚注正文需要一个带中文复合字体（CF_*）的段落样式，否则 InDesign 退回
-                    // 拉丁默认字体、中文显示为豆腐。优先用 caption（小字号、无首行缩进，最像
-                    // 脚注），退而求其次用 body；都没有才用空样式。绝不再写死 [No paragraph style]。
-                    let emittedStyleIds = Set(ctx.paragraphStyles.map { $0.id })
-                    let footnoteStyleRef: String
-                    if frameFootnotes.isEmpty {
-                        footnoteStyleRef = "ParagraphStyle/$ID/[No paragraph style]"
-                    } else if emittedStyleIds.contains(StyleID.caption.rawValue) {
-                        footnoteStyleRef = "ParagraphStyle/\(StyleID.caption.rawValue)"
-                    } else if emittedStyleIds.contains(StyleID.body.rawValue) {
-                        footnoteStyleRef = "ParagraphStyle/\(StyleID.body.rawValue)"
-                    } else {
-                        footnoteStyleRef = "ParagraphStyle/$ID/[No paragraph style]"
-                    }
                     let storyContent = storyXML(self: storySelf, styleRef: styleRef,
                                                 vertical: vertical, text: text, inlineRuns: frameInlineRuns,
-                                                footnotes: frameFootnotes, footnoteStyleRef: footnoteStyleRef)
+                                                footnotes: frameFootnotes,
+                                                footnoteStyleRef: footnoteStyleRef(for: frameFootnotes, ctx: ctx))
                     storyFiles["Stories/Story_\(storySelf).xml"] = storyContent
                     storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                     storyListIds.append(storySelf)
@@ -253,6 +343,16 @@ public struct IDMLExporter {
                     }
                     continue
                 }
+            }
+
+            for sectionIndex in sectionsOnPage[pi] ?? [] {
+                guard let storySelf = chapterStorySelf[sectionIndex],
+                      let rect = rectForSectionPage[SectionPageKey(section: sectionIndex, page: pi)],
+                      let chain = chainForSectionPage[SectionPageKey(section: sectionIndex, page: pi)] else { continue }
+                items.append(textFrameItem(self: chain.selfId, story: storySelf, rect: rect,
+                                           fillColor: nil, strokeColor: nil, strokeWidth: 0,
+                                           pageW: pageW, pageH: pageH, dx: dx,
+                                           previous: chain.previous, next: chain.next))
             }
 
             let pageBuild = (pageSelf: "uPage\(pi)", pageName: "\(page.number)", transformX: pageTransformX, items: items)
@@ -511,6 +611,38 @@ public struct IDMLExporter {
         }
     }
 
+    // MARK: - THREAD-1b 章串接辅助类型
+
+    private struct FrameKey: Hashable { let page: Int; let frame: Int }
+    private struct SectionPageKey: Hashable { let section: Int; let page: Int }
+    private struct ChainInfo { let selfId: String; let previous: String; let next: String }
+    private struct ChapterParagraph {
+        let styleRef: String
+        let text: String
+        let inlineRuns: [InlineRun]?
+        let footnotes: [Paragraph]
+        let footnoteStyleRef: String
+    }
+
+    private func unionRect(_ a: Rect, _ b: Rect) -> Rect {
+        let minX = min(a.x, b.x)
+        let minY = min(a.y, b.y)
+        let maxX = max(a.x + a.width, b.x + b.width)
+        let maxY = max(a.y + a.height, b.y + b.height)
+        return Rect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    /// 章串接 Story 只收「正文流」段落：标题（含章名）+ body/listItem/quote/caption 等；
+    /// 图片/抽言/表格/脚注/旁注仍走各自独立的导出路径（本刀不动）。
+    private func isBodyFlowParagraph(_ kind: ParagraphKind) -> Bool {
+        switch kind {
+        case .callout, .table, .footnote, .sideNote, .figure:
+            return false
+        default:
+            return true
+        }
+    }
+
     private func xmlSafe(_ s: String) -> String {
         s.replacingOccurrences(of: "/", with: "_")
     }
@@ -592,9 +724,10 @@ public struct IDMLExporter {
 
     private func textFrameItem(self id: String, story: String, rect: Rect,
                                fillColor: String?, strokeColor: String?, strokeWidth: Double,
-                               pageW: Double, pageH: Double, dx: Double = 0) -> String {
+                               pageW: Double, pageH: Double, dx: Double = 0,
+                               previous: String = "n", next: String = "n") -> String {
         """
-        \t\t<TextFrame Self="\(id)" ParentStory="\(story)" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="\(colorRef(fillColor))" StrokeColor="\(colorRef(strokeColor))" StrokeWeight="\(fmt(max(strokeWidth, 0)))" ItemTransform="1 0 0 1 0 0">
+        \t\t<TextFrame Self="\(id)" ParentStory="\(story)" PreviousTextFrame="\(previous)" NextTextFrame="\(next)" ContentType="TextType" FillColor="\(colorRef(fillColor))" StrokeColor="\(colorRef(strokeColor))" StrokeWeight="\(fmt(max(strokeWidth, 0)))" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH, dx: dx))
         \t\t\t<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
         \t\t</TextFrame>
@@ -953,21 +1086,26 @@ public struct IDMLExporter {
     ) -> String {
         let orientation = vertical ? "Vertical" : "Horizontal"
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
-        // 每个非空行作为一个段落（ParagraphStyleRange）。
-        var lineStart = 0
-        let paragraphs = text.components(separatedBy: "\n").compactMap { rawLine -> (String, Int)? in
-            defer { lineStart += rawLine.count + 1 }
-            let leading = rawLine.prefix { $0.isWhitespace }.count
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            return line.isEmpty ? nil : (line, lineStart + leading)
-        }
-        let effectiveParagraphs = paragraphs.isEmpty ? [(text, 0)] : paragraphs
-        let body = effectiveParagraphs.map { line, start in
-            """
-            \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
-            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes, footnoteStyleRef: footnoteStyleRef))
-            \t\t</ParagraphStyleRange>
-            """
+        let body = paragraphStyleRangeXML(styleRef: styleRef, text: text, inlineRuns: inlineRuns,
+                                          footnotes: footnotes, footnoteStyleRef: footnoteStyleRef)
+        return """
+        \(header)
+        <idPkg:Story \(pkgNS) DOMVersion="\(dom)">
+        \t<Story Self="\(id)" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+        \t\t<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="\(orientation)" StoryDirection="\(direction)"/>
+        \(body)
+        \t</Story>
+        </idPkg:Story>
+        """
+    }
+
+    /// THREAD-1b：一章的正文+标题合成一个 Story，`paragraphs` 按阅读顺序排列。
+    private func chapterStoryXML(self id: String, vertical: Bool, paragraphs: [ChapterParagraph]) -> String {
+        let orientation = vertical ? "Vertical" : "Horizontal"
+        let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
+        let body = paragraphs.map {
+            paragraphStyleRangeXML(styleRef: $0.styleRef, text: $0.text, inlineRuns: $0.inlineRuns,
+                                   footnotes: $0.footnotes, footnoteStyleRef: $0.footnoteStyleRef)
         }.joined(separator: "\n")
         return """
         \(header)
@@ -978,6 +1116,43 @@ public struct IDMLExporter {
         \t</Story>
         </idPkg:Story>
         """
+    }
+
+    /// 一段文本按非空行拆成若干 ParagraphStyleRange（沿用既有折行→段落的规则）。
+    private func paragraphStyleRangeXML(
+        styleRef: String, text: String, inlineRuns: [InlineRun]?,
+        footnotes: [Paragraph], footnoteStyleRef: String
+    ) -> String {
+        var lineStart = 0
+        let lines = text.components(separatedBy: "\n").compactMap { rawLine -> (String, Int)? in
+            defer { lineStart += rawLine.count + 1 }
+            let leading = rawLine.prefix { $0.isWhitespace }.count
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            return line.isEmpty ? nil : (line, lineStart + leading)
+        }
+        let effectiveLines = lines.isEmpty ? [(text, 0)] : lines
+        return effectiveLines.map { line, start in
+            """
+            \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
+            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes, footnoteStyleRef: footnoteStyleRef))
+            \t\t</ParagraphStyleRange>
+            """
+        }.joined(separator: "\n")
+    }
+
+    /// 脚注正文需要一个带中文复合字体（CF_*）的段落样式，否则 InDesign 退回拉丁默认字体、
+    /// 中文显示为豆腐。优先用 caption（小字号、无首行缩进，最像脚注），退而求其次用 body；
+    /// 都没有才用空样式。绝不再写死 [No paragraph style]。
+    private func footnoteStyleRef(for footnotes: [Paragraph], ctx: BuildContext) -> String {
+        guard !footnotes.isEmpty else { return "ParagraphStyle/$ID/[No paragraph style]" }
+        let emittedStyleIds = Set(ctx.paragraphStyles.map { $0.id })
+        if emittedStyleIds.contains(StyleID.caption.rawValue) {
+            return "ParagraphStyle/\(StyleID.caption.rawValue)"
+        } else if emittedStyleIds.contains(StyleID.body.rawValue) {
+            return "ParagraphStyle/\(StyleID.body.rawValue)"
+        } else {
+            return "ParagraphStyle/$ID/[No paragraph style]"
+        }
     }
 
     private func characterStyleRanges(
