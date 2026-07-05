@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 20:23 | claude | 用户在 InDesign 里放大确认矩形填充/描边颜色数据正确(之前"整块橙色"只是缩略图误判)，视觉验收通过后，按流程把 dev 合并进 main 并推送。
+- **分支**：dev
+- **概述**：用户在 InDesign 里放大确认矩形填充/描边颜色数据正确(之前"整块橙色"只是缩略图误判)，视觉验收通过后，按流程把 dev 合并进 main 并推送。
+- **改动文件**：Merge commit 3559a00(main)：合入矩形/直线工具、IDML zip 压缩、CMYK ICC 软打样、内联拾色器面板 共 20 个文件；无冲突。
+- **检查**：swift build: pass; swift test: pass —— 均在合并后的 main 上跑的。main 已推送(611db7c..3559a00)。
+- **下一步**：本轮收尾。dev/main 已同步一致。下一步是新的任务队列(.ai/QUEUE.md)里的后续项，或用户提出的新需求。
+
 ## 2026-07-05 20:11 | claude | 按用户要求，统一检查并合并了三路并行 Claude 对话的产出到 dev：①feature/claude-idml-zip-deflate(IDML 打包 De
 - **分支**：dev
 - **概述**：按用户要求，统一检查并合并了三路并行 Claude 对话的产出到 dev：①feature/claude-idml-zip-deflate(IDML 打包 Deflate 压缩)；②feature/claude-cmyk-icc-proof(画布 CMYK 预览改走 ICC Profile，本对话此前诊断的修复)；③主仓库工作副本里另一并发对话遗留的未提交改动(ObjectPropertiesView 颜色控件改为 InlineColorPickerView 就地内联拾色器面板，替换原生 ColorPicker 弹窗 + MultiSpaceColorPanel)——已单独建分支 feature/claude-inline-colorpicker 提交推送。三者互不碰同一文件(除 ObjectPropertiesView 与 CanvasView 分属不同分支的不同函数)，merge 全部无冲突。合并后 dev 上 build+test(276 测试)全绿，已推送。之后杀掉了两个孤立的旧测试用 layoutD 进程(均已自然退出)，在主仓库(现在=dev 干净状态)重新 build 并启动了一个全新的、包含全部三处改动的 layoutD 实例供用户测试。
