@@ -7,6 +7,69 @@ import XCTest
 /// 阶段 E1：真实 BookProject → IDML 全量映射的容器级验证。
 /// 「在 InDesign 中文版能否干净打开 + 版面到位」仍需人工验收。
 final class IDMLExporterTests: XCTestCase {
+    func testCMYKColorSpaceEmitsProcessCMYKSwatches() throws {
+        let paragraph = Paragraph(kind: .body, text: "红", styleId: StyleID.body.rawValue)
+        var project = BookProject(
+            metadata: ProjectMetadata(title: "CMYK 输出", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])]
+        )
+        // Global CMYK output intent.
+        project.pageSetup.colorSpace = .cmyk
+
+        // A frame carrying an RGB fill — must export as Process CMYK, not RGB.
+        let frame = PageFrame(
+            kind: .text,
+            rect: Rect(x: 20, y: 20, width: 200, height: 60),
+            styleId: StyleID.body.rawValue,
+            content: .text("红"),
+            backgroundColorHex: "#FF0000",
+            sourceParagraphId: paragraph.id
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-cmyk-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let graphic = try entry(output, "Resources/Graphic.xml")
+        // No swatch may remain in the RGB space under a CMYK intent…
+        XCTAssertFalse(graphic.contains("Space=\"RGB\""), "CMYK 输出模式不应残留 RGB 色板")
+        // …and red #FF0000 flattens to Process CMYK 0/100/100/0.
+        XCTAssertTrue(graphic.contains("Space=\"CMYK\" ColorValue=\"0 100 100 0\""),
+                      "红色应转为 Process CMYK 0 100 100 0")
+    }
+
+    func testDrawnColorBoxExportsAsRectangle() throws {
+        // A hand-drawn box = empty text frame carrying a fill (no text).
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "画框", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [])])]
+        )
+        let box = PageFrame(
+            kind: .text,
+            rect: Rect(x: 40, y: 40, width: 160, height: 120),
+            styleId: StyleID.body.rawValue,
+            content: .text(""),
+            backgroundColorHex: "#808080"
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [box])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-box-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let spread = try XCTUnwrap(try zipEntries(output)
+            .filter { $0.hasPrefix("Spreads/Spread_") }
+            .map { try entry(output, $0) }
+            .first { $0.contains("<Rectangle Self=\"uBox") }, "应有含手绘色块的 spread")
+        // The empty-but-filled box must survive as a Rectangle referencing its swatch,
+        // not be dropped for having no text.
+        XCTAssertTrue(spread.contains("<Rectangle Self=\"uBox"), "手绘色块应导出为 Rectangle,而非被丢弃")
+        XCTAssertTrue(spread.contains("FillColor=\"Color/C808080\""), "色块应引用其填充色板")
+    }
+
     func testExportsInlineRunsAsCharacterStyleRangesAcrossLines() throws {
         let paragraph = Paragraph(
             kind: .body,

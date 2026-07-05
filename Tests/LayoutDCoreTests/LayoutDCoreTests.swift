@@ -138,6 +138,38 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertNil(try ProjectFile.decode(legacyData).customSwatches)
     }
 
+    func testPrintColorAsCMYKConversion() {
+        // Pure black → K100 (the CMYK-mode text default).
+        XCTAssertEqual(PrintColor.rgb(r: 0, g: 0, b: 0).asCMYK, .cmyk(c: 0, m: 0, y: 0, k: 100))
+        // White → all zeros.
+        XCTAssertEqual(PrintColor.rgb(r: 255, g: 255, b: 255).asCMYK, .cmyk(c: 0, m: 0, y: 0, k: 0))
+        // Pure red → 0/100/100/0 (naive device conversion).
+        XCTAssertEqual(PrintColor.rgb(r: 255, g: 0, b: 0).asCMYK, .cmyk(c: 0, m: 100, y: 100, k: 0))
+        // Already-CMYK passes through untouched.
+        let teal = PrintColor.cmyk(c: 80, m: 20, y: 60, k: 5)
+        XCTAssertEqual(teal.asCMYK, teal)
+    }
+
+    func testPrintColorIsNearBlack() {
+        XCTAssertTrue(PrintColor.rgb(r: 0, g: 0, b: 0).isNearBlack)
+        XCTAssertTrue(PrintColor.rgb(r: 23, g: 32, b: 42).isNearBlack, "#17202A 深海军≈黑,文字应判近黑→K100")
+        XCTAssertFalse(PrintColor.rgb(r: 139, g: 0, b: 0).isNearBlack, "暗红是彩色,不算近黑")
+        XCTAssertFalse(PrintColor.rgb(r: 255, g: 255, b: 255).isNearBlack)
+    }
+
+    func testPageSetupColorSpaceRoundTripsAndDefaultsForLegacy() throws {
+        var setup = PageSetup.scienceBookDefault
+        setup.colorSpace = .cmyk
+        let data = try JSONEncoder().encode(setup)
+        XCTAssertEqual(try JSONDecoder().decode(PageSetup.self, from: data).colorSpace, .cmyk)
+
+        // Old files without the colorSpace key decode as nil (treated as RGB).
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "colorSpace")
+        let legacy = try JSONSerialization.data(withJSONObject: json)
+        XCTAssertNil(try JSONDecoder().decode(PageSetup.self, from: legacy).colorSpace)
+    }
+
     func testTableParsingAndAllocation() throws {
         let tableText = """
         结构    类比    主要作用

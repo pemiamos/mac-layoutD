@@ -1123,6 +1123,8 @@ final class WorkspaceViewController: NSViewController {
         savePanel.canCreateDirectories = true
 
         let settingsState = IDMLExportSettingsState()
+        // Reflect the document's global color intent as the default.
+        settingsState.cmykColors = appState.project.pageSetup.colorSpace == .cmyk
         savePanel.accessoryView = makeExportAccessoryView(IDMLExportSettingsView(state: settingsState))
 
         guard let window = view.window else { return }

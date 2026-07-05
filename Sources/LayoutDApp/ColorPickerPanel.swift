@@ -60,6 +60,14 @@ struct ColorPickerPanel: View {
             _b = State(initialValue: Double(bb))
         case let .cmyk(cc, mm, yy, kk):
             _mode = State(initialValue: .cmyk)
+            // Preserve the EXACT CMYK the caller passed in. Deriving RGB here is
+            // fine (it's only for the preview/other tabs), but the authoritative
+            // C/M/Y/K must survive verbatim — otherwise opening a swatch would
+            // round-trip it through RGB and silently drift the numbers the user set.
+            _c = State(initialValue: cc)
+            _m = State(initialValue: mm)
+            _y = State(initialValue: yy)
+            _k = State(initialValue: kk)
             let rgb = Self.cmykToRGB(cc, mm, yy, kk)
             _r = State(initialValue: rgb.0)
             _g = State(initialValue: rgb.1)
@@ -92,7 +100,18 @@ struct ColorPickerPanel: View {
         }
         .padding(12)
         .frame(width: 288)
-        .onAppear { syncFromRGB(emit: false) }
+        // Sync from whichever channels are authoritative for the initial mode —
+        // for a CMYK swatch that derives RGB/HSB from the exact C/M/Y/K, instead
+        // of recomputing C/M/Y/K from RGB and drifting them.
+        .onAppear { syncFromCurrentMode(emit: false) }
+    }
+
+    private func syncFromCurrentMode(emit shouldEmit: Bool = false) {
+        switch mode {
+        case .rgb: syncFromRGB(emit: shouldEmit)
+        case .hsb: syncFromHSB(emit: shouldEmit)
+        case .cmyk: syncFromCMYK(emit: shouldEmit)
+        }
     }
 
     // MARK: - Preview

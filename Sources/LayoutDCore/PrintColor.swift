@@ -90,6 +90,43 @@ public enum PrintColor: Equatable, Sendable {
         }
     }
 
+    // MARK: - Space conversion
+
+    /// This color as CMYK. RGB is converted with the naive (no-ICC) device
+    /// formula — the inverse of `displayRGB`, and the same approximation the
+    /// canvas/PDF preview already use — so a document-wide "CMYK 输出" intent can
+    /// flatten every swatch to Process CMYK at export without pulling in AppKit.
+    /// Pure black stays K100; already-CMYK colors pass through unchanged.
+    public var asCMYK: PrintColor {
+        switch self {
+        case .cmyk:
+            return self
+        case let .rgb(r, g, b):
+            let rf = Double(r) / 255, gf = Double(g) / 255, bf = Double(b) / 255
+            let k = 1 - max(rf, gf, bf)
+            if k >= 1 - 1e-9 {
+                return .cmyk(c: 0, m: 0, y: 0, k: 100)
+            }
+            let c = (1 - rf - k) / (1 - k)
+            let m = (1 - gf - k) / (1 - k)
+            let y = (1 - bf - k) / (1 - k)
+            return .cmyk(
+                c: (c * 100).rounded(),
+                m: (m * 100).rounded(),
+                y: (y * 100).rounded(),
+                k: (k * 100).rounded()
+            )
+        }
+    }
+
+    /// True for a very dark color (any hue). Used by the CMYK output intent to
+    /// snap "black" text to a clean K100 single-black instead of a 4-color rich
+    /// black — the standard book-printing convention for body/heading type.
+    public var isNearBlack: Bool {
+        let rgb = displayRGB
+        return max(rgb.r, rgb.g, rgb.b) <= 0.25
+    }
+
     // MARK: - Screen display
 
     /// RGB components in 0…1 for on-screen rendering. CMYK uses the naive

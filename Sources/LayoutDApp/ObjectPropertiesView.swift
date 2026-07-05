@@ -137,7 +137,7 @@ struct ObjectPropertiesView: View {
                     set: { state.setSelectedFrameFillColor($0) }
                 ), supportsOpacity: false)
                 multiSpaceButton(title: "填充",
-                    current: printColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
+                    current: pickerColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
                     apply: { state.setSelectedFrameFillColor($0) })
                 Spacer()
                 Button("无填充") { state.clearSelectedFrameFillColor() }
@@ -151,7 +151,7 @@ struct ObjectPropertiesView: View {
                     set: { state.setSelectedFrameStrokeColor($0) }
                 ), supportsOpacity: false)
                 multiSpaceButton(title: "描边",
-                    current: printColor(frame.strokeColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
+                    current: pickerColor(frame.strokeColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
                     apply: { state.setSelectedFrameStrokeColor($0) })
                 Spacer()
                 Button("无描边") { state.clearSelectedFrameStrokeColor() }
@@ -166,7 +166,7 @@ struct ObjectPropertiesView: View {
                         set: { state.setSelectedFrameTextColor($0) }
                     ), supportsOpacity: false)
                     multiSpaceButton(title: "文字",
-                        current: printColor(frame.textColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
+                        current: pickerColor(frame.textColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
                         apply: { state.setSelectedFrameTextColor($0) })
                     Spacer()
                     Button("默认") { state.clearSelectedFrameTextColor() }
@@ -247,6 +247,27 @@ struct ObjectPropertiesView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(width: 130)
+        }
+
+        HStack {
+            Text("色彩模式").foregroundColor(.secondary).font(.caption)
+            Spacer()
+            Picker("", selection: Binding(
+                get: { state.project.pageSetup.colorSpace ?? .rgb },
+                set: { value in state.updateProject { $0.pageSetup.colorSpace = value } }
+            )) {
+                Text("RGB").tag(LayoutColorSpace.rgb)
+                Text("CMYK").tag(LayoutColorSpace.cmyk)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 130)
+        }
+        if (state.project.pageSetup.colorSpace ?? .rgb) == .cmyk {
+            Text("导出 IDML 时所有颜色转为 Process CMYK；文字默认黑为 K100。")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
 
         Toggle("对页排版", isOn: Binding(
@@ -335,6 +356,19 @@ struct ObjectPropertiesView: View {
     private func printColor(_ hex: String?, fallback: PrintColor) -> PrintColor {
         guard let hex, let color = PrintColor(string: hex) else { return fallback }
         return color
+    }
+
+    private var isCMYKMode: Bool {
+        (state.project.pageSetup.colorSpace ?? .rgb) == .cmyk
+    }
+
+    /// The color the multi-space picker should open on. In CMYK document mode it
+    /// opens on the CMYK tab (converting the current/fallback color), so new fills
+    /// and text default to CMYK — black text lands on K100. Non-destructive: this
+    /// only picks the opening tab; nothing is written until the user edits.
+    private func pickerColor(_ hex: String?, fallback: PrintColor) -> PrintColor {
+        let base = printColor(hex, fallback: fallback)
+        return isCMYKMode ? base.asCMYK : base
     }
 
     /// The "多套系" trigger next to a quick ColorPicker: opens the RGB/HSB/CMYK

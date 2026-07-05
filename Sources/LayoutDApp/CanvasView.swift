@@ -824,7 +824,8 @@ final class CanvasView: NSView {
         }
 
         let tokenColor = project.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
-        let textColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
+        let rawTextColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
+        let textColor = proofedText(rawTextColor) ?? rawTextColor
         
         let drawingRect = applyDefaultInset ? rect.insetBy(dx: 4, dy: 2) : rect
         
@@ -912,7 +913,33 @@ final class CanvasView: NSView {
     }
 
     private func resolvedColor(memoryColor: NSColor?, persistedHex: String?) -> NSColor? {
-        memoryColor ?? persistedHex.flatMap(NSColor.fromHex)
+        proofed(memoryColor ?? persistedHex.flatMap(NSColor.fromHex))
+    }
+
+    /// True when the document is in CMYK output mode.
+    private var cmykProof: Bool {
+        project?.pageSetup.colorSpace == .cmyk
+    }
+
+    /// Soft-proof: in CMYK mode, render colors through device CMYK so RGB fills
+    /// show their duller CMYK appearance and the canvas matches InDesign instead
+    /// of showing the vivid RGB. A no-op in RGB mode.
+    private func proofed(_ color: NSColor?) -> NSColor? {
+        guard cmykProof, let color else { return color }
+        return color.usingColorSpace(.deviceCMYK) ?? color
+    }
+
+    /// Text soft-proof. Mirrors the exporter's "near-black text → K100" rule so
+    /// the canvas shows body/heading type as the same clean single-black InDesign
+    /// will print, rather than a dull rich-black; other text is device-CMYK
+    /// proofed like everything else.
+    private func proofedText(_ color: NSColor?) -> NSColor? {
+        guard cmykProof, let color else { return color }
+        if let rgb = color.usingColorSpace(.deviceRGB),
+           max(rgb.redComponent, rgb.greenComponent, rgb.blueComponent) <= 0.25 {
+            return NSColor(deviceCyan: 0, magenta: 0, yellow: 0, black: 1, alpha: 1)
+        }
+        return color.usingColorSpace(.deviceCMYK) ?? color
     }
 
     private func drawAssetPlaceholder(assetId: UUID, isLeftHalf: Bool?, project: BookProject, rect: CGRect, maskShape: ImageMaskShape?) {
