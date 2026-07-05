@@ -84,6 +84,18 @@
 - [x] **E3-9 约物挤压 + 基线网格对齐** — ✅ Codex @ `feature/codex-e3-9-mojikumi-baseline`（`b4dbb3d` feat(export): bind mojikumi and baseline grid in IDML），Claude 已合 dev
   - IDML 补 `MojikumiTable` 声明 + 段落样式绑定 Mojikumi/MojikumiSet + `GridAlignment=AlignAllLinesToGrid` 基线网格绑定。⚠️ 待用户在 InDesign 里肉眼确认标点挤压与基线贴齐效果（视觉属性，探针测不出）。
 - [ ] ~~**E3-8 token → CMYK 色板**~~ ⏸ **暂缓（用户 2026-06-21 决定；印前转色交 InDesign，非阻塞）**
+- [ ] **IMP-4 DOCX 脚注导入** — 2026-07-05 新增。真实书稿常以 .docx 交稿且常带脚注，但 `DOCXBookImporter.swift` 目前完全不解析脚注（零匹配 `footnote`），脚注内容导入时静默丢失；Markdown 侧已有对应支持（`footnoteDefinitions`/`.footnote(number:)`），且 IDML 导出侧 E3-7 原生 Footnote 早已跑通视觉验收——只差 DOCX 这一路打通。
+  - 目标：解析 OOXML `word/footnotes.xml` + 正文里的 `w:footnoteReference`，映射为与 Markdown 导入同构的 `Paragraph(kind: .footnote(number:), styleId: "footnote")`，编号连续、引用位置对应正确。
+  - 文件：`Sources/LayoutDImport/DOCXBookImporter.swift`。
+  - 验收：构造一个含 2+ 脚注的 `.docx`（可用现有 DOCX 测试 fixture 手法造）单测断言脚注内容/编号/引用位置正确；导出 IDML 验证脚注走原生 Footnote（复用 E3-7 探针口径，非阻塞的话可选跑一次 InDesign 肉眼确认）；无脚注的既有 DOCX 用例零回归。
+- [ ] **IMP-2 收尾：DOCX 内嵌图片改落项目目录** — 遗留自 IMP-2（见 `.ai/QUEUE-ARCHIVE.md`）。`DOCXBookImporter.swift:102` 当前把内嵌图片写到源 `.docx` **同级目录**下新建的 `images/` 文件夹，会在用户任意文件夹里意外生成子目录、污染用户的文件组织。
+  - 目标：图片改落到与项目关联的位置（如项目自身的 assets 目录，或系统临时目录 + 由调用方决定去留），不再默认污染源文件所在目录；具体落点需与现有 `AssetCatalog`/`AssetScanner` 的资产管理方式对齐，别引入第二套资产存放约定。
+  - 文件：`Sources/LayoutDImport/DOCXBookImporter.swift`，可能涉及 `AssetCatalog.swift`。
+  - 验收：导入含图 DOCX 后源文件同级目录不再多出 `images/`；现有 DOCX 图片导入测试零回归（断言改为新落点）；`review-idml.sh` PASS。
+- [ ] **GUARD-3 DOCX 端到端探针进 review-idml.sh** — 2026-07-05 新增。`review-idml.sh` 的端到端探针目前只覆盖 Markdown 导入路径（GUARD-1 角色标签、行内格式等），DOCX 导入链路（`D-2`/`IMP-2`/未来 `IMP-4`）完全靠单测，没有"真实 DOCX → IDML → 解包断言"的探针兜底，改动 DOCX 导入器时端到端回归测不到。
+  - 目标：仿 GUARD-1 手法，在探针里用最小 OOXML 片段（或已有测试 fixture 复用）造一个含粗斜体/图片/脚注的 `.docx`，走完整 DOCX 导入 → 排版 → IDML 导出 → 解包，断言内容不丢、样式映射正确、XML well-formed。
+  - 文件：`scripts/review-idml.sh`。
+  - 验收：新探针在当前 dev PASS；建议先做完 IMP-4 后再加脚注这段断言（顺序：IMP-4 → GUARD-3，避免探针断言一个还没实现的能力）；整脚本仍 PASS。
 
 ## Antigravity 道队列（预览渲染 + GUI）
 
@@ -104,7 +116,7 @@
   - 文件：`Sources/LayoutDEngine/LayoutEngine.swift`（`estimatedTextHeight` + 缓存类）；如需给样式加指纹计算可加到 `Sources/LayoutDCore/`。
   - 验收：PERF-1 基准显著下降；全部现有测试/探针 PASS；**新增一个缓存正确性单测**：构造两个 fontName/fontSize 相同但复合字体映射不同的样式，断言其测高缓存不互相污染（同键必同高、异配置不撞键）。
 
-  ### 4b｜`fittingPrefix` 二分改单次扫描（高风险，4a 之后按需再做）
+  ### ~~4b｜`fittingPrefix` 二分改单次扫描~~ ⏸ **暂缓（用户 2026-07-05 决定：4a 已拿到 16% 提升，够用；高风险改动暂不追加，日后需要再评估）**
   - 目标：`overlaps.isEmpty` 分支里的二分查找（:562-577，每步重建 framesetter）改为 `CTTypesetterCreateWithAttributedString` + `CTTypesetterSuggestLineBreak` 单次逐行扫描取 `bestCount`。
   - **⚠️ 硬约束②（"断点 100% 一致"是待验证假设，不是承诺，先扩 golden 再动手）**：手写逐行循环要精确复现 framesetter 的四处细节，任一漏掉都会改断点：①第一行必须手工减掉 `firstLineHeadIndent`；②`CTTypesetterSuggestLineBreak` 默认算法 vs framesetter 的 `byWordWrapping` 在中英混排不保证逐字一致；③老高度是 `max(ceil(总高), lineHeight)`（有 ceil 取整 + 最小行高 + 末行 descent），不是"行数×行高"；④复合字体 sizeMultiplier 改字宽→改断点。**开工顺序强制为**：先把 golden 回归语料扩充到覆盖 {首行缩进、竖排 layoutDirection==.vertical、行内粗/斜/着重、图片环绕 overlaps 非空} 四类，跑通"改动前逐页字符区间+坐标 100% 一致"的 golden 比对基线，**再**动断点算法；改完该 golden 必须仍逐页全等。达不到 100% 全等就**不合**，退回 4a 收益即可。
   - 文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDCore/ChineseTypesetting.swift`、golden 语料测试（`Tests/`）。
