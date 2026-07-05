@@ -150,6 +150,79 @@ else
   bad "角色标签 fixture 导出失败（见 $TMP/role-export.log）"
 fi
 
+# 2e. DOCX 导入链路：最小 OOXML 覆盖粗斜体、图片和脚注，避免 DOCX 只靠单测兜底。
+DOCX_FIX="$TMP/docx-fixture.docx"
+python3 - "$DOCX_FIX" <<'PY'
+import sys, zipfile
+out=sys.argv[1]
+document='''<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+  <w:body>
+    <w:p><w:r><w:t>DOCX正文</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>粗体</w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t>斜体</w:t></w:r><w:r><w:footnoteReference w:id="2"/></w:r></w:p>
+    <w:p><w:drawing><wp:extent cx="12700" cy="12700"/><a:blip r:embed="rId4"/></w:drawing></w:p>
+  </w:body>
+</w:document>'''
+rels='''<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+</Relationships>'''
+footnotes='''<?xml version="1.0" encoding="UTF-8"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>
+  <w:footnote w:id="2"><w:p><w:r><w:t>DOCX脚注内容</w:t></w:r></w:p></w:footnote>
+</w:footnotes>'''
+png=bytes([
+    0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A,0x00,0x00,0x00,0x0D,0x49,0x48,0x44,0x52,
+    0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x01,0x08,0x06,0x00,0x00,0x00,0x1F,0x15,0xC4,
+    0x89,0x00,0x00,0x00,0x0D,0x49,0x44,0x41,0x54,0x78,0x9C,0x63,0x60,0x60,0x60,0x00,
+    0x00,0x00,0x05,0x00,0x01,0x0D,0x0A,0x2D,0xB4,0x00,0x00,0x00,0x00,0x49,0x45,0x4E,
+    0x44,0xAE,0x42,0x60,0x82
+])
+with zipfile.ZipFile(out,'w',zipfile.ZIP_STORED) as z:
+    z.writestr('word/document.xml', document)
+    z.writestr('word/_rels/document.xml.rels', rels)
+    z.writestr('word/footnotes.xml', footnotes)
+    z.writestr('word/media/image1.png', png)
+PY
+DOCX_OUT="$TMP/out/docx-fixture.idml"
+if swift run layoutD -- "$DOCX_FIX" --export-idml "$DOCX_OUT" >"$TMP/docx-export.log" 2>&1; then
+  ok "DOCX fixture 导出成功"
+  unzip -oq "$DOCX_OUT" -d "$TMP/docx-u"
+  python3 - "$TMP/docx-u" "$TMP/out/Links" <<'PY'
+import glob, html, os, re, sys
+root=sys.argv[1]
+links_dir=sys.argv[2]
+story='\n'.join(open(f,encoding='utf-8').read() for f in glob.glob(os.path.join(root,'Stories','*.xml')))
+spreads='\n'.join(open(f,encoding='utf-8').read() for f in glob.glob(os.path.join(root,'Spreads','*.xml')))
+spans=[]
+for m in re.finditer(r'<CharacterStyleRange([^>]*)>(.*?)</CharacterStyleRange>', story, re.S):
+    attr,body=m.groups()
+    txt=html.unescape(''.join(re.findall(r'<Content>(.*?)</Content>',body,re.S)))
+    spans.append(('FauxBold="true"' in attr, 'Skew="12"' in attr, txt))
+story_text=''.join(txt for _,_,txt in spans)
+def styled(sub,want_bold,want_italic):
+    return any(sub in txt and bold==want_bold and italic==want_italic for bold,italic,txt in spans)
+checks=[
+    ("DOCX 正文进入 Story", "DOCX" in story_text and "正文" in story_text),
+    ("DOCX 粗体→FauxBold", styled("粗体", True, False)),
+    ("DOCX 斜体→Skew", styled("斜体", False, True)),
+    ("DOCX 脚注→原生 Footnote", "<Footnote>" in story and "DOCX脚注内容" in story),
+    ("DOCX 脚注上标不残留", "<Content>¹</Content>" not in story),
+    ("DOCX 图片→Links 打包", os.path.exists(os.path.join(links_dir, "image1.png")) and "file:Links/image1.png" in spreads),
+]
+fails=[name for name, ok in checks if not ok]
+for name, ok in checks:
+    print(("  ✅ " if ok else "  ❌ ")+name)
+sys.exit(1 if fails else 0)
+PY
+  [ $? -eq 0 ] && ok "DOCX 导入断言全过" || bad "DOCX 导入断言有失败（见上）"
+else
+  bad "DOCX fixture 导出失败（见 $TMP/docx-export.log）"
+fi
+
 sec "结论"
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" -eq 0 ] && echo "REVIEW: PASS ✅" || echo "REVIEW: FAIL ❌"
