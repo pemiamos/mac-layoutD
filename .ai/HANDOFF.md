@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-06 01:03 | claude | 用户视觉验收 SPLIT-GUI(GUI 截图抽查通过)+导出的两份 IDML(约物基线 OK；DOCX 脚注验收发现真 bug)。合 dev→main(0bb
+- **分支**：dev
+- **概述**：用户视觉验收 SPLIT-GUI(GUI 截图抽查通过)+导出的两份 IDML(约物基线 OK；DOCX 脚注验收发现真 bug)。合 dev→main(0bbda6c)并推送。核心发现:两条脚注只要不在同一段落就会各显示"1",根因是 IDML 导出"一段一 Story、完全不 threaded"(NextTextFrame/PreviousTextFrame 恒"n"),InDesign 原生脚注按 Story 为单位编号。用现场造的 Markdown 2 段式脚注 fixture 独立复现同样 bug,证实是既存架构缺陷(threaded story 重构此前只在性能语境提过),不是今天 DOCX/SPLIT-GUI 引入的回归,只是这次撞见——E3-7 原始验收样例大概率把连续脚注挤在同一段落侥幸没测出。用户决定:现在就合 main,把这条记为高优先级待修(commit 00369d9)。merge dev→main 前独立复验:build+test(281/0)+review-idml.sh(10/10)全绿,main 已推送(3559a00..0bbda6c)。
+- **改动文件**：Merge main 0bbda6c: 含本轮全部批次(GUARD1-3/SPLIT-IMPORT/SPLIT-GUI/E3-9/PERF-3/PERF-4a/DOCX 脚注导入)。dev 补提交 00369d9: .ai/QUEUE.md 新增 BUG-1(跨段落脚注编号错误,标🔴高优先级,置于 Claude 道最前)。
+- **检查**：merge 前独立复验:swift build pass; swift test pass(281 tests,0 failures); review-idml.sh 10/10 PASS。main 已推送。BUG-1 用两条独立证据锁定:①DOCX fixture(~/Desktop/layoutD-脚注验收-DOCX导入.idml)两段脚注均显示"1";②Markdown fixture(scratchpad/md-footnote-check.idml)同样复现,且两个 Story 的 Spread XML 显示 NextTextFrame/PreviousTextFrame 恒为"n"(零 threading)。
+- **下一步**：①【高优先级】BUG-1 需要评估修复方向:根治是 threaded story 重构(正文改串接文流,工作量较大);短期可探索 IDML 是否支持不改 threading 的跨 Story 编号覆盖方案(Preferences.xml FootnoteOption 或类似机制),可行性待查。②【非阻塞】main 上的示意图出现"cell-d细胞结构示意"疑似图片 id/标题泄漏到画布显示,用户验收截图里看到的,与 SPLIT-GUI 无关(拆分前应该也这样),值得单独查一下来源。③main/dev 已同步一致(0bbda6c)。④下一批任务:Claude 道排 BUG-1 优先,其后可挑 B1-IDML 图文绕排导出侧或 SPLIT-ENGINE;Codex/AG 两道活跃队列已清空,待 Claude 补充。
+
 ## 2026-07-06 00:39 | claude | 审核并合并 Codex 道(DOCX 导入批)+ AG 道(SPLIT-GUI)两批交付。① Codex feature/codex-docx-import-g
 - **分支**：dev
 - **概述**：审核并合并 Codex 道(DOCX 导入批)+ AG 道(SPLIT-GUI)两批交付。① Codex feature/codex-docx-import-guards(3f84c77,含 IMP-4/IMP-2收尾/GUARD-3 三项):DOCXBookImporter 新增 DOCXFootnotesParser 解析 word/footnotes.xml、消费正文 w:footnoteReference,按引用顺序生成与 Markdown 同构的 Paragraph(.footnote(number:),"footnote"),正文塞 Unicode 上标 + anchoredFootnoteIds 复用 E3-7 原生 Footnote 导出;内嵌图片改落系统临时目录唯一 layoutd-docx-assets-*/images(不再污染源 docx 同级)+normalizedWordEntryPath 规范化 ../;review-idml.sh 加 DOCX 端到端探针(python3 造最小 OOXML 走 import→IDML→解包)。重点核对:确认 Markdown 路径同样往正文塞字面上标(superscriptString),故 DOCX 做法结构一致无双标记,且探针专门断言"脚注上标不残留(<Content>¹</Content> 不出现)"锁死此点。② AG feature/ag-split-gui(4b6f16b,分三棒):main.swift 拆出 AppDelegate/+Menu/WorkspaceViewController/ExportSettingsViews;InspectorView 拆出 +Issues/+Styles/+Assets/+Quality;CanvasView 拆出 +Drawing/+Interaction。纯搬家 Tests/ 零改动。两道文件边界不重叠,仅 .ai 文档冲突已自动合并。合并 merge ee69387(codex ff)+a7be7a8(ag)。独立复验(非仅采信自报):build+test(281/0)+review-idml.sh 探针 8→10 全过(含 DOCX 粗斜体/原生 Footnote/上标不残留/图片进 Links)。补提交 6982bed 标记 IMP-4/IMP-2/GUARD-3 完成,已推 origin/dev。
