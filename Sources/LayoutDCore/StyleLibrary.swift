@@ -163,7 +163,7 @@ public enum StyleTemplate: String, Codable, CaseIterable, Sendable {
     }
 }
 
-public enum CompositeFontClass: String, Codable, CaseIterable, Sendable {
+public enum CompositeFontClass: String, Codable, CaseIterable, Sendable, Hashable {
     case chinese
     case fullWidthPunctuation
     case halfWidthPunctuation
@@ -172,7 +172,7 @@ public enum CompositeFontClass: String, Codable, CaseIterable, Sendable {
     case symbol
 }
 
-public struct CompositeFontMapping: Codable, Equatable, Sendable {
+public struct CompositeFontMapping: Codable, Equatable, Hashable, Sendable {
     public var fontName: String
     public var sizeMultiplier: Double
     public var baselineOffset: Double

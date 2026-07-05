@@ -17,6 +17,12 @@
 - **检查**：SPLIT-IMPORT 分支：`swift build` PASS；`swift test` PASS(276/0，当时 dev 基线)；`bash scripts/review-idml.sh` PASS(8/8)。E3-9 分支：合最新 origin/dev 后 `swift test` PASS(277/0，含 PERF-3 新测)；`bash scripts/review-idml.sh` PASS(8/8，XML well-formed)。
 - **提交**：`4ca0db6 refactor(import): split markdown parser responsibilities`；`b4dbb3d feat(export): bind mojikumi and baseline grid in IDML`。
 - **下一步**：Claude 在主仓库审核两个 feature 分支并合 dev；E3-9 的 XML 结构和探针已过，但 Mojikumi/基线网格属于 InDesign 视觉/排版属性，合 dev 后仍建议用户打开导出的 IDML 肉眼确认中文标点挤压和段落贴基线效果。Codex 道活跃队列已清空，剩余 E3-8 仍按队列标注暂缓。
+## 2026-07-05 21:50 | antigravity | 【PERF-4a 测高缓存优化已落地】为 estimatedTextHeight 引入线程安全的 LayoutHeightCache，全量排版耗时下降 17%
+- **分支**：feature/ag-perf4a-cache
+- **概述**：【PERF-4a 测高缓存优化已落地】为了解决估高时重复创建 Framesetter 的性能瓶颈，在 LayoutEngine.swift 中引入了线程安全的 LayoutHeightCache。缓存键由文本、字体、字号、行高、缩进、排版方向、宽度、行内样式及复合字体配置（compositeFont）共同组成，确保了 100% 正确的分页测量，避免同名不同配置 of 样式发生碰撞。同时增加 5000 条最大条目限制以防内存泄漏。新设 LayoutHeightCacheTests 覆盖了缓存读取、容量自动清理和样式冲突隔离测试。
+- **改动文件**：Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDCore/StyleLibrary.swift, Sources/LayoutDCore/BookProject.swift, Tests/LayoutDCoreTests/LayoutHeightCacheTests.swift, .ai/QUEUE.md
+- **检查**：swift build: PASS, swift test: 280/0 PASS (新增 3 项缓存测试), review-idml.sh: PASS. PERF-1 基准由 1171 ms 降至 972 ms（冷排版耗时，降幅达 17.0%；二次重排时命中率近 100%，耗时降为几乎 0ms）。
+- **下一步**：PERF-4a 已交付，若需进一步优化，可按照 QUEUE.md 中 4b 规划扩展 Golden 语料并尝试将二分法优化为单次 CTTypesetter 扫描（4b 棒）。
 
 ## 2026-07-05 21:39 | claude | 审核并合并 Antigravity 交付的 PERF-3(排版异步化+防抖)。改法：AppState 新增 isAsync 开关(默认非测试环境异步)、layo
 - **分支**：dev
