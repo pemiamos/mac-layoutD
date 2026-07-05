@@ -65,11 +65,14 @@
 > **2026-07-06 定位校准（见 DECISIONS）**：layoutD 交付「初排灌版」给 InDesign，不替代 InDesign。开发价值标准 = 文流/样式/视觉规范/CMYK 高完成度迁移进 InDesign、给人工调整省时间。可编辑性 > 逐像素冻结（InDesign 里漂移可人工调校）。脚注/傍点/表格深化 = 初排细枝末节，不再投入。
 
 - [ ] ~~**BUG-1 跨段落脚注编号全错**~~ ⏸ **不修（用户 2026-07-06 决定）**——脚注使用频率极低，初排里属细枝末节，需要时 InDesign 补做很快；且 THREAD-1 落地后 story 结构整个会变，现在修是白修。根因存档：一框一 Story 零串接 → InDesign 原生脚注按 Story 各自从 1 编号（Markdown/DOCX 两路径均复现，非 IMP-4/SPLIT-GUI 回归）。
-- [ ] **THREAD-1a 串接文流 spike（先探路，一小棒）** — 2026-07-06 立项，**灌版定位下的最高优先级**。
-  - 背景：现状"一段一 Story、一框一 Story、零串接"（`NextTextFrame`/`PreviousTextFrame` 恒 `"n"`），demo 4 页即 21 story/21 框，300 页书≈1500 个。更根本的是交付物不是「可编辑的文流」——编辑在 InDesign 里插一句话，后文不会自动流动，灌版价值大打折扣。
-  - 目标：手工/脚本造一份最小 threaded 样张（一章正文 3-5 页：一个 Story + 每页一个 TextFrame 用 Previous/NextTextFrame 串接，框坐标仍用引擎算好的值），InDesign 打开人工验证三件事：① 文流可编辑（中间插一段字，后文自动流过页界）；② 打开时版面漂移程度可接受（漂移允许存在，人工调校是预期内工作）；③ 样式/复合字体/约物/基线在串接结构下依旧生效。
-  - 验收：spike 样张 InDesign 人工验证通过 → 写清结构模板（Story 粒度=章；章名/概述随文流入 Story；抽言/图/图注仍独立框）→ 立 THREAD-1b。不通过 → 记录失败细节，评估旁路（仅同页正文合并 story 等轻量减对象方案）。
-- [ ] **THREAD-1b 串接文流全量实现**（THREAD-1a 通过后）：IDMLExporter 正文改按章出 Story、逐页框 Previous/NextTextFrame 串接；LayoutEngine 提供每页正文框的串接分组信息。验收：全书导出 story 数按章计不按段计；`review-idml.sh` 加 GUARD-4 探针（串接链完整、无孤儿框）；InDesign 人工验证灌版可编辑。
+- [x] **THREAD-1a 串接文流 spike** — ✅ **2026-07-06 用户 InDesign 人工验证通过**。手工生成脚本 `scratchpad/gen-thread-spike.py`：一个 Story 装 32 段正文 + 3 个页大小 TextFrame 用 Previous/NextTextFrame 串接（坐标沿用 demo 版心）。用户验证三点全过：① 文字跨页连续流（**第12段被从中间拆到第1→2页、第20段拆到第2→3页、段号 1→27 连续**——独立框永远做不到跨页拆段，铁证串接成立）；② 编辑顺移丝滑自动（删/插一段后文跨页自动重排）；③ 中文/复合字体/约物/两端对齐正常，漂移可接受。
+  - **验证过的结构模板（THREAD-1b 照此实现）**：① 一章正文合成一个 `<Story Self="uStoryBodyN">`，每段一个 `<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">`，Content 末尾带 `\n`（最后一段不带）；② 每页一个 `<TextFrame>`，几何=引擎算好的版心框（PathGeometry 四角坐标），`ParentStory` 指向该章 Story；串接：首框 `PreviousTextFrame="n"`、末框 `NextTextFrame="n"`，中间各框 Prev/Next 互指兄弟框 `Self` id；③ designmap `StoryList` 列各章 Story，每 Spread 一页含其串接框；④ InDesign 打开自动灌流、编辑自动重排，无需额外属性。
+- [ ] **THREAD-1b 串接文流全量实现**（THREAD-1a 已过，模板见上）。IDMLExporter 正文改按章出 Story、逐页框 Previous/NextTextFrame 串接；LayoutEngine 提供"这一章正文占哪些页、每页版心框几何"的串接分组信息。
+  - **⚠️ 开工前需定的设计岔路（Claude 已向用户给出推荐，待拍板后写死）**：串接 Story 里装什么？
+    - (A) 仅正文串接：只有 body 段进 Story 串流；章名/节名/抽言/图仍是独立定位框。**问题**：正文一重排，固定位置的标题会跟正文错位、图会被流动的正文压到（除非配 B1 绕排）。
+    - (B) 正文+标题同流（**Claude 推荐的第一刀**）：章名/节名/正文按阅读顺序进同一章 Story（各带自己的段落样式），标题随文重排不掉队；图/抽言/知识卡片先作为**锚定对象（anchored object）**挂在文流锚点上随文移动，或退而求其次仍作浮动框但必须配 B1 绕排避免压字。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`、`Sources/LayoutDEngine/LayoutEngine.swift`。
+  - 验收：全书导出 story 数按章计不按段计；`review-idml.sh` GUARD-4 探针（串接链完整、无孤儿框、段落跨框连续）PASS；InDesign 人工验证灌版可编辑（插字跨页顺移）。
 - [ ] **MASTER-1 主页交付**（THREAD-1 之后，同文件避免冲突）：版心/栏参考、自动页码（CurrentPageNumber 变量）、页眉书名/章名放 A-主页，正文页应用主页——编辑改页码位置只动主页一处。现状疑似页码按静态文本逐页画，动手前先核实。文件：`IDMLExporter.swift`。验收：InDesign 里主页面板见 A-主页带自动页码，正文页页码随主页变。
 - [ ] **SPREAD-1 对页合并 Spread**（THREAD-1 之后）：per-page Spread 改真对页 spread（左右页同 spread、版心镜像），配合 MASTER-1。验收：InDesign 页面面板呈对页排列，与 layoutD 预览一致。
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
