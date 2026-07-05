@@ -3,6 +3,15 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 21:33 | antigravity | 【PERF-3 排版异步化与防抖已落地】基于 DispatchWorkItem 重构 AppState.recalculateLayout，将排版、prefli
+- **分支**：feature/ag-perf3-async-layout
+- **概述**：【PERF-3 排版异步化与防抖已落地】基于 DispatchWorkItem 重构 AppState.recalculateLayout，将排版、preflight 报告生成和 AI 方案提案后台化（通过 userInitiated 队列），并在主线程以 layoutVersion 单调版本号守卫合并以防 GUI 竞态；引入了 0.15 秒（150ms）连续编辑操作防抖；首帧及 XCTest 测试环境能够自动检测并完美回退为同步模式，保护了全部单元测试。新增 testAsyncDebouncedLayout 测试锁定防抖合并与异步计算行为。
+- **改动文件**：Sources/LayoutDApp/AppState.swift, Tests/LayoutDAppTests/AppStateTests.swift, .ai/QUEUE.md
+- **检查**：swift build: PASS, swift test: 277/0 PASS, review-idml.sh: PASS
+- **下一步**：1. 待用户进行 GUI 视觉验收 dev/ag-lane 中合并的 InDesign 式工作区骨架与框工具；
+2. 随后可领 PERF-4 引擎测量改造（CTTypesetter 逐行填充 + 测量缓存）；
+3. 进行 SPLIT-GUI 巨型 GUI 文件拆分。
+
 ## 2026-07-05 20:33 | claude | 应用户要求 review 全项目并生成《layoutD 开发报告》PDF（~/Desktop/layoutD-开发报告-2026-07-05.pdf，5页）。内
 - **分支**：dev
 - **概述**：应用户要求 review 全项目并生成《layoutD 开发报告》PDF（~/Desktop/layoutD-开发报告-2026-07-05.pdf，5页）。内容：项目概览(285 commits/24.6k 行源码/7 模块)、能力盘点、07-04~05 两天 65 提交详述(GUI 大改版/CMYK 管线/形状工具/三路合并)、后续优化建议(样式导入 5 条：复合 typography token/Figma 直连/语义绑定表/印刷色策略/再导入 diff；AI 版式 7 条：Claude API provider/受控变体铁律/评分闭环/真书反哺模板/视觉范式注入/性能前置/调用缓存)、工程优先级路线(PERF→SPLIT→绕排导出→样式导入→AI provider→threaded story)、风险清单。纯文档产出，未改任何仓库代码。

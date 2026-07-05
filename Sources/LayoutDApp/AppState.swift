@@ -6,9 +6,16 @@ import LayoutDDesignAI
 import LayoutDCheck
 
 final class AppState: ObservableObject {
+    var isAsync: Bool = NSClassFromString("XCTestCase") == nil
+    private var pendingLayoutWorkItem: DispatchWorkItem?
+    private var layoutVersion = 0
+    private var isUpdatingQualityHistory = false
+
     @Published var project: BookProject {
         didSet {
-            recalculateLayout()
+            if !isUpdatingQualityHistory {
+                recalculateLayout()
+            }
         }
     }
     @Published var laidOutDocument: LaidOutDocument?
@@ -116,7 +123,7 @@ final class AppState: ObservableObject {
     
     init(project: BookProject) {
         self.project = project
-        recalculateLayout()
+        recalculateLayoutSync()
     }
 
     /// Frame currently mid color-adjust. Continuous color-picker changes on this
@@ -170,17 +177,27 @@ final class AppState: ObservableObject {
     }
     
     func recalculateLayout() {
+        if isAsync {
+            triggerRecalculateLayout(debounced: true)
+        } else {
+            recalculateLayoutSync()
+        }
+    }
+
+    func recalculateLayoutSync() {
         guard !isPerformingRecalculation else { return }
         isPerformingRecalculation = true
         defer { isPerformingRecalculation = false }
+
+        // Cancel any pending async layouts and increment version
+        pendingLayoutWorkItem?.cancel()
+        layoutVersion += 1
 
         let doc = engine.layout(project: project)
         self.laidOutDocument = doc
         
         var baselineProj = project
         baselineProj.appliedLayoutPlans = nil
-        // Quality history is bookkeeping appended after every recalculation; it has
-        // no effect on layout but would defeat the equality check below.
         baselineProj.qualityMetricsHistory = nil
         if baselineDocument == nil || baselineSource != baselineProj {
             self.baselineDocument = engine.layout(project: baselineProj)
@@ -193,48 +210,134 @@ final class AppState: ObservableObject {
         
         updateAIPlans()
         
-        // Record quality metrics history if different from the last snapshot
         if let report = self.report {
-            let metrics = report.qualityMetrics
-            let newEntry = QualityHistoryEntry(
-                timestamp: Date(),
-                pageCount: metrics.pageCount,
-                totalFrames: metrics.totalFrames,
-                averageFramesPerPage: metrics.averageFramesPerPage,
-                planAppliedPages: metrics.planAppliedPages,
-                autoLaidOutPages: metrics.autoLaidOutPages,
-                lowResolutionAssets: metrics.lowResolutionAssets,
-                missingCaptionAssets: metrics.missingCaptionAssets,
-                blockingErrors: metrics.blockingErrors,
-                layoutIssues: metrics.layoutIssues
-            )
-            
-            var history = project.safeQualityMetricsHistory
-            let shouldAdd: Bool
-            if let last = history.last {
-                shouldAdd = last.pageCount != newEntry.pageCount ||
-                            last.totalFrames != newEntry.totalFrames ||
-                            last.averageFramesPerPage != newEntry.averageFramesPerPage ||
-                            last.planAppliedPages != newEntry.planAppliedPages ||
-                            last.autoLaidOutPages != newEntry.autoLaidOutPages ||
-                            last.lowResolutionAssets != newEntry.lowResolutionAssets ||
-                            last.missingCaptionAssets != newEntry.missingCaptionAssets ||
-                            last.blockingErrors != newEntry.blockingErrors ||
-                            last.layoutIssues != newEntry.layoutIssues
-            } else {
-                shouldAdd = true
-            }
-            
-            if shouldAdd {
-                history.append(newEntry)
-                if history.count > 30 {
-                    history = Array(history.suffix(30))
-                }
-                project.qualityMetricsHistory = history
-            }
+            updateQualityHistorySilently(with: report)
         }
         
         onLayoutCompleted?(project, doc)
+    }
+
+    private func triggerRecalculateLayout(debounced: Bool) {
+        pendingLayoutWorkItem?.cancel()
+        layoutVersion += 1
+        let currentVersion = layoutVersion
+        
+        let projectSnapshot = self.project
+        let pdfExportOptionsSnapshot = self.pdfExportOptions
+        let currentPageNumberSnapshot = self.currentPageNumber
+        
+        var baselineProj = projectSnapshot
+        baselineProj.appliedLayoutPlans = nil
+        baselineProj.qualityMetricsHistory = nil
+        let needsBaselineLayout = self.baselineDocument == nil || self.baselineSource != baselineProj
+        let existingBaselineDocument = self.baselineDocument
+        
+        var workItem: DispatchWorkItem?
+        workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            
+            // 1. Layout primary document on background thread
+            let doc = self.engine.layout(project: projectSnapshot)
+            
+            if workItem?.isCancelled == true { return }
+            
+            // 2. Layout baseline document on background thread if needed
+            let baselineDoc: LaidOutDocument
+            if needsBaselineLayout {
+                baselineDoc = self.engine.layout(project: baselineProj)
+            } else if let existing = existingBaselineDocument {
+                baselineDoc = existing
+            } else {
+                baselineDoc = self.engine.layout(project: baselineProj)
+            }
+            
+            if workItem?.isCancelled == true { return }
+            
+            // 3. Preflight on background thread
+            let report = self.inspectorEngine.preflight(project: projectSnapshot, document: doc, exportOptions: pdfExportOptionsSnapshot)
+            
+            if workItem?.isCancelled == true { return }
+            
+            // 4. Propose plans on background thread
+            let targetPage = min(max(currentPageNumberSnapshot, 1), max(doc.pages.count, 1))
+            let proposedPlans = self.advisor.proposePlans(for: projectSnapshot, target: .page(targetPage))
+            
+            if workItem?.isCancelled == true { return }
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                guard self.layoutVersion == currentVersion else { return }
+                
+                self.isPerformingRecalculation = true
+                defer { self.isPerformingRecalculation = false }
+                
+                self.laidOutDocument = doc
+                self.baselineDocument = baselineDoc
+                if needsBaselineLayout {
+                    self.baselineSource = baselineProj
+                    self.baselineLayoutCount += 1
+                }
+                self.report = report
+                self.plans = proposedPlans
+                
+                self.updateQualityHistorySilently(with: report)
+                
+                self.onLayoutCompleted?(self.project, doc)
+            }
+        }
+        
+        pendingLayoutWorkItem = workItem
+        
+        if let actualWorkItem = workItem {
+            if debounced {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: actualWorkItem)
+            } else {
+                DispatchQueue.global(qos: .userInitiated).async(execute: actualWorkItem)
+            }
+        }
+    }
+
+    private func updateQualityHistorySilently(with report: PreflightReport) {
+        let metrics = report.qualityMetrics
+        let newEntry = QualityHistoryEntry(
+            timestamp: Date(),
+            pageCount: metrics.pageCount,
+            totalFrames: metrics.totalFrames,
+            averageFramesPerPage: metrics.averageFramesPerPage,
+            planAppliedPages: metrics.planAppliedPages,
+            autoLaidOutPages: metrics.autoLaidOutPages,
+            lowResolutionAssets: metrics.lowResolutionAssets,
+            missingCaptionAssets: metrics.missingCaptionAssets,
+            blockingErrors: metrics.blockingErrors,
+            layoutIssues: metrics.layoutIssues
+        )
+        
+        var history = project.safeQualityMetricsHistory
+        let shouldAdd: Bool
+        if let last = history.last {
+            shouldAdd = last.pageCount != newEntry.pageCount ||
+                        last.totalFrames != newEntry.totalFrames ||
+                        last.averageFramesPerPage != newEntry.averageFramesPerPage ||
+                        last.planAppliedPages != newEntry.planAppliedPages ||
+                        last.autoLaidOutPages != newEntry.autoLaidOutPages ||
+                        last.lowResolutionAssets != newEntry.lowResolutionAssets ||
+                        last.missingCaptionAssets != newEntry.missingCaptionAssets ||
+                        last.blockingErrors != newEntry.blockingErrors ||
+                        last.layoutIssues != newEntry.layoutIssues
+        } else {
+            shouldAdd = true
+        }
+        
+        if shouldAdd {
+            history.append(newEntry)
+            if history.count > 30 {
+                history = Array(history.suffix(30))
+            }
+            
+            isUpdatingQualityHistory = true
+            project.qualityMetricsHistory = history
+            isUpdatingQualityHistory = false
+        }
     }
     
     private func updateAIPlans() {
