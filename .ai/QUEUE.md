@@ -66,13 +66,6 @@
 
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
 - [x] **PERF-2 baseline 布局缓存** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。对照版只在内容/样式真变时重排（比较时剔除 appliedLayoutPlans + qualityMetricsHistory）；纯版面方案操作/undo/redo 不再触发第二次全书排版，单次改动成本约减半。加 baselineLayoutCount 测试钩子+缓存单测。
-- [ ] **PERF-3 排版异步化 + 防抖** — 等 PERF-1/2 落地后单独一棒（动状态流，须防 GUI 竞态）。
-  - 目标：连续操作只排最后一次，layout/preflight 移出界面线程；首帧仍同步保证打开即有版面。
-  - 文件：`AppState.swift`、可能 `CanvasView.swift`。
-- [ ] **PERF-4 引擎测量改造（CTTypesetter 逐行填充 + 测量缓存）** — 风险最高放最后，靠 PERF-1 验证无回归。
-  - 目标：`fittingPrefix` 二分试排（每次重建 framesetter）改为 CTTypesetter 一次性逐行填充取断点；测高结果按 (text,style,width) 缓存。
-  - 文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDCore/ChineseTypesetting.swift`。
-  - 验收：PERF-1 基准显著下降且全部现有测试/探针 PASS；分页/避头尾/孤寡行为零变化（golden 对比）。
 - [ ] **B1-IDML 导出侧图文绕排**（配对 B1）：图片框输出 `TextWrapPreference` 让 InDesign 也绕排。文件：`IDMLExporter.swift`。验收：解包含 TextWrapPreference、InDesign 打开绕排生效（用户肉眼）；`review-idml.sh` PASS。
 - [ ] **SPLIT-ENGINE LayoutEngine.swift 拆分**（1600+ 行，纯搬家不改逻辑；放性能批之后避免叠加冲突）。
 
@@ -99,6 +92,16 @@
 
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`Sources/LayoutDApp/*`
 > ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）；**生成样张别提交进仓库**（B1 踩过，Claude 合并时剔除了 20 个 PNG/PDF）。
+
+- [ ] **PERF-3 排版异步化 + 防抖** — 2026-07-05 从 Claude 道转来（文件都在本道地盘，用户确认交 Antigravity 做）。PERF-1/2 已落地（本机基线 ≈1179ms/次全量排版），可直接开工。
+  - 背景：每次改动全书重排两遍 + preflight 同步跑在界面线程（`AppState.recalculateLayout`），书稿变大会卡界面。
+  - 目标：连续操作只排最后一次（防抖），layout/preflight 移出界面线程（异步化）；首帧仍同步保证打开即有版面；须防状态流里的 GUI 竞态（异步排版结果回来时用户可能已经切换了选中/页面）。
+  - 文件：`AppState.swift`、可能 `CanvasView.swift`。
+  - 验收：连续快速操作（如连续拖拽/连续按键）时界面不卡顿、只在停顿后触发一次真实重排；PERF-1 基准脚本仍 PASS；全部现有测试/探针 PASS。
+- [ ] **PERF-4 引擎测量改造（CTTypesetter 逐行填充 + 测量缓存）** — 2026-07-05 从 Claude 道转来。风险最高，建议排在 PERF-3 之后单独一棒，靠 PERF-1 基准验证无回归。
+  - 目标：`fittingPrefix` 二分试排（每次重建 framesetter）改为 CTTypesetter 一次性逐行填充取断点；测高结果按 (text,style,width) 缓存。
+  - 文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`Sources/LayoutDCore/ChineseTypesetting.swift`。
+  - 验收：PERF-1 基准显著下降且全部现有测试/探针 PASS；分页/避头尾/孤寡行为零变化（golden 对比，改动前后同一份稿子的分页结果必须逐页一致）。
 
 - [x] **GUARD-2 断言闸字形覆盖检查（rule⑥）** — ✅ AG `b3a2e97`, 合 dev(8389c9c)
   - 背景：rule⑤ 已拦「字重不存在→Helvetica 豆腐」；还差「字体存在但缺 CJK 字形→豆腐」（脚注豆腐那类事故的自动网）。

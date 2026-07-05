@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 20:33 | claude | 应用户要求 review 全项目并生成《layoutD 开发报告》PDF（~/Desktop/layoutD-开发报告-2026-07-05.pdf，5页）。内
+- **分支**：dev
+- **概述**：应用户要求 review 全项目并生成《layoutD 开发报告》PDF（~/Desktop/layoutD-开发报告-2026-07-05.pdf，5页）。内容：项目概览(285 commits/24.6k 行源码/7 模块)、能力盘点、07-04~05 两天 65 提交详述(GUI 大改版/CMYK 管线/形状工具/三路合并)、后续优化建议(样式导入 5 条：复合 typography token/Figma 直连/语义绑定表/印刷色策略/再导入 diff；AI 版式 7 条：Claude API provider/受控变体铁律/评分闭环/真书反哺模板/视觉范式注入/性能前置/调用缓存)、工程优先级路线(PERF→SPLIT→绕排导出→样式导入→AI provider→threaded story)、风险清单。纯文档产出，未改任何仓库代码。
+- **改动文件**：无仓库改动；产出物 ~/Desktop/layoutD-开发报告-2026-07-05.pdf
+- **检查**：不适用（无代码改动）；PDF 已目检排版正常（中文字体/表格/分页）
+- **下一步**：报告第四章 C 节给出了建议的开发顺位，可作为下一轮 QUEUE.md 排任务的参考：1)PERF-3/4 2)SPLIT-* 3)B1-IDML+E3-9 4)样式导入增强 5)AI provider 接入 6)threaded story 重构。
+
 ## 2026-07-05 20:23 | claude | 用户在 InDesign 里放大确认矩形填充/描边颜色数据正确(之前"整块橙色"只是缩略图误判)，视觉验收通过后，按流程把 dev 合并进 main 并推送。
 - **分支**：dev
 - **概述**：用户在 InDesign 里放大确认矩形填充/描边颜色数据正确(之前"整块橙色"只是缩略图误判)，视觉验收通过后，按流程把 dev 合并进 main 并推送。
