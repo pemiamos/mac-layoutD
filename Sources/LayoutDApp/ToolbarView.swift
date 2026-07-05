@@ -26,6 +26,16 @@ struct ToolbarView: View {
             Divider()
                 .padding(.horizontal, 4)
 
+            // Group 2b: Shape authoring — rectangle (M) and horizontal/vertical rule (\).
+            // Structured decorative blocks, still exported to IDML.
+            VStack(spacing: 4) {
+                toolButton(.rectangle)
+                toolButton(.line)
+            }
+
+            Divider()
+                .padding(.horizontal, 4)
+
             // Group 3: Layout & Structure tools (Shift+P / U)
             VStack(spacing: 4) {
                 toolButton(.page)

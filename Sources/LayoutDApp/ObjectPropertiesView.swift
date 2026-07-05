@@ -131,48 +131,74 @@ struct ObjectPropertiesView: View {
         // Appearance (fill / stroke, plus text color for text frames)
         sectionLabel("外观")
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                ColorPicker("填充", selection: Binding(
-                    get: { colorFromHex(frame.backgroundColorHex) ?? Color.white },
-                    set: { state.setSelectedFrameFillColor($0) }
-                ), supportsOpacity: false)
-                multiSpaceButton(title: "填充",
-                    current: pickerColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
-                    apply: { state.setSelectedFrameFillColor($0) })
-                Spacer()
-                Button("无填充") { state.clearSelectedFrameFillColor() }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
+            // A line has no fill — only a stroke (its colour + weight). Hide 填充 for it.
+            if frame.kind != .line {
+                InlineColorPickerView(
+                    label: "填充",
+                    color: pickerColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
+                    clearLabel: "无填充",
+                    swatches: state.customSwatches,
+                    onChange: { state.setSelectedFrameFillColor($0) },
+                    onClear: { state.clearSelectedFrameFillColor() },
+                    onAddSwatch: { state.addCustomSwatch($0) },
+                    onRemoveSwatch: { state.removeCustomSwatch(id: $0) }
+                )
+                .id("fill-\(frame.id)")
             }
 
+            InlineColorPickerView(
+                label: "描边",
+                color: pickerColor(frame.strokeColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
+                clearLabel: "无描边",
+                swatches: state.customSwatches,
+                onChange: { state.setSelectedFrameStrokeColor($0) },
+                onClear: { state.clearSelectedFrameStrokeColor() },
+                onAddSwatch: { state.addCustomSwatch($0) },
+                onRemoveSwatch: { state.removeCustomSwatch(id: $0) }
+            )
+            .id("stroke-\(frame.id)")
+
+            // Stroke weight — InDesign-style preset list (0 / 0.25 / 0.5 / 0.75 / 1 …).
             HStack {
-                ColorPicker("描边", selection: Binding(
-                    get: { colorFromHex(frame.strokeColorHex) ?? Color.black },
-                    set: { state.setSelectedFrameStrokeColor($0) }
-                ), supportsOpacity: false)
-                multiSpaceButton(title: "描边",
-                    current: pickerColor(frame.strokeColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
-                    apply: { state.setSelectedFrameStrokeColor($0) })
+                Text("粗细")
+                    .frame(width: 40, alignment: .leading)
+                Menu {
+                    ForEach(strokeWeightOptions, id: \.self) { w in
+                        Button {
+                            state.setSelectedFrameStrokeWidth(w)
+                        } label: {
+                            if abs((frame.strokeWidth ?? 0) - w) < 0.001 {
+                                Label(strokeWeightLabel(w), systemImage: "checkmark")
+                            } else {
+                                Text(strokeWeightLabel(w))
+                            }
+                        }
+                    }
+                } label: {
+                    Text(strokeWeightLabel(frame.strokeWidth ?? 0))
+                }
+                .frame(width: 96)
+                Stepper("", onIncrement: {
+                    state.setSelectedFrameStrokeWidth(nextStrokeWeight(above: frame.strokeWidth ?? 0))
+                }, onDecrement: {
+                    state.setSelectedFrameStrokeWidth(nextStrokeWeight(below: frame.strokeWidth ?? 0))
+                })
+                .labelsHidden()
                 Spacer()
-                Button("无描边") { state.clearSelectedFrameStrokeColor() }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
             }
 
             if frame.kind == .text || frame.kind == .caption {
-                HStack {
-                    ColorPicker("文字", selection: Binding(
-                        get: { colorFromHex(frame.textColorHex) ?? Color.primary },
-                        set: { state.setSelectedFrameTextColor($0) }
-                    ), supportsOpacity: false)
-                    multiSpaceButton(title: "文字",
-                        current: pickerColor(frame.textColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
-                        apply: { state.setSelectedFrameTextColor($0) })
-                    Spacer()
-                    Button("默认") { state.clearSelectedFrameTextColor() }
-                        .buttonStyle(.borderless)
-                        .font(.caption)
-                }
+                InlineColorPickerView(
+                    label: "文字",
+                    color: pickerColor(frame.textColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
+                    clearLabel: "默认",
+                    swatches: state.customSwatches,
+                    onChange: { state.setSelectedFrameTextColor($0) },
+                    onClear: { state.clearSelectedFrameTextColor() },
+                    onAddSwatch: { state.addCustomSwatch($0) },
+                    onRemoveSwatch: { state.removeCustomSwatch(id: $0) }
+                )
+                .id("text-\(frame.id)")
             }
         }
         .disabled(ctx.isPageLocked)
@@ -346,13 +372,7 @@ struct ObjectPropertiesView: View {
         }
     }
 
-    /// Resolves a stored hex color to a SwiftUI Color for picker bindings.
-    private func colorFromHex(_ hex: String?) -> Color? {
-        guard let hex, let ns = NSColor.fromHex(hex) else { return nil }
-        return Color(nsColor: ns)
-    }
-
-    /// Resolves a stored color string to a `PrintColor` for the multi-space picker.
+    /// Resolves a stored color string to a `PrintColor` for the inline picker.
     private func printColor(_ hex: String?, fallback: PrintColor) -> PrintColor {
         guard let hex, let color = PrintColor(string: hex) else { return fallback }
         return color
@@ -362,39 +382,36 @@ struct ObjectPropertiesView: View {
         (state.project.pageSetup.colorSpace ?? .rgb) == .cmyk
     }
 
-    /// The color the multi-space picker should open on. In CMYK document mode it
-    /// opens on the CMYK tab (converting the current/fallback color), so new fills
-    /// and text default to CMYK — black text lands on K100. Non-destructive: this
-    /// only picks the opening tab; nothing is written until the user edits.
+    /// The color the inline picker should open on. In CMYK document mode it opens
+    /// on the CMYK tab (converting the current/fallback color), so new fills and
+    /// text default to CMYK — black text lands on K100. Non-destructive: this only
+    /// picks the opening tab; nothing is written until the user edits.
     private func pickerColor(_ hex: String?, fallback: PrintColor) -> PrintColor {
         let base = printColor(hex, fallback: fallback)
         return isCMYKMode ? base.asCMYK : base
     }
 
-    /// The "多套系" trigger next to a quick ColorPicker: opens the RGB/HSB/CMYK
-    /// picker in a floating panel (separate window) so applying a color — and the
-    /// full-book relayout it triggers — can't tear the picker down mid-edit.
-    private func multiSpaceButton(
-        title: String,
-        current: PrintColor,
-        apply: @escaping (PrintColor) -> Void
-    ) -> some View {
-        Button {
-            MultiSpaceColorPanelController.shared.toggle(
-                title: title,
-                initial: current,
-                state: state,
-                apply: apply
-            )
-        } label: {
-            Image(systemName: "slider.horizontal.3")
-        }
-        .buttonStyle(.borderless)
-        .help("多套系拾色器 (RGB / HSB / CMYK)")
-    }
-
     private func pointsToMillimeters(_ points: Double) -> Double {
         points / 72 * 25.4
+    }
+
+    /// InDesign 描边粗细预设（点）。
+    private var strokeWeightOptions: [Double] {
+        [0, 0.25, 0.5, 0.75, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    }
+
+    private func strokeWeightLabel(_ w: Double) -> String {
+        // "%g" 去掉多余的零：0.25 点 / 1 点 / 2.5 点。
+        String(format: "%g 点", w)
+    }
+
+    /// Stepper 上/下一档：吸附到最接近的预设，越过一格。
+    private func nextStrokeWeight(above current: Double) -> Double {
+        strokeWeightOptions.first { $0 > current + 0.001 } ?? strokeWeightOptions.last ?? current
+    }
+
+    private func nextStrokeWeight(below current: Double) -> Double {
+        strokeWeightOptions.last { $0 < current - 0.001 } ?? strokeWeightOptions.first ?? current
     }
 
     private func icon(for kind: PageFrameKind) -> String {
@@ -405,6 +422,8 @@ struct ObjectPropertiesView: View {
         case .callout: return "rectangle.inset.filled"
         case .table: return "tablecells"
         case .footnoteDivider: return "minus"
+        case .rectangle: return "rectangle"
+        case .line: return "line.diagonal"
         }
     }
 
@@ -419,6 +438,8 @@ struct ObjectPropertiesView: View {
         case .footnoteDivider: return "脚注分界线"
         case .sideNote: return "旁注信息"
         case .runningHeader: return "页眉"
+        case .rectangle: return "矩形"
+        case .line: return "直线"
         }
     }
 }

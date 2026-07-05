@@ -173,6 +173,13 @@ public enum LayoutBlockKind: String, Codable, Sendable {
     case image
     case caption
     case component
+    /// A filled/stroked decorative rectangle — no text or image content. Drawn with
+    /// the rectangle tool; still a structured LayoutPlan block (undoable, exported to
+    /// IDML as a `<Rectangle>`), not free-form vector art.
+    case rectangle
+    /// A horizontal or vertical rule (divider). Stored as a thin rectangle; the drawn
+    /// drag is snapped to the dominant axis. Exports to IDML as a thin filled rectangle.
+    case line
 }
 
 public enum ContentReference: Codable, Equatable, Sendable {
@@ -199,6 +206,11 @@ public enum LayoutTool: String, CaseIterable, Sendable {
     /// Draw a new image frame by dragging a rectangle → a `.image` LayoutPlan block
     /// referencing a project asset (re-pickable in the inspector).
     case imageFrame
+    /// Draw a filled/stroked rectangle by dragging → a `.rectangle` LayoutPlan block.
+    case rectangle
+    /// Draw a horizontal/vertical rule by dragging → a `.line` LayoutPlan block; the
+    /// drag is snapped to whichever axis it's longer along.
+    case line
     case page
     case gap
     case hand
@@ -212,6 +224,8 @@ public enum LayoutTool: String, CaseIterable, Sendable {
         case .type: return "文字工具"
         case .textFrame: return "文本框工具"
         case .imageFrame: return "图像框工具"
+        case .rectangle: return "矩形工具"
+        case .line: return "直线工具"
         case .page: return "页面工具"
         case .gap: return "间隔工具"
         case .hand: return "手形工具"
@@ -227,6 +241,8 @@ public enum LayoutTool: String, CaseIterable, Sendable {
         case .type: return "textformat"
         case .textFrame: return "character.textbox"
         case .imageFrame: return "photo.badge.plus"
+        case .rectangle: return "rectangle"
+        case .line: return "line.diagonal"
         case .page: return "doc.plaintext"
         case .gap: return "arrow.left.and.right.pattern.ratio"
         case .hand: return "hand.raised.fill"
@@ -247,6 +263,8 @@ public enum LayoutTool: String, CaseIterable, Sendable {
         case .gap: return "u"
         case .hand: return "h"
         case .zoom: return "z"
+        case .rectangle: return "m"
+        case .line: return "\\"
         case .textFrame, .page, .annotation: return nil
         }
     }

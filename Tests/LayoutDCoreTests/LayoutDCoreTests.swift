@@ -1325,6 +1325,8 @@ final class LayoutDCoreTests: XCTestCase {
             case .footnoteDivider: kind = .component
             case .sideNote: kind = .text
             case .runningHeader: kind = .text
+            case .rectangle: kind = .rectangle
+            case .line: kind = .line
             }
 
             let ref: ContentReference

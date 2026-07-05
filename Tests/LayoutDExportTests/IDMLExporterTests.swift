@@ -7,6 +7,35 @@ import XCTest
 /// 阶段 E1：真实 BookProject → IDML 全量映射的容器级验证。
 /// 「在 InDesign 中文版能否干净打开 + 版面到位」仍需人工验收。
 final class IDMLExporterTests: XCTestCase {
+    func testDrawnLineExportsAsGraphicLineWithStrokeWeight() throws {
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "画线", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [])])]
+        )
+        // A drawn horizontal line: empty content, carrying stroke color + weight.
+        let line = PageFrame(
+            kind: .line,
+            rect: Rect(x: 40, y: 100, width: 200, height: 1),
+            content: .empty,
+            strokeColorHex: "#000000",
+            strokeWidth: 0.75
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [line])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-line-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let spread = try XCTUnwrap(try zipEntries(output)
+            .filter { $0.hasPrefix("Spreads/Spread_") }
+            .map { try entry(output, $0) }
+            .first { $0.contains("<GraphicLine") }, "直线应导出为 GraphicLine")
+        // A real line with an editable stroke weight — not a thin filled rect (0pt stroke).
+        XCTAssertTrue(spread.contains("StrokeWeight=\"0.750\""), "直线应保留 0.75 点描边粗细")
+        XCTAssertTrue(spread.contains("PathOpen=\"true\""), "直线是开放路径")
+    }
+
     func testCMYKColorSpaceEmitsProcessCMYKSwatches() throws {
         let paragraph = Paragraph(kind: .body, text: "红", styleId: StyleID.body.rawValue)
         var project = BookProject(
@@ -398,6 +427,42 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertEqual(try imageFramePointCount(.octagon), 8, "八角图框应 8 个路径点")
         XCTAssertEqual(try imageFramePointCount(.rect), 4, "矩形图框仍 4 个路径点（无回归）")
         XCTAssertGreaterThanOrEqual(try imageFramePointCount(.fan), 16, "扇面图框应多段弧近似（≥16 点）")
+    }
+
+    func testDrawnRectangleExportsAsUnassignedRectangleWithFillAndStroke() throws {
+        // A drawn rectangle (fill + stroke, no content) must reach InDesign as an
+        // Unassigned <Rectangle> carrying its fill and stroke — not vanish.
+        var project = BookProject.sample
+        let plan = LayoutPlan(target: .page(3), strategy: .balanced, blocks: [
+            LayoutPlanBlock(kind: .rectangle, role: "rectangle",
+                            frame: Rect(x: 0.1, y: 0.1, width: 0.5, height: 0.3),
+                            contentReference: .generated(""),
+                            backgroundColorHex: "#3366CC",
+                            strokeColorHex: "#101010",
+                            strokeWidth: 1.5)
+        ])
+        project.safeAppliedLayoutPlans[3] = plan
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-rect-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        // Scan every Unassigned <Rectangle> open-tag across all spreads (accent fills
+        // are also Unassigned but carry weight 0) and find the one with our 1.5pt stroke.
+        let allSpreads = try zipEntries(output)
+            .filter { $0.hasPrefix("Spreads/Spread_") }
+            .map { try entry(output, $0) }
+            .joined(separator: "\n")
+        let rectTags = allSpreads
+            .components(separatedBy: "ContentType=\"Unassigned\"")
+            .dropFirst()
+            .map { String($0.prefix(while: { $0 != ">" })) }
+        let ourRect = try XCTUnwrap(
+            rectTags.first { $0.contains("StrokeWeight=\"1.500\"") },
+            "矩形应作为 Unassigned Rectangle 保留 1.5pt 描边粗细")
+        // With a stroke set, its colour is a real swatch, not None.
+        XCTAssertFalse(ourRect.contains("StrokeColor=\"Swatch/None\""), "有描边时 StrokeColor 不应为 None")
     }
 
     func testFacingPagesSpreadImposition() throws {

@@ -235,6 +235,20 @@ public struct IDMLExporter {
                                            packagedFileName: packagedLinks[asset.id]?.fileName,
                                            rect: frame.rect, maskShape: frame.maskShape, pageW: pageW, pageH: pageH, dx: dx))
                 case .empty:
+                    // Drawn shapes have no content → export as an Unassigned Rectangle.
+                    // Rectangle: fill (+ optional stroke). Line: a centered thin filled
+                    // rectangle whose thin dimension is the stroke weight.
+                    if frame.kind == .rectangle, let fill = frame.backgroundColorHex {
+                        items.append(colorRectangleItem(
+                            self: "uShape\(pi)_\(fi)", rect: frame.rect, fillColor: fill,
+                            strokeColor: frame.strokeColorHex, strokeWidth: frame.strokeWidth ?? 0,
+                            pageW: pageW, pageH: pageH, dx: dx))
+                    } else if frame.kind == .line, let color = frame.strokeColorHex {
+                        items.append(graphicLineItem(
+                            self: "uShape\(pi)_\(fi)", rect: frame.rect,
+                            strokeColor: color, strokeWidth: frame.strokeWidth ?? 1,
+                            pageW: pageW, pageH: pageH, dx: dx))
+                    }
                     continue
                 }
             }
@@ -586,11 +600,36 @@ public struct IDMLExporter {
     }
 
     private func colorRectangleItem(self id: String, rect: Rect, fillColor: String,
+                                    strokeColor: String? = nil, strokeWidth: Double = 0,
                                     pageW: Double, pageH: Double, dx: Double = 0) -> String {
-        """
-        \t\t<Rectangle Self="\(id)" ContentType="Unassigned" FillColor="\(colorRef(fillColor))" StrokeColor="Swatch/None" StrokeWeight="0" ItemTransform="1 0 0 1 0 0">
+        let strokeRef = strokeColor.map { colorRef($0) } ?? "Swatch/None"
+        let weight = strokeColor != nil ? max(strokeWidth, 0) : 0
+        return """
+        \t\t<Rectangle Self="\(id)" ContentType="Unassigned" FillColor="\(colorRef(fillColor))" StrokeColor="\(strokeRef)" StrokeWeight="\(fmt(weight))" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH, dx: dx))
         \t\t</Rectangle>
+        """
+    }
+
+    /// A drawn line → a real InDesign `GraphicLine` (open path, two anchor points)
+    /// carrying an actual `StrokeWeight`/`StrokeColor`. Emitting it as a thin filled
+    /// rectangle (the earlier approach) made InDesign report the stroke as 0pt and
+    /// left it uneditable as a line. Lines are axis-aligned: horizontal along the
+    /// vertical centre when wider than tall, else vertical.
+    private func graphicLineItem(self id: String, rect: Rect, strokeColor: String, strokeWidth: Double,
+                                 pageW: Double, pageH: Double, dx: Double = 0) -> String {
+        let horizontal = rect.width >= rect.height
+        let (ax1, ay1, ax2, ay2): (Double, Double, Double, Double) = horizontal
+            ? (rect.x, rect.y + rect.height / 2, rect.x + rect.width, rect.y + rect.height / 2)
+            : (rect.x + rect.width / 2, rect.y, rect.x + rect.width / 2, rect.y + rect.height)
+        func pt(_ x: Double, _ y: Double) -> String {
+            let a = "\(fmt(x - pageW / 2 + dx)) \(fmt(y - pageH / 2))"
+            return "<PathPointType Anchor=\"\(a)\" LeftDirection=\"\(a)\" RightDirection=\"\(a)\"/>"
+        }
+        return """
+        \t\t<GraphicLine Self="\(id)" ContentType="Unassigned" FillColor="Swatch/None" StrokeColor="\(colorRef(strokeColor))" StrokeWeight="\(fmt(max(strokeWidth, 0)))" ItemTransform="1 0 0 1 0 0">
+        \t\t\t<Properties><PathGeometry><GeometryPathType PathOpen="true"><PathPointArray>\(pt(ax1, ay1))\(pt(ax2, ay2))</PathPointArray></GeometryPathType></PathGeometry></Properties>
+        \t\t</GraphicLine>
         """
     }
 

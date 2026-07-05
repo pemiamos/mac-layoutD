@@ -3,6 +3,36 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 20:11 | claude | 按用户要求，统一检查并合并了三路并行 Claude 对话的产出到 dev：①feature/claude-idml-zip-deflate(IDML 打包 De
+- **分支**：dev
+- **概述**：按用户要求，统一检查并合并了三路并行 Claude 对话的产出到 dev：①feature/claude-idml-zip-deflate(IDML 打包 Deflate 压缩)；②feature/claude-cmyk-icc-proof(画布 CMYK 预览改走 ICC Profile，本对话此前诊断的修复)；③主仓库工作副本里另一并发对话遗留的未提交改动(ObjectPropertiesView 颜色控件改为 InlineColorPickerView 就地内联拾色器面板，替换原生 ColorPicker 弹窗 + MultiSpaceColorPanel)——已单独建分支 feature/claude-inline-colorpicker 提交推送。三者互不碰同一文件(除 ObjectPropertiesView 与 CanvasView 分属不同分支的不同函数)，merge 全部无冲突。合并后 dev 上 build+test(276 测试)全绿，已推送。之后杀掉了两个孤立的旧测试用 layoutD 进程(均已自然退出)，在主仓库(现在=dev 干净状态)重新 build 并启动了一个全新的、包含全部三处改动的 layoutD 实例供用户测试。
+- **改动文件**：合并提交：fce2963(idml zip)、4963635(cmyk icc proof)、f3c3618(inline colorpicker)、c5e9b65(补记 handoff)。三个 feature 分支均已推送 origin：feature/claude-idml-zip-deflate(既有)、feature/claude-cmyk-icc-proof(既有)、feature/claude-inline-colorpicker(新建)。dev 已推送 c5e9b65。
+- **检查**：swift build: pass; swift test: pass(276 tests, 0 failures)——均在合并后的 dev 上跑的。main 分支未动(仍落后 dev，等用户视觉验收后再按流程合 main)。
+- **下一步**：1) 用户应在新启动的 layoutD 窗口里视觉验收：a) 内联拾色器面板交互是否符合预期(参照 InDesign 拾色器布局)；b) CMYK 矩形填充是否比之前更接近 InDesign 印刷模拟(建议取消选中后对比，选中态有 15% 蓝色高亮叠加会干扰视觉判断)。2) 视觉验收通过后，按 AGENTS.md 流程 checkout main + merge dev + push。3) main 目前落后 dev 多个提交(含本轮三项)，尚未处理，属正常"验收后才合 main"流程，非异常。
+
+## 2026-07-05 19:43 | claude | 用户问"两个软件同一 CMYK 值屏幕显示差异巨大"，诊断出画布走 AppKit 设备 CMYK 色域(NSColor(deviceCyan:...)/.dev
+- **分支**：feature/claude-idml-zip-deflate
+- **概述**：用户问"两个软件同一 CMYK 值屏幕显示差异巨大"，诊断出画布走 AppKit 设备 CMYK 色域(NSColor(deviceCyan:...)/.deviceCMYK)，比 InDesign 的印刷模拟鲜艳很多。改为读取系统 Generic CMYK Profile.icc(与 PDFExporter 的 PDF/X 输出意图同一份文件)做 ICC 换算做画布软打样，加载失败时回退旧行为。因主仓库工作副本当时有另一个并发 Claude 对话正在做色板面板重构(ColorPickerPanel.swift/MultiSpaceColorPanel.swift 删除中、新增 InlineColorPickerView.swift，未提交)，遵照 N1/N2 铁律未直接在主仓库提交，而是用 /tmp 专用 worktree(基于 origin/dev)隔离改动、build+test 通过后单独提交推送，未触碰主仓库工作副本里对方的未提交改动。
+- **改动文件**：Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/AppState.swift（提交于隔离 worktree，非主仓库当前 checkout）
+- **检查**：swift build: pass; swift test (276 tests): pass；均在 /tmp worktree 里跑的，主仓库当前 checkout 未验证(因其正被另一对话占用编辑中)
+- **下一步**：已提交 commit 64917fe 并推送到 origin/feature/claude-cmyk-icc-proof，等主仓库这边并发的色板重构对话收尾提交后，由 Claude 统一 review + merge 进 dev（注意该分支与对方重构分支都碰 CanvasView.swift 相关但改的是不同函数，理论上可 merge，合并时需人工核对）。用户尚未在 InDesign 里视觉验收这次颜色改动效果，属"结构改对但未做视觉终验"，下一步应导出 IDML/PDF 让用户实际打开 InDesign 对比新旧颜色差异。
+
+## 2026-07-05 19:39 | claude | 回答用户"IDML 打开慢 / 大书能否扛住"的诊断后,落地了性价比最高的一改:IDML 打包器启用 Deflate 压缩。根因:ZIPArchiveWrite
+- **分支**：feature/claude-idml-zip-deflate
+- **概述**：回答用户"IDML 打开慢 / 大书能否扛住"的诊断后,落地了性价比最高的一改:IDML 打包器启用 Deflate 压缩。根因:ZIPArchiveWriter 原先所有条目 Stored(零压缩),导致高重复的 IDML XML 比 InDesign 自导的大 ~5-6 倍。改法:除 mimetype(OCF 规范要求 Stored 且置首)外一律走 Apple Compression 框架 COMPRESSION_ZLIB(=裸 deflate 流,正是 ZIP method 8 所需);压不小的条目自动回退 Stored。CentralRecord 现分别记录 compressedSize/uncompressedSize/method。注:这只治"文件体积/几百兆"的担忧;"打开慢"的主因是 IDML 作为导入格式需 InDesign 当场重排组装(固有代价),被我们"一框一 Story、一页一 Spread、文流不串接"放大——留待后续。
+- **改动文件**：Sources/LayoutDExport/ZIPArchiveWriter.swift
+- **检查**：swift build: pass; swift test (LayoutDExport, 58 tests): pass; 独立 harness 产物经系统 unzip -v/-t 校验: mimetype=Stored、XML=Deflate(99%)、tiny 回退 Stored、CRC 全部 OK。已提交 d228809 并推送 feature/claude-idml-zip-deflate。
+- **下一步**：1) 中长期抗大书:正文改为 threaded story(串接文流)替代"一框一 Story"、合并 per-page Spread,减少 InDesign 导入时的对象实例化爆炸(属 IDML lane 较大重构)。2) 注意 ZIP32 硬上限:最多 65535 条目 / 4GiB,重排版大书有撞顶风险,需评估是否升级 ZIP64。3) 可选:交付流程定义为"生成 IDML→开一次→另存 .indd",让用户日常用 .indd 规避一次性慢。
+
+## 2026-07-05 14:55 | claude | 【本会话在隔离分支 feature/claude-shapes 上做"结构化形状"工具,未合 dev,勿动主目录我的东西】已完成并推送(origin/featu
+- **分支**：dev
+- **概述**：【本会话在隔离分支 feature/claude-shapes 上做"结构化形状"工具,未合 dev,勿动主目录我的东西】已完成并推送(origin/feature/claude-shapes=17ed823,基于 dev 0c75245):①矩形工具(填充+描边方框,快捷键 M);②直线工具(快捷键 \,真·线段:描边语义=颜色/粗细,居中线段渲染,选中只两端端点,可拖端点改长度,画时拉出虚线段,正文页也能导 IDML);③描边粗细控件(属性面板「外观」下拉 0/0.25/0.5/0.75/1/2…10 点+步进,AppState.setSelectedFrameStrokeWidth);④修真 bug:LayoutEngine 正文页把形状 content 当 .text("") 导致 IDML 漏导出→改 content=.empty。canvas/PDF/PNG/IDML 四处渲染都按形状处理。270 测试全绿。改到的文件:LayoutPlan/LaidOutPage(枚举)、LayoutEngine、AppState、CanvasView、ControlPanelView、ObjectPropertiesView、ToolbarView、main、{IDML,PDF,PNG}Exporter、LayoutPlanEditing。
+
+【交给颜色会话做 · 优化2:拾色器改内联色域面板】用户要求(见其截图):去掉现在点胶囊会弹出的 macOS 独立「拾色器」窗口(SwiftUI 原生 ColorPicker 的行为);改成点属性面板里的胶囊色块→就地下拉展开一个自定义拾色器面板;面板参照 InDesign 拾色器:顶部一块 2D 色域(饱和度×明度 SB 方块 + 竖直 Hue 条,带可拖十字准星),下方排 HSB / RGB / CMYK 滑块(可多组同时显示或沿用现有分段)。要与现有 PrintColor 多色系管线(storageString 支持 cmyk())打通,直接写入模型→保 CMYK 到 IDML。落点:ObjectPropertiesView 的 ColorPicker/multiSpaceButton 那两处(填充/描边/文字);建议新建一个 InlineColorPickerView 组件替换原生 ColorPicker 胶囊。注意:直线属性已不显示「填充」行(frame.kind==.line 时隐藏),改颜色控件时保留该判断。
+- **改动文件**：（本轮改动在 feature/claude-shapes 分支,未进 dev；供颜色会话参考归属文件）Sources/LayoutDApp/ObjectPropertiesView.swift, Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/main.swift, Sources/LayoutDApp/ToolbarView.swift, Sources/LayoutDApp/ControlPanelView.swift, Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDCore/LaidOutPage.swift, Sources/LayoutDCore/LayoutPlanEditing.swift, Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDExport/IDMLExporter.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift
+- **检查**：feature/claude-shapes: swift build + swift test 全绿(270)。已推 origin。dev 未动(=1c353b5,含颜色会话的属性面板重构+CMYK)。
+- **下一步**：①【颜色会话】做优化2内联色域拾色器(见上,落点 ObjectPropertiesView + 新建 InlineColorPickerView,保留直线隐藏填充的判断)。②【Claude(本会话)后续】用户视觉验收 feature/claude-shapes 满意后,把它 + 之前的 align/多选对齐分布 一起并入 dev;因 dev 已从 0c75245 前进到 1c353b5(颜色会话的改动),合并时需先 merge origin/dev 再解 ObjectPropertiesView 等颜色文件冲突。③两边都改了 ObjectPropertiesView,合并前互相知会。
+
 ## 2026-07-05 14:29 | claude | 实现全局 CMYK 模式并修一串颜色保真问题,均已人工验收。①全局色彩模式开关:PageSetup.colorSpace(可选,旧文件解为 nil=rgb),属
 - **分支**：dev
 - **概述**：实现全局 CMYK 模式并修一串颜色保真问题,均已人工验收。①全局色彩模式开关:PageSetup.colorSpace(可选,旧文件解为 nil=rgb),属性面板文档区 RGB/CMYK 分段控件;CMYK 下拾色器默认落 CMYK 页、文字默认 K100;导出对话框 cmykColors 默认跟随全局。②拾色器保值(关键 bug):ColorPickerPanel 打开 CMYK 色时 init 只存了 RGB、onAppear 又 syncFromRGB 反推 C/M/Y/K,富色 cmyk→rgb→cmyk round-trip 严重漂移(C61M75Y63K77→C62M88Y77K75)。修复:init 存 c/m/y/k 四通道 + onAppear 改 syncFromCurrentMode(按当前套系派生而非反推)。设定 CMYK 值现全程零转换。③近黑文字→K100:PrintColor.isNearBlack(最亮通道≤0.25);导出时近黑文字色折叠到内建 Color/Black(K100 单黑),彩色文字/色块照实转;画布 proofedText 同规则。④屏幕软打样:CanvasView.proofed/proofedText,CMYK 模式经 device CMYK 显示,与 InDesign 口径接近。⑤IDML 导出 CMYK:graphic() 按 cmykOutput 用 asCMYK 发 swatch,但 Self 仍按存储色键(引用不失配);cmykColors 由全局或勾选驱动。⑥手绘色块导出(老 bug):空文本框带填充/描边时导出为 Rectangle(原先 !isEmpty 直接跳过丢失),新增 drawnBoxItem;无填充无描边空框仍跳过。⑦PrintColor.asCMYK/isNearBlack 纯 Core 无 AppKit。commit eb80024 推 origin/dev,271 测试通过。

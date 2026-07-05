@@ -383,8 +383,10 @@ struct SidebarView: View {
             color = .secondary.opacity(0.55)
         case .text, .footnote, .sideNote, .runningHeader:
             color = .primary.opacity(0.35)
-        case .footnoteDivider:
+        case .footnoteDivider, .line:
             color = .secondary.opacity(0.4)
+        case .rectangle:
+            color = .blue.opacity(0.5)
         }
 
         return GeometryReader { proxy in
@@ -457,6 +459,8 @@ struct SidebarView: View {
         case .callout: return "rectangle.inset.filled"
         case .table: return "tablecells"
         case .footnoteDivider: return "minus"
+        case .rectangle: return "rectangle"
+        case .line: return "line.diagonal"
         }
     }
     
@@ -489,6 +493,10 @@ struct SidebarView: View {
                 return "页眉: \(txt.prefix(12))"
             }
             return "页眉"
+        case .rectangle:
+            return "矩形"
+        case .line:
+            return "直线"
         }
     }
     
