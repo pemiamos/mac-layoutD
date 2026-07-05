@@ -676,10 +676,15 @@ final class IDMLExporterTests: XCTestCase {
 
         let designmap = try entry(output, "designmap.xml")
         let tableRef = "KinsokuTable/$ID/kSimpChineseKinsokuName"
+        let mojikumiRef = "MojikumiTable/$ID/kSimpChineseMojikumiName"
         let tables = matches(in: designmap, pattern: "(<KinsokuTable\\b[^>]*/>)")
         XCTAssertEqual(tables.count, 1)
         let table = try XCTUnwrap(tables.first)
         XCTAssertTrue(table.contains("Self=\"\(tableRef)\""))
+        let mojikumiTables = matches(in: designmap, pattern: "(<MojikumiTable\\b[^>]*/>)")
+        XCTAssertEqual(mojikumiTables.count, 1)
+        let mojikumiTable = try XCTUnwrap(mojikumiTables.first)
+        XCTAssertTrue(mojikumiTable.contains("Self=\"\(mojikumiRef)\""))
         XCTAssertTrue(ChineseLineBreakRules.forbiddenLineStartCharacters.contains("，"))
         XCTAssertTrue(ChineseLineBreakRules.forbiddenLineEndCharacters.contains("（"))
 
@@ -688,10 +693,14 @@ final class IDMLExporterTests: XCTestCase {
             let styleID = NSRegularExpression.escapedPattern(for: style.id)
             // `\s` guards against matching `<ParagraphStyleRange>` (or a future
             // style-like element) while inspecting the concrete style definition.
-            let pattern = "(<ParagraphStyle\\s+[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?</ParagraphStyle>)"
+            let pattern = "(<ParagraphStyle\\s+[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*GridAlignment=\"AlignAllLinesToGrid\"[^>]*Mojikumi=\"\(NSRegularExpression.escapedPattern(for: mojikumiRef))\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?<MojikumiSet type=\"object\">\(NSRegularExpression.escapedPattern(for: mojikumiRef))</MojikumiSet>[\\s\\S]*?</ParagraphStyle>)"
             XCTAssertEqual(matches(in: styles, pattern: pattern).count, 1,
-                           "段落样式 \(style.id) 未绑定 layoutD 禁则集")
+                           "段落样式 \(style.id) 未绑定 layoutD 禁则/约物/基线网格设置")
         }
+
+        let preferences = try entry(output, "Resources/Preferences.xml")
+        XCTAssertTrue(preferences.contains("GridAlignment=\"AlignAllLinesToGrid\""))
+        XCTAssertTrue(preferences.contains("Mojikumi=\"\(mojikumiRef)\""))
     }
 
     // MARK: - CMYK swatches (印刷路线 A：CMYK 原生色板)

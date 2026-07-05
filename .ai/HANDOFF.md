@@ -3,6 +3,14 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 21:45 | codex | 完成 Codex 道队列两项：SPLIT-IMPORT 拆分 Markdown importer；E3-9 IDML 约物挤压 + 基线网格导出绑定。
+- **分支**：feature/codex-split-import；feature/codex-e3-9-mojikumi-baseline
+- **概述**：按队列完成 Codex 道剩余两项。① SPLIT-IMPORT：在 `feature/codex-split-import` 将 1528 行 `MarkdownBookImporter.swift` 纯搬家拆为主入口/状态 + `MarkdownParserBlocks.swift`、`MarkdownParserInline.swift`、`MarkdownParserFrontMatter.swift`、`MarkdownParserImages.swift` 四个 extension 文件；为跨文件 extension 访问，把 parser/辅助类型从 file-private 级别调整为模块内可见，对外 public API 不变。② E3-9：在 `feature/codex-e3-9-mojikumi-baseline`（已先合最新 origin/dev=790ac97，含 PERF-3）给 IDML 导出补 `MojikumiTable/$ID/kSimpChineseMojikumiName` 声明，段落样式绑定 `Mojikumi`/`MojikumiSet`，并在段落样式与 TextDefault 上写 `GridAlignment=AlignAllLinesToGrid`、`GridAlignFirstLineOnly=false`，保持既有 SimplifiedChineseKinsoku 与 CJK Composer。新增/扩展 IDMLExporterTests 覆盖 designmap、Styles.xml、Preferences.xml 中的约物/基线绑定。
+- **改动文件**：SPLIT-IMPORT：`Sources/LayoutDImport/MarkdownBookImporter.swift`、新增 `MarkdownParserBlocks.swift`、`MarkdownParserInline.swift`、`MarkdownParserFrontMatter.swift`、`MarkdownParserImages.swift`。E3-9：`Sources/LayoutDExport/IDMLExporter.swift`、`Tests/LayoutDExportTests/IDMLExporterTests.swift`。
+- **检查**：SPLIT-IMPORT 分支：`swift build` PASS；`swift test` PASS(276/0，当时 dev 基线)；`bash scripts/review-idml.sh` PASS(8/8)。E3-9 分支：合最新 origin/dev 后 `swift test` PASS(277/0，含 PERF-3 新测)；`bash scripts/review-idml.sh` PASS(8/8，XML well-formed)。
+- **提交**：`4ca0db6 refactor(import): split markdown parser responsibilities`；`b4dbb3d feat(export): bind mojikumi and baseline grid in IDML`。
+- **下一步**：Claude 在主仓库审核两个 feature 分支并合 dev；E3-9 的 XML 结构和探针已过，但 Mojikumi/基线网格属于 InDesign 视觉/排版属性，合 dev 后仍建议用户打开导出的 IDML 肉眼确认中文标点挤压和段落贴基线效果。Codex 道活跃队列已清空，剩余 E3-8 仍按队列标注暂缓。
+
 ## 2026-07-05 21:39 | claude | 审核并合并 Antigravity 交付的 PERF-3(排版异步化+防抖)。改法：AppState 新增 isAsync 开关(默认非测试环境异步)、layo
 - **分支**：dev
 - **概述**：审核并合并 Antigravity 交付的 PERF-3(排版异步化+防抖)。改法：AppState 新增 isAsync 开关(默认非测试环境异步)、layoutVersion 版本号防止旧异步结果覆盖新状态、快照 project/pdfExportOptions/currentPageNumber 后在后台线程跑 layout+baseline+preflight+proposePlans，完成后主线程按版本号校验才写回；150ms 防抖(asyncAfter)；quality history 写回加 isUpdatingQualityHistory 标志防止 didSet 递归重排；新增 testAsyncDebouncedLayout 验证连续 5 次编辑合并成 1 次实际排版。代码审查确认：快照避免跨线程读写共享可变状态、DispatchWorkItem 自引用取消检查正确、测试默认走同步分支不受影响。build+test(277)+review-idml.sh(8/8)全绿后合入 dev(276ee00)并推送，AG 工作副本已切回 ag-lane 并同步到最新 dev。
