@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-06 01:22 | claude | 项目定位校准 + 队列全面重排(commit c1b4e2f)。用户在脚注编号 bug 的讨论中拍板:layoutD 的交付物是给 InDesign 的「初排灌
+- **分支**：dev
+- **概述**：项目定位校准 + 队列全面重排(commit c1b4e2f)。用户在脚注编号 bug 的讨论中拍板:layoutD 的交付物是给 InDesign 的「初排灌版」,不是替代 InDesign;真实书籍每篇文字本来就要串接,InDesign 里漂移可人工调校,灌版工作量的减轻才是价值——可编辑性 > 逐像素冻结。已 record_decision 存入 DECISIONS.md。按灌版镜头重盘项目:样式体系/CMYK/资产链接已达标✅;真缺口=①文流零串接(demo 4页=21个孤立story,交付物不是可编辑文流,这是头号缺口)②主页缺失(页码疑似逐页静态文本)③per-page Spread 非对页。队列重排:BUG-1 脚注编号标不修(细枝末节,InDesign 补做快,且 THREAD-1 后 story 结构会变);新立 THREAD-1a(串接 spike,手工样张验证 InDesign 可编辑+漂移可接受)→THREAD-1b(全量实现,Story 粒度=章)→MASTER-1(主页+自动页码)→SPREAD-1(对页合并)为 Claude 道主线;SPLIT-ENGINE 挪到 THREAD-1 之后避免冲突;Codex 道挂 GUARD-4 串接探针(⏳等 THREAD-1b);AG 道加 FIX-CANVAS-1(画布图片标题泄漏"cell-d"资产id前缀,小修)。傍点/表格深化维持不投入。
+- **改动文件**：c1b4e2f: .ai/QUEUE.md(Claude 道重排+BUG-1 改不修+THREAD/MASTER/SPREAD 立项+GUARD-4/FIX-CANVAS-1), .ai/DECISIONS.md(record_decision 追加定位校准)。另存 Claude 侧长期记忆 layoutd-positioning-initial-pour。
+- **检查**：纯文档/队列改动,未跑代码检查(无需要)。dev 已推送(aa86f97..c1b4e2f)。main/dev 当前一致(0bbda6c + dev 上的文档提交)。
+- **下一步**：①【Claude 下一棒】THREAD-1a spike:造最小 threaded 样张(一章 3-5 页,一个 Story+逐页框串接,坐标用引擎算好的),投桌面请用户 InDesign 验证:插字后文自动流动/漂移可接受/样式复合字体约物仍生效。通过→写结构模板立 THREAD-1b;不通过→评估轻量旁路。②【AG 可领】FIX-CANVAS-1 画布标题泄漏 id 前缀小修。③【Codex】暂无活跃任务(GUARD-4 ⏳等 THREAD-1b),待 Claude 后续补充导入侧任务。④E3-9 约物/基线用户已在 InDesign 目检 OK(2026-07-06 验收截图),可视为视觉验收通过。
+
 ## 2026-07-06 01:03 | claude | 用户视觉验收 SPLIT-GUI(GUI 截图抽查通过)+导出的两份 IDML(约物基线 OK；DOCX 脚注验收发现真 bug)。合 dev→main(0bb
 - **分支**：dev
 - **概述**：用户视觉验收 SPLIT-GUI(GUI 截图抽查通过)+导出的两份 IDML(约物基线 OK；DOCX 脚注验收发现真 bug)。合 dev→main(0bbda6c)并推送。核心发现:两条脚注只要不在同一段落就会各显示"1",根因是 IDML 导出"一段一 Story、完全不 threaded"(NextTextFrame/PreviousTextFrame 恒"n"),InDesign 原生脚注按 Story 为单位编号。用现场造的 Markdown 2 段式脚注 fixture 独立复现同样 bug,证实是既存架构缺陷(threaded story 重构此前只在性能语境提过),不是今天 DOCX/SPLIT-GUI 引入的回归,只是这次撞见——E3-7 原始验收样例大概率把连续脚注挤在同一段落侥幸没测出。用户决定:现在就合 main,把这条记为高优先级待修(commit 00369d9)。merge dev→main 前独立复验:build+test(281/0)+review-idml.sh(10/10)全绿,main 已推送(3559a00..0bbda6c)。
