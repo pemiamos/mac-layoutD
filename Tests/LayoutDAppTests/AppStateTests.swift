@@ -335,6 +335,26 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(block.strokeColorHex)
     }
 
+    func testSetSelectedFrameStrokeWidthPersistsAsOverride() {
+        let state = AppState(project: BookProject.sample)
+        XCTAssertTrue(state.createDrawnFrame(
+            kind: .rectangle,
+            onPage: 2,
+            rect: Rect(x: 60, y: 80, width: 150, height: 100)
+        ))
+        let id = try! XCTUnwrap(state.selectedFrameId)
+
+        state.setSelectedFrameStrokeWidth(3)
+        var block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first { $0.id == id })
+        XCTAssertEqual(try XCTUnwrap(block.strokeWidth), 3, accuracy: 0.0001)
+        XCTAssertTrue(state.canUndo)
+
+        // 0 pt is a valid weight (hairline off), and negatives are clamped to 0.
+        state.setSelectedFrameStrokeWidth(-5)
+        block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first { $0.id == id })
+        XCTAssertEqual(try XCTUnwrap(block.strokeWidth), 0, accuracy: 0.0001)
+    }
+
     func testCreateDrawnImageFrameNeedsAsset() {
         // sample project has assets → image frame creates and references one.
         let withAssets = AppState(project: BookProject.sample)

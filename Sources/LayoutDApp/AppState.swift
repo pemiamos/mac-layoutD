@@ -1249,6 +1249,24 @@ final class AppState: ObservableObject {
         self.project = currentProject
     }
 
+    /// Sets the selected frame's stroke weight (points), InDesign-style. Writes a
+    /// plan-block override, undoable. Note the weight only shows if a stroke colour
+    /// is also set — matching InDesign, where weight and colour are independent.
+    func setSelectedFrameStrokeWidth(_ width: Double) {
+        commitState()
+        guard let frameId = selectedFrameId,
+              let pageNum = findPageNumber(for: frameId) else { return }
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+        guard let index = plan.blocks.firstIndex(where: { $0.id == frameId }) else { return }
+        plan.blocks[index].strokeWidth = max(width, 0)
+        plan.notes = ["手动修改描边粗细"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
+    }
+
     func updateFrameCoordinate(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {
         updateFrameCoordinatesWithoutUndo(id: id, x: x, y: y, width: width, height: height)
     }

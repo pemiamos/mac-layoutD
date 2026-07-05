@@ -159,6 +159,35 @@ struct ObjectPropertiesView: View {
                     .font(.caption)
             }
 
+            // Stroke weight — InDesign-style preset list (0 / 0.25 / 0.5 / 0.75 / 1 …).
+            HStack {
+                Text("粗细")
+                    .frame(width: 40, alignment: .leading)
+                Menu {
+                    ForEach(strokeWeightOptions, id: \.self) { w in
+                        Button {
+                            state.setSelectedFrameStrokeWidth(w)
+                        } label: {
+                            if abs((frame.strokeWidth ?? 0) - w) < 0.001 {
+                                Label(strokeWeightLabel(w), systemImage: "checkmark")
+                            } else {
+                                Text(strokeWeightLabel(w))
+                            }
+                        }
+                    }
+                } label: {
+                    Text(strokeWeightLabel(frame.strokeWidth ?? 0))
+                }
+                .frame(width: 96)
+                Stepper("", onIncrement: {
+                    state.setSelectedFrameStrokeWidth(nextStrokeWeight(above: frame.strokeWidth ?? 0))
+                }, onDecrement: {
+                    state.setSelectedFrameStrokeWidth(nextStrokeWeight(below: frame.strokeWidth ?? 0))
+                })
+                .labelsHidden()
+                Spacer()
+            }
+
             if frame.kind == .text || frame.kind == .caption {
                 HStack {
                     ColorPicker("文字", selection: Binding(
@@ -361,6 +390,25 @@ struct ObjectPropertiesView: View {
 
     private func pointsToMillimeters(_ points: Double) -> Double {
         points / 72 * 25.4
+    }
+
+    /// InDesign 描边粗细预设（点）。
+    private var strokeWeightOptions: [Double] {
+        [0, 0.25, 0.5, 0.75, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    }
+
+    private func strokeWeightLabel(_ w: Double) -> String {
+        // "%g" 去掉多余的零：0.25 点 / 1 点 / 2.5 点。
+        String(format: "%g 点", w)
+    }
+
+    /// Stepper 上/下一档：吸附到最接近的预设，越过一格。
+    private func nextStrokeWeight(above current: Double) -> Double {
+        strokeWeightOptions.first { $0 > current + 0.001 } ?? strokeWeightOptions.last ?? current
+    }
+
+    private func nextStrokeWeight(below current: Double) -> Double {
+        strokeWeightOptions.last { $0 < current - 0.001 } ?? strokeWeightOptions.first ?? current
     }
 
     private func icon(for kind: PageFrameKind) -> String {

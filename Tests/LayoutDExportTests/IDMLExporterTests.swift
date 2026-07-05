@@ -356,16 +356,21 @@ final class IDMLExporterTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: output) }
         try IDMLExporter().export(document: document, project: project, to: output)
 
-        let spread = try XCTUnwrap(try zipEntries(output)
+        // Scan every Unassigned <Rectangle> open-tag across all spreads (accent fills
+        // are also Unassigned but carry weight 0) and find the one with our 1.5pt stroke.
+        let allSpreads = try zipEntries(output)
             .filter { $0.hasPrefix("Spreads/Spread_") }
             .map { try entry(output, $0) }
-            .first { $0.contains("ContentType=\"Unassigned\"") }, "应有含矩形的 spread")
-        // The rectangle keeps a real stroke weight (not the 0 used for accent fills).
-        XCTAssertTrue(spread.contains("StrokeWeight=\"1.500\""), "矩形应保留描边粗细")
+            .joined(separator: "\n")
+        let rectTags = allSpreads
+            .components(separatedBy: "ContentType=\"Unassigned\"")
+            .dropFirst()
+            .map { String($0.prefix(while: { $0 != ">" })) }
+        let ourRect = try XCTUnwrap(
+            rectTags.first { $0.contains("StrokeWeight=\"1.500\"") },
+            "矩形应作为 Unassigned Rectangle 保留 1.5pt 描边粗细")
         // With a stroke set, its colour is a real swatch, not None.
-        let rectTag = try XCTUnwrap(spread.components(separatedBy: "ContentType=\"Unassigned\"").dropFirst().first)
-        let rectOpenTag = String(rectTag.prefix(while: { $0 != ">" }))
-        XCTAssertFalse(rectOpenTag.contains("StrokeColor=\"Swatch/None\""), "有描边时 StrokeColor 不应为 None")
+        XCTAssertFalse(ourRect.contains("StrokeColor=\"Swatch/None\""), "有描边时 StrokeColor 不应为 None")
     }
 
     func testFacingPagesSpreadImposition() throws {

@@ -1730,7 +1730,10 @@ private struct LayoutContext {
             }
 
             let content: FrameContent
-            if case .asset(let assetId) = block.contentReference {
+            if block.kind == .rectangle || block.kind == .line {
+                // Shapes carry no text/image; they render from fill/stroke alone.
+                content = .empty
+            } else if case .asset(let assetId) = block.contentReference {
                 content = .asset(assetId)
             } else {
                 if block.kind == .text && (block.nextThreadedBlockId != nil || block.previousThreadedBlockId != nil) {
