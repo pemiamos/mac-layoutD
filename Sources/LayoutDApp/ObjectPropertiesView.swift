@@ -133,34 +133,30 @@ struct ObjectPropertiesView: View {
         VStack(alignment: .leading, spacing: 6) {
             // A line has no fill — only a stroke (its colour + weight). Hide 填充 for it.
             if frame.kind != .line {
-                HStack {
-                    ColorPicker("填充", selection: Binding(
-                        get: { colorFromHex(frame.backgroundColorHex) ?? Color.white },
-                        set: { state.setSelectedFrameFillColor($0) }
-                    ), supportsOpacity: false)
-                    multiSpaceButton(title: "填充",
-                        current: pickerColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
-                        apply: { state.setSelectedFrameFillColor($0) })
-                    Spacer()
-                    Button("无填充") { state.clearSelectedFrameFillColor() }
-                        .buttonStyle(.borderless)
-                        .font(.caption)
-                }
+                InlineColorPickerView(
+                    label: "填充",
+                    color: pickerColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
+                    clearLabel: "无填充",
+                    swatches: state.customSwatches,
+                    onChange: { state.setSelectedFrameFillColor($0) },
+                    onClear: { state.clearSelectedFrameFillColor() },
+                    onAddSwatch: { state.addCustomSwatch($0) },
+                    onRemoveSwatch: { state.removeCustomSwatch(id: $0) }
+                )
+                .id("fill-\(frame.id)")
             }
 
-            HStack {
-                ColorPicker("描边", selection: Binding(
-                    get: { colorFromHex(frame.strokeColorHex) ?? Color.black },
-                    set: { state.setSelectedFrameStrokeColor($0) }
-                ), supportsOpacity: false)
-                multiSpaceButton(title: "描边",
-                    current: pickerColor(frame.strokeColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
-                    apply: { state.setSelectedFrameStrokeColor($0) })
-                Spacer()
-                Button("无描边") { state.clearSelectedFrameStrokeColor() }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-            }
+            InlineColorPickerView(
+                label: "描边",
+                color: pickerColor(frame.strokeColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
+                clearLabel: "无描边",
+                swatches: state.customSwatches,
+                onChange: { state.setSelectedFrameStrokeColor($0) },
+                onClear: { state.clearSelectedFrameStrokeColor() },
+                onAddSwatch: { state.addCustomSwatch($0) },
+                onRemoveSwatch: { state.removeCustomSwatch(id: $0) }
+            )
+            .id("stroke-\(frame.id)")
 
             // Stroke weight — InDesign-style preset list (0 / 0.25 / 0.5 / 0.75 / 1 …).
             HStack {
@@ -192,19 +188,17 @@ struct ObjectPropertiesView: View {
             }
 
             if frame.kind == .text || frame.kind == .caption {
-                HStack {
-                    ColorPicker("文字", selection: Binding(
-                        get: { colorFromHex(frame.textColorHex) ?? Color.primary },
-                        set: { state.setSelectedFrameTextColor($0) }
-                    ), supportsOpacity: false)
-                    multiSpaceButton(title: "文字",
-                        current: pickerColor(frame.textColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
-                        apply: { state.setSelectedFrameTextColor($0) })
-                    Spacer()
-                    Button("默认") { state.clearSelectedFrameTextColor() }
-                        .buttonStyle(.borderless)
-                        .font(.caption)
-                }
+                InlineColorPickerView(
+                    label: "文字",
+                    color: pickerColor(frame.textColorHex, fallback: .rgb(r: 0, g: 0, b: 0)),
+                    clearLabel: "默认",
+                    swatches: state.customSwatches,
+                    onChange: { state.setSelectedFrameTextColor($0) },
+                    onClear: { state.clearSelectedFrameTextColor() },
+                    onAddSwatch: { state.addCustomSwatch($0) },
+                    onRemoveSwatch: { state.removeCustomSwatch(id: $0) }
+                )
+                .id("text-\(frame.id)")
             }
         }
         .disabled(ctx.isPageLocked)
@@ -378,13 +372,7 @@ struct ObjectPropertiesView: View {
         }
     }
 
-    /// Resolves a stored hex color to a SwiftUI Color for picker bindings.
-    private func colorFromHex(_ hex: String?) -> Color? {
-        guard let hex, let ns = NSColor.fromHex(hex) else { return nil }
-        return Color(nsColor: ns)
-    }
-
-    /// Resolves a stored color string to a `PrintColor` for the multi-space picker.
+    /// Resolves a stored color string to a `PrintColor` for the inline picker.
     private func printColor(_ hex: String?, fallback: PrintColor) -> PrintColor {
         guard let hex, let color = PrintColor(string: hex) else { return fallback }
         return color
@@ -394,35 +382,13 @@ struct ObjectPropertiesView: View {
         (state.project.pageSetup.colorSpace ?? .rgb) == .cmyk
     }
 
-    /// The color the multi-space picker should open on. In CMYK document mode it
-    /// opens on the CMYK tab (converting the current/fallback color), so new fills
-    /// and text default to CMYK — black text lands on K100. Non-destructive: this
-    /// only picks the opening tab; nothing is written until the user edits.
+    /// The color the inline picker should open on. In CMYK document mode it opens
+    /// on the CMYK tab (converting the current/fallback color), so new fills and
+    /// text default to CMYK — black text lands on K100. Non-destructive: this only
+    /// picks the opening tab; nothing is written until the user edits.
     private func pickerColor(_ hex: String?, fallback: PrintColor) -> PrintColor {
         let base = printColor(hex, fallback: fallback)
         return isCMYKMode ? base.asCMYK : base
-    }
-
-    /// The "多套系" trigger next to a quick ColorPicker: opens the RGB/HSB/CMYK
-    /// picker in a floating panel (separate window) so applying a color — and the
-    /// full-book relayout it triggers — can't tear the picker down mid-edit.
-    private func multiSpaceButton(
-        title: String,
-        current: PrintColor,
-        apply: @escaping (PrintColor) -> Void
-    ) -> some View {
-        Button {
-            MultiSpaceColorPanelController.shared.toggle(
-                title: title,
-                initial: current,
-                state: state,
-                apply: apply
-            )
-        } label: {
-            Image(systemName: "slider.horizontal.3")
-        }
-        .buttonStyle(.borderless)
-        .help("多套系拾色器 (RGB / HSB / CMYK)")
     }
 
     private func pointsToMillimeters(_ points: Double) -> Double {
