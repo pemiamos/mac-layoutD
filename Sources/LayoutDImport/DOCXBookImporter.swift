@@ -39,11 +39,34 @@ public struct DOCXBookImporter {
         if let relsXML = try? archive.string(named: "word/_rels/document.xml.rels") {
             rels = DOCXRelsParser(xml: relsXML).rels
         }
+        let footnotes = (try? archive.string(named: "word/footnotes.xml"))
+            .map(DOCXFootnotesParser.init(xml:))?.footnotes ?? [:]
         
         let parsed = DOCXDocumentParser(styleNames: styleNames).parse(xml: documentXML)
         guard !parsed.failed else { throw ImportError.malformedDocument }
 
         var projectAssets: [Asset] = []
+
+        var footnoteByReferenceId: [String: Paragraph] = [:]
+        var nextFootnoteNumber = 1
+
+        func footnoteParagraph(for referenceId: String) -> Paragraph? {
+            if let existing = footnoteByReferenceId[referenceId] {
+                return existing
+            }
+            guard let text = footnotes[referenceId]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else {
+                return nil
+            }
+            let paragraph = Paragraph(
+                kind: .footnote(number: nextFootnoteNumber),
+                text: text,
+                styleId: "footnote"
+            )
+            footnoteByReferenceId[referenceId] = paragraph
+            nextFootnoteNumber += 1
+            return paragraph
+        }
 
         let paragraphs = parsed.blocks.flatMap { block -> [Paragraph] in
             switch block {
@@ -65,10 +88,12 @@ public struct DOCXBookImporter {
                 }
                 
                 if !cleanText.isEmpty {
+                    let anchoredFootnotes = value.footnoteReferenceIDs.compactMap(footnoteParagraph(for:))
                     let textPara = Paragraph(
                         kind: kind(for: value, styleNames: styleNames),
                         text: value.text,
                         styleId: styleID(for: value, styleNames: styleNames),
+                        anchoredFootnoteIds: anchoredFootnotes.isEmpty ? nil : anchoredFootnotes.map(\.id),
                         inlineRuns: inlineRuns(for: value)
                     )
                     result.append(textPara)
@@ -84,8 +109,15 @@ public struct DOCXBookImporter {
                                  styleId: StyleID.body.rawValue, tableCells: cells)]
             }
         }
+        let footnoteParagraphs = footnoteByReferenceId.values.sorted { lhs, rhs in
+            guard case .footnote(let lhsNumber) = lhs.kind,
+                  case .footnote(let rhsNumber) = rhs.kind else {
+                return false
+            }
+            return lhsNumber < rhsNumber
+        }
         
-        let roleMappedParagraphs = applyContentRoles(to: paragraphs)
+        let roleMappedParagraphs = applyContentRoles(to: paragraphs + footnoteParagraphs)
         let title = fallbackTitle ?? url.deletingPathExtension().lastPathComponent
         return BookProject(
             metadata: ProjectMetadata(title: title.isEmpty ? "未命名 DOCX 书稿" : title, author: defaultAuthor),
@@ -96,10 +128,12 @@ public struct DOCXBookImporter {
 
     private func extractAndRegisterImage(_ img: DOCXImage, rels: [String: String], from archive: OOXMLArchive, docxURL: URL) -> Asset? {
         guard let target = rels[img.rId] else { return nil }
-        let entryName = target.hasPrefix("word/") ? target : "word/\(target)"
+        let entryName = normalizedWordEntryPath(for: target)
         guard let data = try? archive.data(named: entryName) else { return nil }
         
-        let imagesDirectory = docxURL.deletingLastPathComponent().appendingPathComponent("images")
+        let imagesDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-docx-assets-\(docxURL.deletingPathExtension().lastPathComponent)-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("images", isDirectory: true)
         try? FileManager.default.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
         
         let fileName = URL(fileURLWithPath: target).lastPathComponent
@@ -139,6 +173,25 @@ public struct DOCXBookImporter {
             dpi: dpi,
             usage: .placed
         )
+    }
+
+    private func normalizedWordEntryPath(for target: String) -> String {
+        var components: [String] = target.hasPrefix("word/")
+            ? []
+            : ["word"]
+        for component in target.split(separator: "/").map(String.init) {
+            switch component {
+            case "", ".":
+                continue
+            case "..":
+                if !components.isEmpty {
+                    components.removeLast()
+                }
+            default:
+                components.append(component)
+            }
+        }
+        return components.joined(separator: "/")
     }
 
     private func inferRole(from fileName: String) -> AssetRole {
@@ -220,7 +273,7 @@ public struct DOCXBookImporter {
 
 private struct DOCXImage { var rId: String; var cx: Int?; var cy: Int? }
 private struct DOCXRun { var text = ""; var emphasis = Set<InlineEmphasis>() }
-private struct DOCXParagraph { var text = ""; var runs: [DOCXRun] = []; var styleID: String?; var isList = false; var images: [DOCXImage] = [] }
+private struct DOCXParagraph { var text = ""; var runs: [DOCXRun] = []; var styleID: String?; var isList = false; var images: [DOCXImage] = []; var footnoteReferenceIDs: [String] = [] }
 private enum DOCXBlock { case paragraph(DOCXParagraph), table([[String]]) }
 private struct DOCXParseResult { var blocks: [DOCXBlock] = []; var failed = false }
 
@@ -235,6 +288,8 @@ private final class DOCXDocumentParser: NSObject, XMLParserDelegate {
     private var tableCellParagraphs: [String] = []
     private var tableDepth = 0
     private var textTarget: TextTarget?
+    private var footnoteNumbersByReferenceId: [String: Int] = [:]
+    private var nextFootnoteNumber = 1
     private enum TextTarget { case run }
 
     init(styleNames: [String: String]) { self.styleNames = styleNames }
@@ -261,6 +316,19 @@ private final class DOCXDocumentParser: NSObject, XMLParserDelegate {
         case "t": textTarget = .run
         case "tab": run?.text.append("\t")
         case "br", "cr": run?.text.append("\n")
+        case "footnoteReference":
+            let referenceId = attributeDict["w:id"] ?? attributeDict["id"] ?? ""
+            guard !referenceId.isEmpty else { break }
+            paragraph?.footnoteReferenceIDs.append(referenceId)
+            let number: Int
+            if let existing = footnoteNumbersByReferenceId[referenceId] {
+                number = existing
+            } else {
+                number = nextFootnoteNumber
+                footnoteNumbersByReferenceId[referenceId] = number
+                nextFootnoteNumber += 1
+            }
+            run?.text.append(Self.footnoteMarker(number: number))
         case "drawing": currentImage = DOCXImage(rId: "")
         case "blip":
             let embedId = attributeDict["r:embed"] ?? attributeDict["embed"] ?? attributeDict["r:link"] ?? attributeDict["link"] ?? ""
@@ -305,6 +373,14 @@ private final class DOCXDocumentParser: NSObject, XMLParserDelegate {
     }
 
     private func localName(_ name: String) -> String { name.split(separator: ":").last.map(String.init) ?? name }
+
+    private static func footnoteMarker(number: Int) -> String {
+        let digits: [Character: Character] = [
+            "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
+            "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹"
+        ]
+        return String(number).compactMap { digits[$0] }.map(String.init).joined()
+    }
 }
 
 private final class DOCXStyles: NSObject, XMLParserDelegate {
@@ -344,6 +420,82 @@ private final class DOCXRelsParser: NSObject, XMLParserDelegate {
             }
         }
     }
+}
+
+private final class DOCXFootnotesParser: NSObject, XMLParserDelegate {
+    var footnotes: [String: String] = [:]
+    private var currentID: String?
+    private var paragraphTexts: [String] = []
+    private var runText = ""
+    private var paragraphText = ""
+    private var textTarget: TextTarget?
+    private enum TextTarget { case run }
+
+    convenience init(xml: String) { self.init(); parse(xml: xml) }
+
+    private func parse(xml: String) {
+        guard let data = xml.data(using: .utf8) else { return }
+        let parser = XMLParser(data: data)
+        parser.delegate = self
+        parser.parse()
+    }
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
+        switch localName(qName ?? elementName) {
+        case "footnote":
+            let type = attributeDict["w:type"] ?? attributeDict["type"]
+            if type == "separator" || type == "continuationSeparator" {
+                currentID = nil
+            } else {
+                currentID = attributeDict["w:id"] ?? attributeDict["id"]
+                paragraphTexts = []
+            }
+        case "p" where currentID != nil:
+            paragraphText = ""
+        case "r" where currentID != nil:
+            runText = ""
+        case "t" where currentID != nil:
+            textTarget = .run
+        case "tab" where currentID != nil:
+            runText.append("\t")
+        case "br" where currentID != nil, "cr" where currentID != nil:
+            runText.append("\n")
+        default:
+            break
+        }
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        if textTarget == .run {
+            runText.append(string)
+        }
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+        switch localName(qName ?? elementName) {
+        case "t":
+            textTarget = nil
+        case "r" where currentID != nil:
+            paragraphText.append(runText)
+            runText = ""
+        case "p" where currentID != nil:
+            let text = paragraphText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                paragraphTexts.append(text)
+            }
+            paragraphText = ""
+        case "footnote":
+            if let currentID {
+                footnotes[currentID] = paragraphTexts.joined(separator: "\n")
+            }
+            currentID = nil
+            paragraphTexts = []
+        default:
+            break
+        }
+    }
+
+    private func localName(_ name: String) -> String { name.split(separator: ":").last.map(String.init) ?? name }
 }
 
 private struct OOXMLArchive {

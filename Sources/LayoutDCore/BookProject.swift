@@ -389,7 +389,7 @@ public enum InlineEmphasis: String, Codable, Hashable, Sendable {
     case kenten
 }
 
-public struct InlineRun: Codable, Equatable, Sendable {
+public struct InlineRun: Codable, Equatable, Hashable, Sendable {
     public var location: Int
     public var length: Int
     public var emphasis: Set<InlineEmphasis>

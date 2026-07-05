@@ -2,6 +2,76 @@ import CoreText
 import Foundation
 import LayoutDCore
 
+public final class LayoutHeightCache: @unchecked Sendable {
+    public static let shared = LayoutHeightCache()
+    private init() {}
+    
+    struct Key: Hashable {
+        let text: String
+        let fontName: String
+        let fontSize: Double
+        let lineHeight: Double
+        let firstLineIndent: Double
+        let layoutDirection: LayoutDirection?
+        let width: Double
+        let inlineRuns: [InlineRun]?
+        let compositeFont: [CompositeFontClass: CompositeFontMapping]?
+    }
+    
+    private let lock = NSLock()
+    private var cache: [Key: Double] = [:]
+    
+    public func get(text: String, style: ParagraphStyle, width: Double, inlineRuns: [InlineRun]? = nil) -> Double? {
+        let key = Key(
+            text: text,
+            fontName: style.fontName,
+            fontSize: style.fontSize,
+            lineHeight: style.lineHeight,
+            firstLineIndent: style.firstLineIndent,
+            layoutDirection: style.layoutDirection,
+            width: width,
+            inlineRuns: inlineRuns,
+            compositeFont: style.compositeFont
+        )
+        lock.lock()
+        defer { lock.unlock() }
+        return cache[key]
+    }
+    
+    public func set(text: String, style: ParagraphStyle, width: Double, inlineRuns: [InlineRun]? = nil, height: Double) {
+        let key = Key(
+            text: text,
+            fontName: style.fontName,
+            fontSize: style.fontSize,
+            lineHeight: style.lineHeight,
+            firstLineIndent: style.firstLineIndent,
+            layoutDirection: style.layoutDirection,
+            width: width,
+            inlineRuns: inlineRuns,
+            compositeFont: style.compositeFont
+        )
+        lock.lock()
+        defer { lock.unlock() }
+        if cache.count >= 5000 {
+            cache.removeAll()
+        }
+        cache[key] = height
+    }
+    
+    public func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        cache.removeAll()
+    }
+    
+    public var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return cache.count
+    }
+}
+
+
 /// Single source of truth for how many front-matter pages (cover, contents)
 /// precede the content pages. The content engine numbers pages from 1 and adds
 /// this offset to reach the absolute page number used by page setup, plans and
@@ -1119,6 +1189,10 @@ private struct LayoutContext {
     }
 
     private func estimatedTextHeight(text: String, style: ParagraphStyle, width: Double, inlineRuns: [InlineRun]? = nil) -> Double {
+        if let cached = LayoutHeightCache.shared.get(text: text, style: style, width: width, inlineRuns: inlineRuns) {
+            return cached
+        }
+        
         let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, inlineRuns: inlineRuns)
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let constraint = CGSize(width: width, height: .greatestFiniteMagnitude)
@@ -1129,7 +1203,9 @@ private struct LayoutContext {
             constraint,
             nil
         )
-        return max(ceil(size.height), style.lineHeight)
+        let result = max(ceil(size.height), style.lineHeight)
+        LayoutHeightCache.shared.set(text: text, style: style, width: width, inlineRuns: inlineRuns, height: result)
+        return result
     }
 
     /// 表格按网格估高：每行取其各单元格估高的最大值（单元格在等分列宽内自动折行），

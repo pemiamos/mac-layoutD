@@ -91,16 +91,20 @@ final class DOCXBookImporterTests: XCTestCase {
             "word/_rels/document.xml.rels": Data(relsXML.utf8),
             "word/media/image1.png": pngBytes
         ])
+        let siblingImagesDirectory = url.deletingLastPathComponent().appendingPathComponent("images")
         defer {
             try? FileManager.default.removeItem(at: url)
-            let imagesDirectory = url.deletingLastPathComponent().appendingPathComponent("images")
-            try? FileManager.default.removeItem(at: imagesDirectory)
+            try? FileManager.default.removeItem(at: siblingImagesDirectory)
         }
 
         let project = try DOCXBookImporter().importDocument(from: url)
         XCTAssertEqual(project.assets.count, 1)
         let asset = project.assets[0]
         XCTAssertEqual(asset.fileName, "images/image1.png")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: siblingImagesDirectory.path))
+        let sourcePath = try XCTUnwrap(asset.sourcePath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sourcePath))
+        XCTAssertFalse(sourcePath.hasPrefix(siblingImagesDirectory.path))
         XCTAssertEqual(asset.pixelWidth, 1)
         XCTAssertEqual(asset.pixelHeight, 1)
         XCTAssertEqual(asset.usage, .placed)
@@ -113,6 +117,49 @@ final class DOCXBookImporterTests: XCTestCase {
         XCTAssertEqual(paragraphs[1].kind, .figure(assetId: asset.id))
         XCTAssertEqual(paragraphs[1].text, "images/image1.png")
         XCTAssertEqual(paragraphs[1].styleId, StyleID.caption.rawValue)
+    }
+
+    func testImportsFootnotesAndAnchorsReferences() throws {
+        let documentXML = """
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body>
+            <w:p>
+              <w:r><w:t>第一段带脚注</w:t></w:r>
+              <w:r><w:footnoteReference w:id="2"/></w:r>
+              <w:r><w:t>继续正文</w:t></w:r>
+            </w:p>
+            <w:p>
+              <w:r><w:t>第二段</w:t></w:r>
+              <w:r><w:footnoteReference w:id="5"/></w:r>
+            </w:p>
+          </w:body>
+        </w:document>
+        """
+        let footnotesXML = """
+        <w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>
+          <w:footnote w:id="2"><w:p><w:r><w:t>第一条脚注</w:t></w:r></w:p></w:footnote>
+          <w:footnote w:id="5"><w:p><w:r><w:t>第二条</w:t></w:r></w:p><w:p><w:r><w:t>脚注续段</w:t></w:r></w:p></w:footnote>
+        </w:footnotes>
+        """
+        let url = try makeDOCX(entries: [
+            "word/document.xml": documentXML,
+            "word/footnotes.xml": footnotesXML
+        ])
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let paragraphs = try XCTUnwrap(try DOCXBookImporter().importDocument(from: url).sections.first?.stories.first?.paragraphs)
+        XCTAssertEqual(paragraphs.count, 4)
+        XCTAssertEqual(paragraphs[0].text, "第一段带脚注¹继续正文")
+        XCTAssertEqual(paragraphs[1].text, "第二段²")
+        XCTAssertEqual(paragraphs[2].text, "第一条脚注")
+        XCTAssertEqual(paragraphs[3].text, "第二条\n脚注续段")
+        XCTAssertEqual(paragraphs[2].kind, .footnote(number: 1))
+        XCTAssertEqual(paragraphs[3].kind, .footnote(number: 2))
+        XCTAssertEqual(paragraphs[2].styleId, "footnote")
+        XCTAssertEqual(paragraphs[3].styleId, "footnote")
+        XCTAssertEqual(paragraphs[0].anchoredFootnoteIds, [paragraphs[2].id])
+        XCTAssertEqual(paragraphs[1].anchoredFootnoteIds, [paragraphs[3].id])
     }
 
     private func makeDOCX(entries: [String: String]) throws -> URL {

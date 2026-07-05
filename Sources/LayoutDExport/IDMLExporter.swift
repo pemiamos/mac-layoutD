@@ -52,6 +52,8 @@ public struct IDMLExporter {
     // 故本导出器把 Composer 写进每个 ParagraphStyle + [No paragraph style] + TextDefault,
     // Story 段落不再写(已删除无效的 AppliedComposer)。
     private let composer = "HL Composer J"
+    private let kinsokuTableSelf = "KinsokuTable/$ID/kSimpChineseKinsokuName"
+    private let mojikumiTableSelf = "MojikumiTable/$ID/kSimpChineseMojikumiName"
 
     // MARK: - 入口
 
@@ -675,7 +677,8 @@ public struct IDMLExporter {
         <Document \(pkgNS) Self="layoutd_doc" DOMVersion="\(dom)" Name="layoutd-export.indd" StoryList="\(storyList.joined(separator: " "))">
         \t<idPkg:Graphic src="Resources/Graphic.xml"/>
         \t<idPkg:Fonts src="Resources/Fonts.xml"/>
-        \t<KinsokuTable Self="KinsokuTable/$ID/kSimpChineseKinsokuName" Name="$ID/kSimpChineseKinsokuName"/>
+        \t<KinsokuTable Self="\(kinsokuTableSelf)" Name="$ID/kSimpChineseKinsokuName"/>
+        \t<MojikumiTable Self="\(mojikumiTableSelf)" Name="$ID/kSimpChineseMojikumiName"/>
         \t<idPkg:Styles src="Resources/Styles.xml"/>
         \t<idPkg:Preferences src="Resources/Preferences.xml"/>
         \t<idPkg:Tags src="XML/Tags.xml"/>
@@ -798,12 +801,13 @@ public struct IDMLExporter {
             let applied = isComposite ? "CF_\(xmlSafe(style.id))" : famFallback
             let fontStyleAttr = isComposite ? "" : " FontStyle=\"\(esc(styleFallback))\""
             paras += """
-            \t\t<ParagraphStyle Self="ParagraphStyle/\(xmlSafe(style.id))" Imported="false" Name="\(esc(style.displayName))" PointSize="\(fmt(style.fontSize))" Leading="\(fmt(style.lineHeight))" FirstLineIndent="\(fmt(style.firstLineIndent))" SpaceBefore="\(fmt(style.spaceBefore))" SpaceAfter="\(fmt(style.spaceAfter))" FillColor="\(fill)"\(fontStyleAttr) Composer="\(composer)" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None">
+            \t\t<ParagraphStyle Self="ParagraphStyle/\(xmlSafe(style.id))" Imported="false" Name="\(esc(style.displayName))" PointSize="\(fmt(style.fontSize))" Leading="\(fmt(style.lineHeight))" FirstLineIndent="\(fmt(style.firstLineIndent))" SpaceBefore="\(fmt(style.spaceBefore))" SpaceAfter="\(fmt(style.spaceAfter))" FillColor="\(fill)"\(fontStyleAttr) Composer="\(composer)" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="\(mojikumiTableSelf)">
             \t\t\t<Properties>
             \t\t\t\t<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
             \t\t\t\t<PreviewColor type="enumeration">Nothing</PreviewColor>
             \t\t\t\t<AppliedFont type="string">\(esc(applied))</AppliedFont>
             \t\t\t\t<KinsokuSet type="enumeration">SimplifiedChineseKinsoku</KinsokuSet>
+            \t\t\t\t<MojikumiSet type="object">\(mojikumiTableSelf)</MojikumiSet>
             \t\t\t</Properties>
             \t\t</ParagraphStyle>\n
             """
@@ -841,7 +845,7 @@ public struct IDMLExporter {
         <idPkg:Preferences \(pkgNS) DOMVersion="\(dom)">
         \t<DocumentPreference PageHeight="\(fmt(pageH))" PageWidth="\(fmt(pageW))" PagesPerDocument="1" FacingPages="\(facing)" DocumentBleedTopOffset="0" DocumentBleedBottomOffset="0" DocumentBleedInsideOrLeftOffset="0" DocumentBleedOutsideOrRightOffset="0" DocumentBleedUniformSize="true" SlugTopOffset="0" SlugBottomOffset="0" SlugInsideOrLeftOffset="0" SlugRightOrOutsideOffset="0" DocumentSlugUniformSize="false" PreserveLayoutWhenShuffling="true" AllowPageShuffle="true" OverprintBlack="true" PageBinding="LeftToRight" ColumnDirection="Horizontal" SpreadHiddenVisibility="false" Intent="PrintIntent" CreatePrimaryTextFrame="false" ColumnGuideLocked="true" MasterTextFrame="false" SnippetImportUsesOriginalLocation="false"/>
         \t<ViewPreference HorizontalMeasurementUnits="Points" VerticalMeasurementUnits="Points" RulerOrigin="PageOrigin"/>
-        \t<TextDefault Composer="\(composer)" AppliedLanguage="$ID/Chinese: Simplified" KinsokuType="KinsokuPushInFirst"/>
+        \t<TextDefault Composer="\(composer)" AppliedLanguage="$ID/Chinese: Simplified" KinsokuType="KinsokuPushInFirst" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="\(mojikumiTableSelf)"/>
         </idPkg:Preferences>
         """
     }

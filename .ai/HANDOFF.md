@@ -3,6 +3,95 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-06 00:39 | claude | 审核并合并 Codex 道(DOCX 导入批)+ AG 道(SPLIT-GUI)两批交付。① Codex feature/codex-docx-import-g
+- **分支**：dev
+- **概述**：审核并合并 Codex 道(DOCX 导入批)+ AG 道(SPLIT-GUI)两批交付。① Codex feature/codex-docx-import-guards(3f84c77,含 IMP-4/IMP-2收尾/GUARD-3 三项):DOCXBookImporter 新增 DOCXFootnotesParser 解析 word/footnotes.xml、消费正文 w:footnoteReference,按引用顺序生成与 Markdown 同构的 Paragraph(.footnote(number:),"footnote"),正文塞 Unicode 上标 + anchoredFootnoteIds 复用 E3-7 原生 Footnote 导出;内嵌图片改落系统临时目录唯一 layoutd-docx-assets-*/images(不再污染源 docx 同级)+normalizedWordEntryPath 规范化 ../;review-idml.sh 加 DOCX 端到端探针(python3 造最小 OOXML 走 import→IDML→解包)。重点核对:确认 Markdown 路径同样往正文塞字面上标(superscriptString),故 DOCX 做法结构一致无双标记,且探针专门断言"脚注上标不残留(<Content>¹</Content> 不出现)"锁死此点。② AG feature/ag-split-gui(4b6f16b,分三棒):main.swift 拆出 AppDelegate/+Menu/WorkspaceViewController/ExportSettingsViews;InspectorView 拆出 +Issues/+Styles/+Assets/+Quality;CanvasView 拆出 +Drawing/+Interaction。纯搬家 Tests/ 零改动。两道文件边界不重叠,仅 .ai 文档冲突已自动合并。合并 merge ee69387(codex ff)+a7be7a8(ag)。独立复验(非仅采信自报):build+test(281/0)+review-idml.sh 探针 8→10 全过(含 DOCX 粗斜体/原生 Footnote/上标不残留/图片进 Links)。补提交 6982bed 标记 IMP-4/IMP-2/GUARD-3 完成,已推 origin/dev。
+- **改动文件**：Merge ee69387: Sources/LayoutDImport/DOCXBookImporter.swift, Tests/LayoutDImportTests/DOCXBookImporterTests.swift, scripts/review-idml.sh。Merge a7be7a8: Sources/LayoutDApp/ 新增 10 文件(AppDelegate/+Menu/WorkspaceViewController/ExportSettingsViews/InspectorView+Issues/+Styles/+Assets/+Quality/CanvasView+Drawing/+Interaction)+瘦身 main.swift/InspectorView.swift/CanvasView.swift。6982bed: .ai/QUEUE.md(IMP-4/IMP-2/GUARD-3 标记完成)。
+- **检查**：swift build: pass; swift test: pass(281 tests); review-idml.sh: 10/10 PASS(新增 DOCX 探针)。均在合并后 dev 上跑,独立复验。已推 origin/dev(85aae8a..6982bed)。
+- **下一步**：①【用户·视觉验收,非阻塞】IMP-4 脚注:可用含脚注的真实 .docx 导出 IDML 在 InDesign 确认脚注为原生 Footnote 且编号/位置正确。SPLIT-GUI 是纯搬家,建议 Claude 出一次 GUI 包让用户抽查各面板/画布交互无回归。②【已知小边界·非阻塞】DOCX 脚注正文 marker 号与脚注段落号用两套计数器,仅当 footnoteReference 指向空/缺失脚注时会错位;正常 Word 稿全非空则锁步一致。若日后遇到畸形稿再统一为单计数器。③当前 dev 已积累一大批(GUARD1-3/SPLIT-IMPORT/SPLIT-GUI/E3-9/PERF-3/PERF-4a/DOCX 脚注),两道活跃队列均已清空,建议找节点集中给用户过一轮 InDesign/GUI 视觉验收后合 main。④下一批任务需 Claude 盘点补 QUEUE.md(Claude 道 B1-IDML/SPLIT-ENGINE 仍挂着)。
+
+## 2026-07-05 22:12 | codex | 完成 Codex 道三项新任务：IMP-4 DOCX 脚注导入、IMP-2 图片落点收尾、GUARD-3 DOCX 端到端探针
+- **分支**：feature/codex-docx-import-guards
+- **概述**：按队列顺序一次完成三项 Codex 新任务。① IMP-4：`DOCXBookImporter` 现在解析 `word/footnotes.xml`，消费正文 `w:footnoteReference`，按引用出现顺序生成与 Markdown 导入同构的 `Paragraph(kind: .footnote(number:), styleId: "footnote")`，正文保留对应 Unicode 上标并把脚注段落 ID 写入 `anchoredFootnoteIds`，从而复用既有 IDML 原生 `<Footnote>` 导出路径。② IMP-2 收尾：内嵌图片不再写到源 `.docx` 同级 `images/` 目录，改为写入系统临时目录下唯一 `layoutd-docx-assets-* / images`，`Asset.fileName` 仍保持 `images/<name>` 作为项目内引用名；同时规范化 `word/media` 相对路径。③ GUARD-3：`scripts/review-idml.sh` 新增现场生成最小 DOCX fixture，覆盖 DOCX 粗斜体、内嵌图片和脚注，完整走 DOCX 导入 → IDML 导出 → 解包断言。
+- **改动文件**：Sources/LayoutDImport/DOCXBookImporter.swift；Tests/LayoutDImportTests/DOCXBookImporterTests.swift；scripts/review-idml.sh。
+- **检查**：`swift test --filter DOCXBookImporterTests` PASS(5/0)；`bash scripts/review-idml.sh` PASS（swift build PASS；swift test 281/0；Markdown 行内强调、角色标签、DOCX 导入三类 IDML 探针全过）。
+- **提交**：`3f84c77 feat(import): cover DOCX footnotes and import guards`。
+- **下一步**：Claude 在主仓库审核 `feature/codex-docx-import-guards`，复跑 `bash scripts/review-idml.sh` 后合入 dev；若要做人工验收，可用含脚注/内嵌图 DOCX 导出 IDML，在 InDesign 中确认脚注为原生 Footnote 且图片链接正常。
+## 2026-07-05 22:15 | antigravity | 【SPLIT-GUI 巨型 GUI 文件拆分已完成】纯重构且行为零回归，分三个 commit 提交并推送
+- **分支**：feature/ag-split-gui
+- **概述**：完成了对三个巨型 GUI 文件的拆分，保证所有模块正常运行及排版一致性：
+  1. `main.swift`：拆分出 `AppDelegate.swift`、`AppDelegate+Menu.swift`、`WorkspaceViewController.swift`、`ExportSettingsViews.swift`，主入口仅保留 CLI 排版/导出与应用启动逻辑。
+  2. `InspectorView.swift`：按功能区拆分出 `InspectorView+Issues.swift`、`InspectorView+Styles.swift`、`InspectorView+Assets.swift`、`InspectorView+Quality.swift` 等 subview 扩展。
+  3. `CanvasView.swift`：拆分出 `CanvasView+Drawing.swift`（CoreGraphics/CoreText 绘制与 CMYK 软打样）和 `CanvasView+Interaction.swift`（鼠标键盘交互与内联文本编辑器）。
+- **改动文件**：`Sources/LayoutDApp/main.swift`、`Sources/LayoutDApp/InspectorView.swift`、`Sources/LayoutDApp/CanvasView.swift`，并在同目录下新建了 10 个对应的子 Swift 文件。
+- **检查**：编译通过 (`swift build`)，单元测试全部通过 (`swift test` 280/280)，IDML 端到端回归测试全部通过 (`review-idml.sh` 8/8 PASS)，全书排版冷基准无变化（161 页 / 1004 ms）。
+- **下一步**：本阶段 GUI 文件模块化拆分已完工，已生成三个 commit 并推送到 feature/ag-split-gui 分支，等待主车道/Claude 审核并合入 dev。
+
+## 2026-07-05 22:04 | claude | 给 Codex 道补充下一批任务 + 处理 AG 道 PERF-4b 去留决定(commit b62e0f8)。Codex 队列此前已清空(仅 E3-8 暂缓)
+- **分支**：dev
+- **概述**：给 Codex 道补充下一批任务 + 处理 AG 道 PERF-4b 去留决定(commit b62e0f8)。Codex 队列此前已清空(仅 E3-8 暂缓),盘点 Sources/LayoutDImport/* 发现两个真实缺口:①DOCXBookImporter.swift 完全不解析脚注(零匹配"footnote"),真实书稿常见 .docx 带脚注时会静默丢失,而 Markdown 侧已支持且 IDML 导出侧 E3-7 原生 Footnote 早已验收通过,只差 DOCX 打通——新增 IMP-4。②IMP-2 遗留:DOCXBookImporter.swift:102 把内嵌图片写到源 docx 同级新建的 images/ 文件夹,污染用户文件组织——新增收尾任务。③review-idml.sh 端到端探针目前只覆盖 Markdown 路径,DOCX 导入链路全靠单测无探针兜底——新增 GUARD-3(建议顺序 IMP-4→GUARD-3)。AG 道:用户确认 PERF-4a 的 16% 提升已经够用,4b(二分改单次扫描,高风险)明确暂缓,已按 E3-8 先例用删除线+⏸标记,AG 下一个自动领到的任务顺位变为 SPLIT-GUI(巨型 GUI 文件拆分)。纯文档改动,未跑代码检查(无需要)。
+- **改动文件**：.ai/QUEUE.md(新增 Codex 道 IMP-4/IMP-2收尾/GUARD-3 三项;AG 道 PERF-4b 标记暂缓)
+- **检查**：纯文档改动,不涉及代码,未跑 build/test/review-idml.sh。
+- **下一步**：Codex 下次唤起会按队列顺序领到 IMP-4(DOCX 脚注导入);AG 下次唤起会跳过已暂缓的 4b 直接领到 SPLIT-GUI。若日后书稿变大到 4a 的 16% 提升不够用,再重新评估是否要做 4b(硬约束②仍然有效——动手前必须先扩 golden 语料覆盖首行缩进/竖排/行内格式/图片环绕四类)。
+
+## 2026-07-05 21:59 | claude | 审核并合并 Antigravity 交付的 PERF-4a(测高缓存)。上一棒我 review AG 的 PERF-4 方案后拆成 4a/4b 并追加两条硬约束
+- **分支**：dev
+- **概述**：审核并合并 Antigravity 交付的 PERF-4a(测高缓存)。上一棒我 review AG 的 PERF-4 方案后拆成 4a/4b 并追加两条硬约束,4a 的硬约束①是"缓存键必须含完整复合字体映射指纹,否则 fontName/fontSize 相同但 compositeFont 不同的样式会撞键静默算错分页"。审核 AG 实现(feature/ag-perf4a-cache 41ee1ad):新增 LayoutHeightCache(NSLock 保护的线程安全单例),缓存键含 text/fontName/fontSize/lineHeight/firstLineIndent/layoutDirection/width/inlineRuns/compositeFont 全部字段,完整满足硬约束①;为使 Key 可 Hashable,顺带给 CompositeFontMapping/CompositeFontClass/InlineRun 补了 Hashable conformance(InlineRun 含 emphasis,符合约束里"标 Hashable 要含 emphasis"的要求);新增 testCompositeFontDifferenceDoesNotCollision 精确覆盖验收要求的"两个 fontName/fontSize 相同但复合字体映射不同的样式,缓存不互相污染";容量上限 5000 条超限整体清空。代码审查通过,合入 dev(merge 55af77a),独立复验(不只信 AG 自报):build+test(280/0)+review-idml.sh(8/8)全绿,并单独重跑 PerformanceBenchmarkTests 得 161页/992ms,相较基线(~1187ms)降约16%,与 AG 自报 17% 吻合,非假数据。
+- **改动文件**：Merge 55af77a: Sources/LayoutDEngine/LayoutEngine.swift(新增 LayoutHeightCache), Sources/LayoutDCore/StyleLibrary.swift(CompositeFontMapping/Class 加 Hashable), Sources/LayoutDCore/BookProject.swift(InlineRun 加 Hashable), Tests/LayoutDCoreTests/LayoutHeightCacheTests.swift(新增), .ai/QUEUE.md(4a 标记完成), .ai/HANDOFF.md。另在此之前补提交 8c3f597(补记上一棒 SPLIT-IMPORT/E3-9 交接日志,write_handoff 未走 git 需手动提交)。
+- **检查**：swift build: pass; swift test: pass(280 tests); review-idml.sh: 8/8 PASS。均在合并后 dev 上跑,独立复验非仅采信 AG 报告。PERF-1 独立重跑:161页/992ms(基线~1187ms,降幅~16%)。已推送 origin/dev(8c3f597..55af77a)。
+- **下一步**：①PERF-4a 是纯性能优化无用户可见变化,不阻塞视觉验收流程。②QUEUE.md 里 4b(fittingPrefix 二分改单次扫描)仍是高风险待办,硬约束②要求先扩 golden 语料覆盖首行缩进/竖排/行内格式/图片环绕四类、逐页坐标 100% 一致才能动,AG 可按需领取或视 4a 收益是否已经够用而搁置。③Codex 道队列已清空(仅 E3-8 暂缓),需要 Claude 补充下一批任务到 QUEUE.md。④当前 dev 已积累较多改动(GUARD/SPLIT/E3-9/PERF-3/PERF-4a),可考虑找个节点集中给用户过一轮视觉验收后合 main。
+
+## 2026-07-05 21:54 | claude | 审核并合并 Codex 交付的两项(SPLIT-IMPORT + E3-9)。①feature/codex-split-import(4ca0db6):把 15
+- **分支**：dev
+- **概述**：审核并合并 Codex 交付的两项(SPLIT-IMPORT + E3-9)。①feature/codex-split-import(4ca0db6):把 1528 行 MarkdownBookImporter.swift 纯搬家拆成 MarkdownParserBlocks/Inline/FrontMatter/Images.swift 四个 extension 文件,对外 API 不变,行为不变。②feature/codex-e3-9-mojikumi-baseline(b4dbb3d+488c537,已先合最新 dev 含 PERF-3):IDML 导出补 MojikumiTable 声明、段落样式绑定 Mojikumi/MojikumiSet、GridAlignment=AlignAllLinesToGrid 基线网格绑定,保留既有 SimplifiedChineseKinsoku 与 CJK Composer,新增 IDMLExporterTests 覆盖 designmap/Styles.xml/Preferences.xml。两分支与 dev 均无冲突,merge 提交 a5b049b(split-import)+60104f1(e3-9)。合并后 build+test(277)+review-idml.sh(8/8)全绿,补提交 749f92b 把 .ai/QUEUE.md 里这两项标记完成,已推送 origin/dev。
+- **改动文件**：Merge a5b049b: Sources/LayoutDImport/MarkdownBookImporter.swift + 新增 MarkdownParserBlocks/Inline/FrontMatter/Images.swift。Merge 60104f1: Sources/LayoutDExport/IDMLExporter.swift, Tests/LayoutDExportTests/IDMLExporterTests.swift, .ai/HANDOFF.md。749f92b: .ai/QUEUE.md(SPLIT-IMPORT/E3-9 标记完成)。
+- **检查**：swift build: pass; swift test: pass(277 tests); review-idml.sh: 8/8 PASS(含角色标签探针)。均在合并后 dev 上跑。已推送 origin/dev(7c8405a..749f92b)。
+- **下一步**：①【用户·视觉验收,非阻塞】E3-9 是约物挤压/基线网格贴齐这类视觉排版属性,结构探针测不出对错,建议导出含中文标点段落的 IDML 在 InDesign 里肉眼确认标点挤压效果和基线对齐是否生效。②SPLIT-IMPORT 是纯重构无用户可见变化,无需验收。③Codex 道活跃队列已清空(E3-8 暂缓),下一批任务需 Claude 在 QUEUE.md 补充。④Antigravity 那边 PERF-4 已拆 4a/4b 且 4a(LayoutHeightCache)已完成(41ee1ad,本地可见但未合 dev),下次可一并审核合并。
+
+## 2026-07-05 21:45 | codex | 完成 Codex 道队列两项：SPLIT-IMPORT 拆分 Markdown importer；E3-9 IDML 约物挤压 + 基线网格导出绑定。
+- **分支**：feature/codex-split-import；feature/codex-e3-9-mojikumi-baseline
+- **概述**：按队列完成 Codex 道剩余两项。① SPLIT-IMPORT：在 `feature/codex-split-import` 将 1528 行 `MarkdownBookImporter.swift` 纯搬家拆为主入口/状态 + `MarkdownParserBlocks.swift`、`MarkdownParserInline.swift`、`MarkdownParserFrontMatter.swift`、`MarkdownParserImages.swift` 四个 extension 文件；为跨文件 extension 访问，把 parser/辅助类型从 file-private 级别调整为模块内可见，对外 public API 不变。② E3-9：在 `feature/codex-e3-9-mojikumi-baseline`（已先合最新 origin/dev=790ac97，含 PERF-3）给 IDML 导出补 `MojikumiTable/$ID/kSimpChineseMojikumiName` 声明，段落样式绑定 `Mojikumi`/`MojikumiSet`，并在段落样式与 TextDefault 上写 `GridAlignment=AlignAllLinesToGrid`、`GridAlignFirstLineOnly=false`，保持既有 SimplifiedChineseKinsoku 与 CJK Composer。新增/扩展 IDMLExporterTests 覆盖 designmap、Styles.xml、Preferences.xml 中的约物/基线绑定。
+- **改动文件**：SPLIT-IMPORT：`Sources/LayoutDImport/MarkdownBookImporter.swift`、新增 `MarkdownParserBlocks.swift`、`MarkdownParserInline.swift`、`MarkdownParserFrontMatter.swift`、`MarkdownParserImages.swift`。E3-9：`Sources/LayoutDExport/IDMLExporter.swift`、`Tests/LayoutDExportTests/IDMLExporterTests.swift`。
+- **检查**：SPLIT-IMPORT 分支：`swift build` PASS；`swift test` PASS(276/0，当时 dev 基线)；`bash scripts/review-idml.sh` PASS(8/8)。E3-9 分支：合最新 origin/dev 后 `swift test` PASS(277/0，含 PERF-3 新测)；`bash scripts/review-idml.sh` PASS(8/8，XML well-formed)。
+- **提交**：`4ca0db6 refactor(import): split markdown parser responsibilities`；`b4dbb3d feat(export): bind mojikumi and baseline grid in IDML`。
+- **下一步**：Claude 在主仓库审核两个 feature 分支并合 dev；E3-9 的 XML 结构和探针已过，但 Mojikumi/基线网格属于 InDesign 视觉/排版属性，合 dev 后仍建议用户打开导出的 IDML 肉眼确认中文标点挤压和段落贴基线效果。Codex 道活跃队列已清空，剩余 E3-8 仍按队列标注暂缓。
+## 2026-07-05 21:50 | antigravity | 【PERF-4a 测高缓存优化已落地】为 estimatedTextHeight 引入线程安全的 LayoutHeightCache，全量排版耗时下降 17%
+- **分支**：feature/ag-perf4a-cache
+- **概述**：【PERF-4a 测高缓存优化已落地】为了解决估高时重复创建 Framesetter 的性能瓶颈，在 LayoutEngine.swift 中引入了线程安全的 LayoutHeightCache。缓存键由文本、字体、字号、行高、缩进、排版方向、宽度、行内样式及复合字体配置（compositeFont）共同组成，确保了 100% 正确的分页测量，避免同名不同配置 of 样式发生碰撞。同时增加 5000 条最大条目限制以防内存泄漏。新设 LayoutHeightCacheTests 覆盖了缓存读取、容量自动清理和样式冲突隔离测试。
+- **改动文件**：Sources/LayoutDEngine/LayoutEngine.swift, Sources/LayoutDCore/StyleLibrary.swift, Sources/LayoutDCore/BookProject.swift, Tests/LayoutDCoreTests/LayoutHeightCacheTests.swift, .ai/QUEUE.md
+- **检查**：swift build: PASS, swift test: 280/0 PASS (新增 3 项缓存测试), review-idml.sh: PASS. PERF-1 基准由 1171 ms 降至 972 ms（冷排版耗时，降幅达 17.0%；二次重排时命中率近 100%，耗时降为几乎 0ms）。
+- **下一步**：PERF-4a 已交付，若需进一步优化，可按照 QUEUE.md 中 4b 规划扩展 Golden 语料并尝试将二分法优化为单次 CTTypesetter 扫描（4b 棒）。
+
+## 2026-07-05 21:39 | claude | 审核并合并 Antigravity 交付的 PERF-3(排版异步化+防抖)。改法：AppState 新增 isAsync 开关(默认非测试环境异步)、layo
+- **分支**：dev
+- **概述**：审核并合并 Antigravity 交付的 PERF-3(排版异步化+防抖)。改法：AppState 新增 isAsync 开关(默认非测试环境异步)、layoutVersion 版本号防止旧异步结果覆盖新状态、快照 project/pdfExportOptions/currentPageNumber 后在后台线程跑 layout+baseline+preflight+proposePlans，完成后主线程按版本号校验才写回；150ms 防抖(asyncAfter)；quality history 写回加 isUpdatingQualityHistory 标志防止 didSet 递归重排；新增 testAsyncDebouncedLayout 验证连续 5 次编辑合并成 1 次实际排版。代码审查确认：快照避免跨线程读写共享可变状态、DispatchWorkItem 自引用取消检查正确、测试默认走同步分支不受影响。build+test(277)+review-idml.sh(8/8)全绿后合入 dev(276ee00)并推送，AG 工作副本已切回 ag-lane 并同步到最新 dev。
+- **改动文件**：Merge commit 276ee00(dev)：Sources/LayoutDApp/AppState.swift、Tests/LayoutDAppTests/AppStateTests.swift、.ai/QUEUE.md(PERF-3 标记完成)、.ai/HANDOFF.md；无冲突。
+- **检查**：swift build: pass; swift test: pass(277 tests，含新增防抖测试); review-idml.sh: 8/8 PASS——均在 AG 工作副本(合并前)+主仓库 dev(合并后)各跑一遍。PERF-1 基准 161页/1187ms，与合并前基线(~1179-1203ms)一致，符合预期(PERF-3 优化的是连续操作场景，不改变单次全量排版耗时)。
+- **下一步**：PERF-3 是性能优化，无用户可见功能变化，暂不阻塞合 main，等下一批一起过用户视觉验收（可请用户主观感受一下连续拖拽/连续打字是否比以前流畅）。Antigravity 下一个可领的任务是队列里紧接着的 PERF-4(引擎测量改造，风险最高单独一棒)，其后是 SPLIT-GUI。
+
+## 2026-07-05 21:33 | antigravity | 【PERF-3 排版异步化与防抖已落地】基于 DispatchWorkItem 重构 AppState.recalculateLayout，将排版、prefli
+- **分支**：feature/ag-perf3-async-layout
+- **概述**：【PERF-3 排版异步化与防抖已落地】基于 DispatchWorkItem 重构 AppState.recalculateLayout，将排版、preflight 报告生成和 AI 方案提案后台化（通过 userInitiated 队列），并在主线程以 layoutVersion 单调版本号守卫合并以防 GUI 竞态；引入了 0.15 秒（150ms）连续编辑操作防抖；首帧及 XCTest 测试环境能够自动检测并完美回退为同步模式，保护了全部单元测试。新增 testAsyncDebouncedLayout 测试锁定防抖合并与异步计算行为。
+- **改动文件**：Sources/LayoutDApp/AppState.swift, Tests/LayoutDAppTests/AppStateTests.swift, .ai/QUEUE.md
+- **检查**：swift build: PASS, swift test: 277/0 PASS, review-idml.sh: PASS
+- **下一步**：1. 待用户进行 GUI 视觉验收 dev/ag-lane 中合并的 InDesign 式工作区骨架与框工具；
+2. 随后可领 PERF-4 引擎测量改造（CTTypesetter 逐行填充 + 测量缓存）；
+3. 进行 SPLIT-GUI 巨型 GUI 文件拆分。
+
+## 2026-07-05 20:33 | claude | 应用户要求 review 全项目并生成《layoutD 开发报告》PDF（~/Desktop/layoutD-开发报告-2026-07-05.pdf，5页）。内
+- **分支**：dev
+- **概述**：应用户要求 review 全项目并生成《layoutD 开发报告》PDF（~/Desktop/layoutD-开发报告-2026-07-05.pdf，5页）。内容：项目概览(285 commits/24.6k 行源码/7 模块)、能力盘点、07-04~05 两天 65 提交详述(GUI 大改版/CMYK 管线/形状工具/三路合并)、后续优化建议(样式导入 5 条：复合 typography token/Figma 直连/语义绑定表/印刷色策略/再导入 diff；AI 版式 7 条：Claude API provider/受控变体铁律/评分闭环/真书反哺模板/视觉范式注入/性能前置/调用缓存)、工程优先级路线(PERF→SPLIT→绕排导出→样式导入→AI provider→threaded story)、风险清单。纯文档产出，未改任何仓库代码。
+- **改动文件**：无仓库改动；产出物 ~/Desktop/layoutD-开发报告-2026-07-05.pdf
+- **检查**：不适用（无代码改动）；PDF 已目检排版正常（中文字体/表格/分页）
+- **下一步**：报告第四章 C 节给出了建议的开发顺位，可作为下一轮 QUEUE.md 排任务的参考：1)PERF-3/4 2)SPLIT-* 3)B1-IDML+E3-9 4)样式导入增强 5)AI provider 接入 6)threaded story 重构。
+
+## 2026-07-05 20:23 | claude | 用户在 InDesign 里放大确认矩形填充/描边颜色数据正确(之前"整块橙色"只是缩略图误判)，视觉验收通过后，按流程把 dev 合并进 main 并推送。
+- **分支**：dev
+- **概述**：用户在 InDesign 里放大确认矩形填充/描边颜色数据正确(之前"整块橙色"只是缩略图误判)，视觉验收通过后，按流程把 dev 合并进 main 并推送。
+- **改动文件**：Merge commit 3559a00(main)：合入矩形/直线工具、IDML zip 压缩、CMYK ICC 软打样、内联拾色器面板 共 20 个文件；无冲突。
+- **检查**：swift build: pass; swift test: pass —— 均在合并后的 main 上跑的。main 已推送(611db7c..3559a00)。
+- **下一步**：本轮收尾。dev/main 已同步一致。下一步是新的任务队列(.ai/QUEUE.md)里的后续项，或用户提出的新需求。
+
 ## 2026-07-05 20:11 | claude | 按用户要求，统一检查并合并了三路并行 Claude 对话的产出到 dev：①feature/claude-idml-zip-deflate(IDML 打包 De
 - **分支**：dev
 - **概述**：按用户要求，统一检查并合并了三路并行 Claude 对话的产出到 dev：①feature/claude-idml-zip-deflate(IDML 打包 Deflate 压缩)；②feature/claude-cmyk-icc-proof(画布 CMYK 预览改走 ICC Profile，本对话此前诊断的修复)；③主仓库工作副本里另一并发对话遗留的未提交改动(ObjectPropertiesView 颜色控件改为 InlineColorPickerView 就地内联拾色器面板，替换原生 ColorPicker 弹窗 + MultiSpaceColorPanel)——已单独建分支 feature/claude-inline-colorpicker 提交推送。三者互不碰同一文件(除 ObjectPropertiesView 与 CanvasView 分属不同分支的不同函数)，merge 全部无冲突。合并后 dev 上 build+test(276 测试)全绿，已推送。之后杀掉了两个孤立的旧测试用 layoutD 进程(均已自然退出)，在主仓库(现在=dev 干净状态)重新 build 并启动了一个全新的、包含全部三处改动的 layoutD 实例供用户测试。

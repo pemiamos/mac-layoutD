@@ -1030,4 +1030,34 @@ final class AppStateTests: XCTestCase {
         }
         XCTAssertEqual(state.baselineLayoutCount, 2)
     }
+
+    func testAsyncDebouncedLayout() {
+        let state = AppState(project: BookProject.sample)
+        state.isAsync = true
+        
+        var layoutCount = 0
+        state.onLayoutCompleted = { _, _ in
+            layoutCount += 1
+        }
+        
+        // Mutate the project multiple times rapidly
+        for i in 1...5 {
+            state.updateProject { project in
+                project.sections[0].stories[0].paragraphs[0].text = "快速修改 \(i)"
+            }
+        }
+        
+        // In async mode, layout should not have completed yet
+        XCTAssertEqual(layoutCount, 0)
+        
+        let expectation = self.expectation(description: "Async layout completes")
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            // It should have layouted exactly once (coalesced 5 mutations)
+            XCTAssertEqual(layoutCount, 1)
+            expectation.fulfill()
+        }
+        
+        self.wait(for: [expectation], timeout: 2.0)
+    }
 }
