@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 21:39 | claude | 审核并合并 Antigravity 交付的 PERF-3(排版异步化+防抖)。改法：AppState 新增 isAsync 开关(默认非测试环境异步)、layo
+- **分支**：dev
+- **概述**：审核并合并 Antigravity 交付的 PERF-3(排版异步化+防抖)。改法：AppState 新增 isAsync 开关(默认非测试环境异步)、layoutVersion 版本号防止旧异步结果覆盖新状态、快照 project/pdfExportOptions/currentPageNumber 后在后台线程跑 layout+baseline+preflight+proposePlans，完成后主线程按版本号校验才写回；150ms 防抖(asyncAfter)；quality history 写回加 isUpdatingQualityHistory 标志防止 didSet 递归重排；新增 testAsyncDebouncedLayout 验证连续 5 次编辑合并成 1 次实际排版。代码审查确认：快照避免跨线程读写共享可变状态、DispatchWorkItem 自引用取消检查正确、测试默认走同步分支不受影响。build+test(277)+review-idml.sh(8/8)全绿后合入 dev(276ee00)并推送，AG 工作副本已切回 ag-lane 并同步到最新 dev。
+- **改动文件**：Merge commit 276ee00(dev)：Sources/LayoutDApp/AppState.swift、Tests/LayoutDAppTests/AppStateTests.swift、.ai/QUEUE.md(PERF-3 标记完成)、.ai/HANDOFF.md；无冲突。
+- **检查**：swift build: pass; swift test: pass(277 tests，含新增防抖测试); review-idml.sh: 8/8 PASS——均在 AG 工作副本(合并前)+主仓库 dev(合并后)各跑一遍。PERF-1 基准 161页/1187ms，与合并前基线(~1179-1203ms)一致，符合预期(PERF-3 优化的是连续操作场景，不改变单次全量排版耗时)。
+- **下一步**：PERF-3 是性能优化，无用户可见功能变化，暂不阻塞合 main，等下一批一起过用户视觉验收（可请用户主观感受一下连续拖拽/连续打字是否比以前流畅）。Antigravity 下一个可领的任务是队列里紧接着的 PERF-4(引擎测量改造，风险最高单独一棒)，其后是 SPLIT-GUI。
+
 ## 2026-07-05 21:33 | antigravity | 【PERF-3 排版异步化与防抖已落地】基于 DispatchWorkItem 重构 AppState.recalculateLayout，将排版、prefli
 - **分支**：feature/ag-perf3-async-layout
 - **概述**：【PERF-3 排版异步化与防抖已落地】基于 DispatchWorkItem 重构 AppState.recalculateLayout，将排版、preflight 报告生成和 AI 方案提案后台化（通过 userInitiated 队列），并在主线程以 layoutVersion 单调版本号守卫合并以防 GUI 竞态；引入了 0.15 秒（150ms）连续编辑操作防抖；首帧及 XCTest 测试环境能够自动检测并完美回退为同步模式，保护了全部单元测试。新增 testAsyncDebouncedLayout 测试锁定防抖合并与异步计算行为。
