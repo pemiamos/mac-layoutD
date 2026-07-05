@@ -3,6 +3,16 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 22:15 | antigravity | 【SPLIT-GUI 巨型 GUI 文件拆分已完成】纯重构且行为零回归，分三个 commit 提交并推送
+- **分支**：feature/ag-split-gui
+- **概述**：完成了对三个巨型 GUI 文件的拆分，保证所有模块正常运行及排版一致性：
+  1. `main.swift`：拆分出 `AppDelegate.swift`、`AppDelegate+Menu.swift`、`WorkspaceViewController.swift`、`ExportSettingsViews.swift`，主入口仅保留 CLI 排版/导出与应用启动逻辑。
+  2. `InspectorView.swift`：按功能区拆分出 `InspectorView+Issues.swift`、`InspectorView+Styles.swift`、`InspectorView+Assets.swift`、`InspectorView+Quality.swift` 等 subview 扩展。
+  3. `CanvasView.swift`：拆分出 `CanvasView+Drawing.swift`（CoreGraphics/CoreText 绘制与 CMYK 软打样）和 `CanvasView+Interaction.swift`（鼠标键盘交互与内联文本编辑器）。
+- **改动文件**：`Sources/LayoutDApp/main.swift`、`Sources/LayoutDApp/InspectorView.swift`、`Sources/LayoutDApp/CanvasView.swift`，并在同目录下新建了 10 个对应的子 Swift 文件。
+- **检查**：编译通过 (`swift build`)，单元测试全部通过 (`swift test` 280/280)，IDML 端到端回归测试全部通过 (`review-idml.sh` 8/8 PASS)，全书排版冷基准无变化（161 页 / 1004 ms）。
+- **下一步**：本阶段 GUI 文件模块化拆分已完工，已生成三个 commit 并推送到 feature/ag-split-gui 分支，等待主车道/Claude 审核并合入 dev。
+
 ## 2026-07-05 22:04 | claude | 给 Codex 道补充下一批任务 + 处理 AG 道 PERF-4b 去留决定(commit b62e0f8)。Codex 队列此前已清空(仅 E3-8 暂缓)
 - **分支**：dev
 - **概述**：给 Codex 道补充下一批任务 + 处理 AG 道 PERF-4b 去留决定(commit b62e0f8)。Codex 队列此前已清空(仅 E3-8 暂缓),盘点 Sources/LayoutDImport/* 发现两个真实缺口:①DOCXBookImporter.swift 完全不解析脚注(零匹配"footnote"),真实书稿常见 .docx 带脚注时会静默丢失,而 Markdown 侧已支持且 IDML 导出侧 E3-7 原生 Footnote 早已验收通过,只差 DOCX 打通——新增 IMP-4。②IMP-2 遗留:DOCXBookImporter.swift:102 把内嵌图片写到源 docx 同级新建的 images/ 文件夹,污染用户文件组织——新增收尾任务。③review-idml.sh 端到端探针目前只覆盖 Markdown 路径,DOCX 导入链路全靠单测无探针兜底——新增 GUARD-3(建议顺序 IMP-4→GUARD-3)。AG 道:用户确认 PERF-4a 的 16% 提升已经够用,4b(二分改单次扫描,高风险)明确暂缓,已按 E3-8 先例用删除线+⏸标记,AG 下一个自动领到的任务顺位变为 SPLIT-GUI(巨型 GUI 文件拆分)。纯文档改动,未跑代码检查(无需要)。
