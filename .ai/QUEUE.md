@@ -60,21 +60,22 @@
 
 ---
 
-## Claude 道（性能批 + 高风险导出 + 集成）
+## Claude 道（灌版主线 + 高风险导出 + 集成）
 
-> 2026-07-04 全项目 review 立项「性能批」：根因是每次改动全书重排两遍+preflight 同步跑在界面线程（AppState.recalculateLayout），书稿变大会卡。顺序做、每步靠 PERF-1 的基准数字验证。
+> **2026-07-06 定位校准（见 DECISIONS）**：layoutD 交付「初排灌版」给 InDesign，不替代 InDesign。开发价值标准 = 文流/样式/视觉规范/CMYK 高完成度迁移进 InDesign、给人工调整省时间。可编辑性 > 逐像素冻结（InDesign 里漂移可人工调校）。脚注/傍点/表格深化 = 初排细枝末节，不再投入。
 
-- [ ] **🔴 BUG-1 跨段落脚注编号全错（高优先级，既存缺陷非今日回归）** — 2026-07-06 用户在 InDesign 里验收 IMP-4 时发现。
-  - **现象**：两条脚注只要不在同一段落里，导出 IDML 后 InDesign 里编号都显示"1"（应为 1/2/3...）。
-  - **根因**：本项目 IDML 导出是"一段一 Story、逐帧独立、完全不 threaded"（`NextTextFrame`/`PreviousTextFrame` 恒为 `"n"`）；InDesign 原生脚注按 Story 为单位自动编号，互不串联的 Story 各自从 1 开始计数。已用两条独立验证复现：① DOCX 路径（`layoutD-脚注验收-DOCX导入.idml`，两段各一条脚注，均显示"1"）；② Markdown 路径（现场造的 2 段式脚注 fixture，同样复现）——证实是导出架构的既存缺陷，**不是 IMP-4/DOCX 或 SPLIT-GUI 引入的回归**，只是这次撞见。E3-7（Markdown 脚注，早已"验收通过"合入 main）的原始验收样例大概率把连续脚注挤在同一段落里，侥幸没测出这条。
-  - **影响范围**：任意真实书稿只要有 2 条以上脚注且分属不同段落（几乎所有正常用法）都会中招，脚注编号功能对真实书稿基本不可用。
-  - **修复方向**：根治需要「threaded story」重构（正文改串接文流，替代"一框一 Story"）——此前在 IDML 体积/性能 语境下就提过，现在从"性能优化"升级为"正确性阻塞项"。短期是否有更轻量的变通（如探索 IDML 是否支持跨 Story 的显式编号覆盖 `Preferences.xml` FootnoteOption，无需整改 threading）待评估，若不可行则直接排队做 threaded story。
-  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`（导出侧）；根治需要 `Sources/LayoutDEngine/LayoutEngine.swift` 配合把同页/同 story 的连续正文块改为串接。
-  - 验收：多段各带一条脚注（≥3 条）导出 IDML，InDesign 里脚注编号连续正确（1/2/3）；`review-idml.sh` 加对应探针（造 2+ 段各一条脚注的 fixture，断言正文脚注引用点位置正确即可，编号本身 InDesign 端渲染探针测不出，仍需人工终验）。
+- [ ] ~~**BUG-1 跨段落脚注编号全错**~~ ⏸ **不修（用户 2026-07-06 决定）**——脚注使用频率极低，初排里属细枝末节，需要时 InDesign 补做很快；且 THREAD-1 落地后 story 结构整个会变，现在修是白修。根因存档：一框一 Story 零串接 → InDesign 原生脚注按 Story 各自从 1 编号（Markdown/DOCX 两路径均复现，非 IMP-4/SPLIT-GUI 回归）。
+- [ ] **THREAD-1a 串接文流 spike（先探路，一小棒）** — 2026-07-06 立项，**灌版定位下的最高优先级**。
+  - 背景：现状"一段一 Story、一框一 Story、零串接"（`NextTextFrame`/`PreviousTextFrame` 恒 `"n"`），demo 4 页即 21 story/21 框，300 页书≈1500 个。更根本的是交付物不是「可编辑的文流」——编辑在 InDesign 里插一句话，后文不会自动流动，灌版价值大打折扣。
+  - 目标：手工/脚本造一份最小 threaded 样张（一章正文 3-5 页：一个 Story + 每页一个 TextFrame 用 Previous/NextTextFrame 串接，框坐标仍用引擎算好的值），InDesign 打开人工验证三件事：① 文流可编辑（中间插一段字，后文自动流过页界）；② 打开时版面漂移程度可接受（漂移允许存在，人工调校是预期内工作）；③ 样式/复合字体/约物/基线在串接结构下依旧生效。
+  - 验收：spike 样张 InDesign 人工验证通过 → 写清结构模板（Story 粒度=章；章名/概述随文流入 Story；抽言/图/图注仍独立框）→ 立 THREAD-1b。不通过 → 记录失败细节，评估旁路（仅同页正文合并 story 等轻量减对象方案）。
+- [ ] **THREAD-1b 串接文流全量实现**（THREAD-1a 通过后）：IDMLExporter 正文改按章出 Story、逐页框 Previous/NextTextFrame 串接；LayoutEngine 提供每页正文框的串接分组信息。验收：全书导出 story 数按章计不按段计；`review-idml.sh` 加 GUARD-4 探针（串接链完整、无孤儿框）；InDesign 人工验证灌版可编辑。
+- [ ] **MASTER-1 主页交付**（THREAD-1 之后，同文件避免冲突）：版心/栏参考、自动页码（CurrentPageNumber 变量）、页眉书名/章名放 A-主页，正文页应用主页——编辑改页码位置只动主页一处。现状疑似页码按静态文本逐页画，动手前先核实。文件：`IDMLExporter.swift`。验收：InDesign 里主页面板见 A-主页带自动页码，正文页页码随主页变。
+- [ ] **SPREAD-1 对页合并 Spread**（THREAD-1 之后）：per-page Spread 改真对页 spread（左右页同 spread、版心镜像），配合 MASTER-1。验收：InDesign 页面面板呈对页排列，与 layoutD 预览一致。
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
 - [x] **PERF-2 baseline 布局缓存** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。对照版只在内容/样式真变时重排（比较时剔除 appliedLayoutPlans + qualityMetricsHistory）；纯版面方案操作/undo/redo 不再触发第二次全书排版，单次改动成本约减半。加 baselineLayoutCount 测试钩子+缓存单测。
-- [ ] **B1-IDML 导出侧图文绕排**（配对 B1）：图片框输出 `TextWrapPreference` 让 InDesign 也绕排。文件：`IDMLExporter.swift`。验收：解包含 TextWrapPreference、InDesign 打开绕排生效（用户肉眼）；`review-idml.sh` PASS。
-- [ ] **SPLIT-ENGINE LayoutEngine.swift 拆分**（1600+ 行，纯搬家不改逻辑；放性能批之后避免叠加冲突）。
+- [ ] **B1-IDML 导出侧图文绕排**（次优先，THREAD-1 批之后顺带做——绕排影响文流走向，属灌版相关但可后补）：图片框输出 `TextWrapPreference` 让 InDesign 也绕排。文件：`IDMLExporter.swift`。验收：解包含 TextWrapPreference、InDesign 打开绕排生效（用户肉眼）；`review-idml.sh` PASS。
+- [ ] **SPLIT-ENGINE LayoutEngine.swift 拆分** ⏳ **挪到 THREAD-1 批全部落地之后**（THREAD-1b 要大改引擎与导出，拆分与之叠加必然冲突；纯搬家不急）。
 
 ## Codex 道队列（导入 + 探针）
 
@@ -97,6 +98,7 @@
   - 内嵌图片不再写到源 `.docx` 同级 `images/`，改写系统临时目录下唯一 `layoutd-docx-assets-*/images`；`Asset.fileName` 仍保持 `images/<name>` 引用名；顺带规范化 `word/media` 相对路径（`normalizedWordEntryPath` 处理 `../`）。
 - [x] **GUARD-3 DOCX 端到端探针进 review-idml.sh** — ✅ Codex @ 同分支（`3f84c77`），Claude 已合 dev
   - 探针现场用 python3 造最小 OOXML（粗斜体/内嵌图/脚注）走完整 DOCX 导入→IDML→解包，断言 FauxBold/Skew/原生 Footnote/上标不残留/图片进 Links。探针总数 8→10 全过。
+- [ ] **GUARD-4 串接文流探针** ⏳ **等 THREAD-1b 落地后再领（现在做会断言一个还不存在的结构）**：`review-idml.sh` 断言正文框 Previous/NextTextFrame 串接链完整（可从任一链头走到链尾）、story 数按章计不按段计、无孤儿正文框。文件：`scripts/review-idml.sh`。验收：探针在 THREAD-1b 后的 dev PASS；人为断开一处串接时 FAIL（自证有效）；整脚本仍 PASS。
 
 ## Antigravity 道队列（预览渲染 + GUI）
 
@@ -132,10 +134,13 @@
   - 目标：`facingPages` 开启时 Canvas/PDF/PNG 左右页并排、版心镜像（订口内侧）；关闭时与现状一致。
   - 文件：`LayoutEngine.swift`、`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
   - 验收：对开稿导 PNG 左右页镜像正确；非对开零回归；单测断言镜像边距；`review-idml.sh` PASS。
-- [x] **SPLIT-GUI 巨型 GUI 文件拆分**（由 AG 于 feature/ag-split-gui 分三棒完成）
+- [x] **SPLIT-GUI 巨型 GUI 文件拆分**（由 AG 于 feature/ag-split-gui 分三棒完成）— ✅ 用户 2026-07-06 GUI 截图抽查通过，已随批合 main(`0bbda6c`)。
   - 目标：`main.swift`(1500 行，拆出 AppDelegate/菜单/WorkspaceViewController/CLI 各自文件)、`InspectorView.swift`(1600 行，按面板 section 拆)、`CanvasView.swift`(1400 行，拆出工具交互/绘制)。
   - 文件：`Sources/LayoutDApp/*`。
   - 验收：全部测试零修改通过；`review-idml.sh` PASS；GUI 行为无变化（拆完 Claude 出包给用户抽查）。
+- [ ] **FIX-CANVAS-1 画布图片标题前泄漏资产 id**（小修）：用户 2026-07-06 GUI 抽查截图发现画布上示意图标题显示为「cell-d细胞结构示意」——"cell-d" 疑似资产 id/文件名前缀混进了标题渲染（InDesign 里打开同一文档无此前缀，仅画布预览有）。查 `CanvasView+Drawing.swift` 图片占位/标题绘制路径，只画标题本体。
+  - 文件：`Sources/LayoutDApp/CanvasView+Drawing.swift`（或相关渲染函数所在文件）。
+  - 验收：画布显示「细胞结构示意」无 id 前缀；PDF/PNG 导出同步检查无此问题；全部测试/探针 PASS。
 
 ## Backlog（按车道路由）
 
