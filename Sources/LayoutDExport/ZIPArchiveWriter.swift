@@ -1,10 +1,13 @@
 import Foundation
+import Compression
 
 /// Minimal in-process ZIP32 writer used by IDML packaging.
 ///
-/// IDML requires `mimetype` to be the first entry and stored without compression. The caller
-/// controls entry order; this writer stores every entry, avoiding an external zip executable and
-/// keeping the container implementation deterministic.
+/// IDML requires `mimetype` to be the first entry and stored without compression. Every other
+/// entry is Deflate-compressed (matching what InDesign itself writes), which shrinks the highly
+/// repetitive IDML XML by ~80% and keeps the container small on disk. The caller controls entry
+/// order; `mimetype` is detected by path and left stored. Falls back to stored for any entry that
+/// does not compress smaller (e.g. tiny or already-compressed payloads).
 struct ZIPArchiveWriter {
     struct Entry {
         let path: String
@@ -37,7 +40,9 @@ struct ZIPArchiveWriter {
     private struct CentralRecord {
         let path: Data
         let crc32: UInt32
-        let size: UInt32
+        let compressedSize: UInt32
+        let uncompressedSize: UInt32
+        let method: UInt16
         let localHeaderOffset: UInt32
     }
 
@@ -72,26 +77,40 @@ struct ZIPArchiveWriter {
                 throw ArchiveError.archiveTooLarge
             }
 
-            let size = UInt32(entry.data.count)
+            let uncompressedSize = UInt32(entry.data.count)
             let checksum = crc32(entry.data)
             let localHeaderOffset = UInt32(archive.count)
+
+            // `mimetype` must stay stored per the IDML/OCF spec; everything else Deflates when it helps.
+            let payload: Data
+            let method: UInt16
+            if entry.path != "mimetype", let compressed = deflate(entry.data) {
+                payload = compressed
+                method = 8 // Deflate
+            } else {
+                payload = entry.data
+                method = 0 // Stored
+            }
+            let compressedSize = UInt32(payload.count)
 
             archive.appendLE(UInt32(0x0403_4b50)) // local file header signature
             archive.appendLE(UInt16(20))          // version needed to extract
             archive.appendLE(UInt16(0x0800))      // UTF-8 path
-            archive.appendLE(UInt16(0))           // stored (no compression)
+            archive.appendLE(method)              // compression method
             archive.appendLE(UInt16(0))           // DOS time
             archive.appendLE(UInt16(0x0021))      // DOS date: 1980-01-01
             archive.appendLE(checksum)
-            archive.appendLE(size)
-            archive.appendLE(size)
+            archive.appendLE(compressedSize)
+            archive.appendLE(uncompressedSize)
             archive.appendLE(UInt16(path.count))
             archive.appendLE(UInt16(0))           // extra field length
             archive.append(path)
-            archive.append(entry.data)
+            archive.append(payload)
 
             centralRecords.append(
-                CentralRecord(path: path, crc32: checksum, size: size, localHeaderOffset: localHeaderOffset)
+                CentralRecord(path: path, crc32: checksum, compressedSize: compressedSize,
+                              uncompressedSize: uncompressedSize, method: method,
+                              localHeaderOffset: localHeaderOffset)
             )
         }
 
@@ -103,12 +122,12 @@ struct ZIPArchiveWriter {
             archive.appendLE(UInt16(20))          // version made by
             archive.appendLE(UInt16(20))          // version needed to extract
             archive.appendLE(UInt16(0x0800))      // UTF-8 path
-            archive.appendLE(UInt16(0))           // stored (no compression)
+            archive.appendLE(record.method)       // compression method
             archive.appendLE(UInt16(0))
             archive.appendLE(UInt16(0x0021))
             archive.appendLE(record.crc32)
-            archive.appendLE(record.size)
-            archive.appendLE(record.size)
+            archive.appendLE(record.compressedSize)
+            archive.appendLE(record.uncompressedSize)
             archive.appendLE(UInt16(record.path.count))
             archive.appendLE(UInt16(0))           // extra field length
             archive.appendLE(UInt16(0))           // comment length
@@ -143,6 +162,29 @@ struct ZIPArchiveWriter {
         } else {
             try fileManager.moveItem(at: temporaryURL, to: outputURL)
         }
+    }
+
+    /// Raw DEFLATE (RFC 1951) via Apple's Compression framework — `COMPRESSION_ZLIB` emits the
+    /// bare deflate stream ZIP method 8 expects (no zlib header/adler checksum). Returns nil when
+    /// the input is empty or does not shrink, so the caller falls back to storing it uncompressed.
+    private static func deflate(_ data: Data) -> Data? {
+        guard !data.isEmpty else { return nil }
+        let capacity = data.count
+        var destination = Data(count: capacity)
+        let written = destination.withUnsafeMutableBytes { destinationBuffer -> Int in
+            data.withUnsafeBytes { sourceBuffer -> Int in
+                guard let destinationBase = destinationBuffer.bindMemory(to: UInt8.self).baseAddress,
+                      let sourceBase = sourceBuffer.bindMemory(to: UInt8.self).baseAddress else {
+                    return 0
+                }
+                return compression_encode_buffer(destinationBase, capacity,
+                                                 sourceBase, data.count,
+                                                 nil, COMPRESSION_ZLIB)
+            }
+        }
+        guard written > 0, written < data.count else { return nil }
+        destination.removeSubrange(written..<destination.count)
+        return destination
     }
 
     private static func crc32(_ data: Data) -> UInt32 {
