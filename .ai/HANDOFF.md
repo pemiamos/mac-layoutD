@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 22:04 | claude | 给 Codex 道补充下一批任务 + 处理 AG 道 PERF-4b 去留决定(commit b62e0f8)。Codex 队列此前已清空(仅 E3-8 暂缓)
+- **分支**：dev
+- **概述**：给 Codex 道补充下一批任务 + 处理 AG 道 PERF-4b 去留决定(commit b62e0f8)。Codex 队列此前已清空(仅 E3-8 暂缓),盘点 Sources/LayoutDImport/* 发现两个真实缺口:①DOCXBookImporter.swift 完全不解析脚注(零匹配"footnote"),真实书稿常见 .docx 带脚注时会静默丢失,而 Markdown 侧已支持且 IDML 导出侧 E3-7 原生 Footnote 早已验收通过,只差 DOCX 打通——新增 IMP-4。②IMP-2 遗留:DOCXBookImporter.swift:102 把内嵌图片写到源 docx 同级新建的 images/ 文件夹,污染用户文件组织——新增收尾任务。③review-idml.sh 端到端探针目前只覆盖 Markdown 路径,DOCX 导入链路全靠单测无探针兜底——新增 GUARD-3(建议顺序 IMP-4→GUARD-3)。AG 道:用户确认 PERF-4a 的 16% 提升已经够用,4b(二分改单次扫描,高风险)明确暂缓,已按 E3-8 先例用删除线+⏸标记,AG 下一个自动领到的任务顺位变为 SPLIT-GUI(巨型 GUI 文件拆分)。纯文档改动,未跑代码检查(无需要)。
+- **改动文件**：.ai/QUEUE.md(新增 Codex 道 IMP-4/IMP-2收尾/GUARD-3 三项;AG 道 PERF-4b 标记暂缓)
+- **检查**：纯文档改动,不涉及代码,未跑 build/test/review-idml.sh。
+- **下一步**：Codex 下次唤起会按队列顺序领到 IMP-4(DOCX 脚注导入);AG 下次唤起会跳过已暂缓的 4b 直接领到 SPLIT-GUI。若日后书稿变大到 4a 的 16% 提升不够用,再重新评估是否要做 4b(硬约束②仍然有效——动手前必须先扩 golden 语料覆盖首行缩进/竖排/行内格式/图片环绕四类)。
+
 ## 2026-07-05 21:59 | claude | 审核并合并 Antigravity 交付的 PERF-4a(测高缓存)。上一棒我 review AG 的 PERF-4 方案后拆成 4a/4b 并追加两条硬约束
 - **分支**：dev
 - **概述**：审核并合并 Antigravity 交付的 PERF-4a(测高缓存)。上一棒我 review AG 的 PERF-4 方案后拆成 4a/4b 并追加两条硬约束,4a 的硬约束①是"缓存键必须含完整复合字体映射指纹,否则 fontName/fontSize 相同但 compositeFont 不同的样式会撞键静默算错分页"。审核 AG 实现(feature/ag-perf4a-cache 41ee1ad):新增 LayoutHeightCache(NSLock 保护的线程安全单例),缓存键含 text/fontName/fontSize/lineHeight/firstLineIndent/layoutDirection/width/inlineRuns/compositeFont 全部字段,完整满足硬约束①;为使 Key 可 Hashable,顺带给 CompositeFontMapping/CompositeFontClass/InlineRun 补了 Hashable conformance(InlineRun 含 emphasis,符合约束里"标 Hashable 要含 emphasis"的要求);新增 testCompositeFontDifferenceDoesNotCollision 精确覆盖验收要求的"两个 fontName/fontSize 相同但复合字体映射不同的样式,缓存不互相污染";容量上限 5000 条超限整体清空。代码审查通过,合入 dev(merge 55af77a),独立复验(不只信 AG 自报):build+test(280/0)+review-idml.sh(8/8)全绿,并单独重跑 PerformanceBenchmarkTests 得 161页/992ms,相较基线(~1187ms)降约16%,与 AG 自报 17% 吻合,非假数据。
