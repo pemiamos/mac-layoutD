@@ -995,17 +995,17 @@ final class CanvasView: NSView {
         project?.pageSetup.colorSpace == .cmyk
     }
 
-    /// Soft-proof: in CMYK mode, render colors through device CMYK so RGB fills
-    /// show their duller CMYK appearance and the canvas matches InDesign instead
-    /// of showing the vivid RGB. A no-op in RGB mode.
+    /// Soft-proof: in CMYK mode, render colors through the ICC CMYK profile so
+    /// RGB fills show their duller print appearance and the canvas matches
+    /// InDesign instead of showing the vivid RGB. A no-op in RGB mode.
     private func proofed(_ color: NSColor?) -> NSColor? {
         guard cmykProof, let color else { return color }
-        return color.usingColorSpace(.deviceCMYK) ?? color
+        return ICCCMYKProof.proof(color)
     }
 
     /// Text soft-proof. Mirrors the exporter's "near-black text → K100" rule so
     /// the canvas shows body/heading type as the same clean single-black InDesign
-    /// will print, rather than a dull rich-black; other text is device-CMYK
+    /// will print, rather than a dull rich-black; other text is ICC-CMYK
     /// proofed like everything else.
     private func proofedText(_ color: NSColor?) -> NSColor? {
         guard cmykProof, let color else { return color }
@@ -1013,7 +1013,7 @@ final class CanvasView: NSView {
            max(rgb.redComponent, rgb.greenComponent, rgb.blueComponent) <= 0.25 {
             return NSColor(deviceCyan: 0, magenta: 0, yellow: 0, black: 1, alpha: 1)
         }
-        return color.usingColorSpace(.deviceCMYK) ?? color
+        return ICCCMYKProof.proof(color)
     }
 
     private func drawAssetPlaceholder(assetId: UUID, isLeftHalf: Bool?, project: BookProject, rect: CGRect, maskShape: ImageMaskShape?) {
@@ -2058,16 +2058,53 @@ final class InlineTextEditorView: NSTextView {
 
 extension NSColor {
     static func fromHex(_ hex: String) -> NSColor? {
-        // "hex" now also carries CMYK (`cmyk(c,m,y,k)`); CMYK renders via the
-        // device-CMYK space as a screen approximation on the canvas.
+        // "hex" now also carries CMYK (`cmyk(c,m,y,k)`); CMYK renders through
+        // the ICC-managed proof space so the canvas matches InDesign's print
+        // simulation instead of AppKit's more saturated device-CMYK space.
         guard let color = PrintColor(string: hex) else { return nil }
         switch color {
         case let .rgb(r, g, b):
             return NSColor(calibratedRed: CGFloat(r) / 255, green: CGFloat(g) / 255,
                            blue: CGFloat(b) / 255, alpha: 1.0)
         case let .cmyk(c, m, y, k):
-            return NSColor(deviceCyan: CGFloat(c) / 100, magenta: CGFloat(m) / 100,
-                           yellow: CGFloat(y) / 100, black: CGFloat(k) / 100, alpha: 1.0)
+            return ICCCMYKProof.rgb(c: c, m: m, y: y, k: k)
         }
+    }
+}
+
+/// ICC-managed CMYK↔RGB soft-proofing so the canvas approximates InDesign's
+/// print simulation rather than AppKit's `.deviceCMYK`/`.deviceRGB`, which are
+/// noticeably more saturated than a real print profile. Loads the system's
+/// Generic CMYK Profile (same one `PDFExporter` embeds as a PDF/X output
+/// intent) once and reuses it; falls back to the device-CMYK approximation if
+/// the profile can't be loaded.
+enum ICCCMYKProof {
+    private static let cmykSpace: CGColorSpace? = {
+        let path = "/System/Library/ColorSync/Profiles/Generic CMYK Profile.icc"
+        guard let data = FileManager.default.contents(atPath: path) else { return nil }
+        return CGColorSpace(iccData: data as CFData)
+    }()
+
+    /// c/m/y/k in 0...100 → on-screen RGB.
+    static func rgb(c: Double, m: Double, y: Double, k: Double) -> NSColor {
+        let fallback = NSColor(deviceCyan: CGFloat(c) / 100, magenta: CGFloat(m) / 100,
+                                yellow: CGFloat(y) / 100, black: CGFloat(k) / 100, alpha: 1.0)
+        guard let space = cmykSpace,
+              let cgColor = CGColor(colorSpace: space, components: [c / 100, m / 100, y / 100, k / 100, 1.0]),
+              let srgb = cgColor.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil)
+        else { return fallback }
+        return NSColor(cgColor: srgb) ?? fallback
+    }
+
+    /// Soft-proof an on-screen RGB color as if it were printed in CMYK: round
+    /// -trips it through the ICC CMYK profile and back. A no-op (returns the
+    /// input) if the profile can't be loaded.
+    static func proof(_ color: NSColor) -> NSColor {
+        guard let space = cmykSpace,
+              let srgbColor = color.usingColorSpace(.deviceRGB)?.cgColor,
+              let cmykColor = srgbColor.converted(to: space, intent: .defaultIntent, options: nil),
+              let backToSRGB = cmykColor.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil)
+        else { return color }
+        return NSColor(cgColor: backToSRGB) ?? color
     }
 }
