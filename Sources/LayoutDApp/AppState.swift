@@ -1152,6 +1152,9 @@ final class AppState: ObservableObject {
     // 一路保持到 IDML 导出;画布即时预览用 displayRGB 近似色覆盖。
 
     private func previewColor(_ pc: PrintColor) -> Color {
+        if case let .cmyk(c, m, y, k) = pc {
+            return Color(nsColor: ICCCMYKProof.rgb(c: c, m: m, y: y, k: k))
+        }
         let c = pc.displayRGB
         return Color(.sRGB, red: c.r, green: c.g, blue: c.b, opacity: 1)
     }
