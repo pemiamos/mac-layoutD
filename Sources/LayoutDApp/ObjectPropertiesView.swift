@@ -131,18 +131,21 @@ struct ObjectPropertiesView: View {
         // Appearance (fill / stroke, plus text color for text frames)
         sectionLabel("外观")
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                ColorPicker("填充", selection: Binding(
-                    get: { colorFromHex(frame.backgroundColorHex) ?? Color.white },
-                    set: { state.setSelectedFrameFillColor($0) }
-                ), supportsOpacity: false)
-                multiSpaceButton(title: "填充",
-                    current: pickerColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
-                    apply: { state.setSelectedFrameFillColor($0) })
-                Spacer()
-                Button("无填充") { state.clearSelectedFrameFillColor() }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
+            // A line has no fill — only a stroke (its colour + weight). Hide 填充 for it.
+            if frame.kind != .line {
+                HStack {
+                    ColorPicker("填充", selection: Binding(
+                        get: { colorFromHex(frame.backgroundColorHex) ?? Color.white },
+                        set: { state.setSelectedFrameFillColor($0) }
+                    ), supportsOpacity: false)
+                    multiSpaceButton(title: "填充",
+                        current: pickerColor(frame.backgroundColorHex, fallback: .rgb(r: 255, g: 255, b: 255)),
+                        apply: { state.setSelectedFrameFillColor($0) })
+                    Spacer()
+                    Button("无填充") { state.clearSelectedFrameFillColor() }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                }
             }
 
             HStack {
@@ -157,6 +160,35 @@ struct ObjectPropertiesView: View {
                 Button("无描边") { state.clearSelectedFrameStrokeColor() }
                     .buttonStyle(.borderless)
                     .font(.caption)
+            }
+
+            // Stroke weight — InDesign-style preset list (0 / 0.25 / 0.5 / 0.75 / 1 …).
+            HStack {
+                Text("粗细")
+                    .frame(width: 40, alignment: .leading)
+                Menu {
+                    ForEach(strokeWeightOptions, id: \.self) { w in
+                        Button {
+                            state.setSelectedFrameStrokeWidth(w)
+                        } label: {
+                            if abs((frame.strokeWidth ?? 0) - w) < 0.001 {
+                                Label(strokeWeightLabel(w), systemImage: "checkmark")
+                            } else {
+                                Text(strokeWeightLabel(w))
+                            }
+                        }
+                    }
+                } label: {
+                    Text(strokeWeightLabel(frame.strokeWidth ?? 0))
+                }
+                .frame(width: 96)
+                Stepper("", onIncrement: {
+                    state.setSelectedFrameStrokeWidth(nextStrokeWeight(above: frame.strokeWidth ?? 0))
+                }, onDecrement: {
+                    state.setSelectedFrameStrokeWidth(nextStrokeWeight(below: frame.strokeWidth ?? 0))
+                })
+                .labelsHidden()
+                Spacer()
             }
 
             if frame.kind == .text || frame.kind == .caption {
@@ -397,6 +429,25 @@ struct ObjectPropertiesView: View {
         points / 72 * 25.4
     }
 
+    /// InDesign 描边粗细预设（点）。
+    private var strokeWeightOptions: [Double] {
+        [0, 0.25, 0.5, 0.75, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    }
+
+    private func strokeWeightLabel(_ w: Double) -> String {
+        // "%g" 去掉多余的零：0.25 点 / 1 点 / 2.5 点。
+        String(format: "%g 点", w)
+    }
+
+    /// Stepper 上/下一档：吸附到最接近的预设，越过一格。
+    private func nextStrokeWeight(above current: Double) -> Double {
+        strokeWeightOptions.first { $0 > current + 0.001 } ?? strokeWeightOptions.last ?? current
+    }
+
+    private func nextStrokeWeight(below current: Double) -> Double {
+        strokeWeightOptions.last { $0 < current - 0.001 } ?? strokeWeightOptions.first ?? current
+    }
+
     private func icon(for kind: PageFrameKind) -> String {
         switch kind {
         case .text, .footnote, .sideNote, .runningHeader: return "text.alignleft"
@@ -405,6 +456,8 @@ struct ObjectPropertiesView: View {
         case .callout: return "rectangle.inset.filled"
         case .table: return "tablecells"
         case .footnoteDivider: return "minus"
+        case .rectangle: return "rectangle"
+        case .line: return "line.diagonal"
         }
     }
 
@@ -419,6 +472,8 @@ struct ObjectPropertiesView: View {
         case .footnoteDivider: return "脚注分界线"
         case .sideNote: return "旁注信息"
         case .runningHeader: return "页眉"
+        case .rectangle: return "矩形"
+        case .line: return "直线"
         }
     }
 }

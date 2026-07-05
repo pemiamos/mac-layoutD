@@ -302,6 +302,8 @@ final class AppState: ObservableObject {
             case .footnoteDivider: kind = .component
             case .sideNote: kind = .text
             case .runningHeader: kind = .text
+            case .rectangle: kind = .rectangle
+            case .line: kind = .line
             }
             
             let ref: ContentReference
@@ -351,11 +353,29 @@ final class AppState: ObservableObject {
 
         let contentRef: ContentReference
         let role: String
+        // Shapes carry the current fill/stroke so they're visible the moment they're
+        // drawn (a colorless box would be invisible). A rectangle takes both fill and
+        // stroke; a line is a true stroke — no fill, its colour and weight ARE the
+        // stroke, drawn as a centered segment (see CanvasView/exporters).
+        var backgroundColorHex: String? = nil
+        var strokeColorHex: String? = nil
+        var strokeWidth: Double? = nil
         switch kind {
         case .image:
             guard let firstAsset = project.assets.first else { return false }
             contentRef = .asset(firstAsset.id)
             role = PageFrameKind.image.rawValue
+        case .rectangle:
+            contentRef = .generated("")
+            role = PageFrameKind.rectangle.rawValue
+            if isFillActive { backgroundColorHex = Self.printColor(from: activeFillColor).storageString }
+            strokeColorHex = Self.printColor(from: activeStrokeColor).storageString
+            strokeWidth = 1.0
+        case .line:
+            contentRef = .generated("")
+            role = PageFrameKind.line.rawValue
+            strokeColorHex = Self.printColor(from: activeStrokeColor).storageString
+            strokeWidth = 1.0
         default:
             contentRef = .generated("")
             role = PageFrameKind.text.rawValue
@@ -372,9 +392,24 @@ final class AppState: ObservableObject {
             width: rect.width / pageSize.width,
             height: rect.height / pageSize.height
         )
-        let block = LayoutPlanBlock(kind: kind, role: role, frame: normRect, contentReference: contentRef)
+        let block = LayoutPlanBlock(
+            kind: kind,
+            role: role,
+            frame: normRect,
+            contentReference: contentRef,
+            backgroundColorHex: backgroundColorHex,
+            strokeColorHex: strokeColorHex,
+            strokeWidth: strokeWidth
+        )
         plan.blocks.append(block)
-        plan.notes = [kind == .image ? "手动绘制图像框" : "手动绘制文本框"]
+        let noteName: String
+        switch kind {
+        case .image: noteName = "手动绘制图像框"
+        case .rectangle: noteName = "手动绘制矩形"
+        case .line: noteName = "手动绘制直线"
+        default: noteName = "手动绘制文本框"
+        }
+        plan.notes = [noteName]
         plans[pageNum] = plan
         currentProject.safeAppliedLayoutPlans = plans
         self.project = currentProject
@@ -1216,8 +1251,48 @@ final class AppState: ObservableObject {
         self.project = currentProject
     }
 
+    /// Sets the selected frame's stroke weight (points), InDesign-style. Writes a
+    /// plan-block override, undoable. Note the weight only shows if a stroke colour
+    /// is also set — matching InDesign, where weight and colour are independent.
+    func setSelectedFrameStrokeWidth(_ width: Double) {
+        commitState()
+        guard let frameId = selectedFrameId,
+              let pageNum = findPageNumber(for: frameId) else { return }
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+        guard let index = plan.blocks.firstIndex(where: { $0.id == frameId }) else { return }
+        plan.blocks[index].strokeWidth = max(width, 0)
+        plan.notes = ["手动修改描边粗细"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
+    }
+
     func updateFrameCoordinate(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {
         updateFrameCoordinatesWithoutUndo(id: id, x: x, y: y, width: width, height: height)
+    }
+
+    /// Commits a line's new bounding rect from an endpoint drag. Uses a tiny minimum
+    /// size (lines are thin by nature) and relies on the drag's begin-grouping for
+    /// undo, so it doesn't push its own undo step.
+    func updateLineGeometry(id: UUID, rect: Rect) {
+        guard let pageNum = findPageNumber(for: id) else { return }
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+        var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+        guard let idx = plan.blocks.firstIndex(where: { $0.id == id }) else { return }
+        var block = plan.blocks[idx]
+        block.updateAbsoluteFrame(
+            pageSize: project.pageSetup.pageSize,
+            x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+            minimumSize: 1
+        )
+        plan.blocks[idx] = block
+        plan.notes = ["手动调整直线端点"]
+        plans[pageNum] = plan
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
     }
 
     private func updateFrameCoordinatesWithoutUndo(id: UUID, x: Double?, y: Double?, width: Double?, height: Double?) {
