@@ -303,16 +303,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = "layoutD - \(launchProject.project.metadata.title)"
-        // Open filling the screen so the canvas has room (the panel dock + toolbar
-        // take a fixed ~360pt; a small window squeezes the canvas to a sliver).
+        // Open at a comfortable default size (not maximized), centered on screen.
+        // The whole app stays visible without filling the display; the user can
+        // zoom the window manually if they want more canvas. Cap to the visible
+        // frame so it always fits on smaller screens.
         window.minSize = NSSize(width: 1024, height: 700)
         window.contentViewController = controller
         window.acceptsMouseMovedEvents = true
+        let preferredSize = NSSize(width: 1280, height: 860)
         if let visibleFrame = NSScreen.main?.visibleFrame {
-            window.setFrame(visibleFrame, display: true)
+            window.setContentSize(NSSize(
+                width: min(preferredSize.width, visibleFrame.width),
+                height: min(preferredSize.height, visibleFrame.height)
+            ))
         } else {
-            window.center()
+            window.setContentSize(preferredSize)
         }
+        window.center()
         
         let toolbar = NSToolbar(identifier: "LayoutDMainToolbar")
         toolbar.delegate = controller
@@ -554,6 +561,7 @@ final class WorkspaceViewController: NSViewController {
     private var sourceDescription: String
     private let canvas = CanvasView()
     private var selectedFrameCancellable: AnyCancellable?
+    private var selectedFrameIdsCancellable: AnyCancellable?
     private var screenModeCancellable: AnyCancellable?
     private var backgroundColorsCancellable: AnyCancellable?
     private var strokeColorsCancellable: AnyCancellable?
@@ -576,7 +584,11 @@ final class WorkspaceViewController: NSViewController {
         self.selectedFrameCancellable = appState.$selectedFrameId.sink { [weak self] frameId in
             self?.canvas.selectedFrameId = frameId
         }
-        
+
+        self.selectedFrameIdsCancellable = appState.$selectedFrameIds.sink { [weak self] ids in
+            self?.canvas.selectedFrameIds = ids
+        }
+
         self.screenModeCancellable = appState.$activeScreenMode.sink { [weak self] mode in
             self?.canvas.activeScreenMode = mode
         }
@@ -646,7 +658,27 @@ final class WorkspaceViewController: NSViewController {
             guard let self else { return }
             self.appState.updateFrameCoordinate(id: frameId, x: x, y: y, width: w, height: h)
         }
-        
+
+        canvas.onToggleSelection = { [weak self] frameId in
+            guard let self else { return }
+            if self.appState.activeTool == .selection || self.appState.activeTool == .directSelection {
+                self.appState.toggleFrameSelection(frameId)
+            }
+        }
+
+        canvas.onMarqueeSelected = { [weak self] ids in
+            guard let self else { return }
+            if self.appState.activeTool == .selection || self.appState.activeTool == .directSelection {
+                self.appState.setSelection(ids)
+            }
+        }
+
+        canvas.onFramesDragged = { [weak self] updates in
+            guard let self else { return }
+            let origins = Dictionary(uniqueKeysWithValues: updates.map { ($0.id, (x: $0.rect.x, y: $0.rect.y)) })
+            self.appState.applyFrameOrigins(origins, note: "手动移动多个元素")
+        }
+
         canvas.onGapDragged = { [weak self] firstId, firstRect, secondId, secondRect in
             guard let self else { return }
             self.appState.updateGapFrames(firstId: firstId, firstRect: firstRect, secondId: secondId, secondRect: secondRect)
@@ -977,6 +1009,27 @@ final class WorkspaceViewController: NSViewController {
         canvas.scrollToPage(number: appState.currentPageNumber)
     }
 
+    /// Wraps a SwiftUI settings view for use as an `NSSavePanel`/`NSOpenPanel`
+    /// `accessoryView`. A bare `NSHostingView` assigned directly as an accessory
+    /// renders correctly but frequently won't receive mouse clicks — the
+    /// checkboxes look frozen (exactly the IDML export symptom). Embedding it in a
+    /// plain, concretely-sized `NSView` container with pinning constraints
+    /// restores hit-testing.
+    private func makeExportAccessoryView<Content: View>(_ content: Content) -> NSView {
+        let hosting = NSHostingView(rootView: content)
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        let size = hosting.fittingSize
+        let container = NSView(frame: NSRect(origin: .zero, size: size))
+        container.addSubview(hosting)
+        NSLayoutConstraint.activate([
+            hosting.topAnchor.constraint(equalTo: container.topAnchor),
+            hosting.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            hosting.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            hosting.widthAnchor.constraint(equalToConstant: size.width)
+        ])
+        return container
+    }
+
     func exportPDF() {
         let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
         let savePanel = NSSavePanel()
@@ -987,8 +1040,7 @@ final class WorkspaceViewController: NSViewController {
 
         let settingsState = PDFExportSettingsState()
         let settingsView = PDFExportSettingsView(state: settingsState)
-        let hostingView = NSHostingView(rootView: settingsView)
-        savePanel.accessoryView = hostingView
+        savePanel.accessoryView = makeExportAccessoryView(settingsView)
 
         savePanel.beginSheetModal(for: view.window!) { [weak self] response in
             guard response == .OK, let url = savePanel.url, let self else {
@@ -1033,7 +1085,7 @@ final class WorkspaceViewController: NSViewController {
 
         let settingsState = PNGExportSettingsState()
         let settingsView = PNGExportSettingsView(state: settingsState)
-        openPanel.accessoryView = NSHostingView(rootView: settingsView)
+        openPanel.accessoryView = makeExportAccessoryView(settingsView)
 
         guard let window = view.window else {
             return
@@ -1071,7 +1123,9 @@ final class WorkspaceViewController: NSViewController {
         savePanel.canCreateDirectories = true
 
         let settingsState = IDMLExportSettingsState()
-        savePanel.accessoryView = NSHostingView(rootView: IDMLExportSettingsView(state: settingsState))
+        // Reflect the document's global color intent as the default.
+        settingsState.cmykColors = appState.project.pageSetup.colorSpace == .cmyk
+        savePanel.accessoryView = makeExportAccessoryView(IDMLExportSettingsView(state: settingsState))
 
         guard let window = view.window else { return }
         savePanel.beginSheetModal(for: window) { [weak self] response in

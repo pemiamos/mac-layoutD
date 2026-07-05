@@ -120,6 +120,56 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(decoded.assets.count, 1)
     }
 
+    func testCustomSwatchesRoundTripAndLegacyDecode() throws {
+        var project = BookProject.sample
+        project.safeCustomSwatches = [
+            PrintSwatch(name: "品牌绿", color: .cmyk(c: 80, m: 20, y: 60, k: 5)),
+            PrintSwatch(name: "标题墨", color: .rgb(r: 23, g: 32, b: 42))
+        ]
+        let data = try ProjectFile.encode(project)
+        let decoded = try ProjectFile.decode(data)
+        XCTAssertEqual(decoded.safeCustomSwatches.count, 2)
+        XCTAssertEqual(decoded.customSwatches?.first?.color, .cmyk(c: 80, m: 20, y: 60, k: 5))
+
+        // 旧文件(无 customSwatches 键)应解出 nil，不报错。
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "customSwatches")
+        let legacyData = try JSONSerialization.data(withJSONObject: json)
+        XCTAssertNil(try ProjectFile.decode(legacyData).customSwatches)
+    }
+
+    func testPrintColorAsCMYKConversion() {
+        // Pure black → K100 (the CMYK-mode text default).
+        XCTAssertEqual(PrintColor.rgb(r: 0, g: 0, b: 0).asCMYK, .cmyk(c: 0, m: 0, y: 0, k: 100))
+        // White → all zeros.
+        XCTAssertEqual(PrintColor.rgb(r: 255, g: 255, b: 255).asCMYK, .cmyk(c: 0, m: 0, y: 0, k: 0))
+        // Pure red → 0/100/100/0 (naive device conversion).
+        XCTAssertEqual(PrintColor.rgb(r: 255, g: 0, b: 0).asCMYK, .cmyk(c: 0, m: 100, y: 100, k: 0))
+        // Already-CMYK passes through untouched.
+        let teal = PrintColor.cmyk(c: 80, m: 20, y: 60, k: 5)
+        XCTAssertEqual(teal.asCMYK, teal)
+    }
+
+    func testPrintColorIsNearBlack() {
+        XCTAssertTrue(PrintColor.rgb(r: 0, g: 0, b: 0).isNearBlack)
+        XCTAssertTrue(PrintColor.rgb(r: 23, g: 32, b: 42).isNearBlack, "#17202A 深海军≈黑,文字应判近黑→K100")
+        XCTAssertFalse(PrintColor.rgb(r: 139, g: 0, b: 0).isNearBlack, "暗红是彩色,不算近黑")
+        XCTAssertFalse(PrintColor.rgb(r: 255, g: 255, b: 255).isNearBlack)
+    }
+
+    func testPageSetupColorSpaceRoundTripsAndDefaultsForLegacy() throws {
+        var setup = PageSetup.scienceBookDefault
+        setup.colorSpace = .cmyk
+        let data = try JSONEncoder().encode(setup)
+        XCTAssertEqual(try JSONDecoder().decode(PageSetup.self, from: data).colorSpace, .cmyk)
+
+        // Old files without the colorSpace key decode as nil (treated as RGB).
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "colorSpace")
+        let legacy = try JSONSerialization.data(withJSONObject: json)
+        XCTAssertNil(try JSONDecoder().decode(PageSetup.self, from: legacy).colorSpace)
+    }
+
     func testTableParsingAndAllocation() throws {
         let tableText = """
         结构    类比    主要作用
@@ -1907,6 +1957,91 @@ private struct StaticPlanProvider: LayoutPlanProvider {
 
     func proposePlans(request: LayoutPlanRequest) throws -> [LayoutPlan] {
         plans
+    }
+}
+
+extension LayoutDCoreTests {
+    func testAlignedFrameOriginSnapsToRegionEdges() {
+        // A 100×40 frame inside a 200×300 region offset at (10, 20).
+        let region = Rect(x: 10, y: 20, width: 200, height: 300)
+        let frame = Rect(x: 55, y: 130, width: 100, height: 40)
+
+        // Horizontal alignments move X only, preserve Y.
+        let left = alignedFrameOrigin(frame: frame, region: region, alignment: .left)
+        XCTAssertEqual(left.x, 10, accuracy: 0.0001)
+        XCTAssertEqual(left.y, 130, accuracy: 0.0001)
+
+        let hCenter = alignedFrameOrigin(frame: frame, region: region, alignment: .horizontalCenter)
+        XCTAssertEqual(hCenter.x, 10 + (200 - 100) / 2, accuracy: 0.0001) // 60
+        XCTAssertEqual(hCenter.y, 130, accuracy: 0.0001)
+
+        let right = alignedFrameOrigin(frame: frame, region: region, alignment: .right)
+        XCTAssertEqual(right.x, 10 + 200 - 100, accuracy: 0.0001) // 110
+        XCTAssertEqual(right.y, 130, accuracy: 0.0001)
+
+        // Vertical alignments move Y only, preserve X.
+        let top = alignedFrameOrigin(frame: frame, region: region, alignment: .top)
+        XCTAssertEqual(top.y, 20, accuracy: 0.0001)
+        XCTAssertEqual(top.x, 55, accuracy: 0.0001)
+
+        let vCenter = alignedFrameOrigin(frame: frame, region: region, alignment: .verticalCenter)
+        XCTAssertEqual(vCenter.y, 20 + (300 - 40) / 2, accuracy: 0.0001) // 150
+        XCTAssertEqual(vCenter.x, 55, accuracy: 0.0001)
+
+        let bottom = alignedFrameOrigin(frame: frame, region: region, alignment: .bottom)
+        XCTAssertEqual(bottom.y, 20 + 300 - 40, accuracy: 0.0001) // 280
+        XCTAssertEqual(bottom.x, 55, accuracy: 0.0001)
+    }
+
+    func testBoundingBoxEnclosesAllRects() {
+        let box = boundingBox(of: [
+            Rect(x: 10, y: 20, width: 30, height: 40),   // → maxX 40, maxY 60
+            Rect(x: 100, y: 5, width: 20, height: 10),   // → maxX 120, minY 5
+            Rect(x: 50, y: 200, width: 10, height: 10)   // → maxY 210
+        ])
+        XCTAssertEqual(box.x, 10, accuracy: 0.0001)
+        XCTAssertEqual(box.y, 5, accuracy: 0.0001)
+        XCTAssertEqual(box.width, 120 - 10, accuracy: 0.0001)
+        XCTAssertEqual(box.height, 210 - 5, accuracy: 0.0001)
+    }
+
+    func testDistributeHorizontalCentersEqualizesSpacing() {
+        let a = UUID(), b = UUID(), c = UUID()
+        // Centers at 10, 15, 100 → after distribution the middle center is the average.
+        let frames: [(id: UUID, rect: Rect)] = [
+            (a, Rect(x: 0, y: 0, width: 20, height: 10)),    // center 10
+            (b, Rect(x: 10, y: 0, width: 10, height: 10)),   // center 15
+            (c, Rect(x: 90, y: 0, width: 20, height: 10))    // center 100
+        ]
+        let out = distributedOrigins(frames: frames, mode: .horizontalCenters)
+        // Extremes unchanged.
+        XCTAssertEqual(out[a]!.x, 0, accuracy: 0.0001)
+        XCTAssertEqual(out[c]!.x, 90, accuracy: 0.0001)
+        // Middle center becomes (10 + 100)/2 = 55 → x = 55 - width/2 = 50.
+        XCTAssertEqual(out[b]!.x, 50, accuracy: 0.0001)
+    }
+
+    func testDistributeHorizontalSpacingEqualizesGaps() {
+        let a = UUID(), b = UUID(), c = UUID()
+        // Widths 10/20/10 across span [0, 100]: free = 100-40 = 60, gap = 30.
+        let frames: [(id: UUID, rect: Rect)] = [
+            (a, Rect(x: 0, y: 0, width: 10, height: 10)),
+            (b, Rect(x: 40, y: 0, width: 20, height: 10)),
+            (c, Rect(x: 90, y: 0, width: 10, height: 10))
+        ]
+        let out = distributedOrigins(frames: frames, mode: .horizontalSpacing)
+        XCTAssertEqual(out[a]!.x, 0, accuracy: 0.0001)        // leftmost fixed
+        XCTAssertEqual(out[b]!.x, 10 + 30, accuracy: 0.0001)  // after a (10) + gap (30)
+        XCTAssertEqual(out[c]!.x, 40 + 20 + 30, accuracy: 0.0001) // ends at 90 → right edge 100
+    }
+
+    func testDistributeNeedsThreeFrames() {
+        let a = UUID(), b = UUID()
+        let frames: [(id: UUID, rect: Rect)] = [
+            (a, Rect(x: 0, y: 0, width: 10, height: 10)),
+            (b, Rect(x: 50, y: 0, width: 10, height: 10))
+        ]
+        XCTAssertTrue(distributedOrigins(frames: frames, mode: .horizontalCenters).isEmpty)
     }
 }
 

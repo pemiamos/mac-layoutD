@@ -72,7 +72,11 @@ public struct IDMLExporter {
                 .map { ($0.id, $0) }
         )
 
-        var ctx = BuildContext(project: project)
+        // The global CMYK intent (or the explicit export toggle) flattens every
+        // RGB swatch to Process CMYK on emit — non-destructively: stored model
+        // values are untouched, only the exported swatches convert.
+        let cmykOutput = options.cmykColors || project.pageSetup.colorSpace == .cmyk
+        var ctx = BuildContext(project: project, cmykOutput: cmykOutput)
         let includesTOC = pages.contains { page in
             page.frames.contains { !($0.tableOfContentsEntries ?? []).isEmpty }
         }
@@ -126,7 +130,22 @@ public struct IDMLExporter {
                     // 普通正文导出，否则 InDesign 会出现两份脚注内容。
                     guard frame.kind != .footnote else { continue }
                     let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !text.isEmpty else { continue }
+                    if text.isEmpty {
+                        // A hand-drawn box: empty text but carrying a fill/stroke.
+                        // Emit it as a rectangle so it isn't silently dropped. A
+                        // truly empty flow frame (no fill, no stroke) stays skipped
+                        // — it would be invisible in InDesign anyway.
+                        let boxFill = frame.backgroundColorHex
+                        let boxStroke = frame.strokeColorHex
+                        if boxFill != nil || boxStroke != nil {
+                            let boxStrokeWidth = frame.strokeWidth ?? (boxStroke != nil ? 1 : 0)
+                            items.append(drawnBoxItem(self: "uBox\(pi)_\(fi)", rect: frame.rect,
+                                                      fillColor: boxFill, strokeColor: boxStroke,
+                                                      strokeWidth: boxStrokeWidth,
+                                                      pageW: pageW, pageH: pageH, dx: dx))
+                        }
+                        continue
+                    }
                     let storySelf = "uStory\(pi)_\(fi)"
                     let style = ctx.resolvedStyle(id: frame.styleId)
                     let styleRef = "ParagraphStyle/\(xmlSafe(style.id))"
@@ -324,6 +343,9 @@ public struct IDMLExporter {
 
     private struct BuildContext {
         let project: BookProject
+        /// When true, RGB swatches are converted to Process CMYK before keying,
+        /// so the whole document exports in a single CMYK color space.
+        let cmykOutput: Bool
         var colorOrder: [String] = []          // 规范化 hex
         var colorName: [String: String] = [:]  // hex -> Color Self
         var fontOrder: [String] = []           // 字体家族顺序(InDesign 索引用的家族名)
@@ -333,20 +355,45 @@ public struct IDMLExporter {
         var compositeFontStyleIds: [String] = []   // 有复合字体、需生成 CompositeFont 的样式 id
         var paragraphStyles: [ParagraphStyle] = []
 
-        init(project: BookProject) {
+        init(project: BookProject, cmykOutput: Bool = false) {
             self.project = project
+            self.cmykOutput = cmykOutput
             // 预置内建黑色。
             colorOrder = ["000000"]
             colorName = ["000000": "Color/Black"]
         }
 
-        mutating func color(_ hex: String) -> String {
-            let norm = Self.normalizeHex(hex)
-            if let n = colorName[norm] { return n }
-            let n = "Color/C\(norm)"
-            colorName[norm] = n
-            colorOrder.append(norm)
-            return n
+        mutating func color(_ raw: String) -> String {
+            // RGB canonicalizes to the same 6-hex key as the legacy path, so
+            // existing RGB swatches keep their exact Self / order. CMYK colors
+            // key on their own canonical string and emit a Space="CMYK" swatch.
+            // NOTE: keying/Self stay in the color's *stored* space so every frame
+            // reference keeps matching; a CMYK output intent only rewrites the
+            // emitted Space/Value/Name in `graphic()`, never the Self.
+            let parsed = PrintColor(string: raw) ?? .rgb(r: 0, g: 0, b: 0)
+            let key = parsed.canonicalString
+            if let n = colorName[key] { return n }
+            let name = parsed.idmlSwatchSelf
+            colorName[key] = name
+            // Built-in Black (RGB #000000 or CMYK 0,0,0,100) reuses the seeded
+            // Color/Black swatch and is never re-emitted in Graphic.xml.
+            if name != "Color/Black" {
+                colorOrder.append(key)
+            }
+            return name
+        }
+
+        /// The text fill color to use, applying the CMYK-mode "black text → K100"
+        /// rule: under a CMYK output intent a near-black text color collapses to
+        /// `#000000` → the built-in `Color/Black` (Space=CMYK 0 0 0 100), so
+        /// body/heading text prints as clean single-black instead of a 4-color
+        /// rich black. Colored text is left untouched.
+        func textColorHex(_ raw: String?) -> String {
+            let hex = raw ?? "#000000"
+            if cmykOutput, let color = PrintColor(string: hex), color.isNearBlack {
+                return "#000000"
+            }
+            return hex
         }
 
         mutating func font(_ name: String) {
@@ -422,7 +469,7 @@ public struct IDMLExporter {
                 ? project.styles.paragraphStyle(id: style.id)
                 : style
             paragraphStyles.append(resolved)
-            _ = color(project.resolvedColorHex(resolved.colorToken) ?? "#000000")
+            _ = color(textColorHex(project.resolvedColorHex(resolved.colorToken)))
             if let cf = resolved.compositeFont, !cf.isEmpty {
                 compositeFontStyleIds.append(resolved.id)
                 // 按枚举固定顺序遍历，而非字典自然序——字典迭代顺序非确定，会让
@@ -521,10 +568,10 @@ public struct IDMLExporter {
 
     // MARK: - 页面项
 
-    private func colorRef(_ hex: String?) -> String {
-        guard let hex else { return "Swatch/None" }
-        let normalized = BuildContext.normalizeHex(hex)
-        return normalized == "000000" ? "Color/Black" : "Color/C\(normalized)"
+    private func colorRef(_ raw: String?) -> String {
+        guard let raw else { return "Swatch/None" }
+        guard let color = PrintColor(string: raw) else { return "Color/Black" }
+        return color.idmlSwatchSelf
     }
 
     private func textFrameItem(self id: String, story: String, rect: Rect,
@@ -542,6 +589,18 @@ public struct IDMLExporter {
                                     pageW: Double, pageH: Double, dx: Double = 0) -> String {
         """
         \t\t<Rectangle Self="\(id)" ContentType="Unassigned" FillColor="\(colorRef(fillColor))" StrokeColor="Swatch/None" StrokeWeight="0" ItemTransform="1 0 0 1 0 0">
+        \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH, dx: dx))
+        \t\t</Rectangle>
+        """
+    }
+
+    /// A drawn shape frame (empty text frame carrying only a fill and/or stroke).
+    /// Emitted as an unassigned Rectangle so hand-drawn color boxes survive export
+    /// instead of being dropped for having no text.
+    private func drawnBoxItem(self id: String, rect: Rect, fillColor: String?, strokeColor: String?,
+                              strokeWidth: Double, pageW: Double, pageH: Double, dx: Double = 0) -> String {
+        """
+        \t\t<Rectangle Self="\(id)" ContentType="Unassigned" FillColor="\(colorRef(fillColor))" StrokeColor="\(colorRef(strokeColor))" StrokeWeight="\(fmt(max(strokeWidth, 0)))" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH, dx: dx))
         \t\t</Rectangle>
         """
@@ -611,11 +670,14 @@ public struct IDMLExporter {
 
     private func graphic(ctx: BuildContext) -> String {
         var colors = ""
-        for hex in ctx.colorOrder where hex != "000000" {
-            let r = Int(hex.prefix(2), radix: 16) ?? 0
-            let g = Int(hex.dropFirst(2).prefix(2), radix: 16) ?? 0
-            let b = Int(hex.dropFirst(4).prefix(2), radix: 16) ?? 0
-            colors += "\t<Color Self=\"Color/C\(hex)\" Model=\"Process\" Space=\"RGB\" ColorValue=\"\(r) \(g) \(b)\" ColorOverride=\"Normal\" AlternateSpace=\"NoAlternateColor\" AlternateColorValue=\"\" Name=\"C\(hex)\" ColorEditable=\"true\" ColorRemovable=\"true\" Visible=\"true\" SwatchCreatorID=\"7937\"/>\n"
+        for key in ctx.colorOrder where key != "000000" {
+            guard let color = PrintColor(string: key) else { continue }
+            // Under a CMYK output intent, emit this swatch as Process CMYK
+            // (Space/Value/Name) while keeping its Self keyed on the stored color,
+            // so every FillColor/StrokeColor reference still resolves.
+            let emitted = ctx.cmykOutput ? color.asCMYK : color
+            let (space, value) = emitted.idmlSpaceValue
+            colors += "\t<Color Self=\"\(color.idmlSwatchSelf)\" Model=\"Process\" Space=\"\(space)\" ColorValue=\"\(value)\" ColorOverride=\"Normal\" AlternateSpace=\"NoAlternateColor\" AlternateColorValue=\"\" Name=\"\(esc(emitted.idmlSwatchName))\" ColorEditable=\"true\" ColorRemovable=\"true\" Visible=\"true\" SwatchCreatorID=\"7937\"/>\n"
         }
         return """
         \(header)
@@ -689,9 +751,8 @@ public struct IDMLExporter {
     private func styles(ctx: BuildContext, includesTOC: Bool) -> String {
         var paras = ""
         for style in ctx.paragraphStyles {
-            let colorHex = ctx.project.resolvedColorHex(style.colorToken) ?? "#000000"
-            let norm = BuildContext.normalizeHex(colorHex)
-            let fill = norm == "000000" ? "Color/Black" : "Color/C\(norm)"
+            let colorHex = ctx.textColorHex(ctx.project.resolvedColorHex(style.colorToken))
+            let fill = PrintColor(string: colorHex)?.idmlSwatchSelf ?? "Color/Black"
             let isComposite = style.compositeFont?.isEmpty == false
             let famFallback = ctx.appliedFamily[style.fontName] ?? BuildContext.splitFont(style.fontName).0
             let styleFallback = ctx.appliedStyle[style.fontName] ?? BuildContext.splitFont(style.fontName).1

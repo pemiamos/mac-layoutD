@@ -1,5 +1,14 @@
 import Foundation
 
+/// Document-wide output color intent (the "RGB / CMYK" global switch). Purely an
+/// intent: it drives picker defaults and whether the IDML exporter flattens RGB
+/// swatches to Process CMYK — it never mutates stored color values, so flipping
+/// it back is lossless.
+public enum LayoutColorSpace: String, Codable, CaseIterable, Sendable {
+    case rgb
+    case cmyk
+}
+
 public struct PageSetup: Codable, Equatable, Sendable {
     public var pageSize: PageSize
     public var margins: PageMargins {
@@ -22,6 +31,9 @@ public struct PageSetup: Codable, Equatable, Sendable {
     public var facingPages: Bool
     public var bleedMM: Double?
     public var layoutDirection: LayoutDirection
+    /// Output color intent (global RGB/CMYK switch). Optional & additive: old
+    /// `.layoutd` files decode with `colorSpace == nil` → treated as `.rgb`.
+    public var colorSpace: LayoutColorSpace?
     public var marginTopToken: String?
     public var marginRightToken: String?
     public var marginBottomToken: String?
@@ -39,6 +51,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         facingPages: Bool,
         bleedMM: Double? = 3.0,
         layoutDirection: LayoutDirection = .horizontal,
+        colorSpace: LayoutColorSpace? = nil,
         marginTopToken: String? = nil,
         marginRightToken: String? = nil,
         marginBottomToken: String? = nil,
@@ -55,6 +68,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.facingPages = facingPages
         self.bleedMM = bleedMM
         self.layoutDirection = layoutDirection
+        self.colorSpace = colorSpace
         self.marginTopToken = marginTopToken
         self.marginRightToken = marginRightToken
         self.marginBottomToken = marginBottomToken
@@ -65,7 +79,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case pageSize, margins, columns, gutter, baselineGrid, facingPages, bleedMM, layoutDirection
+        case pageSize, margins, columns, gutter, baselineGrid, facingPages, bleedMM, layoutDirection, colorSpace
         case marginTopToken, marginRightToken, marginBottomToken, marginLeftToken
         case columnsToken, gutterToken, baselineGridToken
     }
@@ -80,6 +94,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.facingPages = try container.decode(Bool.self, forKey: .facingPages)
         self.bleedMM = try container.decodeIfPresent(Double.self, forKey: .bleedMM) ?? 3.0
         self.layoutDirection = try container.decodeIfPresent(LayoutDirection.self, forKey: .layoutDirection) ?? .horizontal
+        self.colorSpace = try container.decodeIfPresent(LayoutColorSpace.self, forKey: .colorSpace)
         self.marginTopToken = try container.decodeIfPresent(String.self, forKey: .marginTopToken)
         self.marginRightToken = try container.decodeIfPresent(String.self, forKey: .marginRightToken)
         self.marginBottomToken = try container.decodeIfPresent(String.self, forKey: .marginBottomToken)
@@ -99,6 +114,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         try container.encode(facingPages, forKey: .facingPages)
         try container.encodeIfPresent(bleedMM, forKey: .bleedMM)
         try container.encode(layoutDirection, forKey: .layoutDirection)
+        try container.encodeIfPresent(colorSpace, forKey: .colorSpace)
         try container.encodeIfPresent(marginTopToken, forKey: .marginTopToken)
         try container.encodeIfPresent(marginRightToken, forKey: .marginRightToken)
         try container.encodeIfPresent(marginBottomToken, forKey: .marginBottomToken)
@@ -141,6 +157,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
             facingPages: facingPages,
             bleedMM: bleedMM,
             layoutDirection: layoutDirection,
+            colorSpace: colorSpace,
             marginTopToken: marginTopToken,
             marginRightToken: marginRightToken,
             marginBottomToken: marginBottomToken,

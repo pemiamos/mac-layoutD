@@ -7,6 +7,26 @@ import LayoutDExport
 @testable import LayoutDApp
 
 final class AppStateTests: XCTestCase {
+    func testPrintColorFromSwiftUIColorPreservesCMYK() {
+        // 标准色块通路:系统面板 CMYK 滑块给出的 CMYK 色必须保持 CMYK,不被压回 RGB。
+        let cmyk = Color(nsColor: NSColor(deviceCyan: 0.37, magenta: 0.04, yellow: 0.44, black: 0, alpha: 1))
+        guard case let .cmyk(c, m, y, k) = AppState.printColor(from: cmyk) else {
+            return XCTFail("CMYK Color 应解析为 .cmyk,而非压平为 RGB")
+        }
+        XCTAssertEqual(c, 37, accuracy: 0.5)
+        XCTAssertEqual(m, 4, accuracy: 0.5)
+        XCTAssertEqual(y, 44, accuracy: 0.5)
+        XCTAssertEqual(k, 0, accuracy: 0.5)
+    }
+
+    func testPrintColorFromSwiftUIColorKeepsRGB() {
+        let rgb = Color(.sRGB, red: 143.0 / 255, green: 192.0 / 255, blue: 135.0 / 255, opacity: 1)
+        guard case let .rgb(r, g, b) = AppState.printColor(from: rgb) else {
+            return XCTFail("sRGB Color 应解析为 .rgb")
+        }
+        XCTAssertEqual(r, 143); XCTAssertEqual(g, 192); XCTAssertEqual(b, 135)
+    }
+
     func testApplyPageLayoutTemplate() {
         let project = BookProject.sample
         let state = AppState(project: project)
@@ -71,6 +91,36 @@ final class AppStateTests: XCTestCase {
         XCTAssertFalse(state.canUndo, "the three changes should have collapsed to one undo entry")
     }
 
+    func testCMYKFillKeepsPlanValidSoSelectionSurvives() {
+        let state = AppState(project: BookProject.sample)
+        // The cover page (front matter) is regenerated every layout unless its
+        // frozen plan validates — the exact path the bug struck.
+        guard let doc = state.laidOutDocument,
+              let cover = doc.pages.first(where: { $0.number == 1 }),
+              let frame = cover.frames.first(where: { $0.kind == .text }) else {
+            return XCTFail("sample cover page should have a text frame")
+        }
+        state.selectedFrameId = frame.id
+
+        // Apply a print-native CMYK fill (storage form `cmyk(C,M,Y,K)`).
+        state.setSelectedFrameFillColor(PrintColor.cmyk(c: 37, m: 4, y: 44, k: 0))
+
+        let pageNum = state.currentPageNumber
+        let block = state.project.safeAppliedLayoutPlans[pageNum]?.blocks.first { $0.id == frame.id }
+        XCTAssertEqual(block?.backgroundColorHex, "cmyk(37,4,44,0)",
+                       "CMYK fill must persist in its native form, not flatten to RGB")
+
+        // Regression: a `cmyk(...)` value must not fail plan validation. If it did,
+        // the engine would discard the frozen plan and regenerate the page with
+        // fresh frame ids — silently dropping the selection (and the color). So the
+        // selected frame's id must survive the relayout.
+        let stillPresent = state.laidOutDocument?.pages.contains {
+            $0.frames.contains { $0.id == frame.id }
+        } ?? false
+        XCTAssertTrue(stillPresent,
+                      "selection (frame id) must survive relayout after a CMYK fill")
+    }
+
     func testSelectingFrameSyncsCurrentPage() {
         let state = AppState(project: BookProject.sample)
         state.currentPageNumber = 1
@@ -129,6 +179,123 @@ final class AppStateTests: XCTestCase {
         // The new frame is selected and the action is undoable.
         XCTAssertEqual(state.selectedFrameId, block.id)
         XCTAssertTrue(state.canUndo)
+    }
+
+    func testAlignSelectedFrameToPageWritesUndoableOverride() {
+        let state = AppState(project: BookProject.sample)
+        let pageSize = state.project.pageSetup.pageSize
+
+        // Draw a 200×80 frame somewhere off-edge on page 2, then align it.
+        XCTAssertTrue(state.createDrawnFrame(
+            kind: .text,
+            onPage: 2,
+            rect: Rect(x: 100, y: 120, width: 200, height: 80)
+        ))
+        let frameId = try! XCTUnwrap(state.selectedFrameId)
+
+        // Left → page edge (x = 0).
+        state.alignSelection(.left, reference: .page)
+        var block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first(where: { $0.id == frameId }))
+        XCTAssertEqual(block.absoluteFrame(pageSize: pageSize).x, 0, accuracy: 0.0001)
+
+        // Horizontal center on the page keeps the 200-wide frame centered.
+        state.alignSelection(.horizontalCenter, reference: .page)
+        block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2]?.blocks.first(where: { $0.id == frameId }))
+        XCTAssertEqual(block.absoluteFrame(pageSize: pageSize).x, (pageSize.width - 200) / 2, accuracy: 0.0001)
+
+        // Alignment is undoable (each call commits one undo step).
+        XCTAssertTrue(state.canUndo)
+    }
+
+    func testAlignSelectedFrameToMarginRespectsFacingPageSide() {
+        let state = AppState(project: BookProject.sample)
+        let pageSize = state.project.pageSetup.pageSize
+
+        XCTAssertTrue(state.createDrawnFrame(
+            kind: .text,
+            onPage: 3,
+            rect: Rect(x: 300, y: 120, width: 120, height: 60)
+        ))
+        let frameId = try! XCTUnwrap(state.selectedFrameId)
+
+        state.alignSelection(.left, reference: .margin)
+        let block = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[3]?.blocks.first(where: { $0.id == frameId }))
+
+        // Page 3 is odd → on a facing-page spread its left edge is the (inner) left
+        // margin, matching the canvas guide.
+        let margins = state.project.resolvedMargins(for: 3)
+        XCTAssertEqual(block.absoluteFrame(pageSize: pageSize).x, margins.left, accuracy: 0.0001)
+    }
+
+    func testToggleAndSetSelectionMaintainAnchorInvariant() {
+        let state = AppState(project: BookProject.sample)
+        let a = UUID(), b = UUID(), c = UUID()
+
+        // Plain single-select collapses the set to one.
+        state.selectedFrameId = a
+        XCTAssertEqual(state.selectedFrameIds, [a])
+
+        // Toggle adds and moves the anchor.
+        state.toggleFrameSelection(b)
+        XCTAssertEqual(state.selectedFrameIds, [a, b])
+        XCTAssertEqual(state.selectedFrameId, b)
+
+        // Toggling the anchor off picks a remaining member as the new anchor.
+        state.toggleFrameSelection(b)
+        XCTAssertEqual(state.selectedFrameIds, [a])
+        XCTAssertEqual(state.selectedFrameId, a)
+
+        // setSelection replaces wholesale.
+        state.setSelection([a, b, c], anchor: c)
+        XCTAssertEqual(state.selectedFrameIds, [a, b, c])
+        XCTAssertEqual(state.selectedFrameId, c)
+
+        // Assigning nil clears everything.
+        state.selectedFrameId = nil
+        XCTAssertTrue(state.selectedFrameIds.isEmpty)
+    }
+
+    func testAlignSelectionToSelectionBoundingBox() {
+        let state = AppState(project: BookProject.sample)
+        let pageSize = state.project.pageSetup.pageSize
+
+        // Two frames on page 2 at different X.
+        XCTAssertTrue(state.createDrawnFrame(kind: .text, onPage: 2, rect: Rect(x: 40, y: 60, width: 100, height: 50)))
+        let first = try! XCTUnwrap(state.selectedFrameId)
+        XCTAssertTrue(state.createDrawnFrame(kind: .text, onPage: 2, rect: Rect(x: 220, y: 300, width: 80, height: 40)))
+        let second = try! XCTUnwrap(state.selectedFrameId)
+
+        state.setSelection([first, second])
+        // Left-align to the selection box → both share the leftmost X (40).
+        state.alignSelection(.left, reference: .selection)
+
+        let plan = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2])
+        let f1 = try! XCTUnwrap(plan.blocks.first { $0.id == first })
+        let f2 = try! XCTUnwrap(plan.blocks.first { $0.id == second })
+        XCTAssertEqual(f1.absoluteFrame(pageSize: pageSize).x, 40, accuracy: 0.0001)
+        XCTAssertEqual(f2.absoluteFrame(pageSize: pageSize).x, 40, accuracy: 0.0001)
+        XCTAssertTrue(state.canUndo)
+    }
+
+    func testDistributeSelectionRequiresThreeFrames() {
+        let state = AppState(project: BookProject.sample)
+        let pageSize = state.project.pageSetup.pageSize
+
+        var ids: [UUID] = []
+        for x in [0.0, 100.0, 400.0] {
+            XCTAssertTrue(state.createDrawnFrame(kind: .text, onPage: 2, rect: Rect(x: x, y: 50, width: 40, height: 30)))
+            ids.append(try! XCTUnwrap(state.selectedFrameId))
+        }
+        state.setSelection(Set(ids))
+        state.distributeSelection(.horizontalCenters)
+
+        let plan = try! XCTUnwrap(state.project.safeAppliedLayoutPlans[2])
+        let centers = ids.map { id -> Double in
+            let r = plan.blocks.first { $0.id == id }!.absoluteFrame(pageSize: pageSize)
+            return r.x + r.width / 2
+        }.sorted()
+        // Three evenly spaced centers: middle gap equals outer gap.
+        XCTAssertEqual(centers[1] - centers[0], centers[2] - centers[1], accuracy: 0.0001)
     }
 
     func testCreateDrawnImageFrameNeedsAsset() {

@@ -1594,14 +1594,16 @@ private struct LayoutContext {
 
     private func isValidColorValue(_ val: String) -> Bool {
         let clean = val.trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.hasPrefix("#") {
-            let hexPattern = "^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$"
-            let range = NSRange(location: 0, length: clean.utf16.count)
-            if let regex = try? NSRegularExpression(pattern: hexPattern),
-               regex.firstMatch(in: clean, options: [], range: range) != nil {
-                return true
-            }
+        // Accept any round-trippable PrintColor storage form: `#RRGGBB` / `#RGB` /
+        // bare hex, and — crucially — the print-native `cmyk(C,M,Y,K)` form. This
+        // is the exact vocabulary the app writes into color fields, so a
+        // CMYK-picked color no longer trips validation and gets the whole page's
+        // frozen plan discarded (which was silently regenerating frame ids and
+        // dropping both the selection and the CMYK color).
+        if PrintColor(string: clean) != nil {
+            return true
         }
+        // Also accept an approved style color token id.
         if project.styles.colorHex(clean) != nil {
             return true
         }

@@ -20,6 +20,11 @@ final class AppState: ObservableObject {
             updateAIPlans()
         }
     }
+    /// The "primary" / anchor selection. Kept for backward compatibility: the
+    /// inspector, coordinate fields, colour edits and every single-frame action key
+    /// off this. Assigning it (the plain-click path) *replaces* the whole selection
+    /// with just this frame; multi-selection goes through `selectedFrameIds` and the
+    /// `toggleFrameSelection` / `setSelection` helpers below.
     @Published var selectedFrameId: UUID? {
         didSet {
             // Keep the "current page" pointed at whatever the user is actually
@@ -34,7 +39,42 @@ final class AppState: ObservableObject {
                 currentPageNumber = page
             }
             colorEditBurstFrame = nil
+            // A bare anchor assignment means "select only this" — collapse any
+            // multi-selection. Multi-select helpers set this flag so they can move
+            // the anchor without wiping the set they just built.
+            if !isMutatingSelectionSet {
+                selectedFrameIds = selectedFrameId.map { [$0] } ?? []
+            }
         }
+    }
+
+    /// The full multi-selection (superset of `selectedFrameId`). Alignment and
+    /// distribution operate on this. Invariant: empty iff `selectedFrameId == nil`,
+    /// and the anchor is always a member when non-nil.
+    @Published var selectedFrameIds: Set<UUID> = []
+    private var isMutatingSelectionSet = false
+
+    /// Shift/⌘-click: add the frame to the selection (becoming the new anchor) or
+    /// remove it if already selected.
+    func toggleFrameSelection(_ id: UUID) {
+        isMutatingSelectionSet = true
+        defer { isMutatingSelectionSet = false }
+        if selectedFrameIds.contains(id) {
+            selectedFrameIds.remove(id)
+            if selectedFrameId == id { selectedFrameId = selectedFrameIds.first }
+        } else {
+            selectedFrameIds.insert(id)
+            selectedFrameId = id
+        }
+    }
+
+    /// Replace the whole selection at once (marquee rubber-band). `anchor` becomes
+    /// the primary; defaults to any member.
+    func setSelection(_ ids: Set<UUID>, anchor: UUID? = nil) {
+        isMutatingSelectionSet = true
+        defer { isMutatingSelectionSet = false }
+        selectedFrameIds = ids
+        selectedFrameId = anchor ?? ids.first
     }
     @Published var activeTool: LayoutTool = .selection
     
@@ -369,6 +409,102 @@ final class AppState: ObservableObject {
             currentProject.safeAppliedLayoutPlans = plans
             self.project = currentProject
         }
+    }
+
+    /// Absolute page rects (points) of every frame in the current selection, with
+    /// the page each lives on — the input to alignment/distribution. Read from the
+    /// laid-out document, whose `PageFrame.rect` is already in absolute page points.
+    private func selectedAbsoluteRects() -> [(id: UUID, pageNumber: Int, rect: Rect)] {
+        guard let doc = laidOutDocument else { return [] }
+        var result: [(id: UUID, pageNumber: Int, rect: Rect)] = []
+        for page in doc.pages {
+            for frame in page.frames where selectedFrameIds.contains(frame.id) {
+                result.append((frame.id, page.number, frame.rect))
+            }
+        }
+        return result
+    }
+
+    /// Aligns every selected frame. `.selection` snaps each to the shared bounding
+    /// box (multi-frame「对齐对象」); `.page` / `.margin` snap each to its own page's
+    /// box independently. Reuses the LayoutPlan-override + undo path, so it's
+    /// undoable and exports to IDML like any manual coordinate change. Only moves
+    /// frames — sizes are preserved.
+    func alignSelection(_ alignment: FrameAlignment, reference: AlignmentReference) {
+        let items = selectedAbsoluteRects()
+        guard !items.isEmpty else { return }
+
+        let selectionBox = boundingBox(of: items.map { $0.rect })
+        let pageSize = project.pageSetup.pageSize
+
+        var origins: [UUID: (x: Double, y: Double)] = [:]
+        for item in items {
+            let region: Rect
+            switch reference {
+            case .selection: region = selectionBox
+            case .page: region = Rect(x: 0, y: 0, width: pageSize.width, height: pageSize.height)
+            case .margin: region = marginRegion(pageNum: item.pageNumber)
+            }
+            origins[item.id] = alignedFrameOrigin(frame: item.rect, region: region, alignment: alignment)
+        }
+        applyFrameOrigins(origins, note: "手动对齐元素（\(reference.displayName)·\(alignment.displayName)）")
+    }
+
+    /// Distributes the selected frames (3+ required). Extremes stay fixed; the rest
+    /// are repositioned so the chosen edge/center — or the gaps — become even.
+    func distributeSelection(_ mode: DistributionMode) {
+        let items = selectedAbsoluteRects()
+        guard items.count >= 3 else { return }
+        let origins = distributedOrigins(frames: items.map { (id: $0.id, rect: $0.rect) }, mode: mode)
+        applyFrameOrigins(origins, note: "手动分布元素（\(mode.displayName)）")
+    }
+
+    /// Writes new top-left origins for a batch of frames in one undoable step,
+    /// freezing each touched page to a plan as needed. Shared by alignment,
+    /// distribution and group-drag.
+    func applyFrameOrigins(_ origins: [UUID: (x: Double, y: Double)], note: String) {
+        guard !origins.isEmpty else { return }
+        let pageSize = project.pageSetup.pageSize
+
+        commitState()
+        var currentProject = project
+        var plans = currentProject.safeAppliedLayoutPlans
+
+        for (id, origin) in origins {
+            guard let pageNum = findPageNumber(for: id) else { continue }
+            var plan = plans[pageNum] ?? freezePageToPlan(pageNum: pageNum)
+            guard let idx = plan.blocks.firstIndex(where: { $0.id == id }) else { continue }
+            var block = plan.blocks[idx]
+            block.updateAbsoluteFrame(pageSize: pageSize, x: origin.x, y: origin.y)
+            plan.blocks[idx] = block
+            plan.notes = [note]
+            plans[pageNum] = plan
+        }
+
+        currentProject.safeAppliedLayoutPlans = plans
+        self.project = currentProject
+    }
+
+    /// The (facing-page-aware) margin box of a page in absolute points. Mirrors the
+    /// canvas guides: on facing-page spreads the inner/outer margins swap per parity.
+    private func marginRegion(pageNum: Int) -> Rect {
+        let pageSize = project.pageSetup.pageSize
+        let margins = project.resolvedMargins(for: pageNum)
+        let leftM: Double
+        let rightM: Double
+        if project.pageSetup.facingPages {
+            leftM = pageNum % 2 == 1 ? margins.left : margins.right
+            rightM = pageNum % 2 == 1 ? margins.right : margins.left
+        } else {
+            leftM = margins.left
+            rightM = margins.right
+        }
+        return Rect(
+            x: leftM,
+            y: margins.top,
+            width: max(pageSize.width - leftM - rightM, 0),
+            height: max(pageSize.height - margins.top - margins.bottom, 0)
+        )
     }
 
     func updateSelectedFrameImage(assetId: UUID) {
@@ -862,7 +998,7 @@ final class AppState: ObservableObject {
     func applyColorToSelectedFrame(_ color: Color) {
         commitState()
         guard let frameId = selectedFrameId else { return }
-        let hex = color.hexString
+        let hex = Self.printColor(from: color).storageString
         if activeFormattingTarget == .container {
             if isFillActive {
                 frameBackgroundColors[frameId] = color
@@ -914,11 +1050,29 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Converts a SwiftUI `Color` to a `PrintColor`, **preserving CMYK** when the
+    /// color still carries a CMYK color space — e.g. picked via the standard
+    /// ColorPicker's system panel "CMYK Sliders". SwiftUI↔NSColor bridging keeps
+    /// the CMYK space (verified: model stays .cmyk), so the quick color well no
+    /// longer silently flattens CMYK to RGB. Falls back to sRGB otherwise.
+    static func printColor(from color: Color) -> PrintColor {
+        let ns = NSColor(color)
+        // `.colorSpace`/component access is only safe on component-based colors.
+        if ns.type == .componentBased, ns.colorSpace.colorSpaceModel == .cmyk {
+            return .cmyk(c: Double(ns.cyanComponent) * 100, m: Double(ns.magentaComponent) * 100,
+                         y: Double(ns.yellowComponent) * 100, k: Double(ns.blackComponent) * 100)
+        }
+        let rgb = ns.usingColorSpace(.sRGB) ?? ns
+        return .rgb(r: Int((Double(rgb.redComponent) * 255).rounded()),
+                    g: Int((Double(rgb.greenComponent) * 255).rounded()),
+                    b: Int((Double(rgb.blueComponent) * 255).rounded()))
+    }
+
     func setSelectedFrameFillColor(_ color: Color) {
         guard let frameId = selectedFrameId else { return }
         beginColorEditBurst(frameId)
         frameBackgroundColors[frameId] = color
-        updateSelectedFrameColors(backgroundColorHex: color.hexString, strokeColorHex: nil, textColorHex: nil, shouldClear: false)
+        updateSelectedFrameColors(backgroundColorHex: Self.printColor(from: color).storageString, strokeColorHex: nil, textColorHex: nil, shouldClear: false)
     }
 
     func clearSelectedFrameFillColor() {
@@ -932,7 +1086,7 @@ final class AppState: ObservableObject {
         guard let frameId = selectedFrameId else { return }
         beginColorEditBurst(frameId)
         frameStrokeColors[frameId] = color
-        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: color.hexString, textColorHex: nil, shouldClear: false)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: Self.printColor(from: color).storageString, textColorHex: nil, shouldClear: false)
     }
 
     func clearSelectedFrameStrokeColor() {
@@ -946,7 +1100,7 @@ final class AppState: ObservableObject {
         guard let frameId = selectedFrameId else { return }
         beginColorEditBurst(frameId)
         frameTextColors[frameId] = color
-        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: color.hexString, shouldClear: false)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: Self.printColor(from: color).storageString, shouldClear: false)
     }
 
     func clearSelectedFrameTextColor() {
@@ -954,6 +1108,72 @@ final class AppState: ObservableObject {
         guard let frameId = selectedFrameId else { return }
         frameTextColors.removeValue(forKey: frameId)
         updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: "", shouldClear: true)
+    }
+
+    // MARK: - PrintColor 通路（CMYK 原生）
+    //
+    // 与上面吃 SwiftUI `Color` 的快捷 setter 并存：多套系拾色器提交的是
+    // `PrintColor`，其 storageString(可能是 `cmyk(...)`)直接写进模型，从而
+    // 一路保持到 IDML 导出;画布即时预览用 displayRGB 近似色覆盖。
+
+    private func previewColor(_ pc: PrintColor) -> Color {
+        let c = pc.displayRGB
+        return Color(.sRGB, red: c.r, green: c.g, blue: c.b, opacity: 1)
+    }
+
+    func setSelectedFrameFillColor(_ printColor: PrintColor) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameBackgroundColors[frameId] = previewColor(printColor)
+        updateSelectedFrameColors(backgroundColorHex: printColor.storageString, strokeColorHex: nil, textColorHex: nil, shouldClear: false)
+    }
+
+    func setSelectedFrameStrokeColor(_ printColor: PrintColor) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameStrokeColors[frameId] = previewColor(printColor)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: printColor.storageString, textColorHex: nil, shouldClear: false)
+    }
+
+    func setSelectedFrameTextColor(_ printColor: PrintColor) {
+        guard let frameId = selectedFrameId else { return }
+        beginColorEditBurst(frameId)
+        frameTextColors[frameId] = previewColor(printColor)
+        updateSelectedFrameColors(backgroundColorHex: nil, strokeColorHex: nil, textColorHex: printColor.storageString, shouldClear: false)
+    }
+
+    // MARK: - 色板库（自定义 swatch）
+
+    var customSwatches: [PrintSwatch] { project.customSwatches ?? [] }
+
+    /// 把一个颜色存进项目色板库。重复颜色(相同 storageString)不再新增。
+    @discardableResult
+    func addCustomSwatch(_ color: PrintColor, name: String? = nil) -> PrintSwatch? {
+        var currentProject = project
+        var list = currentProject.safeCustomSwatches
+        guard !list.contains(where: { $0.colorString == color.storageString }) else { return nil }
+        commitState()
+        let swatch = PrintSwatch(name: name ?? Self.defaultSwatchName(for: color), color: color)
+        list.append(swatch)
+        currentProject.safeCustomSwatches = list
+        self.project = currentProject
+        return swatch
+    }
+
+    func removeCustomSwatch(id: UUID) {
+        commitState()
+        var currentProject = project
+        currentProject.safeCustomSwatches.removeAll { $0.id == id }
+        self.project = currentProject
+    }
+
+    private static func defaultSwatchName(for color: PrintColor) -> String {
+        switch color {
+        case let .rgb(r, g, b):
+            return String(format: "R=%d G=%d B=%d", r, g, b)
+        case .cmyk:
+            return color.idmlSwatchName
+        }
     }
 
     private func updateSelectedFrameColors(
@@ -1063,12 +1283,3 @@ final class AppState: ObservableObject {
     }
 }
 
-private extension Color {
-    var hexString: String {
-        let nsColor = NSColor(self).usingColorSpace(.sRGB) ?? NSColor(self)
-        let red = Int(round(nsColor.redComponent * 255))
-        let green = Int(round(nsColor.greenComponent * 255))
-        let blue = Int(round(nsColor.blueComponent * 255))
-        return String(format: "#%02X%02X%02X", red, green, blue)
-    }
-}

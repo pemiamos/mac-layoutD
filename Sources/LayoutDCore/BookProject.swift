@@ -49,6 +49,9 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     /// Historical snapshots of layout quality metrics, captured over time.
     public var qualityMetricsHistory: [QualityHistoryEntry]?
     public var annotations: [BookAnnotation]?
+    /// User-saved swatch library (the "色板" panel). Optional & additive: old
+    /// `.layoutd` files decode with `customSwatches == nil`.
+    public var customSwatches: [PrintSwatch]?
 
     public init(
         schemaVersion: Int = BookProject.currentSchemaVersion,
@@ -63,7 +66,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         lockedPages: Set<Int>? = nil,
         colorMode: String? = nil,
         qualityMetricsHistory: [QualityHistoryEntry]? = nil,
-        annotations: [BookAnnotation]? = nil
+        annotations: [BookAnnotation]? = nil,
+        customSwatches: [PrintSwatch]? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.id = id
@@ -78,11 +82,17 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         self.colorMode = colorMode
         self.qualityMetricsHistory = qualityMetricsHistory
         self.annotations = annotations
+        self.customSwatches = customSwatches
     }
 
     public var safeAnnotations: [BookAnnotation] {
         get { annotations ?? [] }
         set { annotations = newValue }
+    }
+
+    public var safeCustomSwatches: [PrintSwatch] {
+        get { customSwatches ?? [] }
+        set { customSwatches = newValue }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -99,6 +109,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         case colorMode
         case qualityMetricsHistory
         case annotations
+        case customSwatches
     }
 
     public init(from decoder: Decoder) throws {
@@ -116,6 +127,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         colorMode = try container.decodeIfPresent(String.self, forKey: .colorMode)
         qualityMetricsHistory = try container.decodeIfPresent([QualityHistoryEntry].self, forKey: .qualityMetricsHistory)
         annotations = try container.decodeIfPresent([BookAnnotation].self, forKey: .annotations)
+        customSwatches = try container.decodeIfPresent([PrintSwatch].self, forKey: .customSwatches)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -133,6 +145,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         try container.encodeIfPresent(colorMode, forKey: .colorMode)
         try container.encodeIfPresent(qualityMetricsHistory, forKey: .qualityMetricsHistory)
         try container.encodeIfPresent(annotations, forKey: .annotations)
+        try container.encodeIfPresent(customSwatches, forKey: .customSwatches)
     }
 
     /// Resolves a color token id to a hex value under the project's active color

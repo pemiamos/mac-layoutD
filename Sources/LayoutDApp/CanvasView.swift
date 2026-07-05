@@ -24,6 +24,12 @@ final class CanvasView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// Full multi-selection (superset of `selectedFrameId`). Every member is drawn
+    /// highlighted; resize handles show only when exactly one frame is selected.
+    var selectedFrameIds: Set<UUID> = [] {
+        didSet { needsDisplay = true }
+    }
+
     var activeScreenMode: ScreenMode = .normal {
         didSet { needsDisplay = true }
     }
@@ -49,8 +55,16 @@ final class CanvasView: NSView {
     }
 
     var onFrameSelected: ((UUID?) -> Void)?
+    /// Shift/⌘-click on a frame: toggle its membership in the multi-selection.
+    var onToggleSelection: ((UUID) -> Void)?
+    /// Rubber-band (marquee) selection finished. Payload: every frame intersecting
+    /// the marquee (empty set clears the selection).
+    var onMarqueeSelected: ((Set<UUID>) -> Void)?
     var onCanvasClick: ((Int, CGPoint) -> Void)?
     var onFrameDragged: ((UUID, Double, Double, Double, Double) -> Void)?
+    /// Group-drag commit: new page-local rects for every moved frame, applied in one
+    /// undoable step. Used when 2+ frames are dragged together.
+    var onFramesDragged: (([(id: UUID, rect: Rect)]) -> Void)?
     var onGapDragged: ((UUID, Rect, UUID, Rect) -> Void)?
     var onPageSelected: ((Int) -> Void)?
     var onDragStarted: (() -> Void)?
@@ -94,6 +108,18 @@ final class CanvasView: NSView {
     private var dragStartLocalPoint: CGPoint? // absolute canvas point
     private var previewFrameRects: [UUID: Rect] = [:]
     private var pendingFrameDragUpdate: (id: UUID, rect: Rect)?
+    /// Group-drag: start rects (page-local) of every frame moved together, keyed by id.
+    private var groupDragStartRects: [UUID: Rect] = [:]
+    private var pendingGroupDragUpdate: [(id: UUID, rect: Rect)]?
+
+    // Marquee (rubber-band) selection state — canvas coordinates.
+    private var isMarqueeSelecting = false
+    private var marqueeStartPoint: CGPoint?
+    private var marqueeRect: CGRect? {
+        didSet {
+            if oldValue != marqueeRect { needsDisplay = true }
+        }
+    }
     private var pendingGapDragUpdate: (firstId: UUID, firstRect: Rect, secondId: UUID, secondRect: Rect)?
     
     // Hand tool panning
@@ -209,6 +235,19 @@ final class CanvasView: NSView {
         }
 
         drawRubberBandFrameIfNeeded()
+        drawMarqueeIfNeeded()
+    }
+
+    /// Renders the in-progress marquee (rubber-band selection) rectangle.
+    private func drawMarqueeIfNeeded() {
+        guard isMarqueeSelecting, let rect = marqueeRect else { return }
+        NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.12).setFill()
+        rect.fill()
+        NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.8).setStroke()
+        let path = NSBezierPath(rect: rect)
+        path.lineWidth = 1.0
+        path.setLineDash([4, 3], count: 2, phase: 0)
+        path.stroke()
     }
 
     /// Renders the in-progress rubber-band rectangle for the frame drawing tools.
@@ -529,7 +568,7 @@ final class CanvasView: NSView {
                 path.stroke()
             }
 
-            if frame.id == selectedFrameId {
+            if selectedFrameIds.contains(frame.id) {
                 NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.15).setFill()
                 rect.fill()
                 NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).setStroke()
@@ -537,7 +576,10 @@ final class CanvasView: NSView {
                 path.lineWidth = 2.0
                 path.stroke()
 
-                if activeTool == .selection {
+                // Resize handles only when a single frame is selected — group resize
+                // isn't supported yet, so drawing handles on a multi-selection would
+                // imply an action that does nothing.
+                if activeTool == .selection && selectedFrameIds.count == 1 {
                     let handles = resizeHandles(for: rect)
                     NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).setStroke()
                     NSColor.white.setFill()
@@ -782,7 +824,8 @@ final class CanvasView: NSView {
         }
 
         let tokenColor = project.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
-        let textColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
+        let rawTextColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
+        let textColor = proofedText(rawTextColor) ?? rawTextColor
         
         let drawingRect = applyDefaultInset ? rect.insetBy(dx: 4, dy: 2) : rect
         
@@ -870,7 +913,33 @@ final class CanvasView: NSView {
     }
 
     private func resolvedColor(memoryColor: NSColor?, persistedHex: String?) -> NSColor? {
-        memoryColor ?? persistedHex.flatMap(NSColor.fromHex)
+        proofed(memoryColor ?? persistedHex.flatMap(NSColor.fromHex))
+    }
+
+    /// True when the document is in CMYK output mode.
+    private var cmykProof: Bool {
+        project?.pageSetup.colorSpace == .cmyk
+    }
+
+    /// Soft-proof: in CMYK mode, render colors through device CMYK so RGB fills
+    /// show their duller CMYK appearance and the canvas matches InDesign instead
+    /// of showing the vivid RGB. A no-op in RGB mode.
+    private func proofed(_ color: NSColor?) -> NSColor? {
+        guard cmykProof, let color else { return color }
+        return color.usingColorSpace(.deviceCMYK) ?? color
+    }
+
+    /// Text soft-proof. Mirrors the exporter's "near-black text → K100" rule so
+    /// the canvas shows body/heading type as the same clean single-black InDesign
+    /// will print, rather than a dull rich-black; other text is device-CMYK
+    /// proofed like everything else.
+    private func proofedText(_ color: NSColor?) -> NSColor? {
+        guard cmykProof, let color else { return color }
+        if let rgb = color.usingColorSpace(.deviceRGB),
+           max(rgb.redComponent, rgb.greenComponent, rgb.blueComponent) <= 0.25 {
+            return NSColor(deviceCyan: 0, magenta: 0, yellow: 0, black: 1, alpha: 1)
+        }
+        return color.usingColorSpace(.deviceCMYK) ?? color
     }
 
     private func drawAssetPlaceholder(assetId: UUID, isLeftHalf: Bool?, project: BookProject, rect: CGRect, maskShape: ImageMaskShape?) {
@@ -1088,6 +1157,28 @@ final class CanvasView: NSView {
             }
         }
         return nil
+    }
+
+    /// IDs of every frame whose on-canvas rectangle intersects the marquee.
+    private func framesIntersecting(_ marquee: CGRect?) -> Set<UUID> {
+        guard let marquee, marquee.width > 1 || marquee.height > 1,
+              let document else { return [] }
+        var hits: Set<UUID> = []
+        for page in document.pages {
+            guard let pRect = pageRect(number: page.number) else { continue }
+            for frame in page.frames {
+                let canvasRect = CGRect(
+                    x: pRect.minX + CGFloat(frame.rect.x) * zoomScale,
+                    y: pRect.minY + CGFloat(frame.rect.y) * zoomScale,
+                    width: CGFloat(frame.rect.width) * zoomScale,
+                    height: CGFloat(frame.rect.height) * zoomScale
+                )
+                if canvasRect.intersects(marquee) {
+                    hits.insert(frame.id)
+                }
+            }
+        }
+        return hits
     }
 
     private func resizeHandles(for rect: CGRect) -> [CGRect] {
@@ -1406,8 +1497,10 @@ final class CanvasView: NSView {
             return
         }
 
-        // 5. Selection resize handle hit test
+        // 5. Selection resize handle hit test (single selection only — group resize
+        // isn't supported, matching the handles we draw).
         if activeTool == .selection,
+           selectedFrameIds.count <= 1,
            let selId = selectedFrameId,
            let selFrameInfo = findFrame(id: selId, in: document),
            let pRect = pageRect(number: selFrameInfo.pageNumber) {
@@ -1434,10 +1527,26 @@ final class CanvasView: NSView {
         // 6. Selection or Direct Selection click selection. Direct Selection is
         // intentionally select-only until image crop/focal-point editing exists.
         if activeTool == .selection || activeTool == .directSelection {
+            let additive = event.modifierFlags.contains(.shift) || event.modifierFlags.contains(.command)
             if let frame = hitFrame {
+                if additive {
+                    // Shift/⌘-click: toggle this frame in/out of the selection. No drag.
+                    onToggleSelection?(frame.id)
+                    return
+                }
+
+                if selectedFrameIds.contains(frame.id) && selectedFrameIds.count > 1 {
+                    // Plain click on an already multi-selected frame → drag the group,
+                    // keeping the selection intact.
+                    if activeTool == .selection {
+                        beginGroupDrag(anchorPoint: point)
+                    }
+                    return
+                }
+
+                // Plain click → select just this frame.
                 selectedFrameId = frame.id
                 onFrameSelected?(frame.id)
-
                 if activeTool == .selection {
                     isDraggingFrame = true
                     onDragStarted?()
@@ -1445,8 +1554,11 @@ final class CanvasView: NSView {
                     dragStartLocalPoint = point
                 }
             } else {
-                selectedFrameId = nil
-                onFrameSelected?(nil)
+                // Empty canvas → begin a marquee. A plain click with no drag collapses
+                // to an empty marquee on mouseUp, which clears the selection as before.
+                isMarqueeSelecting = true
+                marqueeStartPoint = point
+                marqueeRect = CGRect(origin: point, size: .zero)
             }
             return
         }
@@ -1457,8 +1569,36 @@ final class CanvasView: NSView {
         }
     }
 
+    /// Captures the start rects of every selected frame so they can be moved
+    /// together, and arms the drag state.
+    private func beginGroupDrag(anchorPoint: CGPoint) {
+        guard let document else { return }
+        groupDragStartRects.removeAll()
+        for id in selectedFrameIds {
+            if let info = findFrame(id: id, in: document) {
+                groupDragStartRects[id] = info.frame.rect
+            }
+        }
+        guard !groupDragStartRects.isEmpty else { return }
+        isDraggingFrame = true
+        // No onDragStarted here: the commit happens once in AppState.applyFrameOrigins
+        // (via onFramesDragged). Calling it too would push a redundant undo step.
+        dragStartLocalPoint = anchorPoint
+    }
+
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+
+        // -1. Marquee (rubber-band) selection: grow the rectangle.
+        if isMarqueeSelecting, let start = marqueeStartPoint {
+            marqueeRect = CGRect(
+                x: min(start.x, point.x),
+                y: min(start.y, point.y),
+                width: abs(point.x - start.x),
+                height: abs(point.y - start.y)
+            )
+            return
+        }
 
         // 0. Frame drawing tools: grow the rubber-band rectangle (clamped to its page).
         if isDrawingFrame, let start = drawFrameStartLocal, let pageNum = drawFramePageNumber,
@@ -1491,6 +1631,21 @@ final class CanvasView: NSView {
             
             scrollView.contentView.scroll(to: newOrigin)
             scrollView.reflectScrolledClipView(scrollView.contentView)
+            return
+        }
+
+        // 2a. Group move (2+ frames dragged together).
+        if isDraggingFrame, !groupDragStartRects.isEmpty, let startPt = dragStartLocalPoint {
+            let dx = Double((point.x - startPt.x) / zoomScale)
+            let dy = Double((point.y - startPt.y) / zoomScale)
+            var updates: [(id: UUID, rect: Rect)] = []
+            for (id, startRect) in groupDragStartRects {
+                let nextRect = Rect(x: startRect.x + dx, y: startRect.y + dy, width: startRect.width, height: startRect.height)
+                previewFrameRects[id] = nextRect
+                updates.append((id: id, rect: nextRect))
+            }
+            pendingGroupDragUpdate = updates
+            needsDisplay = true
             return
         }
 
@@ -1640,13 +1795,34 @@ final class CanvasView: NSView {
             return
         }
 
-        if let pending = pendingFrameDragUpdate {
+        // Marquee selection: select every frame intersecting the rubber-band. A
+        // zero-ish rectangle (plain click) resolves to an empty set → clears.
+        if isMarqueeSelecting {
+            let additive = event.modifierFlags.contains(.shift) || event.modifierFlags.contains(.command)
+            let hits = framesIntersecting(marqueeRect)
+            if additive {
+                onMarqueeSelected?(selectedFrameIds.union(hits))
+            } else {
+                onMarqueeSelected?(hits)
+            }
+            isMarqueeSelecting = false
+            marqueeStartPoint = nil
+            marqueeRect = nil
+            needsDisplay = true
+            return
+        }
+
+        if let group = pendingGroupDragUpdate {
+            onFramesDragged?(group)
+        } else if let pending = pendingFrameDragUpdate {
             onFrameDragged?(pending.id, pending.rect.x, pending.rect.y, pending.rect.width, pending.rect.height)
         }
         if let pending = pendingGapDragUpdate {
             onGapDragged?(pending.firstId, pending.firstRect, pending.secondId, pending.secondRect)
         }
 
+        groupDragStartRects.removeAll()
+        pendingGroupDragUpdate = nil
         isDraggingFrame = false
         isResizingFrame = false
         isDraggingGap = false
@@ -1714,24 +1890,16 @@ final class InlineTextEditorView: NSTextView {
 
 extension NSColor {
     static func fromHex(_ hex: String) -> NSColor? {
-        var cleanHex = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if cleanHex.hasPrefix("#") {
-            cleanHex.remove(at: cleanHex.startIndex)
+        // "hex" now also carries CMYK (`cmyk(c,m,y,k)`); CMYK renders via the
+        // device-CMYK space as a screen approximation on the canvas.
+        guard let color = PrintColor(string: hex) else { return nil }
+        switch color {
+        case let .rgb(r, g, b):
+            return NSColor(calibratedRed: CGFloat(r) / 255, green: CGFloat(g) / 255,
+                           blue: CGFloat(b) / 255, alpha: 1.0)
+        case let .cmyk(c, m, y, k):
+            return NSColor(deviceCyan: CGFloat(c) / 100, magenta: CGFloat(m) / 100,
+                           yellow: CGFloat(y) / 100, black: CGFloat(k) / 100, alpha: 1.0)
         }
-
-        guard cleanHex.count == 6 else {
-            return nil
-        }
-
-        var rgbValue: UInt64 = 0
-        guard Scanner(string: cleanHex).scanHexInt64(&rgbValue) else {
-            return nil
-        }
-
-        let red = CGFloat((rgbValue & 0xFF0000) >> 16) / 255.0
-        let green = CGFloat((rgbValue & 0x00FF00) >> 8) / 255.0
-        let blue = CGFloat(rgbValue & 0x0000FF) / 255.0
-
-        return NSColor(calibratedRed: red, green: green, blue: blue, alpha: 1.0)
     }
 }
