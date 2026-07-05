@@ -64,6 +64,13 @@
 
 > 2026-07-04 全项目 review 立项「性能批」：根因是每次改动全书重排两遍+preflight 同步跑在界面线程（AppState.recalculateLayout），书稿变大会卡。顺序做、每步靠 PERF-1 的基准数字验证。
 
+- [ ] **🔴 BUG-1 跨段落脚注编号全错（高优先级，既存缺陷非今日回归）** — 2026-07-06 用户在 InDesign 里验收 IMP-4 时发现。
+  - **现象**：两条脚注只要不在同一段落里，导出 IDML 后 InDesign 里编号都显示"1"（应为 1/2/3...）。
+  - **根因**：本项目 IDML 导出是"一段一 Story、逐帧独立、完全不 threaded"（`NextTextFrame`/`PreviousTextFrame` 恒为 `"n"`）；InDesign 原生脚注按 Story 为单位自动编号，互不串联的 Story 各自从 1 开始计数。已用两条独立验证复现：① DOCX 路径（`layoutD-脚注验收-DOCX导入.idml`，两段各一条脚注，均显示"1"）；② Markdown 路径（现场造的 2 段式脚注 fixture，同样复现）——证实是导出架构的既存缺陷，**不是 IMP-4/DOCX 或 SPLIT-GUI 引入的回归**，只是这次撞见。E3-7（Markdown 脚注，早已"验收通过"合入 main）的原始验收样例大概率把连续脚注挤在同一段落里，侥幸没测出这条。
+  - **影响范围**：任意真实书稿只要有 2 条以上脚注且分属不同段落（几乎所有正常用法）都会中招，脚注编号功能对真实书稿基本不可用。
+  - **修复方向**：根治需要「threaded story」重构（正文改串接文流，替代"一框一 Story"）——此前在 IDML 体积/性能 语境下就提过，现在从"性能优化"升级为"正确性阻塞项"。短期是否有更轻量的变通（如探索 IDML 是否支持跨 Story 的显式编号覆盖 `Preferences.xml` FootnoteOption，无需整改 threading）待评估，若不可行则直接排队做 threaded story。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`（导出侧）；根治需要 `Sources/LayoutDEngine/LayoutEngine.swift` 配合把同页/同 story 的连续正文块改为串接。
+  - 验收：多段各带一条脚注（≥3 条）导出 IDML，InDesign 里脚注编号连续正确（1/2/3）；`review-idml.sh` 加对应探针（造 2+ 段各一条脚注的 fixture，断言正文脚注引用点位置正确即可，编号本身 InDesign 端渲染探针测不出，仍需人工终验）。
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
 - [x] **PERF-2 baseline 布局缓存** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。对照版只在内容/样式真变时重排（比较时剔除 appliedLayoutPlans + qualityMetricsHistory）；纯版面方案操作/undo/redo 不再触发第二次全书排版，单次改动成本约减半。加 baselineLayoutCount 测试钩子+缓存单测。
 - [ ] **B1-IDML 导出侧图文绕排**（配对 B1）：图片框输出 `TextWrapPreference` 让 InDesign 也绕排。文件：`IDMLExporter.swift`。验收：解包含 TextWrapPreference、InDesign 打开绕排生效（用户肉眼）；`review-idml.sh` PASS。
