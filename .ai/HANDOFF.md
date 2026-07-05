@@ -3,6 +3,14 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-05 22:12 | codex | 完成 Codex 道三项新任务：IMP-4 DOCX 脚注导入、IMP-2 图片落点收尾、GUARD-3 DOCX 端到端探针
+- **分支**：feature/codex-docx-import-guards
+- **概述**：按队列顺序一次完成三项 Codex 新任务。① IMP-4：`DOCXBookImporter` 现在解析 `word/footnotes.xml`，消费正文 `w:footnoteReference`，按引用出现顺序生成与 Markdown 导入同构的 `Paragraph(kind: .footnote(number:), styleId: "footnote")`，正文保留对应 Unicode 上标并把脚注段落 ID 写入 `anchoredFootnoteIds`，从而复用既有 IDML 原生 `<Footnote>` 导出路径。② IMP-2 收尾：内嵌图片不再写到源 `.docx` 同级 `images/` 目录，改为写入系统临时目录下唯一 `layoutd-docx-assets-* / images`，`Asset.fileName` 仍保持 `images/<name>` 作为项目内引用名；同时规范化 `word/media` 相对路径。③ GUARD-3：`scripts/review-idml.sh` 新增现场生成最小 DOCX fixture，覆盖 DOCX 粗斜体、内嵌图片和脚注，完整走 DOCX 导入 → IDML 导出 → 解包断言。
+- **改动文件**：Sources/LayoutDImport/DOCXBookImporter.swift；Tests/LayoutDImportTests/DOCXBookImporterTests.swift；scripts/review-idml.sh。
+- **检查**：`swift test --filter DOCXBookImporterTests` PASS(5/0)；`bash scripts/review-idml.sh` PASS（swift build PASS；swift test 281/0；Markdown 行内强调、角色标签、DOCX 导入三类 IDML 探针全过）。
+- **提交**：`3f84c77 feat(import): cover DOCX footnotes and import guards`。
+- **下一步**：Claude 在主仓库审核 `feature/codex-docx-import-guards`，复跑 `bash scripts/review-idml.sh` 后合入 dev；若要做人工验收，可用含脚注/内嵌图 DOCX 导出 IDML，在 InDesign 中确认脚注为原生 Footnote 且图片链接正常。
+
 ## 2026-07-05 22:04 | claude | 给 Codex 道补充下一批任务 + 处理 AG 道 PERF-4b 去留决定(commit b62e0f8)。Codex 队列此前已清空(仅 E3-8 暂缓)
 - **分支**：dev
 - **概述**：给 Codex 道补充下一批任务 + 处理 AG 道 PERF-4b 去留决定(commit b62e0f8)。Codex 队列此前已清空(仅 E3-8 暂缓),盘点 Sources/LayoutDImport/* 发现两个真实缺口:①DOCXBookImporter.swift 完全不解析脚注(零匹配"footnote"),真实书稿常见 .docx 带脚注时会静默丢失,而 Markdown 侧已支持且 IDML 导出侧 E3-7 原生 Footnote 早已验收通过,只差 DOCX 打通——新增 IMP-4。②IMP-2 遗留:DOCXBookImporter.swift:102 把内嵌图片写到源 docx 同级新建的 images/ 文件夹,污染用户文件组织——新增收尾任务。③review-idml.sh 端到端探针目前只覆盖 Markdown 路径,DOCX 导入链路全靠单测无探针兜底——新增 GUARD-3(建议顺序 IMP-4→GUARD-3)。AG 道:用户确认 PERF-4a 的 16% 提升已经够用,4b(二分改单次扫描,高风险)明确暂缓,已按 E3-8 先例用删除线+⏸标记,AG 下一个自动领到的任务顺位变为 SPLIT-GUI(巨型 GUI 文件拆分)。纯文档改动,未跑代码检查(无需要)。
