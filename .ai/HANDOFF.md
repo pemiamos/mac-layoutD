@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-06 17:26 | claude | THREAD-1b cut2 spike（图片锚定对象）实现完成并推送 dev(698ca48)，待用户 InDesign 验收
+- **分支**：dev
+- **概述**：THREAD-1b cut2 spike（图片锚定对象）实现完成并推送 dev(698ca48)，待用户 InDesign 验收
+- **改动文件**：(未填)
+- **检查**：281 测试过、review-idml.sh 10/10（含途中发现并修复的两个"帧静默消失"bug）、逐字节确定性一致、全包 XML well-formed、无重复独立框。锚定对象机制本项目从未验证过，属于 best-effort 实现，未经真·InDesign 验证。
+- **下一步**：(未填)
+
 ## 2026-07-06 17:01 | claude | THREAD-1b cut1 用户 InDesign 验收通过——正文+标题按章串接落地，推送 dev(7e3b8cc)
 - **分支**：dev
 - **概述**：THREAD-1b cut1 用户 InDesign 验收通过——正文+标题按章串接落地，推送 dev(7e3b8cc)
