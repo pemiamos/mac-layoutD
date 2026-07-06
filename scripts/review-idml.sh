@@ -308,6 +308,21 @@ else
   bad "串接探针 fixture 导出失败（见 $TMP/thread-export.log）"
 fi
 
+# --- golden 回归（防漂移网）。仅本地跑：CI runner 的字体解析与本机有差异会误报，
+# 见 .github/workflows/ci.yml 注释；本地跑本脚本即自动带上，堵住「忘了单独跑」的洞。
+if [ -z "${CI:-}" ]; then
+  sec "golden 回归（本地）"
+  if bash scripts/golden-check.sh >"$TMP/golden.log" 2>&1; then
+    ok "golden 基线逐字节一致"
+  else
+    bad "golden 基线漂移——若变化是本次改动的预期结果，跑 scripts/golden-update.sh --reason \"<原因>\" 刷新留痕"
+    tail -20 "$TMP/golden.log"
+  fi
+else
+  sec "golden 回归"
+  echo "  ⏭ CI 环境跳过（字体环境差异会误报；本地跑本脚本时必查）"
+fi
+
 sec "结论"
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" -eq 0 ] && echo "REVIEW: PASS ✅" || echo "REVIEW: FAIL ❌"
