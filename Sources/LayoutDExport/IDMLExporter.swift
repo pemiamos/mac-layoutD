@@ -129,8 +129,8 @@ public struct IDMLExporter {
         }()
 
         var frameSectionIndex: [FrameKey: Int] = [:]
-        var sectionsOnPage: [Int: [Int]] = [:]           // pageIndex -> 该页出现的章序号（去重，出现顺序）
-        var pagesForSection: [Int: [Int]] = [:]          // sectionIndex -> 该章跨越的页序号（去重，出现顺序）
+        var sectionsOnPage: [Int: [SectionPageKey]] = [:]   // pageIndex -> 该页出现的(章,栏)（去重，出现顺序）
+        var flowUnitsForSection: [Int: [SectionPageKey]] = [:] // sectionIndex -> 该章流经的(页,栏)（去重，出现顺序）
         var rectForSectionPage: [SectionPageKey: Rect] = [:]
         var nextOrphanSectionIndex = 0
         // 2 = LayoutEngine.frontMatterPageCount（封面+目录）；该私有常量不跨模块导出，
@@ -149,25 +149,25 @@ public struct IDMLExporter {
                     nextOrphanSectionIndex += 1
                 }
                 frameSectionIndex[FrameKey(page: pi, frame: fi)] = sectionIndex
-                let key = SectionPageKey(section: sectionIndex, page: pi)
+                let column = Int((frame.rect.x * 4).rounded())
+                let key = SectionPageKey(section: sectionIndex, page: pi, column: column)
                 if let existing = rectForSectionPage[key] {
                     rectForSectionPage[key] = unionRect(existing, frame.rect)
                 } else {
                     rectForSectionPage[key] = frame.rect
-                    sectionsOnPage[pi, default: []].append(sectionIndex)
-                    pagesForSection[sectionIndex, default: []].append(pi)
+                    sectionsOnPage[pi, default: []].append(key)
+                    flowUnitsForSection[sectionIndex, default: []].append(key)
                 }
             }
         }
 
         var chainForSectionPage: [SectionPageKey: ChainInfo] = [:]
-        for (sectionIndex, pageList) in pagesForSection {
-            for (k, pi) in pageList.enumerated() {
+        for (sectionIndex, units) in flowUnitsForSection {
+            for (k, unitKey) in units.enumerated() {
                 let selfId = "uChapterTF\(sectionIndex)_\(k)"
                 let previous = k == 0 ? "n" : "uChapterTF\(sectionIndex)_\(k - 1)"
-                let next = k == pageList.count - 1 ? "n" : "uChapterTF\(sectionIndex)_\(k + 1)"
-                chainForSectionPage[SectionPageKey(section: sectionIndex, page: pi)] =
-                    ChainInfo(selfId: selfId, previous: previous, next: next)
+                let next = k == units.count - 1 ? "n" : "uChapterTF\(sectionIndex)_\(k + 1)"
+                chainForSectionPage[unitKey] = ChainInfo(selfId: selfId, previous: previous, next: next)
             }
         }
 
@@ -175,7 +175,7 @@ public struct IDMLExporter {
         // 与 frame 是否被拆分跨页无关——inlineRuns 天然对齐原文，无需二次映射。
         let chapterVertical = project.pageSetup.layoutDirection == .vertical
         var chapterStorySelf: [Int: String] = [:]
-        for sectionIndex in pagesForSection.keys.sorted() {
+        for sectionIndex in flowUnitsForSection.keys.sorted() {
             let section = project.sections[sectionIndex]
             var chapterParagraphs: [ChapterParagraph] = []
             let title = section.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -346,10 +346,10 @@ public struct IDMLExporter {
                 }
             }
 
-            for sectionIndex in sectionsOnPage[pi] ?? [] {
-                guard let storySelf = chapterStorySelf[sectionIndex],
-                      let rect = rectForSectionPage[SectionPageKey(section: sectionIndex, page: pi)],
-                      let chain = chainForSectionPage[SectionPageKey(section: sectionIndex, page: pi)] else { continue }
+            for unitKey in sectionsOnPage[pi] ?? [] {
+                guard let storySelf = chapterStorySelf[unitKey.section],
+                      let rect = rectForSectionPage[unitKey],
+                      let chain = chainForSectionPage[unitKey] else { continue }
                 items.append(textFrameItem(self: chain.selfId, story: storySelf, rect: rect,
                                            fillColor: nil, strokeColor: nil, strokeWidth: 0,
                                            pageW: pageW, pageH: pageH, dx: dx,
@@ -615,7 +615,10 @@ public struct IDMLExporter {
     // MARK: - THREAD-1b 章串接辅助类型
 
     private struct FrameKey: Hashable { let page: Int; let frame: Int }
-    private struct SectionPageKey: Hashable { let section: Int; let page: Int }
+    // `column` 是 frame.rect.x 的四分之一点取整——多栏页面里同一页会有多个不同 x 的栏，
+    // 绝不能把它们粗暴并成一个宽框（会产出一个跨两栏的超宽 TextFrame，InDesign 里断行/
+    // 对齐全乱）。同页同栏的相邻正文段落才合并成一个 TextFrame。
+    private struct SectionPageKey: Hashable { let section: Int; let page: Int; let column: Int }
     private struct ChainInfo { let selfId: String; let previous: String; let next: String }
     private struct ChapterParagraph {
         let styleRef: String

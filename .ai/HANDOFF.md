@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-06 15:59 | claude | 修复 THREAD-1b cut1 段落断行 bug：Story 里章名标题与首段正文粘连——已定位根因并修复，推送 dev(0c539db)
+- **分支**：dev
+- **概述**：修复 THREAD-1b cut1 段落断行 bug：Story 里章名标题与首段正文粘连——已定位根因并修复，推送 dev(0c539db)
+- **改动文件**：(未填)
+- **检查**：对照真实存在过的 THREAD-1a spike 脚本（scratchpad/gen-thread-spike.py，会话间临时文件里找到）确认了验证过的写法：每段 Content 末尾带字面 \n（最后一段不带），ParagraphStyleRange 边界本身不足以让 InDesign 断行。修复后 swift test 281 过、review-idml.sh 10/10 PASS、两次导出逐字节确定性一致、3 页合成章节 uChapterTF0_0..2 串接链验证正确。
+- **下一步**：(未填)
+
 ## 2026-07-06 05:51 | claude | THREAD-1b cut 1（正文+标题按章串接）实现完成并推送 dev(bd43d10)，待用户 InDesign 验收
 - **分支**：dev
 - **概述**：THREAD-1b cut 1（正文+标题按章串接）实现完成并推送 dev(bd43d10)，待用户 InDesign 验收
