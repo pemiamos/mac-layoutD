@@ -396,6 +396,18 @@ public struct IDMLExporter {
             spreadRefs.append("\t<idPkg:Spread src=\"Spreads/Spread_\(spreadSelf).xml\"/>")
         }
 
+        // MASTER-1：主页放一个自动页码 TextFrame；正文页 AppliedMaster="uMasterA" 已经
+        // 在逐页构建时统一设置，套上主页即自动出正确页码，不用逐页画。位置沿用现有
+        // PDF/PNG 页码的靠页面上方居中做法，先不做对开镜像（留给 SPREAD-1 一起做）。
+        let masterPageNumberStorySelf = "uMasterPageNumberStory"
+        storyFiles["Stories/Story_\(masterPageNumberStorySelf).xml"] = masterPageNumberStoryXML(self: masterPageNumberStorySelf)
+        storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(masterPageNumberStorySelf).xml\"/>")
+        storyListIds.append(masterPageNumberStorySelf)
+        let masterPageNumberRect = Rect(x: pageW / 2 - 30, y: 20, width: 60, height: 16)
+        let masterPageNumberItem = textFrameItem(
+            self: "uMasterPageNumberTF", story: masterPageNumberStorySelf, rect: masterPageNumberRect,
+            fillColor: nil, strokeColor: nil, strokeWidth: 0, pageW: pageW, pageH: pageH)
+
         // 组装包内所有部件。
         var files: [String: String] = [
             "mimetype": "application/vnd.adobe.indesign-idml-package",
@@ -407,7 +419,7 @@ public struct IDMLExporter {
             "Resources/Preferences.xml": preferences(pageW: pageW, pageH: pageH, pageCount: pages.count, facing: facing),
             "XML/Tags.xml": tags(),
             "XML/BackingStory.xml": backingStory(),
-            "MasterSpreads/MasterSpread_uMasterA.xml": masterSpread(pageW: pageW, pageH: pageH),
+            "MasterSpreads/MasterSpread_uMasterA.xml": masterSpread(pageW: pageW, pageH: pageH, items: [masterPageNumberItem]),
             "designmap.xml": designmap(spreadRefs: spreadRefs, storyRefs: storyRefs, storyList: storyListIds)
         ]
         files.merge(spreadFiles) { _, b in b }
@@ -1071,14 +1083,34 @@ public struct IDMLExporter {
         """
     }
 
-    private func masterSpread(pageW: Double, pageH: Double) -> String {
-        """
+    private func masterSpread(pageW: Double, pageH: Double, items: [String] = []) -> String {
+        let allItems = items.joined(separator: "\n")
+        return """
         \(header)
         <idPkg:MasterSpread \(pkgNS) DOMVersion="\(dom)">
         \t<MasterSpread Self="uMasterA" Name="A-Master" NamePrefix="A" BaseName="主页" ShowMasterItems="true" PageCount="1" OverriddenPageItemProps="">
         \t\t<Page Self="uMasterApage" Name="A" AppliedMaster="n" MasterPageTransform="1 0 0 1 0 0" GeometricBounds="0 0 \(fmt(pageH)) \(fmt(pageW))" ItemTransform="1 0 0 1 \(fmt(-pageW/2)) \(fmt(-pageH/2))"/>
+        \(allItems)
         \t</MasterSpread>
         </idPkg:MasterSpread>
+        """
+    }
+
+    /// MASTER-1：自动页码挂在主页上，正文页应用主页即可自动出正确页码、无需逐页画。
+    /// `<?ACE 18?>` 是 InDesign 「当前页码」特殊字符在 IDML 里的字面写法（作为
+    /// Content 内的一个处理指令节点，不是普通文本），来自 Adobe 官方约定
+    /// （NextPageNumber/PreviousPageNumber 变体靠 PageNumberType 属性区分，省略即当前页码）。
+    private func masterPageNumberStoryXML(self id: String) -> String {
+        """
+        \(header)
+        <idPkg:Story \(pkgNS) DOMVersion="\(dom)">
+        \t<Story Self="\(id)" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+        \t\t<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+        \t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/\(xmlSafe(StyleID.caption.rawValue))" Justification="CenterAlign">
+        \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content><?ACE 18?></Content></CharacterStyleRange>
+        \t\t</ParagraphStyleRange>
+        \t</Story>
+        </idPkg:Story>
         """
     }
 
