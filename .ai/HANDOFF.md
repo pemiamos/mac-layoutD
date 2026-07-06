@@ -3,6 +3,20 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 05:33 | claude | 全项目 review 完成（进度盘点/风险清单/推荐计划），无代码改动。核实：dev=main 完全同步、14 个 feature 分支全部已合并无遗落、283
+- **分支**：dev
+- **概述**：全项目 review 完成（进度盘点/风险清单/推荐计划），无代码改动。核实：dev=main 完全同步、14 个 feature 分支全部已合并无遗落、283 测试过、PERF-1 基准 161页/945ms、PERF-4a 缓存防撞键测试在位、IDMLExporter.swift 已回涨到 1563 行成最大文件。风险要点：真书规模未压测（最高优先建议全书端到端试跑）、视觉验收积压 4 项（TYPE-1/E3-9/工作区骨架/工具栏）、golden 仅本地跑、锚定文字拉伸 bug 根因未明。
+- **改动文件**：(未填)
+- **检查**：run_checks("test")：build 过、283 测试 0 失败、PERF-1 161页/945ms。
+- **下一步**：(未填)
+
+## 2026-07-07 02:05 | claude | dev合并进main并推送(a65d901..2655913)——SPLIT-ENGINE正式落地main
+- **分支**：dev
+- **概述**：dev合并进main并推送(a65d901..2655913)——SPLIT-ENGINE正式落地main
+- **改动文件**：(未填)
+- **检查**：main上重跑：build过、283测试过、review-idml.sh 12/12、golden-check逐字节一致。
+- **下一步**：(未填)
+
 ## 2026-07-07 02:03 | claude | SPLIT-ENGINE 完成——LayoutEngine.swift 1971行拆成7个文件，纯搬家零行为变化，推送dev(ff70dc8)
 - **分支**：dev
 - **概述**：SPLIT-ENGINE 完成——LayoutEngine.swift 1971行拆成7个文件，纯搬家零行为变化，推送dev(ff70dc8)
