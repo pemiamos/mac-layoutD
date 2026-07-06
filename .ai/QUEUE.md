@@ -81,7 +81,13 @@
   - **后续可选**（不阻塞，按需再评估）：扩展锚定机制到孤立 `.figure` 图/抽言（需要设计"没有宿主段落时怎么挂"）；图注随图锚定需要真机 InDesign 调试后再重试。
 - [x] **THREAD-1b cut 3：收边** — ✅ Claude（`309e18e`）。GUARD-4 串接探针加进 `review-idml.sh`（60段合成章节撑出多页/栏，断言单头单尾、正反遍历都覆盖全部框、无孤儿无环；已自证：人为断链后探针 FAIL，修复后恢复 PASS）。封面/目录/表格特例复核：造了个含表格+足够正文触发真实 TOC 的样张，确认章 Story 只含预期的标题+正文段落，表格/目录仍各自走独立 Story，未被误并进文流。**THREAD-1b 三刀全部完成**：cut1（正文+标题按章串接，用户验收）、cut2（内嵌图锚定，用户验收；图注锚定放弃，见 DECISIONS）、cut3（收边，本条）。
   - 说明：`scripts/review-idml.sh` 名义上是 Codex 道文件，但 GUARD-4 是 THREAD-1b 收尾的一部分、Claude 有完整上下文，直接实现而非中途交接。
-- [ ] **MASTER-1 主页交付**（THREAD-1 之后，同文件避免冲突）：版心/栏参考、自动页码（CurrentPageNumber 变量）、页眉书名/章名放 A-主页，正文页应用主页——编辑改页码位置只动主页一处。现状疑似页码按静态文本逐页画，动手前先核实。文件：`IDMLExporter.swift`。验收：InDesign 里主页面板见 A-主页带自动页码，正文页页码随主页变。
+- [x] **MASTER-1 自动页码** — ✅ Claude（`9e2ccc8`）。**待用户 InDesign 验收**（桌面 `master-1-spike.idml`，30段正文分3个内容页）。
+  - **核实结果（动手前先查了现状）**：之前的猜测"页码按静态文本逐页画"是错的——IDML 导出压根**没有页码**，只有 PDF/PNG 导出器直接用 CoreGraphics 逐页画数字（`drawPageNumber`），跟 frame/主页完全无关。IDML 里的主页此前是空的（只有一个 `<Page>` 元素，没有任何内容）。
+  - **实现**：主页加一个 TextFrame，内容是 InDesign「当前页码」特殊字符——写法是 `<Content>` 里嵌一个字面的 `<?ACE 18?>` 处理指令节点（不是普通文本！），这是 Adobe 官方约定（查了一份真实的 Adobe 参考文档才拿到准确写法，没有再像锚定对象那次盲猜——`<?ACE 18?>` 本身也验证过是合法 XML，`review-idml.sh` 的 well-formed 检查过了）。正文页统一 `AppliedMaster="uMasterA"`，套上主页页码就自动出对，不用逐页画。位置沿用现有 PDF/PNG 页码的靠页面上方居中做法。
+  - **范围收窄**：只挪了页码，页眉书名/章名没动（还是 LayoutEngine 逐页画的静态标题——它是 PDF/PNG/IDML 共用的一份 frame，挪走要么得复制要么把三个导出器共用的东西拆开；而且"随页显示当前章名"需要 InDesign 文本变量绑定段落样式，是明显更大的一个功能，没有在这刀里做）。版心/栏参考（原计划里的一部分）也没做——现状页面本身已经有版心/栏（BOOK 层面的实际排版），"主页版心参考线"是可视化辅助线，价值没有自动页码高，先跳过。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
+  - 验收：281 测试过、review-idml.sh 12/12、逐字节确定性一致、全包 XML well-formed、golden 已刷新（新增 master TextFrame+Story，改动隔离）。**InDesign 人工验证待用户**：主页面板见 A-主页带页码，正文页页码正确递增。
+  - **后续可选**（不阻塞）：对开镜像页码位置（留给 SPREAD-1 一起做）；页眉显示当前章名（需要文本变量机制，工作量较大，按需评估）。
 - [ ] **SPREAD-1 对页合并 Spread**（THREAD-1 之后）：per-page Spread 改真对页 spread（左右页同 spread、版心镜像），配合 MASTER-1。验收：InDesign 页面面板呈对页排列，与 layoutD 预览一致。
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
 - [x] **PERF-2 baseline 布局缓存** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。对照版只在内容/样式真变时重排（比较时剔除 appliedLayoutPlans + qualityMetricsHistory）；纯版面方案操作/undo/redo 不再触发第二次全书排版，单次改动成本约减半。加 baselineLayoutCount 测试钩子+缓存单测。
