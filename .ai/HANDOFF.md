@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 01:20 | claude | B1-IDML（导出侧图文绕排）实现完成并推送 dev(67d2083)，待用户 InDesign 验收
+- **分支**：dev
+- **概述**：B1-IDML（导出侧图文绕排）实现完成并推送 dev(67d2083)，待用户 InDesign 验收
+- **改动文件**：(未填)
+- **检查**：写法对照真实 Adobe 导出的 IDML 样本确认过结构（没有再盲猜）。282测试过、review-idml.sh 12/12、XML well-formed、golden 无变化（样例项目素材标了 unused 从未真正入版，另造了含真实图片的样张验证）。
+- **下一步**：(未填)
+
 ## 2026-07-07 00:41 | claude | dev 合并进 main 并推送(0bbda6c..7801b8c)——THREAD-1/MASTER-1/SPREAD-1 主线正式落地 main
 - **分支**：dev
 - **概述**：dev 合并进 main 并推送(0bbda6c..7801b8c)——THREAD-1/MASTER-1/SPREAD-1 主线正式落地 main
