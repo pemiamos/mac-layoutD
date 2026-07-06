@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 06:22 | claude | 用户拍板：规范包测试三套变体中选定「方案A · 探索黄（杂志感）」为样张基准。已 record_decision（规范包路线定案 + 方案A 基准）并把三个落地
+- **分支**：dev
+- **概述**：用户拍板：规范包测试三套变体中选定「方案A · 探索黄（杂志感）」为样张基准。已 record_decision（规范包路线定案 + 方案A 基准）并把三个落地任务排入 QUEUE：SPEC-PACK-1（Codex 道，最高优先，schema 须以桌面 3 份真实 JSON 为样例校准）、FIXTURE-1（Claude 道，标准样章）、SAMPLE-1（AG 道，依赖前两者，可先搭 CLI 骨架）。已提交 97891f6 docs(queue+decisions)。注意：存在并发对话（08634e8 于 06:19 提交了 GOLDEN-GUARD/SPLIT-EXPORT 记录），本次改动叠于其上，无冲突。
+- **改动文件**：.ai/QUEUE.md, .ai/DECISIONS.md
+- **检查**：docs-only 改动，未跑构建/测试；commit 97891f6
+- **下一步**：Codex 领 SPEC-PACK-1（读 ~/Desktop/layoutD-规范包测试/ 三份 JSON 作 schema 样例）；Claude 下棒做 FIXTURE-1；AG 在依赖就绪后做 SAMPLE-1。三者齐后用方案A JSON 重跑本次测试出真样张 PDF 给用户终验。
+
 ## 2026-07-07 06:19 | claude | 三项落地：③仓库小扫除（删10本地+8远端已合并分支、清2个残留shapes worktree；AG/Codex副本还停在旧feature分支、各锁1个待删分支
 - **分支**：dev
 - **概述**：三项落地：③仓库小扫除（删10本地+8远端已合并分支、清2个残留shapes worktree；AG/Codex副本还停在旧feature分支、各锁1个待删分支；根目录layoutD-icon.png为低配重复版待用户定夺）+ relay run_checks修复（server.py正则捞XCTest汇总行，重启生效）；④GOLDEN-GUARD防漂移护栏（c311fc7：golden-update.sh强制--reason+GOLDEN-LOG.md留痕+强制看diff+拒绝空刷；review-idml.sh本地自动带golden-check，探针12→13，三路径自证）；⑤SPLIT-EXPORT（87f2dfb：IDMLExporter 1563行拆7文件，纯搬家，排序diff零行丢失）。已合dev(10c0d0b)。过程发现并发对话在同一checkout写handoff（N1场景），本会话改在专属worktree作业。
