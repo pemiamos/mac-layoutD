@@ -88,7 +88,11 @@
   - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
   - 验收：281 测试过、review-idml.sh 12/12、逐字节确定性一致、全包 XML well-formed、golden 已刷新（新增 master TextFrame+Story，改动隔离）。**InDesign 人工验证待用户**：主页面板见 A-主页带页码，正文页页码正确递增。
   - **后续可选**（不阻塞）：对开镜像页码位置（留给 SPREAD-1 一起做）；页眉显示当前章名（需要文本变量机制，工作量较大，按需评估）。
-- [ ] **SPREAD-1 对页合并 Spread**（THREAD-1 之后）：per-page Spread 改真对页 spread（左右页同 spread、版心镜像），配合 MASTER-1。验收：InDesign 页面面板呈对页排列，与 layoutD 预览一致。
+- [x] **SPREAD-1 对页合并 Spread** — ✅ Claude（`b576554`）。**待用户 GUI 验收**（需要实际打开 App 操作，无法生成样张代劳）。
+  - **核实结果（动手前先查了现状，发现活儿比预期小很多）**：真对页 spread（左右页同 spread、书脊镜像、版心镜像）**早就做完并验收过了**——`E2-4`（Claude, 用户 2026-06 已验收 PASS）+ `E2-4p`（AG，PDF/PNG 侧并排预览）。`testFacingPagesSpreadImposition` 单测也在跑。真正的缺口只有一处：GUI 的"Export IDML..."导出面板，"对开跨页"开关**硬编码默认关闭**、跟项目自身的 `pageSetup.facingPages` 设置完全脱节——旁边的 CMYK 开关早就做了"默认跟随项目设置"，唯独这个漏了。等于说：用户在 App 里预览的明明是对开跨页书稿，导出 IDML 时如果忘了手动勾选，出来的就是非对开——这正是验收标准"与 layoutD 预览一致"没做到的地方。
+  - 实现：一行修复，`WorkspaceViewController.exportIDML()` 里让 `settingsState.facingPages` 默认取 `appState.project.pageSetup.facingPages`（跟 `cmykColors` 已有的写法一致），面板里仍可手动改。CLI 的 `--idml-facing` 保持显式选项不动（脚本化场景应该显式指定，不该悄悄跟着项目状态变）。
+  - 文件：`Sources/LayoutDApp/WorkspaceViewController.swift`。
+  - 验收：281 测试过、review-idml.sh 12/12（对开导出机制本身未改动，`testFacingPagesSpreadImposition` 仍过）。**GUI 验收待用户**：打开一份 `pageSetup.facingPages=true` 的项目，选「Export IDML...」，确认对话框里"启用对开跨页"默认已经打勾（不用手动点）。
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
 - [x] **PERF-2 baseline 布局缓存** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。对照版只在内容/样式真变时重排（比较时剔除 appliedLayoutPlans + qualityMetricsHistory）；纯版面方案操作/undo/redo 不再触发第二次全书排版，单次改动成本约减半。加 baselineLayoutCount 测试钩子+缓存单测。
 - [ ] **B1-IDML 导出侧图文绕排**（次优先，THREAD-1 批之后顺带做——绕排影响文流走向，属灌版相关但可后补）：图片框输出 `TextWrapPreference` 让 InDesign 也绕排。文件：`IDMLExporter.swift`。验收：解包含 TextWrapPreference、InDesign 打开绕排生效（用户肉眼）；`review-idml.sh` PASS。
