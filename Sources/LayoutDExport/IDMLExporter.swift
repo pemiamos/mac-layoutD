@@ -161,6 +161,27 @@ public struct IDMLExporter {
             }
         }
 
+        // THREAD-1b cut 2（图片锚定对象，最小可行范围）：只处理挂在正文段落
+        // `anchoredAssetIds` 上、且该段落本身在本章串接文流里的图片——转成嵌入所属段落
+        // 文流内的锚定对象，随文重排移动。孤立的 `.figure` 段落、抽言（callout）、图注仍
+        // 保持独立定位框（本刀范围之外，留给后续迭代）。
+        var anchoredAssetsByParagraphId: [UUID: [(asset: Asset, rect: Rect, packagedFileName: String?)]] = [:]
+        var anchoredImageFrameKeys: Set<FrameKey> = []
+        for (pi, page) in pages.enumerated() where page.number > 2 {
+            for (fi, frame) in page.frames.enumerated() {
+                // 只吃「挂在正文段落 anchoredAssetIds 上」的图。孤立的 `.figure` 段落自己就是
+                // 图的宿主段落、被 isBodyFlowParagraph 排除在文流之外——它的图不能被这里认领，
+                // 否则两头都进不去（既不进锚定对象，独立定位框那条路也被跳过），图片直接消失。
+                guard frame.kind == .image, case .asset(let assetId) = frame.content,
+                      let pid = frame.sourceParagraphId, sectionIndexByParagraphId[pid] != nil,
+                      let hostKind = paragraphsByID[pid]?.kind, isBodyFlowParagraph(hostKind),
+                      let asset = project.assets.first(where: { $0.id == assetId }) else { continue }
+                anchoredAssetsByParagraphId[pid, default: []].append(
+                    (asset: asset, rect: frame.rect, packagedFileName: packagedLinks[assetId]?.fileName))
+                anchoredImageFrameKeys.insert(FrameKey(page: pi, frame: fi))
+            }
+        }
+
         var chainForSectionPage: [SectionPageKey: ChainInfo] = [:]
         for (sectionIndex, units) in flowUnitsForSection {
             for (k, unitKey) in units.enumerated() {
@@ -190,7 +211,10 @@ public struct IDMLExporter {
             for story in section.stories {
                 for paragraph in story.paragraphs {
                     guard isBodyFlowParagraph(paragraph.kind) else { continue }
-                    guard !paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+                    let anchoredAssets = anchoredAssetsByParagraphId[paragraph.id] ?? []
+                    // 段落文字可能是空的（比如 DOCX 里专门用来装图的段落）——只要挂了锚定
+                    // 对象就不能跳过，否则图片既不进文流也不再独立出框，直接从导出里消失。
+                    guard !paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !anchoredAssets.isEmpty else { continue }
                     let style = ctx.resolvedStyle(id: paragraph.styleId)
                     let footnotes = paragraph.safeAnchoredFootnoteIds.compactMap { paragraphsByID[$0] }
                     chapterParagraphs.append(ChapterParagraph(
@@ -198,7 +222,8 @@ public struct IDMLExporter {
                         // 保留原文（不 trim），inlineRuns 的偏移量以 paragraph.text 为基准，
                         // trim 掉前导空白会让二者错位。
                         text: paragraph.text, inlineRuns: paragraph.inlineRuns, footnotes: footnotes,
-                        footnoteStyleRef: footnoteStyleRef(for: footnotes, ctx: ctx)
+                        footnoteStyleRef: footnoteStyleRef(for: footnotes, ctx: ctx),
+                        anchoredAssets: anchoredAssets
                     ))
                 }
             }
@@ -322,6 +347,8 @@ public struct IDMLExporter {
                     storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                     storyListIds.append(storySelf)
                 case .asset(let id), .spreadAsset(let id, _):
+                    // 已转为锚定对象、嵌进所属段落的文流里，这里不再重复画一个独立定位框。
+                    if anchoredImageFrameKeys.contains(FrameKey(page: pi, frame: fi)) { continue }
                     guard let asset = project.assets.first(where: { $0.id == id }) else { continue }
                     items.append(imageItem(self: "uRect\(pi)_\(fi)", imageSelf: "uImg\(pi)_\(fi)",
                                            linkSelf: "uLink\(pi)_\(fi)", asset: asset,
@@ -626,6 +653,7 @@ public struct IDMLExporter {
         let inlineRuns: [InlineRun]?
         let footnotes: [Paragraph]
         let footnoteStyleRef: String
+        var anchoredAssets: [(asset: Asset, rect: Rect, packagedFileName: String?)] = []
     }
 
     private func unionRect(_ a: Rect, _ b: Rect) -> Rect {
@@ -802,6 +830,42 @@ public struct IDMLExporter {
         \t\t\t\t<Link Self="\(linkSelf)" LinkResourceURI="\(esc(uri))" LinkResourceFormat="$ID/" StoredState="Normal" LinkClientID="257" LinkResourceModificationState="None" LinkObjectModificationState="None" LinkResourceSize="0~0" CanEmbed="true" CanUnembed="true" CanPackage="true" ImportPolicy="NoAutoImport" ShowInUI="true"/>
         \t\t\t</Image>
         \t\t</Rectangle>
+        """
+    }
+
+    /// THREAD-1b cut 2（首次落地，未经真·InDesign 验证的新机制）：把一张图嵌成锚定对象，
+    /// 挂在宿主段落文流内——不再是页面绝对坐标的独立 Rectangle，而是相对锚点的局部几何
+    /// （0,0 到 width,height），定位交给 `AnchoredObjectSetting`（AnchoredAboveLine：随锚点
+    /// 所在行浮动，是 InDesign「随文图」的标准做法）。锚点本身是文本流里的一个占位字符
+    /// （Unicode Object Replacement Character U+FFFC），放在专属的 CharacterStyleRange 里，
+    /// 与正文的可见文字分开，避免污染行内强调的偏移计算。
+    private func anchoredImageCharacterStyleRange(self id: String, imageSelf: String, linkSelf: String, asset: Asset, packagedFileName: String?, width: Double, height: Double) -> String {
+        let natW = Double(max(asset.pixelWidth, 1))
+        let natH = Double(max(asset.pixelHeight, 1))
+        let sx = width / natW, sy = height / natH
+        let effX = Int((72.0 / max(sx, 0.0001)).rounded()), effY = Int((72.0 / max(sy, 0.0001)).rounded())
+        let uri = packagedFileName.map { "file:Links/\($0)" } ?? "file:missing-\(asset.fileName)"
+        func p(_ x: Double, _ y: Double) -> String {
+            let a = "\(fmt(x)) \(fmt(y))"
+            return "<PathPointType Anchor=\"\(a)\" LeftDirection=\"\(a)\" RightDirection=\"\(a)\"/>"
+        }
+        return """
+        \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]">
+        \t\t\t\t<Rectangle Self="\(id)" ContentType="GraphicType" StoryTitle="$ID/" ItemTransform="1 0 0 1 0 0">
+        \t\t\t\t\t<Properties>
+        \t\t\t\t\t\t<PathGeometry><GeometryPathType PathOpen="false"><PathPointArray>\(p(0, 0))\(p(width, 0))\(p(width, height))\(p(0, height))</PathPointArray></GeometryPathType></PathGeometry>
+        \t\t\t\t\t\t<AnchoredObjectSetting AnchoredPosition="AnchoredAboveLine" AnchorPoint="TopLeftAnchor" AnchorXoffset="0" AnchorYoffset="0" AnchorSpineOffset="0" AnchoredRelativeTo="none" HorizontalAlignment="CenterAlign" HorizontalReferencePoint="TextFrame" VerticalAlignment="TopAlign" VerticalReferencePoint="LineBaseline" SpineRelative="false" LockPosition="false" PinSpread="false"/>
+        \t\t\t\t\t</Properties>
+        \t\t\t\t\t<Image Self="\(imageSelf)" Space="$ID/#Links_RGB" ActualPpi="72 72" EffectivePpi="\(effX) \(effY)" ImageRenderingIntent="UseColorSettings" Visible="true" ItemTransform="\(fmt(sx)) 0 0 \(fmt(sy)) 0 0">
+        \t\t\t\t\t\t<Properties>
+        \t\t\t\t\t\t\t<Profile type="string">$ID/Embedded</Profile>
+        \t\t\t\t\t\t\t<GraphicBounds Left="0" Top="0" Right="\(fmt(natW))" Bottom="\(fmt(natH))"/>
+        \t\t\t\t\t\t</Properties>
+        \t\t\t\t\t\t<Link Self="\(linkSelf)" LinkResourceURI="\(esc(uri))" LinkResourceFormat="$ID/" StoredState="Normal" LinkClientID="257" LinkResourceModificationState="None" LinkObjectModificationState="None" LinkResourceSize="0~0" CanEmbed="true" CanUnembed="true" CanPackage="true" ImportPolicy="NoAutoImport" ShowInUI="true"/>
+        \t\t\t\t\t</Image>
+        \t\t\t\t</Rectangle>
+        \t\t\t\t<Content>\u{FFFC}</Content>
+        \t\t\t</CharacterStyleRange>
         """
     }
 
@@ -1112,10 +1176,24 @@ public struct IDMLExporter {
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
         let lastIndex = paragraphs.count - 1
         let body = paragraphs.enumerated().map { index, p -> String in
-            let content = index == lastIndex ? p.text : p.text + "\n"
+            // 顺序很关键：可见文字 → 锚定对象（挂在本段末尾，随本段走）→ 段落标记 \n
+            // （单独一个 CharacterStyleRange，不掺进正文的 Content，避免和锚点字符混在一起）。
+            let textRanges = characterStyleRanges(for: p.text, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef)
+            let anchoredRanges = p.anchoredAssets.enumerated().map { assetIndex, anchored in
+                anchoredImageCharacterStyleRange(
+                    self: "uAnchorImg\(id)_\(index)_\(assetIndex)",
+                    imageSelf: "uAnchorImgAsset\(id)_\(index)_\(assetIndex)",
+                    linkSelf: "uAnchorImgLink\(id)_\(index)_\(assetIndex)",
+                    asset: anchored.asset, packagedFileName: anchored.packagedFileName,
+                    width: anchored.rect.width, height: anchored.rect.height)
+            }
+            let paragraphMark = index == lastIndex ? [] : [
+                "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"><Content>\n</Content></CharacterStyleRange>"
+            ]
+            let ranges = ([textRanges] + anchoredRanges + paragraphMark).joined(separator: "\n")
             return """
             \t\t<ParagraphStyleRange AppliedParagraphStyle="\(p.styleRef)">
-            \(characterStyleRanges(for: content, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef))
+            \(ranges)
             \t\t</ParagraphStyleRange>
             """
         }.joined(separator: "\n")

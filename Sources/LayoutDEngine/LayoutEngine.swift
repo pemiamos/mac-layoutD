@@ -222,7 +222,7 @@ private struct LayoutContext {
 
             if case .figure(let assetId) = paragraph.kind {
                 if let asset = project.assets.first(where: { $0.id == assetId }) {
-                    addAsset(asset)
+                    addAsset(asset, sourceParagraphId: paragraph.id)
                 } else {
                     issues.append(
                         LayoutIssue(
@@ -273,7 +273,7 @@ private struct LayoutContext {
 
             for assetId in paragraph.anchoredAssetIds {
                 if let asset = project.assets.first(where: { $0.id == assetId }) {
-                    addAsset(asset)
+                    addAsset(asset, sourceParagraphId: paragraph.id)
                 }
             }
         }
@@ -801,7 +801,7 @@ private struct LayoutContext {
         return prefix
     }
 
-    private mutating func addAsset(_ asset: Asset) {
+    private mutating func addAsset(_ asset: Asset, sourceParagraphId: UUID? = nil) {
         if asset.role == .spread {
             addSpreadAsset(asset)
             return
@@ -817,14 +817,14 @@ private struct LayoutContext {
         }
 
         let imageRect = Rect(x: cursorX, y: cursorY, width: imageWidth, height: desiredHeight)
-        currentPage.frames.append(PageFrame(kind: .image, rect: imageRect, content: .asset(asset.id)))
+        currentPage.frames.append(PageFrame(kind: .image, rect: imageRect, content: .asset(asset.id), sourceParagraphId: sourceParagraphId))
         cursorY += desiredHeight + 4
 
         if let caption = asset.caption {
             let caption = numberedCaption(caption, number: figureCounter)
             let captionRect = Rect(x: cursorX, y: cursorY, width: imageWidth, height: 28)
             currentPage.frames.append(
-                PageFrame(kind: .caption, rect: captionRect, styleId: StyleID.caption.rawValue, content: .text(caption))
+                PageFrame(kind: .caption, rect: captionRect, styleId: StyleID.caption.rawValue, content: .text(caption), sourceParagraphId: sourceParagraphId)
             )
             cursorY += 34
         } else {
