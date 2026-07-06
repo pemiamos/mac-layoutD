@@ -3,6 +3,27 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 01:37 | claude | 合并 AG FIX-CANVAS-1 + B1-IDML 用户验收通过 + 新修段末孤字(TYPE-1)，推送 dev(ab494c4)
+- **分支**：dev
+- **概述**：合并 AG FIX-CANVAS-1 + B1-IDML 用户验收通过 + 新修段末孤字(TYPE-1)，推送 dev(ab494c4)
+- **改动文件**：(未填)
+- **检查**：AG FIX-CANVAS-1 合并后 283 测试过、review-idml.sh 12/12。B1-IDML 用户 InDesign 验收通过（满栏图上下绕排正常）。TYPE-1 孤字修复：确认 InDesign 无原生开关、用 NoBreak 字符属性（对照 Adobe DOM 文档确认写法），283测试过/确定性一致/golden隔离刷新，样张里「辨。」孤字已绑成「可辨。」。
+- **下一步**：(未填)
+
+## 2026-07-07 01:20 | claude | B1-IDML（导出侧图文绕排）实现完成并推送 dev(67d2083)，待用户 InDesign 验收
+- **分支**：dev
+- **概述**：B1-IDML（导出侧图文绕排）实现完成并推送 dev(67d2083)，待用户 InDesign 验收
+- **改动文件**：(未填)
+- **检查**：写法对照真实 Adobe 导出的 IDML 样本确认过结构（没有再盲猜）。282测试过、review-idml.sh 12/12、XML well-formed、golden 无变化（样例项目素材标了 unused 从未真正入版，另造了含真实图片的样张验证）。
+- **下一步**：(未填)
+
+## 2026-07-07 00:41 | claude | dev 合并进 main 并推送(0bbda6c..7801b8c)——THREAD-1/MASTER-1/SPREAD-1 主线正式落地 main
+- **分支**：dev
+- **概述**：dev 合并进 main 并推送(0bbda6c..7801b8c)——THREAD-1/MASTER-1/SPREAD-1 主线正式落地 main
+- **改动文件**：(未填)
+- **检查**：合并后 main 上重跑：swift build 过、282测试过、review-idml.sh 12/12 PASS，再推送。
+- **下一步**：(未填)
+
 ## 2026-07-07 00:38 | claude | SPREAD-1 + BUG-2 均验证通过——THREAD-1/MASTER-1/SPREAD-1 主线全部完结，推送 dev(6f82c31)
 - **分支**：dev
 - **概述**：SPREAD-1 + BUG-2 均验证通过——THREAD-1/MASTER-1/SPREAD-1 主线全部完结，推送 dev(6f82c31)

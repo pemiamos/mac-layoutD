@@ -877,7 +877,7 @@ public struct PDFExporter {
 
         let label: String
         if let id = assetId, let asset = project.assets.first(where: { $0.id == id }) {
-            label = asset.fileName
+            label = asset.caption ?? (asset.fileName as NSString).lastPathComponent
         } else {
             label = "Image"
         }

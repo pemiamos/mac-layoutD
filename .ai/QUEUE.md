@@ -65,6 +65,7 @@
 > **2026-07-06 定位校准（见 DECISIONS）**：layoutD 交付「初排灌版」给 InDesign，不替代 InDesign。开发价值标准 = 文流/样式/视觉规范/CMYK 高完成度迁移进 InDesign、给人工调整省时间。可编辑性 > 逐像素冻结（InDesign 里漂移可人工调校）。脚注/傍点/表格深化 = 初排细枝末节，不再投入。
 
 - [x] **BUG-2 文档末尾「新建页面」无反应** — ✅ **2026-07-07 用户验证通过**（`a4ea45b`），验收 SPREAD-1 时顺手发现并现场修复。根因：`insertPage()` 在 `pageNum = 当前页数+1` 处存一条空白 LayoutPlan，但引擎只在**内容溢出触发翻页**时才检查该页有没有计划——如果插入的空白页排在所有正文内容之后，永远没有内容会触发翻页翻到那么远，计划存了但没人看，页面凭空消失。`finish()` 收尾时补一次检查：正文排完后如果紧接着还有计划就继续 materialize（可级联多页），带一个防死循环的兜底。新增回归测试复现原场景。
+- [x] **TYPE-1 段末孤字（单字不成行）** — ✅ Claude（`13f01a2`）。**待用户 InDesign 验收**（桌面 `orphan-spike.idml`，四段刻意错开长度的正文）。用户 B1 验收时发现 InDesign 里段落末行会甩单字（如「辨。」）。查证：THREAD-1b 后正文交 InDesign 自己折行，而 InDesign **没有**原生「避免单字尾行」开关（社区共识：不算断行错误，靠 NoBreak 字符属性变通）。实现：`chapterStoryXML` 给每段末尾两个实义字（含尾部悬挂标点）打 `NoBreak="true"`（InDesign 的 `noBreak` 字符属性，动手前对照 Adobe DOM 文档确认），放不下时整体换到末行，末行至少两字。写法对照真实属性、不改文字内容。283 测试过、review-idml.sh 12/12、确定性一致、golden 隔离刷新（段末加 NoBreak）。**待用户肉眼确认**：InDesign 里段落末行不再出现单字。
 
 - [ ] ~~**BUG-1 跨段落脚注编号全错**~~ ⏸ **不修（用户 2026-07-06 决定）**——脚注使用频率极低，初排里属细枝末节，需要时 InDesign 补做很快；且 THREAD-1 落地后 story 结构整个会变，现在修是白修。根因存档：一框一 Story 零串接 → InDesign 原生脚注按 Story 各自从 1 编号（Markdown/DOCX 两路径均复现，非 IMP-4/SPLIT-GUI 回归）。
 - [x] **THREAD-1a 串接文流 spike** — ✅ **2026-07-06 用户 InDesign 人工验证通过**。手工生成脚本 `scratchpad/gen-thread-spike.py`：一个 Story 装 32 段正文 + 3 个页大小 TextFrame 用 Previous/NextTextFrame 串接（坐标沿用 demo 版心）。用户验证三点全过：① 文字跨页连续流（**第12段被从中间拆到第1→2页、第20段拆到第2→3页、段号 1→27 连续**——独立框永远做不到跨页拆段，铁证串接成立）；② 编辑顺移丝滑自动（删/插一段后文跨页自动重排）；③ 中文/复合字体/约物/两端对齐正常，漂移可接受。
@@ -97,7 +98,10 @@
   - 验收：281 测试过、review-idml.sh 12/12（对开导出机制本身未改动，`testFacingPagesSpreadImposition` 仍过）。**GUI 验收待用户**：打开一份 `pageSetup.facingPages=true` 的项目，选「Export IDML...」，确认对话框里"启用对开跨页"默认已经打勾（不用手动点）。
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
 - [x] **PERF-2 baseline 布局缓存** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。对照版只在内容/样式真变时重排（比较时剔除 appliedLayoutPlans + qualityMetricsHistory）；纯版面方案操作/undo/redo 不再触发第二次全书排版，单次改动成本约减半。加 baselineLayoutCount 测试钩子+缓存单测。
-- [ ] **B1-IDML 导出侧图文绕排**（次优先，THREAD-1 批之后顺带做——绕排影响文流走向，属灌版相关但可后补）：图片框输出 `TextWrapPreference` 让 InDesign 也绕排。文件：`IDMLExporter.swift`。验收：解包含 TextWrapPreference、InDesign 打开绕排生效（用户肉眼）；`review-idml.sh` PASS。
+- [x] **B1-IDML 导出侧图文绕排** — ✅ Claude（`498c9cd`）。**待用户 InDesign 验收**（桌面 `b1-idml-spike/wrap-spike.idml` + 同目录 `Links/diagram.png`：图片前后各一段够长的正文，用来看绕排效果）。
+  - 实现：独立定位的图片框（孤立 `.figure` 段落、跨页大图——不含 THREAD-1b cut2 的锚定图片，那条路已经靠文流本身让位，不需要绕排）现在带 `<TextWrapPreference>`（矩形绕排 BoundingBoxTextWrap + 两侧避让 + 四边 6pt 间距）。写法对照过一份真实 Adobe 导出的 IDML 样本确认结构（这轮吸取了两次盲猜 IDML 未知元素踩坑的教训，动手前先查真实参考）。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
+  - 验收：282 测试过、review-idml.sh 12/12、XML well-formed、golden 无变化（样例项目唯一素材标了 unused、从未真正入版，另造了带真实占位图的样张验证）。**InDesign 人工验证待用户**：图片旁边的正文是不是主动绕开了图片的矩形范围。
 - [ ] **SPLIT-ENGINE LayoutEngine.swift 拆分** ⏳ **挪到 THREAD-1 批全部落地之后**（THREAD-1b 要大改引擎与导出，拆分与之叠加必然冲突；纯搬家不急）。
 
 ## Codex 道队列（导入 + 探针）
@@ -161,7 +165,7 @@
   - 目标：`main.swift`(1500 行，拆出 AppDelegate/菜单/WorkspaceViewController/CLI 各自文件)、`InspectorView.swift`(1600 行，按面板 section 拆)、`CanvasView.swift`(1400 行，拆出工具交互/绘制)。
   - 文件：`Sources/LayoutDApp/*`。
   - 验收：全部测试零修改通过；`review-idml.sh` PASS；GUI 行为无变化（拆完 Claude 出包给用户抽查）。
-- [ ] **FIX-CANVAS-1 画布图片标题前泄漏资产 id**（小修）：用户 2026-07-06 GUI 抽查截图发现画布上示意图标题显示为「cell-d细胞结构示意」——"cell-d" 疑似资产 id/文件名前缀混进了标题渲染（InDesign 里打开同一文档无此前缀，仅画布预览有）。查 `CanvasView+Drawing.swift` 图片占位/标题绘制路径，只画标题本体。
+- [x] **FIX-CANVAS-1 画布图片标题前泄漏资产 id**（小修） — ✅ commit 0b3fb67
   - 文件：`Sources/LayoutDApp/CanvasView+Drawing.swift`（或相关渲染函数所在文件）。
   - 验收：画布显示「细胞结构示意」无 id 前缀；PDF/PNG 导出同步检查无此问题；全部测试/探针 PASS。
 
