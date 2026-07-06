@@ -190,13 +190,14 @@ public struct IDMLExporter {
             for story in section.stories {
                 for paragraph in story.paragraphs {
                     guard isBodyFlowParagraph(paragraph.kind) else { continue }
-                    let text = paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !text.isEmpty else { continue }
+                    guard !paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
                     let style = ctx.resolvedStyle(id: paragraph.styleId)
                     let footnotes = paragraph.safeAnchoredFootnoteIds.compactMap { paragraphsByID[$0] }
                     chapterParagraphs.append(ChapterParagraph(
                         styleRef: "ParagraphStyle/\(xmlSafe(style.id))",
-                        text: text, inlineRuns: paragraph.inlineRuns, footnotes: footnotes,
+                        // 保留原文（不 trim），inlineRuns 的偏移量以 paragraph.text 为基准，
+                        // trim 掉前导空白会让二者错位。
+                        text: paragraph.text, inlineRuns: paragraph.inlineRuns, footnotes: footnotes,
                         footnoteStyleRef: footnoteStyleRef(for: footnotes, ctx: ctx)
                     ))
                 }
@@ -1100,12 +1101,20 @@ public struct IDMLExporter {
     }
 
     /// THREAD-1b：一章的正文+标题合成一个 Story，`paragraphs` 按阅读顺序排列。
+    /// 每段一个 ParagraphStyleRange——但 PSR 边界本身不是段落标记，InDesign 仍会把相邻
+    /// PSR 的文字接续渲染成一整段。真正的段落标记是 Content 末尾的字面 `\n`（THREAD-1a
+    /// spike 已用真·InDesign 验证过的写法），最后一段不带。
     private func chapterStoryXML(self id: String, vertical: Bool, paragraphs: [ChapterParagraph]) -> String {
         let orientation = vertical ? "Vertical" : "Horizontal"
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
-        let body = paragraphs.map {
-            paragraphStyleRangeXML(styleRef: $0.styleRef, text: $0.text, inlineRuns: $0.inlineRuns,
-                                   footnotes: $0.footnotes, footnoteStyleRef: $0.footnoteStyleRef)
+        let lastIndex = paragraphs.count - 1
+        let body = paragraphs.enumerated().map { index, p -> String in
+            let content = index == lastIndex ? p.text : p.text + "\n"
+            return """
+            \t\t<ParagraphStyleRange AppliedParagraphStyle="\(p.styleRef)">
+            \(characterStyleRanges(for: content, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef))
+            \t\t</ParagraphStyleRange>
+            """
         }.joined(separator: "\n")
         return """
         \(header)

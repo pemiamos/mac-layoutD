@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-06 05:51 | claude | THREAD-1b cut 1（正文+标题按章串接）实现完成并推送 dev(bd43d10)，待用户 InDesign 验收
+- **分支**：dev
+- **概述**：THREAD-1b cut 1（正文+标题按章串接）实现完成并推送 dev(bd43d10)，待用户 InDesign 验收
+- **改动文件**：(未填)
+- **检查**：swift build 过；swift test 281 过；review-idml.sh 10/10 PASS；两次导出逐字节确定性一致；手工构造 10 页长章节验证 uChapterTF0_0..9 串接链完整（首尾 n、中间互指）；golden 已用 scripts/golden-update.sh 刷新并审过 diff（结构变化符合预期，另混了一处无关的 AppliedComposer 属性早前已移除但 golden 未同步的既存漂移）
+- **下一步**：(未填)
+
 ## 2026-07-06 01:22 | claude | 项目定位校准 + 队列全面重排(commit c1b4e2f)。用户在脚注编号 bug 的讨论中拍板:layoutD 的交付物是给 InDesign 的「初排灌
 - **分支**：dev
 - **概述**：项目定位校准 + 队列全面重排(commit c1b4e2f)。用户在脚注编号 bug 的讨论中拍板:layoutD 的交付物是给 InDesign 的「初排灌版」,不是替代 InDesign;真实书籍每篇文字本来就要串接,InDesign 里漂移可人工调校,灌版工作量的减轻才是价值——可编辑性 > 逐像素冻结。已 record_decision 存入 DECISIONS.md。按灌版镜头重盘项目:样式体系/CMYK/资产链接已达标✅;真缺口=①文流零串接(demo 4页=21个孤立story,交付物不是可编辑文流,这是头号缺口)②主页缺失(页码疑似逐页静态文本)③per-page Spread 非对页。队列重排:BUG-1 脚注编号标不修(细枝末节,InDesign 补做快,且 THREAD-1 后 story 结构会变);新立 THREAD-1a(串接 spike,手工样张验证 InDesign 可编辑+漂移可接受)→THREAD-1b(全量实现,Story 粒度=章)→MASTER-1(主页+自动页码)→SPREAD-1(对页合并)为 Claude 道主线;SPLIT-ENGINE 挪到 THREAD-1 之后避免冲突;Codex 道挂 GUARD-4 串接探针(⏳等 THREAD-1b);AG 道加 FIX-CANVAS-1(画布图片标题泄漏"cell-d"资产id前缀,小修)。傍点/表格深化维持不投入。
