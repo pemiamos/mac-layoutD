@@ -164,7 +164,7 @@
   - 目标：`main.swift`(1500 行，拆出 AppDelegate/菜单/WorkspaceViewController/CLI 各自文件)、`InspectorView.swift`(1600 行，按面板 section 拆)、`CanvasView.swift`(1400 行，拆出工具交互/绘制)。
   - 文件：`Sources/LayoutDApp/*`。
   - 验收：全部测试零修改通过；`review-idml.sh` PASS；GUI 行为无变化（拆完 Claude 出包给用户抽查）。
-- [ ] **FIX-CANVAS-1 画布图片标题前泄漏资产 id**（小修）：用户 2026-07-06 GUI 抽查截图发现画布上示意图标题显示为「cell-d细胞结构示意」——"cell-d" 疑似资产 id/文件名前缀混进了标题渲染（InDesign 里打开同一文档无此前缀，仅画布预览有）。查 `CanvasView+Drawing.swift` 图片占位/标题绘制路径，只画标题本体。
+- [x] **FIX-CANVAS-1 画布图片标题前泄漏资产 id**（小修） — ✅ commit 0b3fb67
   - 文件：`Sources/LayoutDApp/CanvasView+Drawing.swift`（或相关渲染函数所在文件）。
   - 验收：画布显示「细胞结构示意」无 id 前缀；PDF/PNG 导出同步检查无此问题；全部测试/探针 PASS。
 

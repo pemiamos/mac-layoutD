@@ -620,4 +620,52 @@ final class PDFExporterTests: XCTestCase {
         let rep2 = try XCTUnwrap(img2.representations.compactMap { $0 as? NSBitmapImageRep }.first)
         XCTAssertEqual(Double(rep2.pixelsWide), doubleExpectedWidth, accuracy: 1.0)
     }
+
+    func testPDFExporterImagePlaceholderLabelWithCaption() throws {
+        let assetId = UUID()
+        let asset = Asset(
+            id: assetId,
+            fileName: "images/cell-diagram-leak.png",
+            sourcePath: "/nonexistent/cell-diagram-leak.png",
+            role: .diagram,
+            caption: "细胞结构示意",
+            pixelWidth: 100,
+            pixelHeight: 100
+        )
+        
+        var project = BookProject.sample
+        project.assets = [asset]
+        
+        // Add an image plan to force rendering the image placeholder
+        let plan = LayoutPlan(
+            target: .page(2),
+            strategy: .fullPageImage,
+            blocks: [
+                LayoutPlanBlock(
+                    kind: .image,
+                    role: "diagram",
+                    frame: Rect(x: 0.0, y: 0.0, width: 1.0, height: 1.0),
+                    contentReference: .asset(assetId)
+                )
+            ]
+        )
+        project.safeAppliedLayoutPlans[2] = plan
+        
+        let document = LayoutEngine().layout(project: project)
+        let pdfURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-pdf-placeholder-test-\(UUID().uuidString)")
+            .appendingPathExtension("pdf")
+        defer {
+            try? FileManager.default.removeItem(at: pdfURL)
+        }
+        
+        XCTAssertNoThrow(try PDFExporter().export(
+            document: document,
+            project: project,
+            to: pdfURL,
+            pageRange: "2"
+        ))
+        
+        XCTAssertTrue(FileManager.default.fileExists(atPath: pdfURL.path))
+    }
 }

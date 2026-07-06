@@ -796,7 +796,8 @@ extension CanvasView {
         
         if let image = loadImage(asset: asset) {
             drawImage(image, isLeftHalf: isLeftHalf, rect: rect, project: project, maskShape: maskShape)
-            drawImageLabel(asset?.fileName ?? "Image", in: rect)
+            let label = asset?.caption ?? (asset?.fileName as NSString?)?.lastPathComponent ?? "Image"
+            drawImageLabel(label, in: rect)
             return
         }
 
@@ -806,7 +807,7 @@ extension CanvasView {
         path.lineWidth = 1.0
         path.stroke()
 
-        let label = asset?.fileName ?? "Image"
+        let label = asset?.caption ?? (asset?.fileName as NSString?)?.lastPathComponent ?? "Image"
         drawImageLabel(label, in: rect)
     }
 
