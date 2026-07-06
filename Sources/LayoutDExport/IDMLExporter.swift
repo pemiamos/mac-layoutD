@@ -888,11 +888,13 @@ public struct IDMLExporter {
     }
 
     /// 图注随锚定图片一起走：不建独立锚定对象（要再配一个 Story，复杂度不成比例），
-    /// 就用一个小号字体的行内文字附在图片后面，U+2028 软换行把它挤到单独一行、仍属于
-    /// 同一段落（不触发段落标记），随宿主段落一起重排。
+    /// 就用一个小号字体的行内文字附在图片后面，随宿主段落一起重排。锚定图片本身是
+    /// AnchoredAboveLine（占据自己的一行空间），后面紧跟的文字天然从新的一行开始，
+    /// 不需要（也不该）额外插一个强制换行字符——那样反而在 InDesign 里表现异常
+    /// （字符间距被拉伸、疑似被当成两端对齐的非末行处理）。
     private func captionCharacterStyleRange(text: String, fontSize: Double?) -> String {
         let sizeAttr = fontSize.map { " PointSize=\"\(fmt($0))\"" } ?? ""
-        return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(sizeAttr)><Content>\u{2028}\(esc(text))</Content></CharacterStyleRange>"
+        return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(sizeAttr)><Content>\(esc(text))</Content></CharacterStyleRange>"
     }
 
     // MARK: - 包内部件
