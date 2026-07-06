@@ -223,6 +223,91 @@ else
   bad "DOCX fixture 导出失败（见 $TMP/docx-export.log）"
 fi
 
+# 2f. GUARD-4 串接文流：一章正文合成一个 Story、逐页框 Previous/NextTextFrame 首尾相连
+# （THREAD-1b）。用够长的正文撑出至少 3 页，断言链条完整（能从任一链头走到链尾、
+# 覆盖该 Story 的全部框、无孤儿）、story 数按章计不按段计。
+THREAD_FIX="$TMP/thread-fixture.md"
+python3 - "$THREAD_FIX" <<'PY'
+import sys
+path = sys.argv[1]
+paras = ["# 串接文流探针章节\n"]
+base = "这是正文段落，用来撑满多页版面，验证串接文流的框链是否完整覆盖、无孤儿、无断裂。反复堆叠中文文字直到超过单页可用高度，从而制造跨页跨栏拆分的场景。"
+for i in range(60):
+    paras.append(f"第{i+1}段。{base}")
+open(path, "w").write("\n\n".join(paras))
+PY
+THREAD_OUT="$TMP/out/thread-fixture.idml"
+if swift run layoutD -- "$THREAD_FIX" --export-idml "$THREAD_OUT" >"$TMP/thread-export.log" 2>&1; then
+  ok "串接探针 fixture 导出成功"
+  unzip -oq "$THREAD_OUT" -d "$TMP/thread-u"
+  python3 - "$TMP/thread-u" <<'PY'
+import glob, os, re, sys
+root = sys.argv[1]
+
+designmap = open(os.path.join(root, "designmap.xml"), encoding="utf-8").read()
+story_list = re.search(r'StoryList="([^"]*)"', designmap).group(1).split()
+chapter_stories = [s for s in story_list if s.startswith("uStoryChapter")]
+
+spreads = "\n".join(open(f, encoding="utf-8").read() for f in glob.glob(os.path.join(root, "Spreads", "*.xml")))
+frames = re.findall(
+    r'<TextFrame Self="(uChapterTF[^"]*)" ParentStory="([^"]*)"[^>]*PreviousTextFrame="([^"]*)" NextTextFrame="([^"]*)"',
+    spreads)
+
+checks = []
+checks.append(("正文按章合成 Story（探针章节只应出现 1 个 uStoryChapter）", len(chapter_stories) == 1))
+checks.append(("串接框存在（至少跨 2 页/栏）", len(frames) >= 2))
+
+by_story = {}
+for self_id, parent, prev, nxt in frames:
+    by_story.setdefault(parent, []).append((self_id, prev, nxt))
+
+chain_ok = True
+for parent, entries in by_story.items():
+    ids = {e[0] for e in entries}
+    prev_map = {e[0]: e[1] for e in entries}
+    next_map = {e[0]: e[2] for e in entries}
+    heads = [i for i in ids if prev_map[i] == "n"]
+    tails = [i for i in ids if next_map[i] == "n"]
+    if len(heads) != 1 or len(tails) != 1:
+        chain_ok = False
+        continue
+    # 从链头顺着 Next 走一遍，必须不重复、不漏、恰好覆盖该 Story 的全部框。
+    visited = []
+    cur = heads[0]
+    seen = set()
+    while cur != "n":
+        if cur in seen:
+            chain_ok = False
+            break
+        seen.add(cur)
+        visited.append(cur)
+        cur = next_map.get(cur, "n")
+    if seen != ids:
+        chain_ok = False
+    # 反向从链尾顺着 Previous 走，必须原路对称。
+    cur = tails[0]
+    seen_back = set()
+    while cur != "n":
+        if cur in seen_back:
+            chain_ok = False
+            break
+        seen_back.add(cur)
+        cur = prev_map.get(cur, "n")
+    if seen_back != ids:
+        chain_ok = False
+
+checks.append(("串接链完整（单头单尾、正反遍历都覆盖全部框、无孤儿无环）", chain_ok))
+
+fails = [name for name, ok in checks if not ok]
+for name, ok in checks:
+    print(("  ✅ " if ok else "  ❌ ") + name)
+sys.exit(1 if fails else 0)
+PY
+  [ $? -eq 0 ] && ok "GUARD-4 串接文流断言全过" || bad "GUARD-4 串接文流断言有失败（见上）"
+else
+  bad "串接探针 fixture 导出失败（见 $TMP/thread-export.log）"
+fi
+
 sec "结论"
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" -eq 0 ] && echo "REVIEW: PASS ✅" || echo "REVIEW: FAIL ❌"

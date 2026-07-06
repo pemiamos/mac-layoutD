@@ -916,6 +916,28 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertTrue(page4Text.contains("第一章 重新理解图文排版"))
     }
 
+    /// 回归：GUI「新建页面」按钮在文档末尾插入空白页时，一度悄悄没有反应（用户点了
+    /// "+"，页面数没有变化）。根因是 finish() 只在内容溢出触发 advanceToNextPage()
+    /// 时才检查排版计划——如果插入的空白页排在所有正文内容之后，永远不会有内容触发
+    /// 翻页去看到那个计划，页面就凭空消失了。
+    func testInsertingBlankPageAfterAllContentStillAppendsIt() {
+        let project = BookProject.sample
+        let baseline = LayoutEngine().layout(project: project)
+        let lastPageNumber = baseline.pages.map(\.number).max() ?? 0
+
+        var projectWithTrailingBlank = project
+        let newPageNumber = lastPageNumber + 1
+        projectWithTrailingBlank.safeAppliedLayoutPlans = [
+            newPageNumber: LayoutPlan(target: .page(newPageNumber), strategy: .balanced, blocks: [])
+        ]
+
+        let document = LayoutEngine().layout(project: projectWithTrailingBlank)
+        XCTAssertEqual(document.pages.map(\.number).max(), newPageNumber,
+                       "文档末尾插入的空白页应该真的出现在最后一页之后")
+        XCTAssertTrue(document.pages.contains { $0.number == newPageNumber },
+                     "新页码应该能在 pages 里找到")
+    }
+
     func testSavedLayoutTemplateRetargetsPlanAndRegeneratesBlockIDs() {
         let block = LayoutPlanBlock(
             kind: .component,

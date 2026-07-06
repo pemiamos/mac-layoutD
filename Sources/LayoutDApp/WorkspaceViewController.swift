@@ -587,8 +587,11 @@ final class WorkspaceViewController: NSViewController {
         savePanel.canCreateDirectories = true
 
         let settingsState = IDMLExportSettingsState()
-        // Reflect the document's global color intent as the default.
+        // Reflect the document's own page setup as the default, so the exported IDML
+        // matches what the user already sees in layoutD's own preview unless they
+        // explicitly override it in this dialog.
         settingsState.cmykColors = appState.project.pageSetup.colorSpace == .cmyk
+        settingsState.facingPages = appState.project.pageSetup.facingPages
         savePanel.accessoryView = makeExportAccessoryView(IDMLExportSettingsView(state: settingsState))
 
         guard let window = view.window else { return }

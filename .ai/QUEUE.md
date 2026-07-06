@@ -60,14 +60,45 @@
 
 ---
 
-## Claude 道（性能批 + 高风险导出 + 集成）
+## Claude 道（灌版主线 + 高风险导出 + 集成）
 
-> 2026-07-04 全项目 review 立项「性能批」：根因是每次改动全书重排两遍+preflight 同步跑在界面线程（AppState.recalculateLayout），书稿变大会卡。顺序做、每步靠 PERF-1 的基准数字验证。
+> **2026-07-06 定位校准（见 DECISIONS）**：layoutD 交付「初排灌版」给 InDesign，不替代 InDesign。开发价值标准 = 文流/样式/视觉规范/CMYK 高完成度迁移进 InDesign、给人工调整省时间。可编辑性 > 逐像素冻结（InDesign 里漂移可人工调校）。脚注/傍点/表格深化 = 初排细枝末节，不再投入。
 
+- [x] **BUG-2 文档末尾「新建页面」无反应** — ✅ **2026-07-07 用户验证通过**（`a4ea45b`），验收 SPREAD-1 时顺手发现并现场修复。根因：`insertPage()` 在 `pageNum = 当前页数+1` 处存一条空白 LayoutPlan，但引擎只在**内容溢出触发翻页**时才检查该页有没有计划——如果插入的空白页排在所有正文内容之后，永远没有内容会触发翻页翻到那么远，计划存了但没人看，页面凭空消失。`finish()` 收尾时补一次检查：正文排完后如果紧接着还有计划就继续 materialize（可级联多页），带一个防死循环的兜底。新增回归测试复现原场景。
+
+- [ ] ~~**BUG-1 跨段落脚注编号全错**~~ ⏸ **不修（用户 2026-07-06 决定）**——脚注使用频率极低，初排里属细枝末节，需要时 InDesign 补做很快；且 THREAD-1 落地后 story 结构整个会变，现在修是白修。根因存档：一框一 Story 零串接 → InDesign 原生脚注按 Story 各自从 1 编号（Markdown/DOCX 两路径均复现，非 IMP-4/SPLIT-GUI 回归）。
+- [x] **THREAD-1a 串接文流 spike** — ✅ **2026-07-06 用户 InDesign 人工验证通过**。手工生成脚本 `scratchpad/gen-thread-spike.py`：一个 Story 装 32 段正文 + 3 个页大小 TextFrame 用 Previous/NextTextFrame 串接（坐标沿用 demo 版心）。用户验证三点全过：① 文字跨页连续流（**第12段被从中间拆到第1→2页、第20段拆到第2→3页、段号 1→27 连续**——独立框永远做不到跨页拆段，铁证串接成立）；② 编辑顺移丝滑自动（删/插一段后文跨页自动重排）；③ 中文/复合字体/约物/两端对齐正常，漂移可接受。
+  - **验证过的结构模板（THREAD-1b 照此实现）**：① 一章正文合成一个 `<Story Self="uStoryBodyN">`，每段一个 `<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">`，Content 末尾带 `\n`（最后一段不带）；② 每页一个 `<TextFrame>`，几何=引擎算好的版心框（PathGeometry 四角坐标），`ParentStory` 指向该章 Story；串接：首框 `PreviousTextFrame="n"`、末框 `NextTextFrame="n"`，中间各框 Prev/Next 互指兄弟框 `Self` id；③ designmap `StoryList` 列各章 Story，每 Spread 一页含其串接框；④ InDesign 打开自动灌流、编辑自动重排，无需额外属性。
+- [x] **THREAD-1b 第一刀：正文+标题按章串接** — ✅ **2026-07-06 用户 InDesign 人工验证通过**（`1338b97`）。历经两轮修复：①段落间需要字面 `\n` 作段落标记（PSR 边界本身不够，对照 THREAD-1a spike 脚本定位）；②多栏页面下按页合并 rect 会把左右两栏错误并成一个双倍宽的框（按 `(页,栏)` 分组后修复，`idml-multicolumn-frame-grouping` 记入长期记忆）。40 段/2 栏/3 页样张验证：标题独占一行、正文分段正常、跨栏跨页顺畅衔接、字距自然。
+  - 实现：`export()` 内先做一遍预扫描，把「章名标题（addSectionTitle 无 sourceParagraphId，按只增计数器认领）+ 正文流段落（`isBodyFlowParagraph` 排除 callout/table/footnote/sideNote/figure）」按 `project.sections` 索引分组；每章一个 `<Story Self="uStoryChapterN">`（内容直接取原始 `paragraph.text`+`inlineRuns`，不经 frame 拆分/归一化，天然对齐、无需二次映射脚注/行内样式偏移）；每页一个合并 `TextFrame`（几何=该章在该页所有原 frame 的并集矩形），`PreviousTextFrame`/`NextTextFrame` 首尾相连。前置页（封面/目录）与非 `.text` kind（图片/抽言/表格/脚注/旁注/运行页眉）不受影响，走原逐帧独立 Story。已验证：10 页合成长章节链完整（`uChapterTF0_0`…`uChapterTF0_9`，首尾 `n`、中间互指）；`swift test`(281 过)/`review-idml.sh`(全过)/golden 已更新(`scripts/golden-update.sh`，纯预期变化：故事数按章合并 + 早前已知的 Composer 属性移除漂移一并刷新)/两次导出逐字节确定性一致。
+  - **本刀范围**：只做正文+标题同流；图片/抽言/知识卡片仍是独立定位框（锚定对象是下一刀 THREAD-1b-cut2）。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
+  - **下一刀（cut 2）**：图片/抽言转锚定对象，随所属段落走。
+- [x] **THREAD-1b cut 2：内嵌图锚定** — ✅ **2026-07-06 用户 InDesign 人工验证通过**（`9ba5b40`）。范围最终定格：只锚定图片本身，图注保持独立定位框（细节见下）。
+  - **范围（比原计划更收敛）**：只处理通过 `paragraph.anchoredAssetIds` 挂在正文宿主段落上的图片（如 Markdown `![](img.png "anchor=previous")` 内嵌图）——嵌成 IDML 锚定对象（`AnchoredObjectSetting AnchoredPosition="AnchoredAboveLine"`，锚点是文流里的 Unicode 占位符 U+FFFC），挂在宿主段落末尾随文重排。**用户验证**：编辑宿主段落文字后图片正确跟着移动，机制成立。孤立的 `.figure` 段落（独占一行的图）、抽言（callout）仍是独立定位框——**不在本刀范围**（它们没有"宿主段落"，需要不同挂载机制，留给后续按需评估）。
+  - **图注（已尝试并放弃随图锚定）**：试了两版"图注跟着图片走"（先用 U+2028 强制换行、再去掉换行让锚定对象自然换行），两版都在 InDesign 里复现同一个 bug——图注那一行字符间距被异常拉伸、疑似丢字，和更早的段落标记 bug 症状一致，但排查不出根因（需要真机 InDesign 迭代，盲改风险不划算）。**已回退**：图注维持独立定位框（cut 2 之前的行为），不随图片移动——按本项目"可编辑性 > 逐像素冻结、漂移可人工微调"的既定原则，这点漂移可接受，不再追加投入。
+  - 实现：`LayoutEngine.addAsset` 把调用它的段落 id 带到图片 frame 上（之前完全不追踪，供导出层反查"这张图挂在哪个段落"）；`IDMLExporter` 预扫描收集"哪个宿主段落挂了哪些图"，跳过这些图片的独立定位框输出，改为嵌进该段落在章 Story 里的 CharacterStyleRange。过程中揪出两个"帧静默消失"的 bug 并修复：①宿主段落文字为空（如 DOCX 专门用来装图的段落）被"跳过空段落"的判断误伤，图片两头都进不去；②孤立 `.figure` 段落的图片被预扫描误判成"已挂到某段"从而被跳过独立输出（其实它是自己给自己当宿主，不该被纳入锚定路径）。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`、`Sources/LayoutDEngine/LayoutEngine.swift`。
+  - 验收：281 测试过、review-idml.sh 10/10（含新增的 DOCX 内嵌图回归）、逐字节确定性一致、全包 XML well-formed、无重复独立框；InDesign 人工验证图片随宿主段落编辑正确重排。
+  - **后续可选**（不阻塞，按需再评估）：扩展锚定机制到孤立 `.figure` 图/抽言（需要设计"没有宿主段落时怎么挂"）；图注随图锚定需要真机 InDesign 调试后再重试。
+- [x] **THREAD-1b cut 3：收边** — ✅ Claude（`309e18e`）。GUARD-4 串接探针加进 `review-idml.sh`（60段合成章节撑出多页/栏，断言单头单尾、正反遍历都覆盖全部框、无孤儿无环；已自证：人为断链后探针 FAIL，修复后恢复 PASS）。封面/目录/表格特例复核：造了个含表格+足够正文触发真实 TOC 的样张，确认章 Story 只含预期的标题+正文段落，表格/目录仍各自走独立 Story，未被误并进文流。**THREAD-1b 三刀全部完成**：cut1（正文+标题按章串接，用户验收）、cut2（内嵌图锚定，用户验收；图注锚定放弃，见 DECISIONS）、cut3（收边，本条）。
+  - 说明：`scripts/review-idml.sh` 名义上是 Codex 道文件，但 GUARD-4 是 THREAD-1b 收尾的一部分、Claude 有完整上下文，直接实现而非中途交接。
+- [x] **MASTER-1 自动页码** — ✅ **2026-07-06 用户 InDesign 人工验证通过**（`9e2ccc8`）。主页面板见 A-主页带页码，正文页页码正确递增。
+  - **核实结果（动手前先查了现状）**：之前的猜测"页码按静态文本逐页画"是错的——IDML 导出压根**没有页码**，只有 PDF/PNG 导出器直接用 CoreGraphics 逐页画数字（`drawPageNumber`），跟 frame/主页完全无关。IDML 里的主页此前是空的（只有一个 `<Page>` 元素，没有任何内容）。
+  - **实现**：主页加一个 TextFrame，内容是 InDesign「当前页码」特殊字符——写法是 `<Content>` 里嵌一个字面的 `<?ACE 18?>` 处理指令节点（不是普通文本！），这是 Adobe 官方约定（查了一份真实的 Adobe 参考文档才拿到准确写法，没有再像锚定对象那次盲猜——`<?ACE 18?>` 本身也验证过是合法 XML，`review-idml.sh` 的 well-formed 检查过了）。正文页统一 `AppliedMaster="uMasterA"`，套上主页页码就自动出对，不用逐页画。位置沿用现有 PDF/PNG 页码的靠页面上方居中做法。
+  - **范围收窄**：只挪了页码，页眉书名/章名没动（还是 LayoutEngine 逐页画的静态标题——它是 PDF/PNG/IDML 共用的一份 frame，挪走要么得复制要么把三个导出器共用的东西拆开；而且"随页显示当前章名"需要 InDesign 文本变量绑定段落样式，是明显更大的一个功能，没有在这刀里做）。版心/栏参考（原计划里的一部分）也没做——现状页面本身已经有版心/栏（BOOK 层面的实际排版），"主页版心参考线"是可视化辅助线，价值没有自动页码高，先跳过。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
+  - 验收：281 测试过、review-idml.sh 12/12、逐字节确定性一致、全包 XML well-formed、golden 已刷新（新增 master TextFrame+Story，改动隔离）。**InDesign 人工验证待用户**：主页面板见 A-主页带页码，正文页页码正确递增。
+  - **后续可选**（不阻塞）：对开镜像页码位置（留给 SPREAD-1 一起做）；页眉显示当前章名（需要文本变量机制，工作量较大，按需评估）。
+- [x] **SPREAD-1 对页合并 Spread** — ✅ **2026-07-07 用户 GUI 验证通过**（`b576554`）：Export IDML... 面板"启用对开跨页"默认已打勾。
+  - **核实结果（动手前先查了现状，发现活儿比预期小很多）**：真对页 spread（左右页同 spread、书脊镜像、版心镜像）**早就做完并验收过了**——`E2-4`（Claude, 用户 2026-06 已验收 PASS）+ `E2-4p`（AG，PDF/PNG 侧并排预览）。`testFacingPagesSpreadImposition` 单测也在跑。真正的缺口只有一处：GUI 的"Export IDML..."导出面板，"对开跨页"开关**硬编码默认关闭**、跟项目自身的 `pageSetup.facingPages` 设置完全脱节——旁边的 CMYK 开关早就做了"默认跟随项目设置"，唯独这个漏了。等于说：用户在 App 里预览的明明是对开跨页书稿，导出 IDML 时如果忘了手动勾选，出来的就是非对开——这正是验收标准"与 layoutD 预览一致"没做到的地方。
+  - 实现：一行修复，`WorkspaceViewController.exportIDML()` 里让 `settingsState.facingPages` 默认取 `appState.project.pageSetup.facingPages`（跟 `cmykColors` 已有的写法一致），面板里仍可手动改。CLI 的 `--idml-facing` 保持显式选项不动（脚本化场景应该显式指定，不该悄悄跟着项目状态变）。
+  - 文件：`Sources/LayoutDApp/WorkspaceViewController.swift`。
+  - 验收：281 测试过、review-idml.sh 12/12（对开导出机制本身未改动，`testFacingPagesSpreadImposition` 仍过）。**GUI 验收待用户**：打开一份 `pageSetup.facingPages=true` 的项目，选「Export IDML...」，确认对话框里"启用对开跨页"默认已经打勾（不用手动点）。
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
 - [x] **PERF-2 baseline 布局缓存** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。对照版只在内容/样式真变时重排（比较时剔除 appliedLayoutPlans + qualityMetricsHistory）；纯版面方案操作/undo/redo 不再触发第二次全书排版，单次改动成本约减半。加 baselineLayoutCount 测试钩子+缓存单测。
-- [ ] **B1-IDML 导出侧图文绕排**（配对 B1）：图片框输出 `TextWrapPreference` 让 InDesign 也绕排。文件：`IDMLExporter.swift`。验收：解包含 TextWrapPreference、InDesign 打开绕排生效（用户肉眼）；`review-idml.sh` PASS。
-- [ ] **SPLIT-ENGINE LayoutEngine.swift 拆分**（1600+ 行，纯搬家不改逻辑；放性能批之后避免叠加冲突）。
+- [ ] **B1-IDML 导出侧图文绕排**（次优先，THREAD-1 批之后顺带做——绕排影响文流走向，属灌版相关但可后补）：图片框输出 `TextWrapPreference` 让 InDesign 也绕排。文件：`IDMLExporter.swift`。验收：解包含 TextWrapPreference、InDesign 打开绕排生效（用户肉眼）；`review-idml.sh` PASS。
+- [ ] **SPLIT-ENGINE LayoutEngine.swift 拆分** ⏳ **挪到 THREAD-1 批全部落地之后**（THREAD-1b 要大改引擎与导出，拆分与之叠加必然冲突；纯搬家不急）。
 
 ## Codex 道队列（导入 + 探针）
 
@@ -90,6 +121,7 @@
   - 内嵌图片不再写到源 `.docx` 同级 `images/`，改写系统临时目录下唯一 `layoutd-docx-assets-*/images`；`Asset.fileName` 仍保持 `images/<name>` 引用名；顺带规范化 `word/media` 相对路径（`normalizedWordEntryPath` 处理 `../`）。
 - [x] **GUARD-3 DOCX 端到端探针进 review-idml.sh** — ✅ Codex @ 同分支（`3f84c77`），Claude 已合 dev
   - 探针现场用 python3 造最小 OOXML（粗斜体/内嵌图/脚注）走完整 DOCX 导入→IDML→解包，断言 FauxBold/Skew/原生 Footnote/上标不残留/图片进 Links。探针总数 8→10 全过。
+- [x] **GUARD-4 串接文流探针** — ✅ Claude（`309e18e`，随 THREAD-1b cut3 一并做掉，见上，Codex 无需再领）。
 
 ## Antigravity 道队列（预览渲染 + GUI）
 
@@ -125,10 +157,13 @@
   - 目标：`facingPages` 开启时 Canvas/PDF/PNG 左右页并排、版心镜像（订口内侧）；关闭时与现状一致。
   - 文件：`LayoutEngine.swift`、`CanvasView.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
   - 验收：对开稿导 PNG 左右页镜像正确；非对开零回归；单测断言镜像边距；`review-idml.sh` PASS。
-- [x] **SPLIT-GUI 巨型 GUI 文件拆分**（由 AG 于 feature/ag-split-gui 分三棒完成）
+- [x] **SPLIT-GUI 巨型 GUI 文件拆分**（由 AG 于 feature/ag-split-gui 分三棒完成）— ✅ 用户 2026-07-06 GUI 截图抽查通过，已随批合 main(`0bbda6c`)。
   - 目标：`main.swift`(1500 行，拆出 AppDelegate/菜单/WorkspaceViewController/CLI 各自文件)、`InspectorView.swift`(1600 行，按面板 section 拆)、`CanvasView.swift`(1400 行，拆出工具交互/绘制)。
   - 文件：`Sources/LayoutDApp/*`。
   - 验收：全部测试零修改通过；`review-idml.sh` PASS；GUI 行为无变化（拆完 Claude 出包给用户抽查）。
+- [ ] **FIX-CANVAS-1 画布图片标题前泄漏资产 id**（小修）：用户 2026-07-06 GUI 抽查截图发现画布上示意图标题显示为「cell-d细胞结构示意」——"cell-d" 疑似资产 id/文件名前缀混进了标题渲染（InDesign 里打开同一文档无此前缀，仅画布预览有）。查 `CanvasView+Drawing.swift` 图片占位/标题绘制路径，只画标题本体。
+  - 文件：`Sources/LayoutDApp/CanvasView+Drawing.swift`（或相关渲染函数所在文件）。
+  - 验收：画布显示「细胞结构示意」无 id 前缀；PDF/PNG 导出同步检查无此问题；全部测试/探针 PASS。
 
 ## Backlog（按车道路由）
 

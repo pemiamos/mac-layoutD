@@ -3,6 +3,111 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 00:38 | claude | SPREAD-1 + BUG-2 均验证通过——THREAD-1/MASTER-1/SPREAD-1 主线全部完结，推送 dev(6f82c31)
+- **分支**：dev
+- **概述**：SPREAD-1 + BUG-2 均验证通过——THREAD-1/MASTER-1/SPREAD-1 主线全部完结，推送 dev(6f82c31)
+- **改动文件**：(未填)
+- **检查**：用户在 App 里实测确认：新建页面按钮在文档末尾插入空白页现在有反应；Export IDML 面板对开跨页开关默认已打勾。
+- **下一步**：(未填)
+
+## 2026-07-06 19:02 | claude | 修复 BUG-2：文档末尾"新建页面"按钮无反应——用户验收 SPREAD-1 时现场发现，推送 dev(5a96171)
+- **分支**：dev
+- **概述**：修复 BUG-2：文档末尾"新建页面"按钮无反应——用户验收 SPREAD-1 时现场发现，推送 dev(5a96171)
+- **改动文件**：(未填)
+- **检查**：282测试过（281+1新）、review-idml.sh 12/12、golden 无变化（只影响"手动在末尾插入空白页"这种场景，默认项目不受影响）。
+- **下一步**：(未填)
+
+## 2026-07-06 18:48 | claude | SPREAD-1 完成——查证发现对开机制早已验收过，真缺口只是 GUI 导出面板默认值没跟项目设置同步，一行修复，推送 dev(cb1049f)
+- **分支**：dev
+- **概述**：SPREAD-1 完成——查证发现对开机制早已验收过，真缺口只是 GUI 导出面板默认值没跟项目设置同步，一行修复，推送 dev(cb1049f)
+- **改动文件**：(未填)
+- **检查**：动手前核实现状发现活儿比预期小很多——2页/spread、书脊镜像、版心镜像早就实现且用户验收过（E2-4），单测 testFacingPagesSpreadImposition 也在跑。真正缺口是 GUI"Export IDML..."面板的对开开关硬编码默认 false、不跟随项目自身 facingPages 设置（CMYK 开关旁边早就做了这个同步，唯独漏了这个）。281测试过、review-idml.sh 12/12、对开导出机制单测仍过。
+- **下一步**：(未填)
+
+## 2026-07-06 18:40 | claude | MASTER-1（主页自动页码）实现完成并推送 dev(f430c67)，待用户 InDesign 验收
+- **分支**：dev
+- **概述**：MASTER-1（主页自动页码）实现完成并推送 dev(f430c67)，待用户 InDesign 验收
+- **改动文件**：(未填)
+- **检查**：动手前核实现状：之前"页码按静态文本画"的猜测是错的，IDML 里此前压根没有页码（只有 PDF/PNG 直接画）。这次写法没有盲猜——查了真实 Adobe 参考文档拿到 `<?ACE 18?>` 的准确写法（吸取本轮锚定对象那次盲猜两次失败的教训）。281测试过、review-idml.sh 12/12、确定性一致、XML well-formed。
+- **下一步**：(未填)
+
+## 2026-07-06 18:31 | claude | THREAD-1b 全部三刀完成——正文串接+图片锚定+GUARD-4收边，推送 dev(75f0823)
+- **分支**：dev
+- **概述**：THREAD-1b 全部三刀完成——正文串接+图片锚定+GUARD-4收边，推送 dev(75f0823)
+- **改动文件**：(未填)
+- **检查**：GUARD-4 探针自证有效（人为断链后 FAIL，修复后 PASS，已还原代码无遗留 diff）；额外造了含表格+TOC的样张确认封面/目录/表格未被误并进串接文流。281测试过、review-idml.sh 12/12 PASS。
+- **下一步**：(未填)
+
+## 2026-07-06 18:09 | claude | THREAD-1b cut2 收官：图片锚定验证通过，图注随图锚定放弃（未解决的 InDesign 渲染 bug），推送 dev(09da23a)
+- **分支**：dev
+- **概述**：THREAD-1b cut2 收官：图片锚定验证通过，图注随图锚定放弃（未解决的 InDesign 渲染 bug），推送 dev(09da23a)
+- **改动文件**：(未填)
+- **检查**：图片锚定机制用户 InDesign 验证通过（编辑段落文字后图片正确重排）。图注随图锚定试了两版都复现同一个"字符间距拉伸"渲染 bug，排查不出根因，已回退，记入长期记忆 idml-anchored-text-stretch-bug（供以后再碰到锚定文字场景时参考，别再盲猜）。281测试过、review-idml.sh 10/10、golden 无变化。
+- **下一步**：(未填)
+
+## 2026-07-06 18:02 | claude | THREAD-1b cut2 图注乱码修复（去掉多余的 U+2028 强制换行符），推送 dev(6efa931)，桌面样张已更新待复验
+- **分支**：dev
+- **概述**：THREAD-1b cut2 图注乱码修复（去掉多余的 U+2028 强制换行符），推送 dev(6efa931)，桌面样张已更新待复验
+- **改动文件**：(未填)
+- **检查**：用户反馈图注那一行字符间距被拉伸、缺字，定位到是我加的 U+2028 软换行符在作怪（同上次段落标记 bug 的症状）；去掉后 281测试过/review-idml.sh 10/10/确定性一致/golden无变化，图注文本本身干净（"图1 示意图"完整无损）。
+- **下一步**：(未填)
+
+## 2026-07-06 17:57 | claude | THREAD-1b cut2 图注跟随修复，推送 dev(9dfd006)，已重新生成桌面样张待用户复验
+- **分支**：dev
+- **概述**：THREAD-1b cut2 图注跟随修复，推送 dev(9dfd006)，已重新生成桌面样张待用户复验
+- **改动文件**：(未填)
+- **检查**：用户 InDesign 验证锚定图片本身随文字编辑正确重排（核心机制成立），但发现图注仍是独立浮动框、只是恰好没跑偏——已修复。281测试过、review-idml.sh 10/10、逐字节确定性一致、无重复图注框、golden 无变化。
+- **下一步**：(未填)
+
+## 2026-07-06 17:26 | claude | THREAD-1b cut2 spike（图片锚定对象）实现完成并推送 dev(698ca48)，待用户 InDesign 验收
+- **分支**：dev
+- **概述**：THREAD-1b cut2 spike（图片锚定对象）实现完成并推送 dev(698ca48)，待用户 InDesign 验收
+- **改动文件**：(未填)
+- **检查**：281 测试过、review-idml.sh 10/10（含途中发现并修复的两个"帧静默消失"bug）、逐字节确定性一致、全包 XML well-formed、无重复独立框。锚定对象机制本项目从未验证过，属于 best-effort 实现，未经真·InDesign 验证。
+- **下一步**：(未填)
+
+## 2026-07-06 17:01 | claude | THREAD-1b cut1 用户 InDesign 验收通过——正文+标题按章串接落地，推送 dev(7e3b8cc)
+- **分支**：dev
+- **概述**：THREAD-1b cut1 用户 InDesign 验收通过——正文+标题按章串接落地，推送 dev(7e3b8cc)
+- **改动文件**：(未填)
+- **检查**：用户在 InDesign 里打开 40段/2栏/3页样张确认：章名标题独占一行、正文分段正常、跨栏跨页顺畅衔接、字距自然无拉伸。THREAD-1b cut1 正式收尾。
+- **下一步**：(未填)
+
+## 2026-07-06 16:40 | claude | 修复 THREAD-1b cut1 真正根因：多栏页面误把左右两栏并成一个超宽框——推送 dev(1338b97)，已重新生成桌面测试文件待验收
+- **分支**：dev
+- **概述**：修复 THREAD-1b cut1 真正根因：多栏页面误把左右两栏并成一个超宽框——推送 dev(1338b97)，已重新生成桌面测试文件待验收
+- **改动文件**：(未填)
+- **检查**：用两个对照文件（单页无串接 vs 40段跨3页2栏串接）定位到：单页版本渲染完全正常，多页版本才出现"标题和正文粘连+字距被拉伸"——查几何发现合并框宽度是正常栏宽的近 2 倍，坐标横跨了左右两栏。确认是多栏页面下 rect 并集逻辑把两栏错误合并成一个超宽框（不是段落换行标记的问题，之前加的 \n 标记本身是对的、已保留）。修复后 40段测试重新验证：6个正确串接的等宽(202.205pt)框，宽度不再翻倍。281测试过、review-idml.sh 10/10、决定性一致、golden 无变化（sample project 没有多栏页面，未触发这条路径）。
+- **下一步**：(未填)
+
+## 2026-07-06 15:59 | claude | 修复 THREAD-1b cut1 段落断行 bug：Story 里章名标题与首段正文粘连——已定位根因并修复，推送 dev(0c539db)
+- **分支**：dev
+- **概述**：修复 THREAD-1b cut1 段落断行 bug：Story 里章名标题与首段正文粘连——已定位根因并修复，推送 dev(0c539db)
+- **改动文件**：(未填)
+- **检查**：对照真实存在过的 THREAD-1a spike 脚本（scratchpad/gen-thread-spike.py，会话间临时文件里找到）确认了验证过的写法：每段 Content 末尾带字面 \n（最后一段不带），ParagraphStyleRange 边界本身不足以让 InDesign 断行。修复后 swift test 281 过、review-idml.sh 10/10 PASS、两次导出逐字节确定性一致、3 页合成章节 uChapterTF0_0..2 串接链验证正确。
+- **下一步**：(未填)
+
+## 2026-07-06 05:51 | claude | THREAD-1b cut 1（正文+标题按章串接）实现完成并推送 dev(bd43d10)，待用户 InDesign 验收
+- **分支**：dev
+- **概述**：THREAD-1b cut 1（正文+标题按章串接）实现完成并推送 dev(bd43d10)，待用户 InDesign 验收
+- **改动文件**：(未填)
+- **检查**：swift build 过；swift test 281 过；review-idml.sh 10/10 PASS；两次导出逐字节确定性一致；手工构造 10 页长章节验证 uChapterTF0_0..9 串接链完整（首尾 n、中间互指）；golden 已用 scripts/golden-update.sh 刷新并审过 diff（结构变化符合预期，另混了一处无关的 AppliedComposer 属性早前已移除但 golden 未同步的既存漂移）
+- **下一步**：(未填)
+
+## 2026-07-06 01:22 | claude | 项目定位校准 + 队列全面重排(commit c1b4e2f)。用户在脚注编号 bug 的讨论中拍板:layoutD 的交付物是给 InDesign 的「初排灌
+- **分支**：dev
+- **概述**：项目定位校准 + 队列全面重排(commit c1b4e2f)。用户在脚注编号 bug 的讨论中拍板:layoutD 的交付物是给 InDesign 的「初排灌版」,不是替代 InDesign;真实书籍每篇文字本来就要串接,InDesign 里漂移可人工调校,灌版工作量的减轻才是价值——可编辑性 > 逐像素冻结。已 record_decision 存入 DECISIONS.md。按灌版镜头重盘项目:样式体系/CMYK/资产链接已达标✅;真缺口=①文流零串接(demo 4页=21个孤立story,交付物不是可编辑文流,这是头号缺口)②主页缺失(页码疑似逐页静态文本)③per-page Spread 非对页。队列重排:BUG-1 脚注编号标不修(细枝末节,InDesign 补做快,且 THREAD-1 后 story 结构会变);新立 THREAD-1a(串接 spike,手工样张验证 InDesign 可编辑+漂移可接受)→THREAD-1b(全量实现,Story 粒度=章)→MASTER-1(主页+自动页码)→SPREAD-1(对页合并)为 Claude 道主线;SPLIT-ENGINE 挪到 THREAD-1 之后避免冲突;Codex 道挂 GUARD-4 串接探针(⏳等 THREAD-1b);AG 道加 FIX-CANVAS-1(画布图片标题泄漏"cell-d"资产id前缀,小修)。傍点/表格深化维持不投入。
+- **改动文件**：c1b4e2f: .ai/QUEUE.md(Claude 道重排+BUG-1 改不修+THREAD/MASTER/SPREAD 立项+GUARD-4/FIX-CANVAS-1), .ai/DECISIONS.md(record_decision 追加定位校准)。另存 Claude 侧长期记忆 layoutd-positioning-initial-pour。
+- **检查**：纯文档/队列改动,未跑代码检查(无需要)。dev 已推送(aa86f97..c1b4e2f)。main/dev 当前一致(0bbda6c + dev 上的文档提交)。
+- **下一步**：①【Claude 下一棒】THREAD-1a spike:造最小 threaded 样张(一章 3-5 页,一个 Story+逐页框串接,坐标用引擎算好的),投桌面请用户 InDesign 验证:插字后文自动流动/漂移可接受/样式复合字体约物仍生效。通过→写结构模板立 THREAD-1b;不通过→评估轻量旁路。②【AG 可领】FIX-CANVAS-1 画布标题泄漏 id 前缀小修。③【Codex】暂无活跃任务(GUARD-4 ⏳等 THREAD-1b),待 Claude 后续补充导入侧任务。④E3-9 约物/基线用户已在 InDesign 目检 OK(2026-07-06 验收截图),可视为视觉验收通过。
+
+## 2026-07-06 01:03 | claude | 用户视觉验收 SPLIT-GUI(GUI 截图抽查通过)+导出的两份 IDML(约物基线 OK；DOCX 脚注验收发现真 bug)。合 dev→main(0bb
+- **分支**：dev
+- **概述**：用户视觉验收 SPLIT-GUI(GUI 截图抽查通过)+导出的两份 IDML(约物基线 OK；DOCX 脚注验收发现真 bug)。合 dev→main(0bbda6c)并推送。核心发现:两条脚注只要不在同一段落就会各显示"1",根因是 IDML 导出"一段一 Story、完全不 threaded"(NextTextFrame/PreviousTextFrame 恒"n"),InDesign 原生脚注按 Story 为单位编号。用现场造的 Markdown 2 段式脚注 fixture 独立复现同样 bug,证实是既存架构缺陷(threaded story 重构此前只在性能语境提过),不是今天 DOCX/SPLIT-GUI 引入的回归,只是这次撞见——E3-7 原始验收样例大概率把连续脚注挤在同一段落侥幸没测出。用户决定:现在就合 main,把这条记为高优先级待修(commit 00369d9)。merge dev→main 前独立复验:build+test(281/0)+review-idml.sh(10/10)全绿,main 已推送(3559a00..0bbda6c)。
+- **改动文件**：Merge main 0bbda6c: 含本轮全部批次(GUARD1-3/SPLIT-IMPORT/SPLIT-GUI/E3-9/PERF-3/PERF-4a/DOCX 脚注导入)。dev 补提交 00369d9: .ai/QUEUE.md 新增 BUG-1(跨段落脚注编号错误,标🔴高优先级,置于 Claude 道最前)。
+- **检查**：merge 前独立复验:swift build pass; swift test pass(281 tests,0 failures); review-idml.sh 10/10 PASS。main 已推送。BUG-1 用两条独立证据锁定:①DOCX fixture(~/Desktop/layoutD-脚注验收-DOCX导入.idml)两段脚注均显示"1";②Markdown fixture(scratchpad/md-footnote-check.idml)同样复现,且两个 Story 的 Spread XML 显示 NextTextFrame/PreviousTextFrame 恒为"n"(零 threading)。
+- **下一步**：①【高优先级】BUG-1 需要评估修复方向:根治是 threaded story 重构(正文改串接文流,工作量较大);短期可探索 IDML 是否支持不改 threading 的跨 Story 编号覆盖方案(Preferences.xml FootnoteOption 或类似机制),可行性待查。②【非阻塞】main 上的示意图出现"cell-d细胞结构示意"疑似图片 id/标题泄漏到画布显示,用户验收截图里看到的,与 SPLIT-GUI 无关(拆分前应该也这样),值得单独查一下来源。③main/dev 已同步一致(0bbda6c)。④下一批任务:Claude 道排 BUG-1 优先,其后可挑 B1-IDML 图文绕排导出侧或 SPLIT-ENGINE;Codex/AG 两道活跃队列已清空,待 Claude 补充。
+
 ## 2026-07-06 00:39 | claude | 审核并合并 Codex 道(DOCX 导入批)+ AG 道(SPLIT-GUI)两批交付。① Codex feature/codex-docx-import-g
 - **分支**：dev
 - **概述**：审核并合并 Codex 道(DOCX 导入批)+ AG 道(SPLIT-GUI)两批交付。① Codex feature/codex-docx-import-guards(3f84c77,含 IMP-4/IMP-2收尾/GUARD-3 三项):DOCXBookImporter 新增 DOCXFootnotesParser 解析 word/footnotes.xml、消费正文 w:footnoteReference,按引用顺序生成与 Markdown 同构的 Paragraph(.footnote(number:),"footnote"),正文塞 Unicode 上标 + anchoredFootnoteIds 复用 E3-7 原生 Footnote 导出;内嵌图片改落系统临时目录唯一 layoutd-docx-assets-*/images(不再污染源 docx 同级)+normalizedWordEntryPath 规范化 ../;review-idml.sh 加 DOCX 端到端探针(python3 造最小 OOXML 走 import→IDML→解包)。重点核对:确认 Markdown 路径同样往正文塞字面上标(superscriptString),故 DOCX 做法结构一致无双标记,且探针专门断言"脚注上标不残留(<Content>¹</Content> 不出现)"锁死此点。② AG feature/ag-split-gui(4b6f16b,分三棒):main.swift 拆出 AppDelegate/+Menu/WorkspaceViewController/ExportSettingsViews;InspectorView 拆出 +Issues/+Styles/+Assets/+Quality;CanvasView 拆出 +Drawing/+Interaction。纯搬家 Tests/ 零改动。两道文件边界不重叠,仅 .ai 文档冲突已自动合并。合并 merge ee69387(codex ff)+a7be7a8(ag)。独立复验(非仅采信自报):build+test(281/0)+review-idml.sh 探针 8→10 全过(含 DOCX 粗斜体/原生 Footnote/上标不残留/图片进 Links)。补提交 6982bed 标记 IMP-4/IMP-2/GUARD-3 完成,已推 origin/dev。
