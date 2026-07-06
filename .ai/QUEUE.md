@@ -97,7 +97,10 @@
   - 验收：281 测试过、review-idml.sh 12/12（对开导出机制本身未改动，`testFacingPagesSpreadImposition` 仍过）。**GUI 验收待用户**：打开一份 `pageSetup.facingPages=true` 的项目，选「Export IDML...」，确认对话框里"启用对开跨页"默认已经打勾（不用手动点）。
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
 - [x] **PERF-2 baseline 布局缓存** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。对照版只在内容/样式真变时重排（比较时剔除 appliedLayoutPlans + qualityMetricsHistory）；纯版面方案操作/undo/redo 不再触发第二次全书排版，单次改动成本约减半。加 baselineLayoutCount 测试钩子+缓存单测。
-- [ ] **B1-IDML 导出侧图文绕排**（次优先，THREAD-1 批之后顺带做——绕排影响文流走向，属灌版相关但可后补）：图片框输出 `TextWrapPreference` 让 InDesign 也绕排。文件：`IDMLExporter.swift`。验收：解包含 TextWrapPreference、InDesign 打开绕排生效（用户肉眼）；`review-idml.sh` PASS。
+- [x] **B1-IDML 导出侧图文绕排** — ✅ Claude（`498c9cd`）。**待用户 InDesign 验收**（桌面 `b1-idml-spike/wrap-spike.idml` + 同目录 `Links/diagram.png`：图片前后各一段够长的正文，用来看绕排效果）。
+  - 实现：独立定位的图片框（孤立 `.figure` 段落、跨页大图——不含 THREAD-1b cut2 的锚定图片，那条路已经靠文流本身让位，不需要绕排）现在带 `<TextWrapPreference>`（矩形绕排 BoundingBoxTextWrap + 两侧避让 + 四边 6pt 间距）。写法对照过一份真实 Adobe 导出的 IDML 样本确认结构（这轮吸取了两次盲猜 IDML 未知元素踩坑的教训，动手前先查真实参考）。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
+  - 验收：282 测试过、review-idml.sh 12/12、XML well-formed、golden 无变化（样例项目唯一素材标了 unused、从未真正入版，另造了带真实占位图的样张验证）。**InDesign 人工验证待用户**：图片旁边的正文是不是主动绕开了图片的矩形范围。
 - [ ] **SPLIT-ENGINE LayoutEngine.swift 拆分** ⏳ **挪到 THREAD-1 批全部落地之后**（THREAD-1b 要大改引擎与导出，拆分与之叠加必然冲突；纯搬家不急）。
 
 ## Codex 道队列（导入 + 探针）
