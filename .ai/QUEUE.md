@@ -64,7 +64,7 @@
 
 > **2026-07-06 定位校准（见 DECISIONS）**：layoutD 交付「初排灌版」给 InDesign，不替代 InDesign。开发价值标准 = 文流/样式/视觉规范/CMYK 高完成度迁移进 InDesign、给人工调整省时间。可编辑性 > 逐像素冻结（InDesign 里漂移可人工调校）。脚注/傍点/表格深化 = 初排细枝末节，不再投入。
 
-- [x] **BUG-2 文档末尾「新建页面」无反应** — ✅ Claude（`a4ea45b`），用户验收 SPREAD-1 时顺手发现并现场修复。根因：`insertPage()` 在 `pageNum = 当前页数+1` 处存一条空白 LayoutPlan，但引擎只在**内容溢出触发翻页**时才检查该页有没有计划——如果插入的空白页排在所有正文内容之后，永远没有内容会触发翻页翻到那么远，计划存了但没人看，页面凭空消失。`finish()` 收尾时补一次检查：正文排完后如果紧接着还有计划就继续 materialize（可级联多页），带一个防死循环的兜底。新增回归测试复现原场景。
+- [x] **BUG-2 文档末尾「新建页面」无反应** — ✅ **2026-07-07 用户验证通过**（`a4ea45b`），验收 SPREAD-1 时顺手发现并现场修复。根因：`insertPage()` 在 `pageNum = 当前页数+1` 处存一条空白 LayoutPlan，但引擎只在**内容溢出触发翻页**时才检查该页有没有计划——如果插入的空白页排在所有正文内容之后，永远没有内容会触发翻页翻到那么远，计划存了但没人看，页面凭空消失。`finish()` 收尾时补一次检查：正文排完后如果紧接着还有计划就继续 materialize（可级联多页），带一个防死循环的兜底。新增回归测试复现原场景。
 
 - [ ] ~~**BUG-1 跨段落脚注编号全错**~~ ⏸ **不修（用户 2026-07-06 决定）**——脚注使用频率极低，初排里属细枝末节，需要时 InDesign 补做很快；且 THREAD-1 落地后 story 结构整个会变，现在修是白修。根因存档：一框一 Story 零串接 → InDesign 原生脚注按 Story 各自从 1 编号（Markdown/DOCX 两路径均复现，非 IMP-4/SPLIT-GUI 回归）。
 - [x] **THREAD-1a 串接文流 spike** — ✅ **2026-07-06 用户 InDesign 人工验证通过**。手工生成脚本 `scratchpad/gen-thread-spike.py`：一个 Story 装 32 段正文 + 3 个页大小 TextFrame 用 Previous/NextTextFrame 串接（坐标沿用 demo 版心）。用户验证三点全过：① 文字跨页连续流（**第12段被从中间拆到第1→2页、第20段拆到第2→3页、段号 1→27 连续**——独立框永远做不到跨页拆段，铁证串接成立）；② 编辑顺移丝滑自动（删/插一段后文跨页自动重排）；③ 中文/复合字体/约物/两端对齐正常，漂移可接受。
@@ -90,7 +90,7 @@
   - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
   - 验收：281 测试过、review-idml.sh 12/12、逐字节确定性一致、全包 XML well-formed、golden 已刷新（新增 master TextFrame+Story，改动隔离）。**InDesign 人工验证待用户**：主页面板见 A-主页带页码，正文页页码正确递增。
   - **后续可选**（不阻塞）：对开镜像页码位置（留给 SPREAD-1 一起做）；页眉显示当前章名（需要文本变量机制，工作量较大，按需评估）。
-- [x] **SPREAD-1 对页合并 Spread** — ✅ Claude（`b576554`）。**待用户 GUI 验收**（需要实际打开 App 操作，无法生成样张代劳）。
+- [x] **SPREAD-1 对页合并 Spread** — ✅ **2026-07-07 用户 GUI 验证通过**（`b576554`）：Export IDML... 面板"启用对开跨页"默认已打勾。
   - **核实结果（动手前先查了现状，发现活儿比预期小很多）**：真对页 spread（左右页同 spread、书脊镜像、版心镜像）**早就做完并验收过了**——`E2-4`（Claude, 用户 2026-06 已验收 PASS）+ `E2-4p`（AG，PDF/PNG 侧并排预览）。`testFacingPagesSpreadImposition` 单测也在跑。真正的缺口只有一处：GUI 的"Export IDML..."导出面板，"对开跨页"开关**硬编码默认关闭**、跟项目自身的 `pageSetup.facingPages` 设置完全脱节——旁边的 CMYK 开关早就做了"默认跟随项目设置"，唯独这个漏了。等于说：用户在 App 里预览的明明是对开跨页书稿，导出 IDML 时如果忘了手动勾选，出来的就是非对开——这正是验收标准"与 layoutD 预览一致"没做到的地方。
   - 实现：一行修复，`WorkspaceViewController.exportIDML()` 里让 `settingsState.facingPages` 默认取 `appState.project.pageSetup.facingPages`（跟 `cmykColors` 已有的写法一致），面板里仍可手动改。CLI 的 `--idml-facing` 保持显式选项不动（脚本化场景应该显式指定，不该悄悄跟着项目状态变）。
   - 文件：`Sources/LayoutDApp/WorkspaceViewController.swift`。
