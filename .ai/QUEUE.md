@@ -63,7 +63,12 @@
 ## Claude 道（灌版主线 + 高风险导出 + 集成）
 
 > **2026-07-06 定位校准（见 DECISIONS）**：layoutD 交付「初排灌版」给 InDesign，不替代 InDesign。开发价值标准 = 文流/样式/视觉规范/CMYK 高完成度迁移进 InDesign、给人工调整省时间。可编辑性 > 逐像素冻结（InDesign 里漂移可人工调校）。脚注/傍点/表格深化 = 初排细枝末节，不再投入。
+> **2026-07-07 规范包路线定案（见 DECISIONS）**：视觉规范/样张走「AI 生成规范包 JSON → layoutD 渲样张 → 人工比选 → 同一规范直通 IDML」。首测已过：`~/Desktop/layoutD-规范包测试/` 有 3 份规范包 JSON（**方案A-探索黄 已选为基准**）+ 视觉预览.html；总纲见桌面《layoutD 视觉规范与样张生成·开发计划 v1.0.pdf》。本批新任务：SPEC-PACK-1（Codex 道）→ FIXTURE-1（Claude 道）→ SAMPLE-1（AG 道，依赖前两个）。
 
+- [ ] **FIXTURE-1 标准样章 fixture**（2026-07-07 用户批准规范包路线后排入）
+  - 目标：一份覆盖**全部角色标签**的固定测试样章（章名/节名/文章名/开节概述/正文/抽言/图注/引文/图片占位），从真书素材截一章改造，落 `Tests/` 或 `Samples/` fixtures（Markdown 角色标签格式，走现有导入器）。
+  - 用途：SAMPLE-1 一键样张的固定输入；也是角色覆盖的回归语料。
+  - 验收：每个角色标签至少出现一次；样章跑通 导入 → 初排 → PDF/IDML 全链路；测试/探针 PASS。
 - [x] **BUG-2 文档末尾「新建页面」无反应** — ✅ **2026-07-07 用户验证通过**（`a4ea45b`），验收 SPREAD-1 时顺手发现并现场修复。根因：`insertPage()` 在 `pageNum = 当前页数+1` 处存一条空白 LayoutPlan，但引擎只在**内容溢出触发翻页**时才检查该页有没有计划——如果插入的空白页排在所有正文内容之后，永远没有内容会触发翻页翻到那么远，计划存了但没人看，页面凭空消失。`finish()` 收尾时补一次检查：正文排完后如果紧接着还有计划就继续 materialize（可级联多页），带一个防死循环的兜底。新增回归测试复现原场景。
 - [x] **TYPE-1 段末孤字（单字不成行）** — ✅ Claude（`13f01a2`）。**待用户 InDesign 验收**（桌面 `orphan-spike.idml`，四段刻意错开长度的正文）。用户 B1 验收时发现 InDesign 里段落末行会甩单字（如「辨。」）。查证：THREAD-1b 后正文交 InDesign 自己折行，而 InDesign **没有**原生「避免单字尾行」开关（社区共识：不算断行错误，靠 NoBreak 字符属性变通）。实现：`chapterStoryXML` 给每段末尾两个实义字（含尾部悬挂标点）打 `NoBreak="true"`（InDesign 的 `noBreak` 字符属性，动手前对照 Adobe DOM 文档确认），放不下时整体换到末行，末行至少两字。写法对照真实属性、不改文字内容。283 测试过、review-idml.sh 12/12、确定性一致、golden 隔离刷新（段末加 NoBreak）。**待用户肉眼确认**：InDesign 里段落末行不再出现单字。
 
@@ -111,6 +116,11 @@
 > 负责文件：`Sources/LayoutDImport/*`、`scripts/review-idml.sh`。
 > 斜体导出已用 `Skew="12"`、粗体用 `FauxBold="true"`（别用 `FauxItalic`/`FontStyle`，对 CJK 不可见/出粉色替代字形）。
 
+- [ ] **SPEC-PACK-1 视觉规范包 schema 补全 + 导入校验**（2026-07-07 用户批准，最高优先）
+  - 背景：规范包路线定案（见 DECISIONS 2026-07-07）。**schema 定稿必须以 `~/Desktop/layoutD-规范包测试/` 下 3 份真实 JSON 为样例校准**（方案A-探索黄 是用户选定基准）——字段结构（meta/page/fonts/colors/roles/vertical）是开发计划附录草样，实现时可微调字段名，但要能表达这 3 份 JSON 的全部内容。
+  - 目标：① 在 `StyleBaselineImporter` 现有 DTCG/Figma 解析之上扩展顶层规范包格式：角色→字体族映射、版面参数（page.size/margins/grid）、角色样式块（fontSize/lineHeight/缩进/颜色/装饰）、竖排开关（占位可先不启用）；② 写《规范包编写指南》到 `docs/`（给 AI 的字段说明+合法取值范围）；③ 校验：字体已装且带真实字重（对齐 approvedFonts 机制）、版心不超页面、字号/行距>0，错误信息用人话并指明字段路径。
+  - 文件：`Sources/LayoutDImport/StyleBaselineImporter.swift`（或新增 `SpecPackImporter.swift`）、必要时 `Sources/LayoutDCore/` 新类型、`docs/`。
+  - 验收：桌面 3 份 JSON 全部一次导入成功（方案A 每个字段都被消费，暂不支持的字段输出明确清单而非静默忽略）；≥10 个典型非法样例被拒且报错可读；全部测试/探针 PASS。
 - [x] **GUARD-1 角色标签端到端探针进 review-idml.sh** — ✅ Codex @ `feature/codex-guard-role-tags`（`bdd1ac2` test: guard role tag idml review probe）
   - 背景：角色标签结构化导入（IMP-3）是 layoutD 核心能力，但 `review-idml.sh` 的端到端探针目前只测行内粗斜体——改导入器时 CI 逮不住角色回归。
   - 目标：探针加一段角色标签 fixture（含 一级标题/开节概述/抽言/参考文献 标签 + 正文），导 IDML 解包断言：① 标签文字零漏出（Story 无「抽言」「开节概述」等标签字面）；② Styles.xml 含中文命名段落样式（章标题/概述/抽言/参考文献）；③ 对应段落 `AppliedParagraphStyle` 指向正确样式。
@@ -134,6 +144,11 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`Sources/LayoutDApp/*`
 > ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）；**生成样张别提交进仓库**（B1 踩过，Claude 合并时剔除了 20 个 PNG/PDF）。
 
+- [ ] **SAMPLE-1 一键批量样张**（2026-07-07 用户批准；⚠️ 依赖 Codex 道 SPEC-PACK-1 + Claude 道 FIXTURE-1，若先领到可先搭 CLI 骨架用现有 DTCG token + 任意样章过渡，接口留好）
+  - 背景：规范包路线定案（见 DECISIONS 2026-07-07）。目标体验：AI 改一版规范 JSON → 一条命令 → 桌面出新样张 PDF，分钟级比选闭环。
+  - 目标：CLI 子命令（形如 `--render-samples 方案A.json 方案B.json --chapter <fixture>`）：每份规范包用标准样章渲一份 PDF 到 `~/Desktop`，文件名含方案名；`PDFExporter` 已有，属薄封装；同输入重跑输出一致（确定性）。
+  - 文件：`Sources/LayoutDApp/`（CLI 入口所在文件）、`Sources/LayoutDExport/PDFExporter.swift`（如需小改）。
+  - 验收：3 份规范包一条命令出 3 份 PDF、真实字体无 tofu（GUARD-2 rule⑥ 字形覆盖可兜底）；重跑确定性一致；全部测试/探针 PASS；**生成的 PDF 不进仓库**（投 ~/Desktop）。
 - [x] **PERF-3 排版异步化 + 防抖** — ✅ AG `c99e48a`，排版及预检移出主线程，引入 150ms 防抖，支持首帧/测试环境同步回退。
   - 背景：每次改动全书重排两遍 + preflight 同步跑在界面线程（`AppState.recalculateLayout`），书稿变大会卡界面。
   - 目标：连续操作只排最后一次（防抖），layout/preflight 移出界面线程（异步化）；首帧仍同步保证打开即有版面；须防状态流里的 GUI 竞态（异步排版结果回来时用户可能已经切换了选中/页面）。

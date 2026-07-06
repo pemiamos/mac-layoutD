@@ -95,3 +95,7 @@
 - **决策**：THREAD-1b cut 2（内嵌图锚定）用户 InDesign 验证通过，但范围收窄——只锚定图片本身，图注放弃随图锚定、维持独立定位框。
 - **理由**：图注随图锚定试了两版都在 InDesign 里复现同一个"字符间距异常拉伸"bug，排查不出根因（不像段落标记 bug 那次有明确的验证脚本可对照，这次是全新的、本项目从未验证过的锚定文字机制，需要真机 InDesign 反复试错才能定位，盲改的性价比不划算）。按 [[fidelity-investment-principle]]（使用频率 × 修复成本随书变大的程度）和已有的"漂移可接受、人工微调"原则，图注偶尔跟丢图片、手动拖一下即可，不值得为此继续投入。图片本身锚定成功已经是这刀的核心价值。
 
+## 2026-07-07 06:20 | claude
+- **决策**：视觉规范与排版样张生成采用 layoutD 原生「规范包」路线（AI 生成规范 JSON → layoutD 校验渲染样张 → 人工比选定稿 → 同一规范驱动初排与 IDML），放弃 Figma 作为主路径（Figma 仅保留为封面等单页物料可选通道）。首次实测通过：用户以《EXPLORE》杂志截图为参考，比选 3 套受控变体后选定「方案A · 探索黄（杂志感）」为样张基准（JSON 见 ~/Desktop/layoutD-规范包测试/）。落地任务 SPEC-PACK-1 / SAMPLE-1 / FIXTURE-1 排入 QUEUE。
+- **理由**：Figma 三硬伤：无竖排、无 CMYK、无书版规则模型，且 Figma→layoutD 导入是有损逆向工程。规范包路线单一事实源、样张与 IDML 同引擎零损耗；基础设施大半已在（StyleBaselineImporter 已解析 DTCG/Figma token、StyleImportSheet、PDFExporter、LayoutPlanProvider 插座）。详见桌面《layoutD 视觉规范与样张生成·开发计划 v1.0.pdf》。
+
