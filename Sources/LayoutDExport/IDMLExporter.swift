@@ -165,7 +165,7 @@ public struct IDMLExporter {
         // `anchoredAssetIds` 上、且该段落本身在本章串接文流里的图片——转成嵌入所属段落
         // 文流内的锚定对象，随文重排移动。孤立的 `.figure` 段落、抽言（callout）、图注仍
         // 保持独立定位框（本刀范围之外，留给后续迭代）。
-        var anchoredAssetsByParagraphId: [UUID: [(asset: Asset, rect: Rect, packagedFileName: String?, captionText: String?, captionFontSize: Double?)]] = [:]
+        var anchoredAssetsByParagraphId: [UUID: [(asset: Asset, rect: Rect, packagedFileName: String?)]] = [:]
         var anchoredImageFrameKeys: Set<FrameKey> = []
         for (pi, page) in pages.enumerated() where page.number > 2 {
             for (fi, frame) in page.frames.enumerated() {
@@ -176,22 +176,8 @@ public struct IDMLExporter {
                       let pid = frame.sourceParagraphId, sectionIndexByParagraphId[pid] != nil,
                       let hostKind = paragraphsByID[pid]?.kind, isBodyFlowParagraph(hostKind),
                       let asset = project.assets.first(where: { $0.id == assetId }) else { continue }
-                // 图注紧跟图片同一个 sourceParagraphId，随图一起锚定，别让它独立留在原位——
-                // 不然图片跟着文字走了，图注没走，两者会散开。
-                var captionText: String?
-                var captionFontSize: Double?
-                let nextIndex = fi + 1
-                if nextIndex < page.frames.count {
-                    let next = page.frames[nextIndex]
-                    if next.kind == .caption, next.sourceParagraphId == pid, case .text(let raw) = next.content {
-                        captionText = raw
-                        captionFontSize = ctx.resolvedStyle(id: next.styleId).fontSize
-                        anchoredImageFrameKeys.insert(FrameKey(page: pi, frame: nextIndex))
-                    }
-                }
                 anchoredAssetsByParagraphId[pid, default: []].append(
-                    (asset: asset, rect: frame.rect, packagedFileName: packagedLinks[assetId]?.fileName,
-                     captionText: captionText, captionFontSize: captionFontSize))
+                    (asset: asset, rect: frame.rect, packagedFileName: packagedLinks[assetId]?.fileName))
                 anchoredImageFrameKeys.insert(FrameKey(page: pi, frame: fi))
             }
         }
@@ -289,10 +275,6 @@ public struct IDMLExporter {
                     // 已并入本章串接 Story；合并后的 TextFrame 在本页 frame 循环结束后统一追加一次。
                     if let sectionIndex = frameSectionIndex[FrameKey(page: pi, frame: fi)],
                        chapterStorySelf[sectionIndex] != nil {
-                        continue
-                    }
-                    // 图注已随图片一起嵌成锚定对象的行内文字，不再独立出框。
-                    if anchoredImageFrameKeys.contains(FrameKey(page: pi, frame: fi)) {
                         continue
                     }
                     let storySelf = "uStory\(pi)_\(fi)"
@@ -671,7 +653,7 @@ public struct IDMLExporter {
         let inlineRuns: [InlineRun]?
         let footnotes: [Paragraph]
         let footnoteStyleRef: String
-        var anchoredAssets: [(asset: Asset, rect: Rect, packagedFileName: String?, captionText: String?, captionFontSize: Double?)] = []
+        var anchoredAssets: [(asset: Asset, rect: Rect, packagedFileName: String?)] = []
     }
 
     private func unionRect(_ a: Rect, _ b: Rect) -> Rect {
@@ -885,16 +867,6 @@ public struct IDMLExporter {
         \t\t\t\t<Content>\u{FFFC}</Content>
         \t\t\t</CharacterStyleRange>
         """
-    }
-
-    /// 图注随锚定图片一起走：不建独立锚定对象（要再配一个 Story，复杂度不成比例），
-    /// 就用一个小号字体的行内文字附在图片后面，随宿主段落一起重排。锚定图片本身是
-    /// AnchoredAboveLine（占据自己的一行空间），后面紧跟的文字天然从新的一行开始，
-    /// 不需要（也不该）额外插一个强制换行字符——那样反而在 InDesign 里表现异常
-    /// （字符间距被拉伸、疑似被当成两端对齐的非末行处理）。
-    private func captionCharacterStyleRange(text: String, fontSize: Double?) -> String {
-        let sizeAttr = fontSize.map { " PointSize=\"\(fmt($0))\"" } ?? ""
-        return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(sizeAttr)><Content>\(esc(text))</Content></CharacterStyleRange>"
     }
 
     // MARK: - 包内部件
@@ -1207,17 +1179,13 @@ public struct IDMLExporter {
             // 顺序很关键：可见文字 → 锚定对象（挂在本段末尾，随本段走）→ 段落标记 \n
             // （单独一个 CharacterStyleRange，不掺进正文的 Content，避免和锚点字符混在一起）。
             let textRanges = characterStyleRanges(for: p.text, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef)
-            let anchoredRanges = p.anchoredAssets.enumerated().flatMap { assetIndex, anchored -> [String] in
-                let imageRange = anchoredImageCharacterStyleRange(
+            let anchoredRanges = p.anchoredAssets.enumerated().map { assetIndex, anchored in
+                anchoredImageCharacterStyleRange(
                     self: "uAnchorImg\(id)_\(index)_\(assetIndex)",
                     imageSelf: "uAnchorImgAsset\(id)_\(index)_\(assetIndex)",
                     linkSelf: "uAnchorImgLink\(id)_\(index)_\(assetIndex)",
                     asset: anchored.asset, packagedFileName: anchored.packagedFileName,
                     width: anchored.rect.width, height: anchored.rect.height)
-                guard let captionText = anchored.captionText, !captionText.isEmpty else { return [imageRange] }
-                // 图注随图一起锚定：紧跟在图片锚点后面，一个软换行(U+2028，段内换行，
-                // 不是段落标记)把它挤到单独一行，同一段落内不产生新段落。
-                return [imageRange, captionCharacterStyleRange(text: captionText, fontSize: anchored.captionFontSize)]
             }
             let paragraphMark = index == lastIndex ? [] : [
                 "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"><Content>\n</Content></CharacterStyleRange>"
