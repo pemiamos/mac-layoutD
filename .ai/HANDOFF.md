@@ -3,6 +3,34 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 06:19 | claude | 三项落地：③仓库小扫除（删10本地+8远端已合并分支、清2个残留shapes worktree；AG/Codex副本还停在旧feature分支、各锁1个待删分支
+- **分支**：dev
+- **概述**：三项落地：③仓库小扫除（删10本地+8远端已合并分支、清2个残留shapes worktree；AG/Codex副本还停在旧feature分支、各锁1个待删分支；根目录layoutD-icon.png为低配重复版待用户定夺）+ relay run_checks修复（server.py正则捞XCTest汇总行，重启生效）；④GOLDEN-GUARD防漂移护栏（c311fc7：golden-update.sh强制--reason+GOLDEN-LOG.md留痕+强制看diff+拒绝空刷；review-idml.sh本地自动带golden-check，探针12→13，三路径自证）；⑤SPLIT-EXPORT（87f2dfb：IDMLExporter 1563行拆7文件，纯搬家，排序diff零行丢失）。已合dev(10c0d0b)。过程发现并发对话在同一checkout写handoff（N1场景），本会话改在专属worktree作业。
+- **改动文件**：(未填)
+- **检查**：拆分后完整重验：283测试0失败、review-idml.sh 13/13（含新golden探针）、golden逐字节一致、排序逐行频次diff仅差extension样板。护栏三路径自证：无reason拒绝(exit 2)、空刷拒绝(exit 1)、真变化打印diff+留痕。
+- **下一步**：(未填)
+
+## 2026-07-07 06:16 | claude | 规范包路线首次实测（无仓库改动，产物在 ~/Desktop/layoutD-规范包测试/）：用户提供 Pinterest《EXPLORE》旅行杂志截图，Clau
+- **分支**：dev
+- **概述**：规范包路线首次实测（无仓库改动，产物在 ~/Desktop/layoutD-规范包测试/）：用户提供 Pinterest《EXPLORE》旅行杂志截图，Claude 完成 AI 侧闭环——分析截图提取版式骨架（大留白/黑白灰+单点缀色/超大章节序号/小图注/强字重对比），产出 3 套受控变体规范包 JSON（方案A探索黄-杂志感、方案B湖山青-疏朗文集、方案C暖砂橙-人文混排；共享 185×260 骨架，仅变点缀色/栏式/行距/序号处理/标题字族），并生成 视觉预览.html（每套含章首页+正文页模拟样张+参数表，系统近似字体）。JSON 采用开发计划附录草样 schema，待 T1 定稿后可能需字段微调。引擎侧（真字体渲 PDF）待 T1/T2/T3 建成后用同一批 JSON 重跑验证。
+- **改动文件**：（仓库无改动；桌面产物：方案A-探索黄.json、方案B-湖山青.json、方案C-暖砂橙.json、视觉预览.html）
+- **检查**：未跑构建/测试（不涉及代码）；HTML 预览待用户目视确认
+- **下一步**：1) 用户比选/反馈 → Claude 改 JSON 重出预览；2) 用户批准开发计划后把 T1(SPEC-PACK-1)/T2(SAMPLE-1)/T3(FIXTURE-1) 排入 QUEUE——T1 定 schema 时应以这 3 份 JSON 为真实样例校准字段。
+
+## 2026-07-07 05:54 | claude | 续评估（无代码改动）：细化"AI 生成规范包→layoutD 自渲染样张"路线并向用户讲解。重要核实（修正上一条交接）：导入口其实已存在——LayoutDImp
+- **分支**：dev
+- **概述**：续评估（无代码改动）：细化"AI 生成规范包→layoutD 自渲染样张"路线并向用户讲解。重要核实（修正上一条交接）：导入口其实已存在——LayoutDImport/StyleBaselineImporter 已能解析 DTCG JSON 和 Figma Variables JSON 成 DesignTokens，App 内已有 StyleImportSheet 绑定面板（含绑定率统计，覆盖 paragraph.*.fontSize/lineHeight/缩进/段距 + page.margin.*）；LayoutDExport/PDFExporter 已能渲 PDF（带 RGB+SWOP/FOGRA39 输出意图）。真实缺口收敛为三件小事：①SPEC-PACK-1 规范包 schema 补全（字体族按角色、版面模板选择、竖排开关等目前 token 未覆盖）；②SAMPLE-1 批量样张命令（N 套规范×标准样章→N 份 PDF 到桌面，PDFExporter 薄封装）；③标准样章 fixture（含全部角色标签的固定测试稿）。分工原则已向用户澄清：AI 只定规范（受控变体），初排是引擎确定性计算；参考图分析由 AI 视觉完成而非 layoutD。仍待用户拍板后 record_decision。
+- **改动文件**：(未填)
+- **检查**：纯评估，未跑构建/测试
+- **下一步**：用户认可后：按 SPEC-PACK-1 → SAMPLE-1 → 样章 fixture 顺序排入 QUEUE；远期再把 LLM 接入 LayoutDDesignAI 的 LayoutPlanProvider。
+
+## 2026-07-07 05:42 | claude | 评估"AI 生成视觉规范/排版样张"技术路径，无代码改动。结论：不建议 Figma 作主路径（无竖排、无 CMYK、无书版模型，且 Figma→layoutD 
+- **分支**：dev
+- **概述**：评估"AI 生成视觉规范/排版样张"技术路径，无代码改动。结论：不建议 Figma 作主路径（无竖排、无 CMYK、无书版模型，且 Figma→layoutD 导入是有损逆向）；推荐"AI 直接生成 layoutD 原生规范包（DesignTokens/StyleLibrary/LayoutPlan JSON）→ layoutD 自渲染样张 PDF 供人审 → 同一规范驱动 IDML 导出"。代码里已有承接点：DesignTokens 已按 DTCG 标准、LayoutDDesignAI 的 LayoutPlanProvider 协议即"AI=受控变体"插座。辅助路径：HTML/CSS 浏览器打样做前期风格发散（竖排/着重号原生可渲染）；Figma 仅保留给封面等单页物料，经 DTCG token 桥接。待用户拍板后再 record_decision。
+- **改动文件**：(未填)
+- **检查**：纯评估，未跑构建/测试（上一棒 283 测试全过仍有效）
+- **下一步**：若用户认可路径 A：①定义"视觉规范包"JSON schema+导入命令；②一键渲染 N 套样张 PDF 到桌面；③LLM 接入 LayoutPlanProvider。
+
 ## 2026-07-07 05:33 | claude | 全项目 review 完成（进度盘点/风险清单/推荐计划），无代码改动。核实：dev=main 完全同步、14 个 feature 分支全部已合并无遗落、283
 - **分支**：dev
 - **概述**：全项目 review 完成（进度盘点/风险清单/推荐计划），无代码改动。核实：dev=main 完全同步、14 个 feature 分支全部已合并无遗落、283 测试过、PERF-1 基准 161页/945ms、PERF-4a 缓存防撞键测试在位、IDMLExporter.swift 已回涨到 1563 行成最大文件。风险要点：真书规模未压测（最高优先建议全书端到端试跑）、视觉验收积压 4 项（TYPE-1/E3-9/工作区骨架/工具栏）、golden 仅本地跑、锚定文字拉伸 bug 根因未明。
