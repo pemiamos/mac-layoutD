@@ -79,7 +79,8 @@
   - 文件：`Sources/LayoutDExport/IDMLExporter.swift`、`Sources/LayoutDEngine/LayoutEngine.swift`。
   - 验收：281 测试过、review-idml.sh 10/10（含新增的 DOCX 内嵌图回归）、逐字节确定性一致、全包 XML well-formed、无重复独立框；InDesign 人工验证图片随宿主段落编辑正确重排。
   - **后续可选**（不阻塞，按需再评估）：扩展锚定机制到孤立 `.figure` 图/抽言（需要设计"没有宿主段落时怎么挂"）；图注随图锚定需要真机 InDesign 调试后再重试。
-- [ ] **THREAD-1b cut 3：收边**（cut 2 之后）：GUARD-4 串接探针（Codex 领，见下）+ 处理封面/目录/表格等不应被误并进文流的特例复核。
+- [x] **THREAD-1b cut 3：收边** — ✅ Claude（`309e18e`）。GUARD-4 串接探针加进 `review-idml.sh`（60段合成章节撑出多页/栏，断言单头单尾、正反遍历都覆盖全部框、无孤儿无环；已自证：人为断链后探针 FAIL，修复后恢复 PASS）。封面/目录/表格特例复核：造了个含表格+足够正文触发真实 TOC 的样张，确认章 Story 只含预期的标题+正文段落，表格/目录仍各自走独立 Story，未被误并进文流。**THREAD-1b 三刀全部完成**：cut1（正文+标题按章串接，用户验收）、cut2（内嵌图锚定，用户验收；图注锚定放弃，见 DECISIONS）、cut3（收边，本条）。
+  - 说明：`scripts/review-idml.sh` 名义上是 Codex 道文件，但 GUARD-4 是 THREAD-1b 收尾的一部分、Claude 有完整上下文，直接实现而非中途交接。
 - [ ] **MASTER-1 主页交付**（THREAD-1 之后，同文件避免冲突）：版心/栏参考、自动页码（CurrentPageNumber 变量）、页眉书名/章名放 A-主页，正文页应用主页——编辑改页码位置只动主页一处。现状疑似页码按静态文本逐页画，动手前先核实。文件：`IDMLExporter.swift`。验收：InDesign 里主页面板见 A-主页带自动页码，正文页页码随主页变。
 - [ ] **SPREAD-1 对页合并 Spread**（THREAD-1 之后）：per-page Spread 改真对页 spread（左右页同 spread、版心镜像），配合 MASTER-1。验收：InDesign 页面面板呈对页排列，与 layoutD 预览一致。
 - [x] **PERF-1 全书规模性能基准** — ✅ Claude `e106c46`，合 dev(`23df697`, 2026-07-04)。合成 161 页书稿基准：**本机基线 ≈1179ms/次全量排版**（断言只拦 60s 性能悬崖，CI 环境差异安全）。后续 PERF-3/4 用这个数字对比。
@@ -108,7 +109,7 @@
   - 内嵌图片不再写到源 `.docx` 同级 `images/`，改写系统临时目录下唯一 `layoutd-docx-assets-*/images`；`Asset.fileName` 仍保持 `images/<name>` 引用名；顺带规范化 `word/media` 相对路径（`normalizedWordEntryPath` 处理 `../`）。
 - [x] **GUARD-3 DOCX 端到端探针进 review-idml.sh** — ✅ Codex @ 同分支（`3f84c77`），Claude 已合 dev
   - 探针现场用 python3 造最小 OOXML（粗斜体/内嵌图/脚注）走完整 DOCX 导入→IDML→解包，断言 FauxBold/Skew/原生 Footnote/上标不残留/图片进 Links。探针总数 8→10 全过。
-- [ ] **GUARD-4 串接文流探针** ⏳ **等 THREAD-1b 落地后再领（现在做会断言一个还不存在的结构）**：`review-idml.sh` 断言正文框 Previous/NextTextFrame 串接链完整（可从任一链头走到链尾）、story 数按章计不按段计、无孤儿正文框。文件：`scripts/review-idml.sh`。验收：探针在 THREAD-1b 后的 dev PASS；人为断开一处串接时 FAIL（自证有效）；整脚本仍 PASS。
+- [x] **GUARD-4 串接文流探针** — ✅ Claude（`309e18e`，随 THREAD-1b cut3 一并做掉，见上，Codex 无需再领）。
 
 ## Antigravity 道队列（预览渲染 + GUI）
 
