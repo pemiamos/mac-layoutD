@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 06:32 | codex | 完成 SPEC-PACK-1：layoutD 视觉规范包 schema 导入、校验与指南
+- **分支**：feature/codex-spec-pack-1
+- **概述**：实现规范包格式自动识别（`ImportFormat.specPack`）与专用 `parseSpecPack` 入口，支持 `meta/page/fonts/colors/roles/vertical` 顶层格式；页面毫米值转换为 point token，角色中文名映射到现有段落样式 token（章名/节名/正文/抽言/图注/开节概述/引文），字体别名走批准映射并用 CoreText 校验真实已安装字体，装饰/复杂版式字段进入 `unsupportedFields` 明确上报而非静默忽略。新增规范包编写指南，说明字段、单位、合法值、字体别名和当前未落地字段。新增 `StyleBaselineImporterSpecPackTests`：桌面 `~/Desktop/layoutD-规范包测试/` 三份 JSON 存在时全部实际导入；另覆盖 10 个典型非法样例，错误信息带 JSON path。
+- **改动文件**：Sources/LayoutDImport/StyleBaselineImporter.swift；Tests/LayoutDImportTests/StyleBaselineImporterSpecPackTests.swift；docs/spec-pack-guide.md
+- **检查**：`swift test --filter StyleBaselineImporterSpecPackTests` PASS（含桌面方案A/B/C 导入）；`swift test` PASS（287 tests, 0 failures）；`bash scripts/review-idml.sh` PASS（13/13，golden 逐字节一致）。代码提交：`a7ce358 feat(import): support layoutD spec packs`
+- **下一步**：Claude 可审核并合入 dev；AG 的 SAMPLE-1 可以调用 `StyleBaselineImporter.parseSpecPack(jsonData:)` 取得 `DesignTokens`、字体解析结果和 unsupported 字段清单，再接标准样章批量渲 PDF。当前规范包只输出 token/校验结果，尚未自动把字体族写入 `StyleLibrary` 实体样式，后续样张 CLI 如需“规范包字体立即生效”，应在应用 token 时同步应用 `fontResolutions`。
+
 ## 2026-07-07 06:22 | claude | 用户拍板：规范包测试三套变体中选定「方案A · 探索黄（杂志感）」为样张基准。已 record_decision（规范包路线定案 + 方案A 基准）并把三个落地
 - **分支**：dev
 - **概述**：用户拍板：规范包测试三套变体中选定「方案A · 探索黄（杂志感）」为样张基准。已 record_decision（规范包路线定案 + 方案A 基准）并把三个落地任务排入 QUEUE：SPEC-PACK-1（Codex 道，最高优先，schema 须以桌面 3 份真实 JSON 为样例校准）、FIXTURE-1（Claude 道，标准样章）、SAMPLE-1（AG 道，依赖前两者，可先搭 CLI 骨架）。已提交 97891f6 docs(queue+decisions)。注意：存在并发对话（08634e8 于 06:19 提交了 GOLDEN-GUARD/SPLIT-EXPORT 记录），本次改动叠于其上，无冲突。
