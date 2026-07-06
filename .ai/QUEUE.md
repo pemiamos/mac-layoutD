@@ -103,6 +103,8 @@
   - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
   - 验收：282 测试过、review-idml.sh 12/12、XML well-formed、golden 无变化（样例项目唯一素材标了 unused、从未真正入版，另造了带真实占位图的样张验证）。**InDesign 人工验证待用户**：图片旁边的正文是不是主动绕开了图片的矩形范围。
 - [x] **SPLIT-ENGINE LayoutEngine.swift 拆分** — ✅ Claude（`046950e`）。1971 行拆成 7 个文件（核心 327 行 + TextFlow/Assets/Geometry/Measurement/FrontMatter/LayoutPlan 六个 extension，最大 492 行）。纯搬家：`private struct LayoutContext` 改成模块内部可见（`struct`，对模块外仍不可见，`LayoutEngine` 才是唯一公开入口），其 `private` 成员相应放开，供跨文件 extension 访问。三重验证零行为变化：①排序后逐行 diff 与原文件一致（只差拆分带来的 extension 包装样板）；②283 测试过、review-idml.sh 12/12、golden-check 逐字节一致（证明导出结果像素级不变，不只是"测试还过"）；③两次导出确定性一致。
+- [x] **SPLIT-EXPORT IDMLExporter.swift 拆分** — ✅ Claude（`87f2dfb`）。1563 行拆成 7 个文件（核心留入口 export() 436 行 + Links/BuildContext/Helpers/PageItems/Resources/Stories 六个 extension，最大 416 行）。照抄 SPLIT-ENGINE 配方，同样三重验证零行为变化（排序逐行频次 diff 零行丢失、283 测试过、review-idml.sh 13/13、golden 逐字节一致）。
+- [x] **GOLDEN-GUARD golden 防漂移护栏** — ✅ Claude（`c311fc7`）。三道闸：①`golden-update.sh` 强制 `--reason` 并写入 `Tests/golden/GOLDEN-LOG.md` 审计留痕；②覆盖前强制打印新旧 diff（杜绝盲刷）、新旧一致拒绝空刷；③`review-idml.sh` 本地跑时自动带 golden-check（CI 跳过，字体环境差异会误报），本地探针 12→13。三条路径均已自证（无 reason 拒绝/空刷拒绝/真变化打印 diff+留痕）。review-idml.sh 属 Codex 道文件，沿 GUARD-4 先例由 Claude 直改。**各道注意：今后刷 golden 必须走 `scripts/golden-update.sh --reason "<原因>"`，禁止手工覆盖基线。**
 
 ## Codex 道队列（导入 + 探针）
 
@@ -177,5 +179,5 @@
 ## 基础设施待办（Claude/用户）
 
 - [x] **真正 CI** — ✅ `.github/workflows/ci.yml`（2026-06-23 起 push/PR 自动跑 review-idml.sh，macOS runner）。
-- [ ] IDML 官方 RNG schema 校验 + golden-file 回归基线，补强 `review-idml.sh`（golden 需先解决 CI 字体环境差异，见 ci.yml 注释）。
-- [ ] relay `run_checks("test")` 末行误显「0 tests」，改回显 XCTest 汇总行（改 relay-mcp，仓库在 `~/tools/relay-mcp`）。
+- [ ] IDML 官方 RNG schema 校验（vendor `app.generateIDMLSchema()` 的 RNG 做名/枚举 lint）。golden 本地回归已并入 `review-idml.sh`（GOLDEN-GUARD，2026-07-07）；golden 进 CI 仍卡字体环境差异，见 ci.yml 注释。
+- [x] relay `run_checks("test")` 末行误显「0 tests」 — ✅ Claude 2026-07-07 直接修了 `~/tools/relay-mcp/server.py`（正则捞出「Executed N tests」汇总行置顶显示；**重启 relay 后生效**）。
