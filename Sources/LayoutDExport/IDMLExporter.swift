@@ -834,6 +834,7 @@ public struct IDMLExporter {
         return """
         \t\t<Rectangle Self="\(id)" ContentType="GraphicType" StoryTitle="$ID/" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(maskGeometry(rect, shape: maskShape, pageW: pageW, pageH: pageH, dx: dx))
+        \t\t\t\(textWrapPreference())
         \t\t\t<Image Self="\(imageSelf)" Space="$ID/#Links_RGB" ActualPpi="72 72" EffectivePpi="\(effX) \(effY)" ImageRenderingIntent="UseColorSettings" Visible="true" ItemTransform="\(fmt(sx)) 0 0 \(fmt(sy)) \(fmt(left)) \(fmt(top))">
         \t\t\t\t<Properties>
         \t\t\t\t\t<Profile type="string">$ID/Embedded</Profile>
@@ -842,6 +843,19 @@ public struct IDMLExporter {
         \t\t\t\t<Link Self="\(linkSelf)" LinkResourceURI="\(esc(uri))" LinkResourceFormat="$ID/" StoredState="Normal" LinkClientID="257" LinkResourceModificationState="None" LinkObjectModificationState="None" LinkResourceSize="0~0" CanEmbed="true" CanUnembed="true" CanPackage="true" ImportPolicy="NoAutoImport" ShowInUI="true"/>
         \t\t\t</Image>
         \t\t</Rectangle>
+        """
+    }
+
+    /// B1-IDML：图片框输出原生绕排设置，让 InDesign 里文字自动避开图片矩形范围
+    /// （之前只有 layoutD 自己的画布预览会绕排，导出的 IDML 图片和文字互不相让）。
+    /// 结构对照过真实 Adobe 导出的 IDML 样本：TextWrapPreference 是 Rectangle 的直接
+    /// 子节点、和 Properties 同级，紧跟其后。矩形绕排（BoundingBoxTextWrap）+ 两侧
+    /// 都避让，四边留 6pt 呼吸间距。
+    private func textWrapPreference(offset: Double = 6) -> String {
+        """
+        <TextWrapPreference Inverse="false" ApplyToMasterPageOnly="false" TextWrapSide="BothSides" TextWrapMode="BoundingBoxTextWrap">
+        \t\t\t\t<Properties><TextWrapOffset Top="\(fmt(offset))" Left="\(fmt(offset))" Bottom="\(fmt(offset))" Right="\(fmt(offset))"/></Properties>
+        \t\t\t</TextWrapPreference>
         """
     }
 
