@@ -1224,7 +1224,7 @@ public struct IDMLExporter {
         let body = paragraphs.enumerated().map { index, p -> String in
             // 顺序很关键：可见文字 → 锚定对象（挂在本段末尾，随本段走）→ 段落标记 \n
             // （单独一个 CharacterStyleRange，不掺进正文的 Content，避免和锚点字符混在一起）。
-            let textRanges = characterStyleRanges(for: p.text, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef)
+            let textRanges = characterStyleRanges(for: p.text, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef, noBreakTail: trailingNoBreakCount(for: p.text))
             let anchoredRanges = p.anchoredAssets.enumerated().map { assetIndex, anchored in
                 anchoredImageCharacterStyleRange(
                     self: "uAnchorImg\(id)_\(index)_\(assetIndex)",
@@ -1291,16 +1291,35 @@ public struct IDMLExporter {
         }
     }
 
+    /// 段末孤字防治：算出该段末尾应绑定为「禁止断行」的字符数，使最后一行至少有两个
+    /// 实义字（末尾悬挂标点一起绑）。InDesign 没有原生「避免单字尾行」开关，社区通行做法
+    /// 就是用 NoBreak 字符属性把末尾几个字锁在一起，宽度放不下时整体换到最后一行。
+    private func trailingNoBreakCount(for text: String) -> Int {
+        let chars = Array(text)
+        // 三字以下整段至多一两行、不会出现「上一行满 + 末行单字」的孤字，无需处理。
+        guard chars.count >= 3 else { return 0 }
+        let hangable = Set<Character>("，。、；：）】〕》〉」』”’.,!?！？")
+        var lastReal = chars.count - 1
+        while lastReal >= 0 && hangable.contains(chars[lastReal]) { lastReal -= 1 }
+        // 全是标点，或只有一个实义字：绑了也凑不出两个实义字，放弃。
+        guard lastReal >= 1 else { return 0 }
+        // 绑定「倒数第二个实义字 …… 段尾」= 两个实义字 + 尾部悬挂标点。
+        return chars.count - (lastReal - 1)
+    }
+
     private func characterStyleRanges(
         for text: String,
         globalStart: Int,
         inlineRuns: [InlineRun],
         footnotes: [Paragraph] = [],
-        footnoteStyleRef: String = "ParagraphStyle/$ID/[No paragraph style]"
+        footnoteStyleRef: String = "ParagraphStyle/$ID/[No paragraph style]",
+        noBreakTail: Int = 0
     ) -> String {
         guard !footnotes.isEmpty else {
-            return styledCharacterRanges(for: text, globalStart: globalStart, inlineRuns: inlineRuns)
+            return styledCharacterRanges(for: text, globalStart: globalStart, inlineRuns: inlineRuns, noBreakTail: noBreakTail)
         }
+        // 带脚注的段落走下方拆分路径，段末孤字防治暂不叠加（脚注段本就少见，避免与
+        // 脚注锚点拆分逻辑纠缠）。
 
         // Markdown importer 已把 [^id] 替换为对应的 Unicode 上标，并以出现顺序保存
         // anchoredFootnoteIds。将该上标替换成 Footnote，交由 InDesign 的 FootnoteOption
@@ -1333,7 +1352,7 @@ public struct IDMLExporter {
         return output
     }
 
-    private func styledCharacterRanges(for text: String, globalStart: Int, inlineRuns: [InlineRun]) -> String {
+    private func styledCharacterRanges(for text: String, globalStart: Int, inlineRuns: [InlineRun], noBreakTail: Int = 0) -> String {
         let characters = Array(text)
         guard !characters.isEmpty else { return "" }
         var styles = Array(repeating: Set<InlineEmphasis>(), count: characters.count)
@@ -1343,14 +1362,21 @@ public struct IDMLExporter {
             guard start < end else { continue }
             for index in start..<end { styles[index].formUnion(run.emphasis) }
         }
+        // 段末孤字防治：末尾 noBreakTail 个字符标「禁止断行」，让它们放不下时整体换到
+        // 最后一行，避免单字孤零零成行。noBreak 与 emphasis 一样是分段维度，任一变化即断段。
+        var noBreak = Array(repeating: false, count: characters.count)
+        if noBreakTail > 0 {
+            for index in max(0, characters.count - noBreakTail)..<characters.count { noBreak[index] = true }
+        }
 
-        var ranges: [(String, Set<InlineEmphasis>)] = []
+        var ranges: [(String, Set<InlineEmphasis>, Bool)] = []
         var start = 0
-        for index in 1...characters.count where index == characters.count || styles[index] != styles[start] {
-            ranges.append((String(characters[start..<index]), styles[start]))
+        for index in 1...characters.count
+        where index == characters.count || styles[index] != styles[start] || noBreak[index] != noBreak[start] {
+            ranges.append((String(characters[start..<index]), styles[start], noBreak[start]))
             start = index
         }
-        return ranges.map { content, emphasis in
+        return ranges.map { content, emphasis, isNoBreak in
             // 粗体用 FauxBold（算法加粗），斜体用 Skew（切变倾斜角）而非 FontStyle 字符串：
             // FontStyle="Bold"/"Italic" 要求 Fonts.xml 里真有同名字重/斜体的字体资源，否则
             // InDesign 找不到，会用替代字形顶上（视觉上是粉色高亮，等于没生效）。
@@ -1369,6 +1395,8 @@ public struct IDMLExporter {
                 attrs += " KentenPlacement=\"-1\""
                 attrs += " KentenPosition=\"BelowLeft\""
             }
+            // NoBreak：InDesign 的「禁止断行」字符属性（DOM 的 noBreak，读写布尔）。
+            if isNoBreak { attrs += " NoBreak=\"true\"" }
             return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(attrs)><Content>\(esc(content))</Content></CharacterStyleRange>"
         }.joined(separator: "\n")
     }
