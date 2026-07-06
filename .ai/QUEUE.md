@@ -72,9 +72,13 @@
   - **本刀范围**：只做正文+标题同流；图片/抽言/知识卡片仍是独立定位框（锚定对象是下一刀 THREAD-1b-cut2）。
   - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
   - **下一刀（cut 2）**：图片/抽言转锚定对象，随所属段落走。
-- [ ] **THREAD-1b cut 2：图片/抽言转锚定对象**（cut 1 之后）：图片/抽言/知识卡片从独立定位框改为文流内锚定对象（`<Rectangle>`/`<TextFrame>` 嵌在文流锚点的 CharacterStyleRange 内，`AnchoredObjectSetting`），挂在其所属段落上，正文重排时随文移动。
-  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`、`Sources/LayoutDEngine/LayoutEngine.swift`（需提供"各锚定对象挂在哪个段落"的分组信息）。
-  - 验收：`review-idml.sh` 断言锚定对象挂在文流内；InDesign 人工验证图跟着文字走。
+- [x] **THREAD-1b cut 2 spike：内嵌图锚定** — ✅ Claude（`fca3c04`）。**待用户 InDesign 验收**（桌面 `thread-1b-cut2-spike/anchor-spike.idml` + 同目录 `Links/test.png`，3 段正文 + 1 张锚定图，图挂在第一段末尾）。
+  - **范围（比原计划更收敛，先验证机制再扩面）**：只处理通过 `paragraph.anchoredAssetIds` 挂在正文宿主段落上的图片（如 Markdown `![](img.png "anchor=previous")` 内嵌图）——嵌成 IDML 锚定对象（`AnchoredObjectSetting AnchoredPosition="AnchoredAboveLine"`，锚点是文流里的 Unicode 占位符 U+FFFC），挂在宿主段落末尾随文重排。孤立的 `.figure` 段落（独占一行的图）、抽言（callout）、图注仍是独立定位框——**不在本 spike 范围**，验证过锚定机制可行后再决定是否/如何扩展到这些场景（它们没有"宿主段落"，需要不同机制）。
+  - **为什么先收窄**：锚定对象在本项目从未验证过（不像 cut 1 有 THREAD-1a 手工样张可抄），选风险最低、最常见的场景（内嵌图挂正文段）先验证核心机制（占位符+AnchoredObjectSetting 写法）能不能被 InDesign 正确解析，再决定要不要扩展写法到孤立图/抽言（那些需要不同的挂载方式，即找不到"宿主段落"时怎么办）。
+  - 实现：`LayoutEngine.addAsset` 现在把调用它的段落 id 带到图片/图注 frame 上（之前完全不追踪）；`IDMLExporter` 预扫描收集"哪个宿主段落挂了哪些图"，跳过这些图片的独立定位框输出，改为嵌进该段落在章 Story 里的 CharacterStyleRange。过程中揪出两个"帧静默消失"的 bug 并修复：①宿主段落文字为空（如 DOCX 专门用来装图的段落）被"跳过空段落"的判断误伤，图片两头都进不去；②孤立 `.figure` 段落的图片被预扫描误判成"已挂到某段"从而被跳过独立输出（其实它是自己给自己当宿主，不该被纳入锚定路径）。
+  - 文件：`Sources/LayoutDExport/IDMLExporter.swift`、`Sources/LayoutDEngine/LayoutEngine.swift`。
+  - 验收：281 测试过、review-idml.sh 10/10（含新增的 DOCX 内嵌图回归）、逐字节确定性一致、全包 XML well-formed、无重复独立框。**InDesign 人工验证待用户**：图片正常显示、挂在宿主段落附近、编辑段落文字后图片跟着走。
+  - **下一步（验收后决定）**：若锚定机制验证通过 → 扩展到孤立 `.figure` 图/抽言（需要设计"没有宿主段落时怎么挂"）；若不通过 → 退回浮动框方案或改用其他 AnchoredPosition/写法重试。
 - [ ] **THREAD-1b cut 3：收边**（cut 2 之后）：GUARD-4 串接探针（Codex 领，见下）+ 处理封面/目录/表格等不应被误并进文流的特例复核。
 - [ ] **MASTER-1 主页交付**（THREAD-1 之后，同文件避免冲突）：版心/栏参考、自动页码（CurrentPageNumber 变量）、页眉书名/章名放 A-主页，正文页应用主页——编辑改页码位置只动主页一处。现状疑似页码按静态文本逐页画，动手前先核实。文件：`IDMLExporter.swift`。验收：InDesign 里主页面板见 A-主页带自动页码，正文页页码随主页变。
 - [ ] **SPREAD-1 对页合并 Spread**（THREAD-1 之后）：per-page Spread 改真对页 spread（左右页同 spread、版心镜像），配合 MASTER-1。验收：InDesign 页面面板呈对页排列，与 layoutD 预览一致。
