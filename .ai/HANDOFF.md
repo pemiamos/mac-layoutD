@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 01:37 | claude | 合并 AG FIX-CANVAS-1 + B1-IDML 用户验收通过 + 新修段末孤字(TYPE-1)，推送 dev(ab494c4)
+- **分支**：dev
+- **概述**：合并 AG FIX-CANVAS-1 + B1-IDML 用户验收通过 + 新修段末孤字(TYPE-1)，推送 dev(ab494c4)
+- **改动文件**：(未填)
+- **检查**：AG FIX-CANVAS-1 合并后 283 测试过、review-idml.sh 12/12。B1-IDML 用户 InDesign 验收通过（满栏图上下绕排正常）。TYPE-1 孤字修复：确认 InDesign 无原生开关、用 NoBreak 字符属性（对照 Adobe DOM 文档确认写法），283测试过/确定性一致/golden隔离刷新，样张里「辨。」孤字已绑成「可辨。」。
+- **下一步**：(未填)
+
 ## 2026-07-07 01:20 | claude | B1-IDML（导出侧图文绕排）实现完成并推送 dev(67d2083)，待用户 InDesign 验收
 - **分支**：dev
 - **概述**：B1-IDML（导出侧图文绕排）实现完成并推送 dev(67d2083)，待用户 InDesign 验收
