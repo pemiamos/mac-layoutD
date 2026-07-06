@@ -3,6 +3,20 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 02:03 | claude | SPLIT-ENGINE 完成——LayoutEngine.swift 1971行拆成7个文件，纯搬家零行为变化，推送dev(ff70dc8)
+- **分支**：dev
+- **概述**：SPLIT-ENGINE 完成——LayoutEngine.swift 1971行拆成7个文件，纯搬家零行为变化，推送dev(ff70dc8)
+- **改动文件**：(未填)
+- **检查**：三重验证零行为变化：排序逐行diff与原文件一致（只差extension包装样板）；283测试过、review-idml.sh 12/12、golden-check逐字节一致（导出结果像素级不变）；两次导出确定性一致。过程中发现并修复了切分时遗漏的4处doc注释（切分脚本按函数签名行切、漏了签名前的注释块），逐行diff对照抓出来的。
+- **下一步**：(未填)
+
+## 2026-07-07 01:43 | claude | dev 合并进 main 并推送(7801b8c..a65d901)——AG FIX-CANVAS-1 + B1-IDML + TYPE-1孤字修复正式落地ma
+- **分支**：dev
+- **概述**：dev 合并进 main 并推送(7801b8c..a65d901)——AG FIX-CANVAS-1 + B1-IDML + TYPE-1孤字修复正式落地main
+- **改动文件**：(未填)
+- **检查**：main上重跑：build过、283测试过、review-idml.sh 12/12 PASS，再推送。
+- **下一步**：(未填)
+
 ## 2026-07-07 01:37 | claude | 合并 AG FIX-CANVAS-1 + B1-IDML 用户验收通过 + 新修段末孤字(TYPE-1)，推送 dev(ab494c4)
 - **分支**：dev
 - **概述**：合并 AG FIX-CANVAS-1 + B1-IDML 用户验收通过 + 新修段末孤字(TYPE-1)，推送 dev(ab494c4)

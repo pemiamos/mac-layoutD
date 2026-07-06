@@ -102,7 +102,7 @@
   - 实现：独立定位的图片框（孤立 `.figure` 段落、跨页大图——不含 THREAD-1b cut2 的锚定图片，那条路已经靠文流本身让位，不需要绕排）现在带 `<TextWrapPreference>`（矩形绕排 BoundingBoxTextWrap + 两侧避让 + 四边 6pt 间距）。写法对照过一份真实 Adobe 导出的 IDML 样本确认结构（这轮吸取了两次盲猜 IDML 未知元素踩坑的教训，动手前先查真实参考）。
   - 文件：`Sources/LayoutDExport/IDMLExporter.swift`。
   - 验收：282 测试过、review-idml.sh 12/12、XML well-formed、golden 无变化（样例项目唯一素材标了 unused、从未真正入版，另造了带真实占位图的样张验证）。**InDesign 人工验证待用户**：图片旁边的正文是不是主动绕开了图片的矩形范围。
-- [ ] **SPLIT-ENGINE LayoutEngine.swift 拆分** ⏳ **挪到 THREAD-1 批全部落地之后**（THREAD-1b 要大改引擎与导出，拆分与之叠加必然冲突；纯搬家不急）。
+- [x] **SPLIT-ENGINE LayoutEngine.swift 拆分** — ✅ Claude（`046950e`）。1971 行拆成 7 个文件（核心 327 行 + TextFlow/Assets/Geometry/Measurement/FrontMatter/LayoutPlan 六个 extension，最大 492 行）。纯搬家：`private struct LayoutContext` 改成模块内部可见（`struct`，对模块外仍不可见，`LayoutEngine` 才是唯一公开入口），其 `private` 成员相应放开，供跨文件 extension 访问。三重验证零行为变化：①排序后逐行 diff 与原文件一致（只差拆分带来的 extension 包装样板）；②283 测试过、review-idml.sh 12/12、golden-check 逐字节一致（证明导出结果像素级不变，不只是"测试还过"）；③两次导出确定性一致。
 
 ## Codex 道队列（导入 + 探针）
 
