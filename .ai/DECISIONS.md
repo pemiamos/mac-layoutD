@@ -91,3 +91,7 @@
 - **决策**：THREAD-1b 拆三刀落地，第一刀（正文+标题按章串接）已实现完成，待用户 InDesign 验收后再开第二刀。实现细节见 QUEUE.md THREAD-1b 条目；关键设计：Story 内容直接取 `project.sections` 原始 `paragraph.text`/`inlineRuns`（不经 frame 拆分/归一化再映射），靠一个「章名标题只增计数器认领」的简单算法把没有 `sourceParagraphId` 的章名标题正确分派到所属章，不需要改动 LayoutEngine。
 - **理由**：探查确认 frame 已带 `sourceParagraphId` 可回指 `project.sections`（有序），且 frame 在文档里天然按阅读顺序排列——重建"哪个框属于哪章"完全能在导出层做，不需要动引擎，把本来估计的"最大一次改造"降到了可控范围。golden 快照已刷新（`scripts/golden-update.sh`），其中混了一处与本刀无关的既存漂移（AppliedComposer 属性已在更早提交移除但 golden 未同步刷新，一并清掉）。
 
+## 2026-07-06 18:10 | claude
+- **决策**：THREAD-1b cut 2（内嵌图锚定）用户 InDesign 验证通过，但范围收窄——只锚定图片本身，图注放弃随图锚定、维持独立定位框。
+- **理由**：图注随图锚定试了两版都在 InDesign 里复现同一个"字符间距异常拉伸"bug，排查不出根因（不像段落标记 bug 那次有明确的验证脚本可对照，这次是全新的、本项目从未验证过的锚定文字机制，需要真机 InDesign 反复试错才能定位，盲改的性价比不划算）。按 [[fidelity-investment-principle]]（使用频率 × 修复成本随书变大的程度）和已有的"漂移可接受、人工微调"原则，图注偶尔跟丢图片、手动拖一下即可，不值得为此继续投入。图片本身锚定成功已经是这刀的核心价值。
+
