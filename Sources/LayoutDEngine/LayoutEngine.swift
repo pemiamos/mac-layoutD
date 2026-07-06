@@ -284,6 +284,27 @@ private struct LayoutContext {
         if !currentPage.frames.isEmpty || pages.isEmpty {
             pages.append(currentPage)
         }
+        // 手动插入的空白页可能排在所有正文内容之后——正常翻页只在内容溢出时才触发
+        // advanceToNextPage()/applyPlanIfPresent()，不会主动去看最后一页之后还有没有
+        // 排版计划。这里补一次：只要下一页确实有计划（哪怕只是空白页占位）就继续
+        // materialize；命中 reservesBlankPage/有 blocks 的计划，plan 内部的
+        // advanceToNextPage() 会自己把该页追加进 pages 并推进到下一页，外层循环接着
+        // 检查更后面的页码，从而级联多页插入。不这样补，在文档末尾插入空白页会因为
+        // 没有内容触发翻页而悄悄没有反应。
+        while project.appliedLayoutPlans?[absolutePageNumber(for: pages.count + 1)] != nil {
+            let countBefore = pages.count
+            currentPage = LaidOutPage(number: pages.count + 1)
+            applyPlanIfPresent()
+            if pages.count == countBefore {
+                // 极端情况下计划命中了但没有触发翻页（既没有 blocks 也不满足
+                // reservesBlankPage，比如只带了 marginOverride）——避免死循环，
+                // 这页也补上（非空才追加，跟上面的判断一致）后退出。
+                if !currentPage.frames.isEmpty {
+                    pages.append(currentPage)
+                }
+                break
+            }
+        }
         return LaidOutDocument(projectId: project.id, pages: pages, issues: issues)
     }
 
