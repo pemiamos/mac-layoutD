@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 13:24 | claude | SAMPLE-1 重做版审核合 dev，规范包三件套全部落地。AG 已自觉领打回、基于 Codex 的 parseSpecPack 重做为 feature/ag
+- **分支**：dev
+- **概述**：SAMPLE-1 重做版审核合 dev，规范包三件套全部落地。AG 已自觉领打回、基于 Codex 的 parseSpecPack 重做为 feature/ag-sample-1-v2（10550c6），铁律全守：①并行 SpecPack.swift 已删、解析只走 StyleBaselineImporter.parseSpecPack（唯一事实源）；②新建共享 BookProject.applySpecPack(_:)（LayoutDImport/BookProject+Tokens.swift），AppState.applyImportedTokens 减105行改为委托它（单一应用路径，不再第三份）；③补齐 SPEC-PACK-1 没做的视觉三项=字体族(fontResolutions→复合中/西/数字)+角色色/装饰点缀色+开本trim(page.width/height)；④不支持字段打 stderr 不静默。实测：swift test 291、桌面3份规范包一条命令出3份视觉可区分PDF（md5各异）。合并提交 d85a730。PDF「重跑确定性」按用户拍板走方式1（内容级+掩码探针，见 DECISIONS 13:23）：Quartz每份PDF盖秒级CreationDate/ModDate+随机ID、字节永不复现且属平台行为，故不改PDF字节，改为 review-idml.sh 加 2g 掩码确定性探针（导出两次抹掉这三项后断言逐字节一致，已自证有效），探针13→14。QUEUE 已标 SAMPLE-1 [x]。
+- **改动文件**：scripts/review-idml.sh（+2g探针）, .ai/QUEUE.md, .ai/DECISIONS.md, .ai/HANDOFF.md；合并带入 Sources/LayoutDImport/BookProject+Tokens.swift(新), Sources/LayoutDImport/StyleBaselineImporter.swift, Sources/LayoutDApp/{main,ProjectLoader,AppState}.swift, Tests/LayoutDAppTests/StyleImportTests.swift
+- **检查**：dev: swift test 291 tests 0 failures; review-idml.sh 14/14 PASS（新增 2g SAMPLE-1 掩码确定性，自证未掩码≠/掩码后=）。合并提交 d85a730（AG SAMPLE-1 v2）；探针+QUEUE 提交 0c31ad5；决策提交已落。dev 未 push（本地集成区）。
+- **下一步**：规范包路线三件套齐（FIXTURE-1✅ + SPEC-PACK-1✅ + SAMPLE-1✅ 全在 dev）。下一步交用户终验：跑 `swift run layoutD -- --render-samples ~/Desktop/layoutD-规范包测试/方案A-探索黄.json 方案B 方案C --chapter Samples/fixture-standard-chapter.md`，桌面已生成 layoutD-样张-方案A/B/C.pdf，请用户肉眼比选/确认视觉规范应用正确（点缀色/字体/开本）→ OK 则 Claude 合 dev→main。⚠️ 待清理：AG 首版分支 feature/ag-sample-1（299450b，废弃）+ 其 worktree 仍停在旧分支；v2 曾被 checkout 到主仓库工作副本（已切回 dev）。⚠️ 提醒 Codex：v2 为拿 roleColors 直接改了 StyleBaselineImporter.swift(+58, Codex道)，已合、能跑，后续该类字段扩展回归 Codex 维护。未跟踪 layoutD-icon.png 与本次无关。
+
 ## 2026-07-07 12:58 | claude | 集成规范包路线两道成果。① SPEC-PACK-1（Codex）审核合 dev（合并提交 1d354c5，含 a7ce358/70a49fd）：StyleBas
 - **分支**：dev
 - **概述**：集成规范包路线两道成果。① SPEC-PACK-1（Codex）审核合 dev（合并提交 1d354c5，含 a7ce358/70a49fd）：StyleBaselineImporter.parseSpecPack(jsonData:)→SpecPackImportResult{tokens,unsupportedFields,fontResolutions}，支持 meta/page/fonts/colors/roles/vertical，CoreText 校验字体、非法样例带 JSON path 报错、docs/spec-pack-guide.md 指南。dev 全绿：swift test 290、review-idml.sh 13/13。② SAMPLE-1（AG，feature/ag-sample-1 299450b）**未合、打回重做**：AG 首版自建了并行的 Sources/LayoutDImport/SpecPack.swift（独立解析+toBookProjectUpdates），与 Codex 的 parseSpecPack 在同模块重复解析同样 3 份 JSON。用户拍板收敛到单一解析器（Codex 版为事实源），已 record_decision。关键发现：parseSpecPack 只产出/校验 DesignTokens，未落地字体族/点缀色/开本 trim；applyImportedTokens 也只覆盖 margins/columns/grid/字号/行距/缩进/段距——AG 首版恰好补了字体/色/开本应用（样张视觉区分方案A/B/C 的关键），这才是 SAMPLE-1 重做的真正价值。QUEUE 已把 SPEC-PACK-1 标 [x]、SAMPLE-1 重写成详细打回条目。
