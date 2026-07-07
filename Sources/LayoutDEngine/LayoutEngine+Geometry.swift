@@ -19,7 +19,7 @@ extension LayoutContext {
     /// Converts a content-relative page number (1-based, content pages only) into
     /// the absolute book page number that page setup, plans, and preflight use.
     func absolutePageNumber(for contentPageNumber: Int) -> Int {
-        contentPageNumber + frontMatterPageCount
+        contentPageNumber + frontMatterPageCount(for: project)
     }
 
     var contentWidth: Double {

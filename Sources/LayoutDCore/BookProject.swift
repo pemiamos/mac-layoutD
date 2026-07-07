@@ -185,6 +185,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
             series: "AI 图书排版实验",
             keywords: ["中文排版", "科普图书", "AI"]
         ),
+        // 整书 demo：显式开启目录（默认 PageSetup 不含目录，一章一章排版用）。
+        pageSetup: .scienceBookDefault.withTableOfContents(),
         sections: [
             BookSection(
                 title: "第一章 重新理解图文排版",

@@ -78,7 +78,11 @@ public final class LayoutHeightCache: @unchecked Sendable {
 /// preflight. NOTE: this still assumes a fixed front-matter size; multi-page
 /// contents or extra front matter would require deriving this from the assembled
 /// front matter instead of a constant (see docs/architecture.md known limitations).
-let frontMatterPageCount = 2
+/// 前置页数：封面恒 1 页；目录页仅在 `pageSetup.includesTableOfContents` 为真时 +1。
+/// 默认不含目录（用户 2026-07-07 定：一章一章排版）。据此推导，不再是固定常量。
+func frontMatterPageCount(for project: BookProject) -> Int {
+    project.pageSetup.includesTableOfContents ? 2 : 1
+}
 
 /// Geometry of the running header, shared by header generation so the value is
 /// defined in exactly one place rather than scattered as literals.
@@ -157,7 +161,7 @@ struct LayoutContext {
     init(project: BookProject) {
         self.project = project
         self.currentPage = LaidOutPage(number: 1)
-        let initialPageNumber = 1 + frontMatterPageCount
+        let initialPageNumber = 1 + frontMatterPageCount(for: project)
         let margins = project.resolvedMargins(for: initialPageNumber)
         let setup = project.pageSetup
         
@@ -308,19 +312,23 @@ struct LayoutContext {
     }
 
     mutating func finishWithFrontMatter() -> LaidOutDocument {
+        let offset = frontMatterPageCount(for: project)
         let contentDocument = finish()
-        let contentPages = contentDocument.pages.map { renumberedPage($0, offset: frontMatterPageCount) }
-        let shiftedIssues = contentDocument.issues.map { shiftedIssue($0, offset: frontMatterPageCount) }
+        let contentPages = contentDocument.pages.map { renumberedPage($0, offset: offset) }
+        let shiftedIssues = contentDocument.issues.map { shiftedIssue($0, offset: offset) }
         let shiftedContents = tableOfContents.map {
-            TableOfContentsEntry(level: $0.level, title: $0.title, pageNumber: $0.pageNumber + frontMatterPageCount)
+            TableOfContentsEntry(level: $0.level, title: $0.title, pageNumber: $0.pageNumber + offset)
+        }
+
+        // 封面恒有；目录仅在开启时生成（默认关，一章一章排版不加目录）。
+        var frontPages: [LaidOutPage] = [makeCoverPage(number: 1)]
+        if project.pageSetup.includesTableOfContents {
+            frontPages.append(makeContentsPage(number: 2, entries: shiftedContents))
         }
 
         return LaidOutDocument(
             projectId: project.id,
-            pages: [
-                makeCoverPage(number: 1),
-                makeContentsPage(number: 2, entries: shiftedContents)
-            ] + contentPages,
+            pages: frontPages + contentPages,
             issues: shiftedIssues
         )
     }

@@ -277,6 +277,7 @@ final class IDMLExporterTests: XCTestCase {
         // 正文里的二级标题也应进静态目录（否则只剩书名级 H1，需在 InDesign 手动更新目录才补全）。
         let project = BookProject(
             metadata: ProjectMetadata(title: "目录层级测试", author: "layoutD"),
+            pageSetup: .scienceBookDefault.withTableOfContents(),
             sections: [
                 BookSection(
                     title: "第一章",
