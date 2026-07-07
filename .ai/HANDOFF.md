@@ -1,7 +1,18 @@
 # 交接记录 Handoff Log
-> 最新在最上方。开工先读最新一条，收工必写一条。本文件不进行任何 git 写操作。
+> 最新在最上方。开工先读最新一条，收工必写一条。本文件不进行 any git 写操作。
 
 <!-- ENTRIES -->
+
+## 2026-07-08 05:10 | Antigravity | 完成 FRAME-CANVAS-1 连续正文分框画布/PDF/PNG合并显示及交互聚合，通过303个单测及14项探针
+- **分支**：feature/ag-frame-canvas-1
+- **概述**：完成了连续正文在显示/交互层（画布/PDF/PNG）的合并框聚合。
+  1. **Canvas 绘制**：普通模式下连续正文（由 groupIntoFlowFrames 算出的分组）在渲染时不单独画单个虚线框，改为统一绘制该组 FlowFrameGroup.rect 的合并虚线框。若有 stroke 颜色/粗细 override，则同样绘制在组的合并矩形上。同时，若应用了 LayoutPlan 产生了 baseline diff，基线虚线框同样按 group 绘制合并框。
+  2. **Canvas 交互**：当用户点击或 Shift/Command 点击连续正文中的任一原子段落框时，交互均扩散到整组，将其作为整体选中并提供多选联动。在 mouseDown 时，如果点击了流文本框，调用 setSelection() 传入整组的 ID 集合，并将该组第一个 Frame 作为 primary selected ID (anchor)。在 Drag 拖拽移动时，整组作为统一的交互单位，通过 Group drag 机制一并移动。
+  3. **PDF/PNG 导出**：重构了 PDFExporter 与 PNGExporter，在导出 page 之前计算 flow frame 分组，并在绘制时将背景色（fill）和描边（stroke）应用到 FlowFrameGroup.rect 合并框级别，而各个原子 frame 只单独渲染自身的文字，从而避免了导出时生成重复多余的分段边框与背景。
+  4. **属性面板 (ObjectPropertiesView)**：防止用户误编辑或崩溃，在选中多个段落（即 selectedFrameIds.count > 1）时，文本编辑器与坐标变换 Stepper 被禁用，并明确提示“已选择多个段落，不可直接编辑文本 / 暂不支持批量编辑变换”，安全可靠。
+- **改动文件**：Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/CanvasView+Drawing.swift, Sources/LayoutDApp/CanvasView+Interaction.swift, Sources/LayoutDApp/WorkspaceViewController.swift, Sources/LayoutDApp/ObjectPropertiesView.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, .ai/HANDOFF.md
+- **检查**：本地通过 303 个 swift 单元测试，review-idml.sh 的所有 14 项端到端和回归测试全部通过，golden 逐字节一致。
+- **下一步**：提交 feature/ag-frame-canvas-1 分支由 Claude 审核和合并。
 
 ## 2026-07-08 04:59 | claude | 验收 AG 道两个任务（UNDERLAY-1 垫底图、FRAME-INSET-2 预览贴边）：代码审查+301测试+14/14探针全过，合 dev(ad8496
 - **分支**：dev
