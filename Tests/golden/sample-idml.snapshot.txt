@@ -490,8 +490,8 @@
 					</ListItem>
 				</TabList>
 			</Properties>
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>第一章 重新理解图文排版	3
-</Content></CharacterStyleRange>
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>第一章 重新理解图文排版	3</Content></CharacterStyleRange>
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Br/></CharacterStyleRange>
 		</ParagraphStyleRange>
 		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/tocLevel2">
 			<Properties>
@@ -536,17 +536,17 @@
 		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading1">
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>第一章 重新理解图文</Content></CharacterStyleRange>
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]" NoBreak="true"><Content>排版</Content></CharacterStyleRange>
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content> </Content></CharacterStyleRange>
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Br/></CharacterStyleRange>
 		</ParagraphStyleRange>
 		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading1">
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>图像不只是正文的</Content></CharacterStyleRange>
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]" NoBreak="true"><Content>附件</Content></CharacterStyleRange>
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content> </Content></CharacterStyleRange>
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Br/></CharacterStyleRange>
 		</ParagraphStyleRange>
 		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>中文科普图书的价值，经常来自文字、图片、图注、知识卡片和跨页解释之间的协作。layoutD 的目标，是把这些内容转化为结构化对象，再由排版引擎稳定</Content></CharacterStyleRange>
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]" NoBreak="true"><Content>输出。</Content></CharacterStyleRange>
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content> </Content></CharacterStyleRange>
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Br/></CharacterStyleRange>
 		</ParagraphStyleRange>
 		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>第一版架构先验证文档模型、页面生成、素材管理和 PDF 导出的边界。后续再逐步加入中文禁则、标点压缩、图片主体识别和更复杂的跨页</Content></CharacterStyleRange>
