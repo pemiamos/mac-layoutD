@@ -227,7 +227,7 @@
 <idPkg:Preferences xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
 	<DocumentPreference PageHeight="737.010" PageWidth="524.410" PagesPerDocument="1" FacingPages="false" DocumentBleedTopOffset="0" DocumentBleedBottomOffset="0" DocumentBleedInsideOrLeftOffset="0" DocumentBleedOutsideOrRightOffset="0" DocumentBleedUniformSize="true" SlugTopOffset="0" SlugBottomOffset="0" SlugInsideOrLeftOffset="0" SlugRightOrOutsideOffset="0" DocumentSlugUniformSize="false" PreserveLayoutWhenShuffling="true" AllowPageShuffle="true" OverprintBlack="true" PageBinding="LeftToRight" ColumnDirection="Horizontal" SpreadHiddenVisibility="false" Intent="PrintIntent" CreatePrimaryTextFrame="false" ColumnGuideLocked="true" MasterTextFrame="false" SnippetImportUsesOriginalLocation="false"/>
 	<ViewPreference HorizontalMeasurementUnits="Points" VerticalMeasurementUnits="Points" RulerOrigin="PageOrigin"/>
-	<TextDefault Composer="HL Composer J" AppliedLanguage="$ID/Chinese: Simplified" KinsokuType="KinsokuPushInFirst" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName"/>
+	<TextDefault Composer="HL Composer J" AppliedLanguage="$ID/Chinese: Simplified" KinsokuType="KinsokuPushInFirst" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName"/>
 </idPkg:Preferences>
 ===== Resources/Styles.xml =====
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -237,7 +237,7 @@
 	</RootCharacterStyleGroup>
 	<RootParagraphStyleGroup Self="u_rpsg">
 		<ParagraphStyle Self="ParagraphStyle/$ID/[No paragraph style]" Imported="false" Name="$ID/[No paragraph style]" Composer="HL Composer J"/>
-		<ParagraphStyle Self="ParagraphStyle/heading1" Imported="false" Name="一级标题" PointSize="22.000" Leading="30.000" FirstLineIndent="0.000" SpaceBefore="18.000" SpaceAfter="14.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/heading1" Imported="false" Name="一级标题" PointSize="22.000" Leading="30.000" FirstLineIndent="0.000" SpaceBefore="18.000" SpaceAfter="14.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -246,7 +246,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/heading2" Imported="false" Name="二级标题" PointSize="15.000" Leading="22.000" FirstLineIndent="0.000" SpaceBefore="12.000" SpaceAfter="8.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/heading2" Imported="false" Name="二级标题" PointSize="15.000" Leading="22.000" FirstLineIndent="0.000" SpaceBefore="12.000" SpaceAfter="8.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -255,7 +255,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/heading3" Imported="false" Name="三级标题" PointSize="16.000" Leading="23.000" FirstLineIndent="0.000" SpaceBefore="10.000" SpaceAfter="7.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/heading3" Imported="false" Name="三级标题" PointSize="16.000" Leading="23.000" FirstLineIndent="0.000" SpaceBefore="10.000" SpaceAfter="7.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -264,7 +264,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/introduction" Imported="false" Name="开节概述" PointSize="11.000" Leading="17.600" FirstLineIndent="0.000" SpaceBefore="4.000" SpaceAfter="8.000" FillColor="Color/C17202A" FontStyle="Regular" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/introduction" Imported="false" Name="开节概述" PointSize="11.000" Leading="17.600" FirstLineIndent="0.000" SpaceBefore="4.000" SpaceAfter="8.000" FillColor="Color/C17202A" FontStyle="Regular" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -273,7 +273,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/introductionEnglish" Imported="false" Name="开节概述英文" PointSize="10.000" Leading="16.000" FirstLineIndent="0.000" SpaceBefore="0.000" SpaceAfter="8.000" FillColor="Color/C17202A" FontStyle="Regular" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/introductionEnglish" Imported="false" Name="开节概述英文" PointSize="10.000" Leading="16.000" FirstLineIndent="0.000" SpaceBefore="0.000" SpaceAfter="8.000" FillColor="Color/C17202A" FontStyle="Regular" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -282,7 +282,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/pullQuote" Imported="false" Name="抽言" PointSize="15.000" Leading="23.000" FirstLineIndent="0.000" SpaceBefore="10.000" SpaceAfter="10.000" FillColor="Color/C17202A" FontStyle="Regular" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/pullQuote" Imported="false" Name="抽言" PointSize="15.000" Leading="23.000" FirstLineIndent="0.000" SpaceBefore="10.000" SpaceAfter="10.000" FillColor="Color/C17202A" FontStyle="Regular" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -291,7 +291,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/bibliography" Imported="false" Name="参考文献" PointSize="8.500" Leading="13.000" FirstLineIndent="-14.000" SpaceBefore="0.000" SpaceAfter="2.000" FillColor="Color/C17202A" FontStyle="Regular" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/bibliography" Imported="false" Name="参考文献" PointSize="8.500" Leading="13.000" FirstLineIndent="-14.000" SpaceBefore="0.000" SpaceAfter="2.000" FillColor="Color/C17202A" FontStyle="Regular" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -300,7 +300,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/body" Imported="false" Name="正文" PointSize="10.500" Leading="16.000" FirstLineIndent="0.000" SpaceBefore="0.000" SpaceAfter="16.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/body" Imported="false" Name="正文" PointSize="10.500" Leading="16.000" FirstLineIndent="0.000" SpaceBefore="0.000" SpaceAfter="16.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -309,7 +309,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/caption" Imported="false" Name="图注" PointSize="8.500" Leading="12.000" FirstLineIndent="0.000" SpaceBefore="4.000" SpaceAfter="8.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/caption" Imported="false" Name="图注" PointSize="8.500" Leading="12.000" FirstLineIndent="0.000" SpaceBefore="4.000" SpaceAfter="8.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -318,7 +318,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/callout" Imported="false" Name="知识卡片" PointSize="11.000" Leading="17.000" FirstLineIndent="0.000" SpaceBefore="8.000" SpaceAfter="8.000" FillColor="Color/C2D7A78" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/callout" Imported="false" Name="知识卡片" PointSize="11.000" Leading="17.000" FirstLineIndent="0.000" SpaceBefore="8.000" SpaceAfter="8.000" FillColor="Color/C2D7A78" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -327,7 +327,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/tocLevel1" Imported="false" Name="目录一级" PointSize="15.000" Leading="22.000" FirstLineIndent="0.000" SpaceBefore="0.000" SpaceAfter="2.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/tocLevel1" Imported="false" Name="目录一级" PointSize="15.000" Leading="22.000" FirstLineIndent="0.000" SpaceBefore="0.000" SpaceAfter="2.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -336,7 +336,7 @@
 				<MojikumiSet type="object">MojikumiTable/$ID/kSimpChineseMojikumiName</MojikumiSet>
 			</Properties>
 		</ParagraphStyle>
-		<ParagraphStyle Self="ParagraphStyle/tocLevel2" Imported="false" Name="目录二级" PointSize="8.500" Leading="12.000" FirstLineIndent="12.000" SpaceBefore="0.000" SpaceAfter="2.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
+		<ParagraphStyle Self="ParagraphStyle/tocLevel2" Imported="false" Name="目录二级" PointSize="8.500" Leading="12.000" FirstLineIndent="12.000" SpaceBefore="0.000" SpaceAfter="2.000" FillColor="Color/C17202A" Composer="HL Composer J" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="MojikumiTable/$ID/kSimpChineseMojikumiName">
 			<Properties>
 				<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
 				<PreviewColor type="enumeration">Nothing</PreviewColor>

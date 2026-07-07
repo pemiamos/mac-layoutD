@@ -693,13 +693,15 @@ final class IDMLExporterTests: XCTestCase {
             let styleID = NSRegularExpression.escapedPattern(for: style.id)
             // `\s` guards against matching `<ParagraphStyleRange>` (or a future
             // style-like element) while inspecting the concrete style definition.
-            let pattern = "(<ParagraphStyle\\s+[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*GridAlignment=\"AlignAllLinesToGrid\"[^>]*Mojikumi=\"\(NSRegularExpression.escapedPattern(for: mojikumiRef))\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?<MojikumiSet type=\"object\">\(NSRegularExpression.escapedPattern(for: mojikumiRef))</MojikumiSet>[\\s\\S]*?</ParagraphStyle>)"
+            // 2026-07-07 用户定「清爽段间空行式」：关闭逐行基线网格锁定（GridAlignment=None），
+            // 段间靠空一行区分；避头尾(Kinsoku)/约物(Mojikumi)保留。
+            let pattern = "(<ParagraphStyle\\s+[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*GridAlignment=\"None\"[^>]*Mojikumi=\"\(NSRegularExpression.escapedPattern(for: mojikumiRef))\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?<MojikumiSet type=\"object\">\(NSRegularExpression.escapedPattern(for: mojikumiRef))</MojikumiSet>[\\s\\S]*?</ParagraphStyle>)"
             XCTAssertEqual(matches(in: styles, pattern: pattern).count, 1,
-                           "段落样式 \(style.id) 未绑定 layoutD 禁则/约物/基线网格设置")
+                           "段落样式 \(style.id) 未绑定 layoutD 禁则/约物设置（网格已关）")
         }
 
         let preferences = try entry(output, "Resources/Preferences.xml")
-        XCTAssertTrue(preferences.contains("GridAlignment=\"AlignAllLinesToGrid\""))
+        XCTAssertTrue(preferences.contains("GridAlignment=\"None\""))
         XCTAssertTrue(preferences.contains("Mojikumi=\"\(mojikumiRef)\""))
     }
 
