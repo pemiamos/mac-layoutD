@@ -129,6 +129,7 @@ struct LayoutContext {
     var currentPageFootnoteParagraphs: [Paragraph] = []
     var currentPageSideNoteParagraphs: [(Paragraph, Double)] = []
     var threadedRemainingText: [UUID: String] = [:]
+    var pendingPageFrames: [Int: [PageFrame]] = [:]
 
     var footnoteStyle: ParagraphStyle {
         ParagraphStyle(
@@ -285,6 +286,18 @@ struct LayoutContext {
     mutating func finish() -> LaidOutDocument {
         layoutFootnotesAndSideNotesOnCurrentPage()
         if !currentPage.frames.isEmpty || pages.isEmpty {
+            pages.append(currentPage)
+        }
+        
+        let maxPendingPage = pendingPageFrames.keys.max() ?? 0
+        while currentPage.number < maxPendingPage {
+            let nextNum = currentPage.number + 1
+            currentPage = LaidOutPage(number: nextNum)
+            if let pending = pendingPageFrames[nextNum] {
+                currentPage.frames.append(contentsOf: pending)
+                pendingPageFrames.removeValue(forKey: nextNum)
+            }
+            applyPlanIfPresent()
             pages.append(currentPage)
         }
         // 手动插入的空白页可能排在所有正文内容之后——正常翻页只在内容溢出时才触发

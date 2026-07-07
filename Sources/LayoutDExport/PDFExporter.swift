@@ -400,7 +400,41 @@ public struct PDFExporter {
             )
         )
 
-        for frame in page.frames {
+        let underlayParagraphIds = Set(page.frames.compactMap { frame -> UUID? in
+            switch frame.content {
+            case .asset(let assetId), .spreadAsset(let assetId, _):
+                if let asset = project.assets.first(where: { $0.id == assetId }),
+                   asset.effectiveWrapMode == .underlay {
+                    return frame.sourceParagraphId
+                }
+            default:
+                break
+            }
+            return nil
+        })
+
+        let isUnderlayFrame = { (frame: PageFrame) -> Bool in
+            switch frame.content {
+            case .asset(let assetId), .spreadAsset(let assetId, _):
+                if let asset = project.assets.first(where: { $0.id == assetId }) {
+                    return asset.effectiveWrapMode == .underlay
+                }
+            default:
+                break
+            }
+            if frame.kind == .caption, let sourceId = frame.sourceParagraphId {
+                return underlayParagraphIds.contains(sourceId)
+            }
+            return false
+        }
+
+        // Pass 1: Draw underlay frames
+        for frame in page.frames where isUnderlayFrame(frame) {
+            draw(frame: frame, pageNumber: page.number, project: project, in: context, pageHeight: CGFloat(pageSize.height), bleedPoints: bleedPoints)
+        }
+
+        // Pass 2: Draw other frames
+        for frame in page.frames where !isUnderlayFrame(frame) {
             draw(frame: frame, pageNumber: page.number, project: project, in: context, pageHeight: CGFloat(pageSize.height), bleedPoints: bleedPoints)
         }
 
