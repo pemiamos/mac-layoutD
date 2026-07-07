@@ -56,6 +56,9 @@ extension MarkdownParser {
             )
         }
 
+        if let wrapMode = image.wrapMode {
+            asset.wrapMode = wrapMode
+        }
         asset.usage = asset.usage == .placed || asset.usage == .repeated ? .repeated : .placed
         assetsByReference[asset.fileName.normalizedAssetPath] = asset
         return asset
@@ -123,20 +126,22 @@ extension MarkdownParser {
             path: path,
             role: parsedTarget.role,
             credit: parsedTarget.credit,
-            anchor: parsedTarget.anchor
+            anchor: parsedTarget.anchor,
+            wrapMode: parsedTarget.wrapMode
         )
     }
 
     func parseImageTarget(_ target: String) -> ParsedImageTarget {
         guard let imageTarget = parsedImageTargetMetadata(target) else {
-            return ParsedImageTarget(path: normalizedImagePath(target), role: nil, credit: nil, anchor: nil)
+            return ParsedImageTarget(path: normalizedImagePath(target), role: nil, credit: nil, anchor: nil, wrapMode: nil)
         }
 
         let values = parseMetadata(imageTarget.metadata)
         let role = parsedRole(values)
         let credit = parsedCredit(values)
         let anchor = parsedImageAnchor(values)
-        return ParsedImageTarget(path: imageTarget.path, role: role, credit: credit, anchor: anchor)
+        let wrapMode = parsedWrapMode(values)
+        return ParsedImageTarget(path: imageTarget.path, role: role, credit: credit, anchor: anchor, wrapMode: wrapMode)
     }
 
     func parsedImageTargetMetadata(_ target: String) -> (path: String, metadata: String)? {
@@ -257,6 +262,20 @@ extension MarkdownParser {
         }
     }
 
+    /// 绕排意图：`wrap=under|underlay|none|背景|底图|垫底` → 垫底（画在文字下层、不绕排）；
+    /// `wrap=wrap|around|绕排` 或缺省 → 在文字流中绕排（默认，返回 nil 不落字段）。
+    func parsedWrapMode(_ values: [String: String]) -> AssetWrapMode? {
+        guard let raw = (values["wrap"] ?? values["layer"] ?? values["绕排"])?.lowercased() else { return nil }
+        switch raw {
+        case "under", "underlay", "none", "background", "背景", "底图", "垫底":
+            return .underlay
+        case "wrap", "around", "绕排":
+            return .wrap
+        default:
+            return nil
+        }
+    }
+
     func parseMetadata(_ metadata: String) -> [String: String] {
         metadata
             .components(separatedBy: CharacterSet(charactersIn: ";,"))
@@ -279,6 +298,7 @@ struct MarkdownImage {
     var role: AssetRole?
     var credit: String?
     var anchor: MarkdownImageAnchor?
+    var wrapMode: AssetWrapMode?
 }
 
 enum MarkdownImageAnchor {
@@ -290,4 +310,5 @@ struct ParsedImageTarget {
     var role: AssetRole?
     var credit: String?
     var anchor: MarkdownImageAnchor?
+    var wrapMode: AssetWrapMode?
 }

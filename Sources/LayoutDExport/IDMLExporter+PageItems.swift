@@ -69,17 +69,19 @@ extension IDMLExporter {
         """
     }
 
-    func imageItem(self id: String, imageSelf: String, linkSelf: String, asset: Asset, packagedFileName: String?, rect: Rect, maskShape: ImageMaskShape? = nil, pageW: Double, pageH: Double, dx: Double = 0) -> String {
+    func imageItem(self id: String, imageSelf: String, linkSelf: String, asset: Asset, packagedFileName: String?, rect: Rect, maskShape: ImageMaskShape? = nil, pageW: Double, pageH: Double, dx: Double = 0, textWrap: Bool = true) -> String {
         let natW = Double(max(asset.pixelWidth, 1))
         let natH = Double(max(asset.pixelHeight, 1))
         let sx = rect.width / natW, sy = rect.height / natH
         let effX = Int((72.0 / max(sx, 0.0001)).rounded()), effY = Int((72.0 / max(sy, 0.0001)).rounded())
         let left = rect.x - pageW / 2 + dx, top = rect.y - pageH / 2
         let uri = packagedFileName.map { "file:Links/\($0)" } ?? "file:missing-\(asset.fileName)"
+        // 垫底图（wrapMode=underlay）不带绕排：文字直接压在图上走，图由调用方置于最底层。
+        let wrapXML = textWrap ? textWrapPreference() : "<TextWrapPreference Inverse=\"false\" ApplyToMasterPageOnly=\"false\" TextWrapSide=\"BothSides\" TextWrapMode=\"None\"/>"
         return """
         \t\t<Rectangle Self="\(id)" ContentType="GraphicType" StoryTitle="$ID/" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(maskGeometry(rect, shape: maskShape, pageW: pageW, pageH: pageH, dx: dx))
-        \t\t\t\(textWrapPreference())
+        \t\t\t\(wrapXML)
         \t\t\t<Image Self="\(imageSelf)" Space="$ID/#Links_RGB" ActualPpi="72 72" EffectivePpi="\(effX) \(effY)" ImageRenderingIntent="UseColorSettings" Visible="true" ItemTransform="\(fmt(sx)) 0 0 \(fmt(sy)) \(fmt(left)) \(fmt(top))">
         \t\t\t\t<Properties>
         \t\t\t\t\t<Profile type="string">$ID/Embedded</Profile>
@@ -104,40 +106,6 @@ extension IDMLExporter {
         """
     }
 
-    /// THREAD-1b cut 2（首次落地，未经真·InDesign 验证的新机制）：把一张图嵌成锚定对象，
-    /// 挂在宿主段落文流内——不再是页面绝对坐标的独立 Rectangle，而是相对锚点的局部几何
-    /// （0,0 到 width,height），定位交给 `AnchoredObjectSetting`（AnchoredAboveLine：随锚点
-    /// 所在行浮动，是 InDesign「随文图」的标准做法）。锚点本身是文本流里的一个占位字符
-    /// （Unicode Object Replacement Character U+FFFC），放在专属的 CharacterStyleRange 里，
-    /// 与正文的可见文字分开，避免污染行内强调的偏移计算。
-    func anchoredImageCharacterStyleRange(self id: String, imageSelf: String, linkSelf: String, asset: Asset, packagedFileName: String?, width: Double, height: Double) -> String {
-        let natW = Double(max(asset.pixelWidth, 1))
-        let natH = Double(max(asset.pixelHeight, 1))
-        let sx = width / natW, sy = height / natH
-        let effX = Int((72.0 / max(sx, 0.0001)).rounded()), effY = Int((72.0 / max(sy, 0.0001)).rounded())
-        let uri = packagedFileName.map { "file:Links/\($0)" } ?? "file:missing-\(asset.fileName)"
-        func p(_ x: Double, _ y: Double) -> String {
-            let a = "\(fmt(x)) \(fmt(y))"
-            return "<PathPointType Anchor=\"\(a)\" LeftDirection=\"\(a)\" RightDirection=\"\(a)\"/>"
-        }
-        return """
-        \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]">
-        \t\t\t\t<Rectangle Self="\(id)" ContentType="GraphicType" StoryTitle="$ID/" ItemTransform="1 0 0 1 0 0">
-        \t\t\t\t\t<Properties>
-        \t\t\t\t\t\t<PathGeometry><GeometryPathType PathOpen="false"><PathPointArray>\(p(0, 0))\(p(width, 0))\(p(width, height))\(p(0, height))</PathPointArray></GeometryPathType></PathGeometry>
-        \t\t\t\t\t\t<AnchoredObjectSetting AnchoredPosition="AnchoredAboveLine" AnchorPoint="TopLeftAnchor" AnchorXoffset="0" AnchorYoffset="0" AnchorSpineOffset="0" AnchoredRelativeTo="none" HorizontalAlignment="CenterAlign" HorizontalReferencePoint="TextFrame" VerticalAlignment="TopAlign" VerticalReferencePoint="LineBaseline" SpineRelative="false" LockPosition="false" PinSpread="false"/>
-        \t\t\t\t\t</Properties>
-        \t\t\t\t\t<Image Self="\(imageSelf)" Space="$ID/#Links_RGB" ActualPpi="72 72" EffectivePpi="\(effX) \(effY)" ImageRenderingIntent="UseColorSettings" Visible="true" ItemTransform="\(fmt(sx)) 0 0 \(fmt(sy)) 0 0">
-        \t\t\t\t\t\t<Properties>
-        \t\t\t\t\t\t\t<Profile type="string">$ID/Embedded</Profile>
-        \t\t\t\t\t\t\t<GraphicBounds Left="0" Top="0" Right="\(fmt(natW))" Bottom="\(fmt(natH))"/>
-        \t\t\t\t\t\t</Properties>
-        \t\t\t\t\t\t<Link Self="\(linkSelf)" LinkResourceURI="\(esc(uri))" LinkResourceFormat="$ID/" StoredState="Normal" LinkClientID="257" LinkResourceModificationState="None" LinkObjectModificationState="None" LinkResourceSize="0~0" CanEmbed="true" CanUnembed="true" CanPackage="true" ImportPolicy="NoAutoImport" ShowInUI="true"/>
-        \t\t\t\t\t</Image>
-        \t\t\t\t</Rectangle>
-        \t\t\t\t<Content>\u{FFFC}</Content>
-        \t\t\t</CharacterStyleRange>
-        """
-    }
-
+    // （THREAD-1b cut2 的锚定对象机制已于 2026-07-07 FRAME-SPLIT 废除：用户定「所有图片
+    //  一律独立定位框」，锚定文字拉伸 bug 也就此绕开。历史实现见 git 记录 9ba5b40。）
 }

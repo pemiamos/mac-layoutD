@@ -401,6 +401,14 @@
 			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -344.505" LeftDirection="-208.205 -344.505" RightDirection="-208.205 -344.505"/><PathPointType Anchor="214.205 -344.505" LeftDirection="214.205 -344.505" RightDirection="214.205 -344.505"/><PathPointType Anchor="214.205 -328.505" LeftDirection="214.205 -328.505" RightDirection="214.205 -328.505"/><PathPointType Anchor="-208.205 -328.505" LeftDirection="-208.205 -328.505" RightDirection="-208.205 -328.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
 			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
 		</TextFrame>
+		<TextFrame Self="uTF2_1" ParentStory="uStory2_1" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -294.505" LeftDirection="-208.205 -294.505" RightDirection="-208.205 -294.505"/><PathPointType Anchor="-6.000 -294.505" LeftDirection="-6.000 -294.505" RightDirection="-6.000 -294.505"/><PathPointType Anchor="-6.000 -233.505" LeftDirection="-6.000 -233.505" RightDirection="-6.000 -233.505"/><PathPointType Anchor="-208.205 -233.505" LeftDirection="-208.205 -233.505" RightDirection="-208.205 -233.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<TextFrame Self="uTF2_2" ParentStory="uStory2_2" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -196.505" LeftDirection="-208.205 -196.505" RightDirection="-208.205 -196.505"/><PathPointType Anchor="-6.000 -196.505" LeftDirection="-6.000 -196.505" RightDirection="-6.000 -196.505"/><PathPointType Anchor="-6.000 -135.505" LeftDirection="-6.000 -135.505" RightDirection="-6.000 -135.505"/><PathPointType Anchor="-208.205 -135.505" LeftDirection="-208.205 -135.505" RightDirection="-208.205 -135.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
 		<TextFrame Self="uTF2_4" ParentStory="uStory2_4" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Color/CE0F5ED" StrokeColor="Color/C2D7A78" StrokeWeight="0.800" ItemTransform="1 0 0 1 0 0">
 			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -24.505" LeftDirection="-208.205 -24.505" RightDirection="-208.205 -24.505"/><PathPointType Anchor="-6.000 -24.505" LeftDirection="-6.000 -24.505" RightDirection="-6.000 -24.505"/><PathPointType Anchor="-6.000 9.495" LeftDirection="-6.000 9.495" RightDirection="-6.000 9.495"/><PathPointType Anchor="-208.205 9.495" LeftDirection="-208.205 9.495" RightDirection="-208.205 9.495"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
 			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
@@ -408,8 +416,12 @@
 		<Rectangle Self="uAccent2_4" ContentType="Unassigned" FillColor="Color/C2D7A78" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
 			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -24.505" LeftDirection="-208.205 -24.505" RightDirection="-208.205 -24.505"/><PathPointType Anchor="-204.205 -24.505" LeftDirection="-204.205 -24.505" RightDirection="-204.205 -24.505"/><PathPointType Anchor="-204.205 9.495" LeftDirection="-204.205 9.495" RightDirection="-204.205 9.495"/><PathPointType Anchor="-208.205 9.495" LeftDirection="-208.205 9.495" RightDirection="-208.205 9.495"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
 		</Rectangle>
-		<TextFrame Self="uChapterTF0_0" ParentStory="uStoryChapter0" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
-			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -294.505" LeftDirection="-208.205 -294.505" RightDirection="-208.205 -294.505"/><PathPointType Anchor="-6.000 -294.505" LeftDirection="-6.000 -294.505" RightDirection="-6.000 -294.505"/><PathPointType Anchor="-6.000 87.495" LeftDirection="-6.000 87.495" RightDirection="-6.000 87.495"/><PathPointType Anchor="-208.205 87.495" LeftDirection="-208.205 87.495" RightDirection="-208.205 87.495"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+		<TextFrame Self="uFlowTF0_0" ParentStory="uStoryFlow0" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 -116.505" LeftDirection="-208.205 -116.505" RightDirection="-208.205 -116.505"/><PathPointType Anchor="-6.000 -116.505" LeftDirection="-6.000 -116.505" RightDirection="-6.000 -116.505"/><PathPointType Anchor="-6.000 -52.505" LeftDirection="-6.000 -52.505" RightDirection="-6.000 -52.505"/><PathPointType Anchor="-208.205 -52.505" LeftDirection="-208.205 -52.505" RightDirection="-208.205 -52.505"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
+			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+		</TextFrame>
+		<TextFrame Self="uFlowTF1_0" ParentStory="uStoryFlow1" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0.000" ItemTransform="1 0 0 1 0 0">
+			<Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray><PathPointType Anchor="-208.205 23.495" LeftDirection="-208.205 23.495" RightDirection="-208.205 23.495"/><PathPointType Anchor="-6.000 23.495" LeftDirection="-6.000 23.495" RightDirection="-6.000 23.495"/><PathPointType Anchor="-6.000 87.495" LeftDirection="-6.000 87.495" RightDirection="-6.000 87.495"/><PathPointType Anchor="-208.205 87.495" LeftDirection="-208.205 87.495" RightDirection="-208.205 87.495"/></PathPointArray></GeometryPathType></PathGeometry></Properties>
 			<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
 		</TextFrame>
 	</Spread>
@@ -518,6 +530,26 @@
 		</ParagraphStyleRange>
 	</Story>
 </idPkg:Story>
+===== Stories/Story_uStory2_1.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory2_1" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading1">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>第一章 重新理解图文排版</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStory2_2.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStory2_2" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
+		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading1">
+			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>图像不只是正文的附件</Content></CharacterStyleRange>
+		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
 ===== Stories/Story_uStory2_4.xml =====
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
@@ -528,26 +560,22 @@
 		</ParagraphStyleRange>
 	</Story>
 </idPkg:Story>
-===== Stories/Story_uStoryChapter0.xml =====
+===== Stories/Story_uStoryFlow0.xml =====
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
-	<Story Self="uStoryChapter0" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+	<Story Self="uStoryFlow0" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
 		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
-		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading1">
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>第一章 重新理解图文</Content></CharacterStyleRange>
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]" NoBreak="true"><Content>排版</Content></CharacterStyleRange>
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Br/></CharacterStyleRange>
-		</ParagraphStyleRange>
-		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/heading1">
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>图像不只是正文的</Content></CharacterStyleRange>
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]" NoBreak="true"><Content>附件</Content></CharacterStyleRange>
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Br/></CharacterStyleRange>
-		</ParagraphStyleRange>
 		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>中文科普图书的价值，经常来自文字、图片、图注、知识卡片和跨页解释之间的协作。layoutD 的目标，是把这些内容转化为结构化对象，再由排版引擎稳定</Content></CharacterStyleRange>
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]" NoBreak="true"><Content>输出。</Content></CharacterStyleRange>
-			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Br/></CharacterStyleRange>
 		</ParagraphStyleRange>
+	</Story>
+</idPkg:Story>
+===== Stories/Story_uStoryFlow1.xml =====
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+	<Story Self="uStoryFlow1" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+		<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="Horizontal" StoryDirection="LeftToRightDirection"/>
 		<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/body">
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>第一版架构先验证文档模型、页面生成、素材管理和 PDF 导出的边界。后续再逐步加入中文禁则、标点压缩、图片主体识别和更复杂的跨页</Content></CharacterStyleRange>
 			<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]" NoBreak="true"><Content>布局。</Content></CharacterStyleRange>
@@ -569,7 +597,7 @@
 ===== designmap.xml =====
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <?aid style="50" type="document" readerVersion="6.0" featureSet="257" product="16.0(202)" ?>
-<Document xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" Self="layoutd_doc" DOMVersion="16.0" Name="layoutd-export.indd" StoryList="uStoryChapter0 uStory0_0 uStory0_1 uStory0_2 uStory0_3 uStory1_0 uStory1_1 uStory2_0 uStory2_4 uMasterPageNumberStory">
+<Document xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" Self="layoutd_doc" DOMVersion="16.0" Name="layoutd-export.indd" StoryList="uStoryFlow0 uStoryFlow1 uStory0_0 uStory0_1 uStory0_2 uStory0_3 uStory1_0 uStory1_1 uStory2_0 uStory2_1 uStory2_2 uStory2_4 uMasterPageNumberStory">
 	<idPkg:Graphic src="Resources/Graphic.xml"/>
 	<idPkg:Fonts src="Resources/Fonts.xml"/>
 	<KinsokuTable Self="KinsokuTable/$ID/kSimpChineseKinsokuName" Name="$ID/kSimpChineseKinsokuName"/>
@@ -582,7 +610,8 @@
 	<idPkg:Spread src="Spreads/Spread_uSpread1.xml"/>
 	<idPkg:Spread src="Spreads/Spread_uSpread2.xml"/>
 	<idPkg:BackingStory src="XML/BackingStory.xml"/>
-	<idPkg:Story src="Stories/Story_uStoryChapter0.xml"/>
+	<idPkg:Story src="Stories/Story_uStoryFlow0.xml"/>
+	<idPkg:Story src="Stories/Story_uStoryFlow1.xml"/>
 	<idPkg:Story src="Stories/Story_uStory0_0.xml"/>
 	<idPkg:Story src="Stories/Story_uStory0_1.xml"/>
 	<idPkg:Story src="Stories/Story_uStory0_2.xml"/>
@@ -590,6 +619,8 @@
 	<idPkg:Story src="Stories/Story_uStory1_0.xml"/>
 	<idPkg:Story src="Stories/Story_uStory1_1.xml"/>
 	<idPkg:Story src="Stories/Story_uStory2_0.xml"/>
+	<idPkg:Story src="Stories/Story_uStory2_1.xml"/>
+	<idPkg:Story src="Stories/Story_uStory2_2.xml"/>
 	<idPkg:Story src="Stories/Story_uStory2_4.xml"/>
 	<idPkg:Story src="Stories/Story_uMasterPageNumberStory.xml"/>
 </Document>

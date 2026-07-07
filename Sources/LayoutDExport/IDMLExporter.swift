@@ -112,129 +112,108 @@ public struct IDMLExporter {
         var storyFiles: [String: String] = [:]
         var storyListIds: [String] = []
 
-        // THREAD-1b 第一刀：把「章名/节名 + 正文」按章合成一条串接 Story，逐页框
-        // Previous/NextTextFrame 首尾相连；图片/抽言/表格/脚注/旁注/运行页眉仍走原逐帧
-        // 独立 Story（本刀不动，留给后续几刀）。前置页（封面/目录，page.number ≤
-        // frontMatterPageCount）天然被排除，不参与串接。
-        let sectionIndexByParagraphId: [UUID: Int] = {
+        // FRAME-SPLIT（2026-07-07 用户定，取代 THREAD-1b「章级串接」）：一个角色一个框——
+        // 只有「纯正文」（styleId==body 的 body/listItem 段落）进串接文流；标题/开节概述/
+        // 抽言/图注/参考文献/表格等一律独立框、各套各的段落样式，便于 InDesign 后期编辑。
+        // 文流遇到任何独立框角色即「断流」：每段连续正文 = 一条独立串接 run（跨栏跨页
+        // Previous/NextTextFrame 相连），断流之后的正文另起新 run。
+        // 内嵌图锚定（THREAD-1b cut2）同日废除：所有图片一律独立定位框（图注框紧邻其后），
+        // 绕排意图由 Asset.wrapMode 表达（wrap=正文避让绕排 / underlay=垫底画在文字下层）。
+        let runIndexByParagraphId: [UUID: Int] = {
             var map: [UUID: Int] = [:]
-            for (idx, section) in project.sections.enumerated() {
+            var run = 0
+            var runHasContent = false
+            func closeRun() {
+                if runHasContent { run += 1; runHasContent = false }
+            }
+            for section in project.sections {
+                closeRun() // 章边界必断流
                 for story in section.stories {
                     for paragraph in story.paragraphs {
-                        map[paragraph.id] = idx
+                        if isBodyFlowParagraph(paragraph) {
+                            map[paragraph.id] = run
+                            runHasContent = true
+                        } else {
+                            closeRun() // 独立框角色（标题/抽言/图/表…）切断正文流
+                        }
                     }
                 }
             }
             return map
         }()
 
-        var frameSectionIndex: [FrameKey: Int] = [:]
-        var sectionsOnPage: [Int: [SectionPageKey]] = [:]   // pageIndex -> 该页出现的(章,栏)（去重，出现顺序）
-        var flowUnitsForSection: [Int: [SectionPageKey]] = [:] // sectionIndex -> 该章流经的(页,栏)（去重，出现顺序）
-        var rectForSectionPage: [SectionPageKey: Rect] = [:]
-        var nextOrphanSectionIndex = 0
+        var frameRunIndex: [FrameKey: Int] = [:]
+        var runsOnPage: [Int: [FlowPageKey]] = [:]      // pageIndex -> 该页出现的(run,栏)（去重，出现顺序）
+        var flowUnitsForRun: [Int: [FlowPageKey]] = [:] // run -> 该流经过的(页,栏)（去重，出现顺序）
+        var rectForRunPage: [FlowPageKey: Rect] = [:]
         // 前置页数与 LayoutEngine.frontMatterPageCount(for:) 保持一致：封面恒 1 页，
-        // 目录仅在 includesTableOfContents 时 +1（默认关）。前置页天然不参与章串接。
+        // 目录仅在 includesTableOfContents 时 +1（默认关）。前置页天然不参与串接。
         let frontMatterPages = project.pageSetup.includesTableOfContents ? 2 : 1
         for (pi, page) in pages.enumerated() where page.number > frontMatterPages {
             for (fi, frame) in page.frames.enumerated() {
+                // 只认领纯正文段落的文字框；章名标题（无 sourceParagraphId）与标题/抽言等
+                // 角色段落一律落到下方「逐帧独立 Story」路径，各自独立成框。
                 guard frame.kind == .text, case .text(let raw) = frame.content,
-                      !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
-                // 章名标题（addSectionTitle）没有 sourceParagraphId，但每章只出现一次、且
-                // 必定在该章第一个正文段落之前发出——用一个只增计数器即可精确认领，无需回看。
-                let sectionIndex: Int
-                if let pid = frame.sourceParagraphId, let idx = sectionIndexByParagraphId[pid] {
-                    sectionIndex = idx
-                } else {
-                    sectionIndex = nextOrphanSectionIndex
-                    nextOrphanSectionIndex += 1
-                }
-                frameSectionIndex[FrameKey(page: pi, frame: fi)] = sectionIndex
+                      !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      let pid = frame.sourceParagraphId,
+                      let runIndex = runIndexByParagraphId[pid] else { continue }
+                frameRunIndex[FrameKey(page: pi, frame: fi)] = runIndex
                 let column = Int((frame.rect.x * 4).rounded())
-                let key = SectionPageKey(section: sectionIndex, page: pi, column: column)
-                if let existing = rectForSectionPage[key] {
-                    rectForSectionPage[key] = unionRect(existing, frame.rect)
+                let key = FlowPageKey(run: runIndex, page: pi, column: column)
+                if let existing = rectForRunPage[key] {
+                    rectForRunPage[key] = unionRect(existing, frame.rect)
                 } else {
-                    rectForSectionPage[key] = frame.rect
-                    sectionsOnPage[pi, default: []].append(key)
-                    flowUnitsForSection[sectionIndex, default: []].append(key)
+                    rectForRunPage[key] = frame.rect
+                    runsOnPage[pi, default: []].append(key)
+                    flowUnitsForRun[runIndex, default: []].append(key)
                 }
             }
         }
 
-        // THREAD-1b cut 2（图片锚定对象，最小可行范围）：只处理挂在正文段落
-        // `anchoredAssetIds` 上、且该段落本身在本章串接文流里的图片——转成嵌入所属段落
-        // 文流内的锚定对象，随文重排移动。孤立的 `.figure` 段落、抽言（callout）、图注仍
-        // 保持独立定位框（本刀范围之外，留给后续迭代）。
-        var anchoredAssetsByParagraphId: [UUID: [(asset: Asset, rect: Rect, packagedFileName: String?)]] = [:]
-        var anchoredImageFrameKeys: Set<FrameKey> = []
-        for (pi, page) in pages.enumerated() where page.number > 2 {
-            for (fi, frame) in page.frames.enumerated() {
-                // 只吃「挂在正文段落 anchoredAssetIds 上」的图。孤立的 `.figure` 段落自己就是
-                // 图的宿主段落、被 isBodyFlowParagraph 排除在文流之外——它的图不能被这里认领，
-                // 否则两头都进不去（既不进锚定对象，独立定位框那条路也被跳过），图片直接消失。
-                guard frame.kind == .image, case .asset(let assetId) = frame.content,
-                      let pid = frame.sourceParagraphId, sectionIndexByParagraphId[pid] != nil,
-                      let hostKind = paragraphsByID[pid]?.kind, isBodyFlowParagraph(hostKind),
-                      let asset = project.assets.first(where: { $0.id == assetId }) else { continue }
-                anchoredAssetsByParagraphId[pid, default: []].append(
-                    (asset: asset, rect: frame.rect, packagedFileName: packagedLinks[assetId]?.fileName))
-                anchoredImageFrameKeys.insert(FrameKey(page: pi, frame: fi))
-            }
-        }
-
-        var chainForSectionPage: [SectionPageKey: ChainInfo] = [:]
-        for (sectionIndex, units) in flowUnitsForSection {
+        var chainForRunPage: [FlowPageKey: ChainInfo] = [:]
+        for (runIndex, units) in flowUnitsForRun {
             for (k, unitKey) in units.enumerated() {
-                let selfId = "uChapterTF\(sectionIndex)_\(k)"
-                let previous = k == 0 ? "n" : "uChapterTF\(sectionIndex)_\(k - 1)"
-                let next = k == units.count - 1 ? "n" : "uChapterTF\(sectionIndex)_\(k + 1)"
-                chainForSectionPage[unitKey] = ChainInfo(selfId: selfId, previous: previous, next: next)
+                let selfId = "uFlowTF\(runIndex)_\(k)"
+                let previous = k == 0 ? "n" : "uFlowTF\(runIndex)_\(k - 1)"
+                let next = k == units.count - 1 ? "n" : "uFlowTF\(runIndex)_\(k + 1)"
+                chainForRunPage[unitKey] = ChainInfo(selfId: selfId, previous: previous, next: next)
             }
         }
 
-        // 章 Story 的内容直接取 project.sections 的原文（未经 normalizedText 折行），
+        // 流 Story 的内容直接取 project.sections 的原文（未经 normalizedText 折行），
         // 与 frame 是否被拆分跨页无关——inlineRuns 天然对齐原文，无需二次映射。
-        let chapterVertical = project.pageSetup.layoutDirection == .vertical
-        var chapterStorySelf: [Int: String] = [:]
-        for sectionIndex in flowUnitsForSection.keys.sorted() {
-            let section = project.sections[sectionIndex]
-            var chapterParagraphs: [ChapterParagraph] = []
-            let title = section.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !title.isEmpty {
-                let headingStyle = ctx.resolvedStyle(id: StyleID.heading1.rawValue)
-                chapterParagraphs.append(ChapterParagraph(
-                    styleRef: "ParagraphStyle/\(xmlSafe(headingStyle.id))",
-                    text: title, inlineRuns: nil, footnotes: [],
-                    footnoteStyleRef: "ParagraphStyle/$ID/[No paragraph style]"
-                ))
-            }
+        let flowVertical = project.pageSetup.layoutDirection == .vertical
+        var flowStorySelf: [Int: String] = [:]
+        var paragraphsForRun: [Int: [Paragraph]] = [:]
+        for section in project.sections {
             for story in section.stories {
                 for paragraph in story.paragraphs {
-                    guard isBodyFlowParagraph(paragraph.kind) else { continue }
-                    let anchoredAssets = anchoredAssetsByParagraphId[paragraph.id] ?? []
-                    // 段落文字可能是空的（比如 DOCX 里专门用来装图的段落）——只要挂了锚定
-                    // 对象就不能跳过，否则图片既不进文流也不再独立出框，直接从导出里消失。
-                    guard !paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !anchoredAssets.isEmpty else { continue }
-                    let style = ctx.resolvedStyle(id: paragraph.styleId)
-                    let footnotes = paragraph.safeAnchoredFootnoteIds.compactMap { paragraphsByID[$0] }
-                    chapterParagraphs.append(ChapterParagraph(
-                        styleRef: "ParagraphStyle/\(xmlSafe(style.id))",
-                        // 保留原文（不 trim），inlineRuns 的偏移量以 paragraph.text 为基准，
-                        // trim 掉前导空白会让二者错位。
-                        text: paragraph.text, inlineRuns: paragraph.inlineRuns, footnotes: footnotes,
-                        footnoteStyleRef: footnoteStyleRef(for: footnotes, ctx: ctx),
-                        anchoredAssets: anchoredAssets
-                    ))
+                    guard let runIndex = runIndexByParagraphId[paragraph.id] else { continue }
+                    paragraphsForRun[runIndex, default: []].append(paragraph)
                 }
             }
-            guard !chapterParagraphs.isEmpty else { continue }
-            let storySelf = "uStoryChapter\(sectionIndex)"
+        }
+        for runIndex in flowUnitsForRun.keys.sorted() {
+            var flowParagraphs: [ChapterParagraph] = []
+            for paragraph in paragraphsForRun[runIndex] ?? [] {
+                guard !paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+                let style = ctx.resolvedStyle(id: paragraph.styleId)
+                let footnotes = paragraph.safeAnchoredFootnoteIds.compactMap { paragraphsByID[$0] }
+                flowParagraphs.append(ChapterParagraph(
+                    styleRef: "ParagraphStyle/\(xmlSafe(style.id))",
+                    // 保留原文（不 trim），inlineRuns 的偏移量以 paragraph.text 为基准，
+                    // trim 掉前导空白会让二者错位。
+                    text: paragraph.text, inlineRuns: paragraph.inlineRuns, footnotes: footnotes,
+                    footnoteStyleRef: footnoteStyleRef(for: footnotes, ctx: ctx)
+                ))
+            }
+            guard !flowParagraphs.isEmpty else { continue }
+            let storySelf = "uStoryFlow\(runIndex)"
             storyFiles["Stories/Story_\(storySelf).xml"] = chapterStoryXML(
-                self: storySelf, vertical: chapterVertical, paragraphs: chapterParagraphs)
+                self: storySelf, vertical: flowVertical, paragraphs: flowParagraphs)
             storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
             storyListIds.append(storySelf)
-            chapterStorySelf[sectionIndex] = storySelf
+            flowStorySelf[runIndex] = storySelf
         }
 
         let facing = options.facingPages
@@ -248,6 +227,9 @@ public struct IDMLExporter {
             // 对开 recto 右(0, 框[0,pageW])、verso 左(-pageW, 框[-pageW,0])。
             let pageTransformX = facing ? (recto ? 0 : -pageW) : -pageW / 2
             var items: [String] = []
+            // 垫底图（wrapMode == .underlay）画在本页所有内容之下：spread 内条目顺序即
+            // 叠放顺序（越靠前越底层），故单独收集、拼装时置于最前。
+            var underlayItems: [String] = []
 
             for (fi, frame) in page.frames.enumerated() {
                 switch frame.content {
@@ -273,9 +255,9 @@ public struct IDMLExporter {
                         }
                         continue
                     }
-                    // 已并入本章串接 Story；合并后的 TextFrame 在本页 frame 循环结束后统一追加一次。
-                    if let sectionIndex = frameSectionIndex[FrameKey(page: pi, frame: fi)],
-                       chapterStorySelf[sectionIndex] != nil {
+                    // 已并入正文串接流；合并后的 TextFrame 在本页 frame 循环结束后统一追加一次。
+                    if let runIndex = frameRunIndex[FrameKey(page: pi, frame: fi)],
+                       flowStorySelf[runIndex] != nil {
                         continue
                     }
                     let storySelf = "uStory\(pi)_\(fi)"
@@ -348,13 +330,17 @@ public struct IDMLExporter {
                     storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                     storyListIds.append(storySelf)
                 case .asset(let id), .spreadAsset(let id, _):
-                    // 已转为锚定对象、嵌进所属段落的文流里，这里不再重复画一个独立定位框。
-                    if anchoredImageFrameKeys.contains(FrameKey(page: pi, frame: fi)) { continue }
                     guard let asset = project.assets.first(where: { $0.id == id }) else { continue }
-                    items.append(imageItem(self: "uRect\(pi)_\(fi)", imageSelf: "uImg\(pi)_\(fi)",
-                                           linkSelf: "uLink\(pi)_\(fi)", asset: asset,
-                                           packagedFileName: packagedLinks[asset.id]?.fileName,
-                                           rect: frame.rect, maskShape: frame.maskShape, pageW: pageW, pageH: pageH, dx: dx))
+                    // 绕排意图：wrap（默认）带 TextWrapPreference 让正文避让；underlay 垫底
+                    // ——不绕排且画在本页最底层（文字直接压在图上走）。
+                    let underlay = asset.effectiveWrapMode == .underlay
+                    let item = imageItem(self: "uRect\(pi)_\(fi)", imageSelf: "uImg\(pi)_\(fi)",
+                                         linkSelf: "uLink\(pi)_\(fi)", asset: asset,
+                                         packagedFileName: packagedLinks[asset.id]?.fileName,
+                                         rect: frame.rect, maskShape: frame.maskShape,
+                                         pageW: pageW, pageH: pageH, dx: dx,
+                                         textWrap: !underlay)
+                    if underlay { underlayItems.append(item) } else { items.append(item) }
                 case .empty:
                     // Drawn shapes have no content → export as an Unassigned Rectangle.
                     // Rectangle: fill (+ optional stroke). Line: a centered thin filled
@@ -374,17 +360,17 @@ public struct IDMLExporter {
                 }
             }
 
-            for unitKey in sectionsOnPage[pi] ?? [] {
-                guard let storySelf = chapterStorySelf[unitKey.section],
-                      let rect = rectForSectionPage[unitKey],
-                      let chain = chainForSectionPage[unitKey] else { continue }
+            for unitKey in runsOnPage[pi] ?? [] {
+                guard let storySelf = flowStorySelf[unitKey.run],
+                      let rect = rectForRunPage[unitKey],
+                      let chain = chainForRunPage[unitKey] else { continue }
                 items.append(textFrameItem(self: chain.selfId, story: storySelf, rect: rect,
                                            fillColor: nil, strokeColor: nil, strokeWidth: 0,
                                            pageW: pageW, pageH: pageH, dx: dx,
                                            previous: chain.previous, next: chain.next))
             }
 
-            let pageBuild = (pageSelf: "uPage\(pi)", pageName: "\(page.number)", transformX: pageTransformX, items: items)
+            let pageBuild = (pageSelf: "uPage\(pi)", pageName: "\(page.number)", transformX: pageTransformX, items: underlayItems + items)
             let si = facing ? (pi + 1) / 2 : pi
             if si >= spreadBuilds.count { spreadBuilds.append([]) }
             spreadBuilds[si].append(pageBuild)
