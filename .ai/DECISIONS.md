@@ -99,3 +99,7 @@
 - **决策**：视觉规范与排版样张生成采用 layoutD 原生「规范包」路线（AI 生成规范 JSON → layoutD 校验渲染样张 → 人工比选定稿 → 同一规范驱动初排与 IDML），放弃 Figma 作为主路径（Figma 仅保留为封面等单页物料可选通道）。首次实测通过：用户以《EXPLORE》杂志截图为参考，比选 3 套受控变体后选定「方案A · 探索黄（杂志感）」为样张基准（JSON 见 ~/Desktop/layoutD-规范包测试/）。落地任务 SPEC-PACK-1 / SAMPLE-1 / FIXTURE-1 排入 QUEUE。
 - **理由**：Figma 三硬伤：无竖排、无 CMYK、无书版规则模型，且 Figma→layoutD 导入是有损逆向工程。规范包路线单一事实源、样张与 IDML 同引擎零损耗；基础设施大半已在（StyleBaselineImporter 已解析 DTCG/Figma token、StyleImportSheet、PDFExporter、LayoutPlanProvider 插座）。详见桌面《layoutD 视觉规范与样张生成·开发计划 v1.0.pdf》。
 
+## 2026-07-07 12:57 | claude
+- **决策**：规范包解析的唯一事实源 = Codex 的 `StyleBaselineImporter.parseSpecPack`（SPEC-PACK-1，已合 dev）。SAMPLE-1 首版（AG，feature/ag-sample-1 `299450b`，未合 dev）自建的并行 `Sources/LayoutDImport/SpecPack.swift`（独立 Codable 模型+解析+toBookProjectUpdates）作废、不合并；SAMPLE-1 打回 AG 重做，须基于 parseSpecPack 重写，删除自建 SpecPack.swift/SpecPackTests.swift。重做时把「token 应用到项目」的逻辑抽成不依赖 AppState/GUI 的共享函数（放 LayoutDCore 或 LayoutDImport），供 CLI 与 App 共用，禁止复制第三份。
+- **理由**：两条道并发落地规范包路线时产生了同模块内两套读同样 3 份 JSON 的解析器：Codex 的 parseSpecPack（SPEC-PACK-1 指定交付，带字体 CoreText 校验、10 个非法样例测试、编写指南）与 AG 过渡期自建的 SpecPack.swift。用户拍板收敛到单一解析器，选 Codex 版作事实源（它是 schema owner、校验最完整）。关键发现：parseSpecPack 目前只产出/校验 DesignTokens，未落地字体族/点缀色/开本 trim 到实体样式；现有 token 应用路径 applyImportedTokens 也只覆盖 margins/columns/grid/fontSize/lineHeight/缩进/段距——AG 首版的 toBookProjectUpdates 恰好补了字体/色/开本的应用（样张能视觉区分方案A/B/C 的关键）。故 SAMPLE-1 重做的真正价值 = 在 Codex 解析之上补齐这三项视觉应用，而不是再造解析器。选择「打回重做」而非「Claude 就地嫁接保留 AG 应用层」：用户要求分歧从源头消除、职责清晰，代价是多一轮接力、样张一键出图要等 AG 返工。
+

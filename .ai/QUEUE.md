@@ -117,11 +117,10 @@
 > 负责文件：`Sources/LayoutDImport/*`、`scripts/review-idml.sh`。
 > 斜体导出已用 `Skew="12"`、粗体用 `FauxBold="true"`（别用 `FauxItalic`/`FontStyle`，对 CJK 不可见/出粉色替代字形）。
 
-- [ ] **SPEC-PACK-1 视觉规范包 schema 补全 + 导入校验**（2026-07-07 用户批准，最高优先）
-  - 背景：规范包路线定案（见 DECISIONS 2026-07-07）。**schema 定稿必须以 `~/Desktop/layoutD-规范包测试/` 下 3 份真实 JSON 为样例校准**（方案A-探索黄 是用户选定基准）——字段结构（meta/page/fonts/colors/roles/vertical）是开发计划附录草样，实现时可微调字段名，但要能表达这 3 份 JSON 的全部内容。
-  - 目标：① 在 `StyleBaselineImporter` 现有 DTCG/Figma 解析之上扩展顶层规范包格式：角色→字体族映射、版面参数（page.size/margins/grid）、角色样式块（fontSize/lineHeight/缩进/颜色/装饰）、竖排开关（占位可先不启用）；② 写《规范包编写指南》到 `docs/`（给 AI 的字段说明+合法取值范围）；③ 校验：字体已装且带真实字重（对齐 approvedFonts 机制）、版心不超页面、字号/行距>0，错误信息用人话并指明字段路径。
-  - 文件：`Sources/LayoutDImport/StyleBaselineImporter.swift`（或新增 `SpecPackImporter.swift`）、必要时 `Sources/LayoutDCore/` 新类型、`docs/`。
-  - 验收：桌面 3 份 JSON 全部一次导入成功（方案A 每个字段都被消费，暂不支持的字段输出明确清单而非静默忽略）；≥10 个典型非法样例被拒且报错可读；全部测试/探针 PASS。
+- [x] **SPEC-PACK-1 视觉规范包 schema 补全 + 导入校验** — ✅ Codex（`a7ce358`，Claude 合 dev `70a49fd`→dev）。
+  - 交付：`StyleBaselineImporter` 加规范包识别（`ImportFormat.specPack`）+ `parseSpecPack(jsonData:fontAvailability:) -> SpecPackImportResult{tokens, unsupportedFields, fontResolutions}`；支持 `meta/page/fonts/colors/roles/vertical`；毫米→point token、角色中文名→段落样式 token、字体别名走批准映射 + CoreText 校验真实已装字体、不支持字段进 `unsupportedFields` 明确上报（非静默忽略）。`docs/spec-pack-guide.md` 编写指南 + `StyleBaselineImporterSpecPackTests`（桌面方案A/B/C 三份真 JSON 全导入 + 10 个非法样例带 JSON path 报错）。
+  - 验收全过：`swift test` 290、`review-idml.sh` 13/13。
+  - **⚠️ 已知边界（SAMPLE-1 必读）**：`parseSpecPack` 只产出/校验 **DesignTokens**，**尚未**把字体族/点缀色/开本尺寸落地到实体 `StyleLibrary`/`PageSetup`（Codex 交接明确说明）。现有 token 应用路径 `AppState.applyImportedTokens` 也只覆盖 margins/columns/grid/fontSize/lineHeight/缩进/段距，**不含** 字体族、颜色、trim 尺寸。样张要在视觉上区分方案A/B/C，SAMPLE-1 必须自己补这一段应用（见下）。
 - [x] **GUARD-1 角色标签端到端探针进 review-idml.sh** — ✅ Codex @ `feature/codex-guard-role-tags`（`bdd1ac2` test: guard role tag idml review probe）
   - 背景：角色标签结构化导入（IMP-3）是 layoutD 核心能力，但 `review-idml.sh` 的端到端探针目前只测行内粗斜体——改导入器时 CI 逮不住角色回归。
   - 目标：探针加一段角色标签 fixture（含 一级标题/开节概述/抽言/参考文献 标签 + 正文），导 IDML 解包断言：① 标签文字零漏出（Story 无「抽言」「开节概述」等标签字面）；② Styles.xml 含中文命名段落样式（章标题/概述/抽言/参考文献）；③ 对应段落 `AppliedParagraphStyle` 指向正确样式。
@@ -145,11 +144,17 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`Sources/LayoutDApp/*`
 > ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）；**生成样张别提交进仓库**（B1 踩过，Claude 合并时剔除了 20 个 PNG/PDF）。
 
-- [ ] **SAMPLE-1 一键批量样张**（2026-07-07 用户批准；⚠️ 依赖 Codex 道 SPEC-PACK-1 + Claude 道 FIXTURE-1，若先领到可先搭 CLI 骨架用现有 DTCG token + 任意样章过渡，接口留好）
-  - 背景：规范包路线定案（见 DECISIONS 2026-07-07）。目标体验：AI 改一版规范 JSON → 一条命令 → 桌面出新样张 PDF，分钟级比选闭环。
-  - 目标：CLI 子命令（形如 `--render-samples 方案A.json 方案B.json --chapter <fixture>`）：每份规范包用标准样章渲一份 PDF 到 `~/Desktop`，文件名含方案名；`PDFExporter` 已有，属薄封装；同输入重跑输出一致（确定性）。
-  - 文件：`Sources/LayoutDApp/`（CLI 入口所在文件）、`Sources/LayoutDExport/PDFExporter.swift`（如需小改）。
-  - 验收：3 份规范包一条命令出 3 份 PDF、真实字体无 tofu（GUARD-2 rule⑥ 字形覆盖可兜底）；重跑确定性一致；全部测试/探针 PASS；**生成的 PDF 不进仓库**（投 ~/Desktop）。
+- [ ] **SAMPLE-1 一键批量样张**（🔁 **2026-07-07 打回重做**，用户拍板：不接受自建并行解析器，须基于 Codex 的 SPEC-PACK-1 重写）
+  - **打回原因**：AG 首版（`feature/ag-sample-1` `299450b`，未合 dev）自建了一套并行的 `Sources/LayoutDImport/SpecPack.swift`（Codable 模型 + 解析 + `toBookProjectUpdates`），与 Codex 刚落地的 `StyleBaselineImporter.parseSpecPack` 在同一模块里重复解析同样 3 份 JSON、逻辑不共享。用户决定：**规范包解析唯一事实源 = Codex 的 `parseSpecPack`**；SAMPLE-1 不得再自建 SpecPack.swift。首版的 CLI 骨架（`--render-samples`/`--chapter` 参数、桌面输出循环、PDF 导出封装）可作参考保留思路，但解析层必须换掉。
+  - 背景：规范包路线定案（见 DECISIONS 2026-07-07 两条）。目标体验：AI 改一版规范 JSON → 一条命令 → 桌面出新样张 PDF，分钟级比选闭环。
+  - **重做目标**：
+    1. CLI 子命令 `--render-samples 方案A.json 方案B.json ... --chapter <fixture>`：默认 `--chapter` 指向 **`Samples/fixture-standard-chapter.md`**（FIXTURE-1 已就绪）；每份规范包渲一份 PDF 到 `~/Desktop`，文件名含方案名；重跑确定性一致。
+    2. 解析走 **`StyleBaselineImporter.parseSpecPack(jsonData:)`**（唯一事实源）：拿到 `SpecPackImportResult{tokens, unsupportedFields, fontResolutions}`；非法规范直接 fail-fast 打印 JSON-path 错误；把 `unsupportedFields` 打到 stderr 提示（不静默）。
+    3. **把 tokens 应用到项目再渲染**：token 里已覆盖的 margins/columns/grid/fontSize/lineHeight/缩进/段距 —— 复用 `applyImportedTokens` 的等价逻辑（它在 App 层且依赖 AppState，CLI 需要抽一份不依赖 GUI 的纯函数应用，或把该逻辑下沉到 `LayoutDCore`/`LayoutDImport` 供两处共用，**别再复制第三份**）。
+    4. **补齐 token 未覆盖的视觉三项——字体族 / 点缀色 / 开本 trim**（这是样张能区分方案A/B/C 的关键，SPEC-PACK-1 明确没做）：用 `fontResolutions` 把每个角色的解析后字体名写进对应 `ParagraphStyle`；颜色 token 落到样式/装饰；`page.size` 落到 `PageSetup` trim。这一步是本任务的真正价值，做扎实。
+  - **⚠️ 铁律**：不新建与 Codex 重复的规范包解析/模型文件；解析只有一处（`parseSpecPack`）。若发现 `parseSpecPack` 缺字段，回头找 Codex 补在 `StyleBaselineImporter`，不要在 App 层另起炉灶。
+  - 文件：`Sources/LayoutDApp/`（CLI 入口 + 参数）、`Sources/LayoutDExport/PDFExporter.swift`（如需小改）；token→样式应用的共享函数放 `LayoutDCore` 或 `LayoutDImport`。**删除**首版的 `Sources/LayoutDImport/SpecPack.swift` 与 `Tests/LayoutDImportTests/SpecPackTests.swift`。
+  - 验收：3 份桌面规范包一条命令出 3 份**视觉可区分**的 PDF（点缀色/字体/版式确实不同）、真实字体无 tofu（GUARD-2 rule⑥ 兜底）；重跑确定性一致；非法规范报可读错误；全部测试/探针 PASS；**生成的 PDF 不进仓库**（投 ~/Desktop）。
 - [x] **PERF-3 排版异步化 + 防抖** — ✅ AG `c99e48a`，排版及预检移出主线程，引入 150ms 防抖，支持首帧/测试环境同步回退。
   - 背景：每次改动全书重排两遍 + preflight 同步跑在界面线程（`AppState.recalculateLayout`），书稿变大会卡界面。
   - 目标：连续操作只排最后一次（防抖），layout/preflight 移出界面线程（异步化）；首帧仍同步保证打开即有版面；须防状态流里的 GUI 竞态（异步排版结果回来时用户可能已经切换了选中/页面）。
