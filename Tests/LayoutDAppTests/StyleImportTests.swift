@@ -147,4 +147,75 @@ final class StyleImportTests: XCTestCase {
         let rolledBackBodyStyle = state.project.styles.paragraphStyle(id: StyleID.body.rawValue)
         XCTAssertNotEqual(rolledBackBodyStyle.fontSize, 13.0)
     }
+
+    func testApplySpecPack() throws {
+        var project = BookProject.sample
+        
+        let tokens = DesignTokens(
+            colorModes: ["default"],
+            defaultMode: "default",
+            colors: [
+                ColorTokenSet(id: "accent", hex: "#F5C518"),
+                ColorTokenSet(id: "ink", hex: "#1B1B1B")
+            ],
+            scalars: [
+                ScalarToken(id: "page.width", value: 500.0, kind: .dimension),
+                ScalarToken(id: "page.height", value: 700.0, kind: .dimension),
+                ScalarToken(id: "page.vertical", value: 1.0, kind: .dimension)
+            ]
+        )
+        
+        let result = SpecPackImportResult(
+            tokens: tokens,
+            unsupportedFields: [],
+            fontResolutions: [
+                SpecPackFontResolution(roleOrAlias: "章名", requestedName: "标题", resolvedName: "Heiti SC Medium"),
+                SpecPackFontResolution(roleOrAlias: "正文", requestedName: "正文", resolvedName: "Songti SC"),
+                SpecPackFontResolution(roleOrAlias: "西文", requestedName: "西文", resolvedName: "Georgia")
+            ],
+            roleColors: [
+                "章名": "ink",
+                "抽言": "accent"
+            ],
+            roleDecorations: [
+                "抽言": SpecPackDecoration(type: "left-rule", color: "accent", widthPt: 3)
+            ]
+        )
+        
+        project.applySpecPack(result)
+        
+        // 1. Check page setup size and layout direction
+        XCTAssertEqual(project.pageSetup.pageSize.width, 500.0)
+        XCTAssertEqual(project.pageSetup.pageSize.height, 700.0)
+        XCTAssertEqual(project.pageSetup.layoutDirection, .vertical)
+        
+        // 2. Check Paragraph Style font mappings
+        let headingStyle = project.styles.paragraphStyle(id: StyleID.heading1.rawValue)
+        XCTAssertEqual(headingStyle.fontName, "Heiti SC Medium")
+        XCTAssertEqual(headingStyle.colorToken, "ink")
+        XCTAssertEqual(headingStyle.compositeFont?[.chinese]?.fontName, "Heiti SC Medium")
+        XCTAssertEqual(headingStyle.compositeFont?[.latin]?.fontName, "Georgia")
+        
+        let bodyStyle = project.styles.paragraphStyle(id: StyleID.body.rawValue)
+        XCTAssertEqual(bodyStyle.fontName, "Songti SC")
+        XCTAssertEqual(bodyStyle.compositeFont?[.chinese]?.fontName, "Songti SC")
+        
+        let pullQuoteStyle = project.styles.paragraphStyle(id: StyleID.pullQuote.rawValue)
+        XCTAssertEqual(pullQuoteStyle.colorToken, "accent")
+        
+        // 3. Check ComponentStyle decorations
+        let calloutStyle = project.styles.safeComponentStyles.first(where: { $0.frameKind == .callout })
+        XCTAssertNotNil(calloutStyle)
+        XCTAssertEqual(calloutStyle?.accentColorToken, "accent")
+        XCTAssertEqual(compStyleAccentWidth(calloutStyle!), 3.0)
+        XCTAssertEqual(compStyleStrokeWidth(calloutStyle!), 0.0)
+    }
+    
+    private func compStyleAccentWidth(_ style: ComponentStyle) -> Double {
+        style.accentWidth
+    }
+    
+    private func compStyleStrokeWidth(_ style: ComponentStyle) -> Double {
+        style.strokeWidth
+    }
 }

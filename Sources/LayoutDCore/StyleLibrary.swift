@@ -297,9 +297,9 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         fontName: "方正兰亭细黑简体",
         fontSize: 10.5,
         lineHeight: 16,
-        firstLineIndent: 21,
+        firstLineIndent: 0,
         spaceBefore: 0,
-        spaceAfter: 4,
+        spaceAfter: 16,
         compositeFont: [
             .chinese: CompositeFontMapping(fontName: "方正兰亭细黑简体", sizeMultiplier: 1.0, baselineOffset: 0.0),
             .latin: CompositeFontMapping(fontName: "Georgia", sizeMultiplier: 1.05, baselineOffset: 0.0),

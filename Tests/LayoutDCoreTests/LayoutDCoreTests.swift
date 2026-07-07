@@ -1075,7 +1075,8 @@ final class LayoutDCoreTests: XCTestCase {
             columns: 1,
             gutter: 7,
             baselineGrid: 16,
-            facingPages: false
+            facingPages: false,
+            includesTableOfContents: true  // 保留 .sample 的目录布局，页号断言(page4/5)才稳定
         )
         
         var bodyStyle = ParagraphStyle.body
@@ -1120,7 +1121,8 @@ final class LayoutDCoreTests: XCTestCase {
             columns: 1,
             gutter: 7,
             baselineGrid: 16,
-            facingPages: false
+            facingPages: false,
+            includesTableOfContents: true  // 保留 .sample 的目录布局，页号断言(page5)才稳定
         )
         
         var bodyStyle = ParagraphStyle.body
@@ -1200,6 +1202,7 @@ final class LayoutDCoreTests: XCTestCase {
     func testLockedPageRetainsLayoutPlans() {
         var project = BookProject(
             metadata: ProjectMetadata(title: "锁定测试", author: "layoutD"),
+            pageSetup: .scienceBookDefault.withTableOfContents(),  // 测锁页需稳定页号，保留目录布局
             sections: [
                 BookSection(
                     title: "第一章",
@@ -1522,6 +1525,37 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(textFrame.rect.width, 324.41, accuracy: 0.01)
     }
 
+    /// 默认排书规则（用户 2026-07-07 定）：一章一章排版，默认不生成目录页。
+    /// 前置页仅封面 1 页；正文首页从第 3 页移到第 2 页；开启 includesTableOfContents 才回到封面+目录。
+    func testDefaultProjectHasNoTableOfContents() {
+        var project = BookProject(
+            metadata: ProjectMetadata(title: "无目录默认", author: "layoutD"),
+            sections: [
+                BookSection(title: "第一章", stories: [
+                    Story(title: "故事", paragraphs: [
+                        Paragraph(kind: .heading(level: 1), text: "第一章", styleId: StyleID.heading1.rawValue),
+                        Paragraph(kind: .body, text: "正文段落。", styleId: StyleID.body.rawValue)
+                    ])
+                ])
+            ]
+        )
+        XCTAssertFalse(project.pageSetup.includesTableOfContents, "默认 PageSetup 不应含目录")
+        let noToc = LayoutEngine().layout(project: project)
+        XCTAssertFalse(
+            noToc.pages.contains { $0.frames.contains { $0.content == .text("目录") } },
+            "默认不应生成目录页"
+        )
+        XCTAssertEqual(noToc.pages.first?.number, 1, "第 1 页仍是封面")
+        // 开启后回到封面+目录两页前置。
+        project.pageSetup.includesTableOfContents = true
+        let withToc = LayoutEngine().layout(project: project)
+        XCTAssertTrue(
+            withToc.pages.contains { $0.frames.contains { $0.content == .text("目录") } },
+            "开启后应生成目录页"
+        )
+        XCTAssertEqual(withToc.pages.count, noToc.pages.count + 1, "目录使总页数 +1")
+    }
+
     func testFootnotesAndMarginalNotesLayout() {
         let markdown = """
         ---
@@ -1574,10 +1608,12 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertEqual(sideNoteParagraphs.count, 1)
         
         let document = LayoutEngine().layout(project: project)
-        XCTAssertGreaterThanOrEqual(document.pages.count, 3)
-        
-        let page = document.pages[2]
-        
+        // Markdown 导入默认不含目录（用户 2026-07-07 定）：前置页只有封面 1 页，
+        // 正文首页从第 3 页移到第 2 页（index 1）。
+        XCTAssertGreaterThanOrEqual(document.pages.count, 2)
+
+        let page = document.pages[1]
+
         let footnoteFrames = page.frames.filter { $0.kind == PageFrameKind.footnote }
         XCTAssertEqual(footnoteFrames.count, 2)
         
@@ -1821,7 +1857,8 @@ final class LayoutDCoreTests: XCTestCase {
         
         XCTAssertFalse(document.pages.isEmpty)
         
-        let contentPages = document.pages.filter { $0.number > 2 }
+        // 默认不含目录：前置页仅封面 1 页，正文自第 2 页起（number > 1）。
+        let contentPages = document.pages.filter { $0.number > 1 }
         XCTAssertFalse(contentPages.isEmpty)
         
         for page in contentPages {

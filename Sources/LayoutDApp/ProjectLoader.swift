@@ -30,6 +30,8 @@ struct LoadedProject {
     var exportPDFFlowURL: URL?
     var exportPNGFlowDirectoryURL: URL?
     var exportIDMLFacing: Bool = false
+    var renderSamplesPaths: [String]?
+    var renderSamplesChapterPath: String?
 }
 
 struct ProjectLoader {
@@ -74,7 +76,9 @@ struct ProjectLoader {
                 pdfxVersion: options.pdfxVersion,
                 exportPDFFlowURL: options.exportPDFFlowPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                exportIDMLFacing: options.idmlFacing
+                exportIDMLFacing: options.idmlFacing,
+                renderSamplesPaths: options.renderSamplesPaths,
+                renderSamplesChapterPath: options.renderSamplesChapterPath
             )
         }
 
@@ -113,7 +117,9 @@ struct ProjectLoader {
                 pdfxVersion: options.pdfxVersion,
                 exportPDFFlowURL: options.exportPDFFlowPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                exportIDMLFacing: options.idmlFacing
+                exportIDMLFacing: options.idmlFacing,
+                renderSamplesPaths: options.renderSamplesPaths,
+                renderSamplesChapterPath: options.renderSamplesChapterPath
             )
         } catch {
             var project = BookProject.sample
@@ -166,7 +172,9 @@ struct ProjectLoader {
                 pdfxVersion: options.pdfxVersion,
                 exportPDFFlowURL: options.exportPDFFlowPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 exportPNGFlowDirectoryURL: options.exportPNGFlowDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL },
-                exportIDMLFacing: options.idmlFacing
+                exportIDMLFacing: options.idmlFacing,
+                renderSamplesPaths: options.renderSamplesPaths,
+                renderSamplesChapterPath: options.renderSamplesChapterPath
             )
         }
     }
@@ -399,6 +407,8 @@ private struct CommandLineOptions {
     var pdfxVersion: PDFXVersion = .none
     var exportPDFFlowPath: String?
     var exportPNGFlowDirectoryPath: String?
+    var renderSamplesPaths: [String]?
+    var renderSamplesChapterPath: String?
 
     init(arguments: [String]) {
         var positionalArguments: [String] = []
@@ -448,6 +458,27 @@ private struct CommandLineOptions {
             if argument == "--help" || argument == "-h" {
                 showHelp = true
                 index += 1
+                continue
+            }
+
+            if argument == "--render-samples" {
+                var paths: [String] = []
+                index += 1
+                while index < arguments.count {
+                    let nextArg = arguments[index]
+                    if nextArg.hasPrefix("-") {
+                        break
+                    }
+                    paths.append(nextArg)
+                    index += 1
+                }
+                renderSamplesPaths = paths
+                continue
+            }
+
+            if argument == "--chapter", index + 1 < arguments.count {
+                renderSamplesChapterPath = arguments[index + 1]
+                index += 2
                 continue
             }
 

@@ -3,6 +3,40 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 13:24 | claude | SAMPLE-1 重做版审核合 dev，规范包三件套全部落地。AG 已自觉领打回、基于 Codex 的 parseSpecPack 重做为 feature/ag
+- **分支**：dev
+- **概述**：SAMPLE-1 重做版审核合 dev，规范包三件套全部落地。AG 已自觉领打回、基于 Codex 的 parseSpecPack 重做为 feature/ag-sample-1-v2（10550c6），铁律全守：①并行 SpecPack.swift 已删、解析只走 StyleBaselineImporter.parseSpecPack（唯一事实源）；②新建共享 BookProject.applySpecPack(_:)（LayoutDImport/BookProject+Tokens.swift），AppState.applyImportedTokens 减105行改为委托它（单一应用路径，不再第三份）；③补齐 SPEC-PACK-1 没做的视觉三项=字体族(fontResolutions→复合中/西/数字)+角色色/装饰点缀色+开本trim(page.width/height)；④不支持字段打 stderr 不静默。实测：swift test 291、桌面3份规范包一条命令出3份视觉可区分PDF（md5各异）。合并提交 d85a730。PDF「重跑确定性」按用户拍板走方式1（内容级+掩码探针，见 DECISIONS 13:23）：Quartz每份PDF盖秒级CreationDate/ModDate+随机ID、字节永不复现且属平台行为，故不改PDF字节，改为 review-idml.sh 加 2g 掩码确定性探针（导出两次抹掉这三项后断言逐字节一致，已自证有效），探针13→14。QUEUE 已标 SAMPLE-1 [x]。
+- **改动文件**：scripts/review-idml.sh（+2g探针）, .ai/QUEUE.md, .ai/DECISIONS.md, .ai/HANDOFF.md；合并带入 Sources/LayoutDImport/BookProject+Tokens.swift(新), Sources/LayoutDImport/StyleBaselineImporter.swift, Sources/LayoutDApp/{main,ProjectLoader,AppState}.swift, Tests/LayoutDAppTests/StyleImportTests.swift
+- **检查**：dev: swift test 291 tests 0 failures; review-idml.sh 14/14 PASS（新增 2g SAMPLE-1 掩码确定性，自证未掩码≠/掩码后=）。合并提交 d85a730（AG SAMPLE-1 v2）；探针+QUEUE 提交 0c31ad5；决策提交已落。dev 未 push（本地集成区）。
+- **下一步**：规范包路线三件套齐（FIXTURE-1✅ + SPEC-PACK-1✅ + SAMPLE-1✅ 全在 dev）。下一步交用户终验：跑 `swift run layoutD -- --render-samples ~/Desktop/layoutD-规范包测试/方案A-探索黄.json 方案B 方案C --chapter Samples/fixture-standard-chapter.md`，桌面已生成 layoutD-样张-方案A/B/C.pdf，请用户肉眼比选/确认视觉规范应用正确（点缀色/字体/开本）→ OK 则 Claude 合 dev→main。⚠️ 待清理：AG 首版分支 feature/ag-sample-1（299450b，废弃）+ 其 worktree 仍停在旧分支；v2 曾被 checkout 到主仓库工作副本（已切回 dev）。⚠️ 提醒 Codex：v2 为拿 roleColors 直接改了 StyleBaselineImporter.swift(+58, Codex道)，已合、能跑，后续该类字段扩展回归 Codex 维护。未跟踪 layoutD-icon.png 与本次无关。
+
+## 2026-07-07 12:58 | claude | 集成规范包路线两道成果。① SPEC-PACK-1（Codex）审核合 dev（合并提交 1d354c5，含 a7ce358/70a49fd）：StyleBas
+- **分支**：dev
+- **概述**：集成规范包路线两道成果。① SPEC-PACK-1（Codex）审核合 dev（合并提交 1d354c5，含 a7ce358/70a49fd）：StyleBaselineImporter.parseSpecPack(jsonData:)→SpecPackImportResult{tokens,unsupportedFields,fontResolutions}，支持 meta/page/fonts/colors/roles/vertical，CoreText 校验字体、非法样例带 JSON path 报错、docs/spec-pack-guide.md 指南。dev 全绿：swift test 290、review-idml.sh 13/13。② SAMPLE-1（AG，feature/ag-sample-1 299450b）**未合、打回重做**：AG 首版自建了并行的 Sources/LayoutDImport/SpecPack.swift（独立解析+toBookProjectUpdates），与 Codex 的 parseSpecPack 在同模块重复解析同样 3 份 JSON。用户拍板收敛到单一解析器（Codex 版为事实源），已 record_decision。关键发现：parseSpecPack 只产出/校验 DesignTokens，未落地字体族/点缀色/开本 trim；applyImportedTokens 也只覆盖 margins/columns/grid/字号/行距/缩进/段距——AG 首版恰好补了字体/色/开本应用（样张视觉区分方案A/B/C 的关键），这才是 SAMPLE-1 重做的真正价值。QUEUE 已把 SPEC-PACK-1 标 [x]、SAMPLE-1 重写成详细打回条目。
+- **改动文件**：.ai/QUEUE.md, .ai/DECISIONS.md, .ai/HANDOFF.md（+ 合并带入 Sources/LayoutDImport/StyleBaselineImporter.swift, Tests/LayoutDImportTests/StyleBaselineImporterSpecPackTests.swift, docs/spec-pack-guide.md）
+- **检查**：dev: swift test 290 tests 0 failures; review-idml.sh 13/13 PASS。合并提交 1d354c5（Codex SPEC-PACK-1）；文档提交 932ae99。AG 的 feature/ag-sample-1 未合并、保留其分支/worktree 供参考。
+- **下一步**：AG：从最新 dev 起新分支重做 SAMPLE-1（详见 QUEUE 打回条目）——① 解析只走 StyleBaselineImporter.parseSpecPack（禁止再建 SpecPack.swift，删除首版的 SpecPack.swift + SpecPackTests.swift）；② token 应用抽成不依赖 AppState 的共享函数（放 LayoutDCore/LayoutDImport，别复制第三份 applyImportedTokens）；③ 补齐 token 未覆盖的字体族/点缀色/开本 trim 应用（本任务真正价值）；④ --chapter 默认指 Samples/fixture-standard-chapter.md（FIXTURE-1 已就绪）。验收=3 份桌面规范包出 3 份视觉可区分 PDF、无 tofu、确定性一致、PDF 不进仓库。Codex：若 AG 反馈 parseSpecPack 缺字段，在 StyleBaselineImporter 补，不要 App 层另起。dev 未 push（本地集成区）。
+
+## 2026-07-07 12:29 | claude | FIXTURE-1 标准样章 fixture 完成。新增 Samples/fixture-standard-chapter.md（《深海不是黑暗的尽头》，Mar
+- **分支**：dev
+- **概述**：FIXTURE-1 标准样章 fixture 完成。新增 Samples/fixture-standard-chapter.md（《深海不是黑暗的尽头》，Markdown 角色标签格式走现有导入器），覆盖全部角色：章名/节名/文章名/开节概述/正文/抽言/图注/引文/图片占位（+参考文献），每个至少一次。配 FixtureStandardChapterTests（3 测）：从 #filePath 推算样章路径（不硬编码绝对路径，避 CI 失效），断言每角色→正确段落种类/命名样式、标签字面不漏进正文、front matter 不泄漏。全链路自验：导入→初排→PDF(267KB)+IDML(22KB) 均导出成功；解包确认 IDML 含全部中文命名样式（含 图注）且 Story 无「一级标题/开节概述/抽言/参考文献」等标签字面泄漏。提交 eeb2a7a → 合 dev（--no-ff 1197b03）→ QUEUE 记录 5e123f5。
+- **改动文件**：Samples/fixture-standard-chapter.md, Tests/LayoutDImportTests/FixtureStandardChapterTests.swift, .ai/QUEUE.md
+- **检查**：test: pass (Executed 286 tests, 0 failures，+3 新测); review-idml.sh: PASS 13/13; 端到端: fixture → --export-pdf / --export-idml 均成功、IDML 解包中文样式齐全无泄漏。commit eeb2a7a，合 dev 1197b03，QUEUE 记录 5e123f5。
+- **下一步**：FIXTURE-1 就绪，SAMPLE-1（AG 道）的固定输入依赖已解除——AG 的 --render-samples CLI 直接把 --chapter 指向 Samples/fixture-standard-chapter.md 即可。规范包三任务剩：SPEC-PACK-1（Codex 道，schema 以桌面 3 份真实 JSON 校准，仍待做）；SAMPLE-1（AG 道，SPEC-PACK-1 + FIXTURE-1 两依赖现只差 SPEC-PACK-1，可先用现有 DTCG token 搭 CLI 骨架并接入本样章过渡）。三者齐后用方案A JSON 重跑出真样张 PDF 交用户终验。注：dev 未 push（本地集成区）；layoutD-icon.png 仍是未跟踪文件，与本次无关。
+## 2026-07-07 06:32 | codex | 完成 SPEC-PACK-1：layoutD 视觉规范包 schema 导入、校验与指南
+- **分支**：feature/codex-spec-pack-1
+- **概述**：实现规范包格式自动识别（`ImportFormat.specPack`）与专用 `parseSpecPack` 入口，支持 `meta/page/fonts/colors/roles/vertical` 顶层格式；页面毫米值转换为 point token，角色中文名映射到现有段落样式 token（章名/节名/正文/抽言/图注/开节概述/引文），字体别名走批准映射并用 CoreText 校验真实已安装字体，装饰/复杂版式字段进入 `unsupportedFields` 明确上报而非静默忽略。新增规范包编写指南，说明字段、单位、合法值、字体别名和当前未落地字段。新增 `StyleBaselineImporterSpecPackTests`：桌面 `~/Desktop/layoutD-规范包测试/` 三份 JSON 存在时全部实际导入；另覆盖 10 个典型非法样例，错误信息带 JSON path。
+- **改动文件**：Sources/LayoutDImport/StyleBaselineImporter.swift；Tests/LayoutDImportTests/StyleBaselineImporterSpecPackTests.swift；docs/spec-pack-guide.md
+- **检查**：`swift test --filter StyleBaselineImporterSpecPackTests` PASS（含桌面方案A/B/C 导入）；`swift test` PASS（287 tests, 0 failures）；`bash scripts/review-idml.sh` PASS（13/13，golden 逐字节一致）。代码提交：`a7ce358 feat(import): support layoutD spec packs`
+- **下一步**：Claude 可审核并合入 dev；AG 的 SAMPLE-1 可以调用 `StyleBaselineImporter.parseSpecPack(jsonData:)` 取得 `DesignTokens`、字体解析结果和 unsupported 字段清单，再接标准样章批量渲 PDF。当前规范包只输出 token/校验结果，尚未自动把字体族写入 `StyleLibrary` 实体样式，后续样张 CLI 如需“规范包字体立即生效”，应在应用 token 时同步应用 `fontResolutions`。
+
+## 2026-07-07 06:22 | claude | 用户拍板：规范包测试三套变体中选定「方案A · 探索黄（杂志感）」为样张基准。已 record_decision（规范包路线定案 + 方案A 基准）并把三个落地
+- **分支**：dev
+- **概述**：用户拍板：规范包测试三套变体中选定「方案A · 探索黄（杂志感）」为样张基准。已 record_decision（规范包路线定案 + 方案A 基准）并把三个落地任务排入 QUEUE：SPEC-PACK-1（Codex 道，最高优先，schema 须以桌面 3 份真实 JSON 为样例校准）、FIXTURE-1（Claude 道，标准样章）、SAMPLE-1（AG 道，依赖前两者，可先搭 CLI 骨架）。已提交 97891f6 docs(queue+decisions)。注意：存在并发对话（08634e8 于 06:19 提交了 GOLDEN-GUARD/SPLIT-EXPORT 记录），本次改动叠于其上，无冲突。
+- **改动文件**：.ai/QUEUE.md, .ai/DECISIONS.md
+- **检查**：docs-only 改动，未跑构建/测试；commit 97891f6
+- **下一步**：Codex 领 SPEC-PACK-1（读 ~/Desktop/layoutD-规范包测试/ 三份 JSON 作 schema 样例）；Claude 下棒做 FIXTURE-1；AG 在依赖就绪后做 SAMPLE-1。三者齐后用方案A JSON 重跑本次测试出真样张 PDF 给用户终验。
+
 ## 2026-07-07 06:19 | claude | 三项落地：③仓库小扫除（删10本地+8远端已合并分支、清2个残留shapes worktree；AG/Codex副本还停在旧feature分支、各锁1个待删分支
 - **分支**：dev
 - **概述**：三项落地：③仓库小扫除（删10本地+8远端已合并分支、清2个残留shapes worktree；AG/Codex副本还停在旧feature分支、各锁1个待删分支；根目录layoutD-icon.png为低配重复版待用户定夺）+ relay run_checks修复（server.py正则捞XCTest汇总行，重启生效）；④GOLDEN-GUARD防漂移护栏（c311fc7：golden-update.sh强制--reason+GOLDEN-LOG.md留痕+强制看diff+拒绝空刷；review-idml.sh本地自动带golden-check，探针12→13，三路径自证）；⑤SPLIT-EXPORT（87f2dfb：IDMLExporter 1563行拆7文件，纯搬家，排序diff零行丢失）。已合dev(10c0d0b)。过程发现并发对话在同一checkout写handoff（N1场景），本会话改在专属worktree作业。

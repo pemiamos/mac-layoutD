@@ -31,6 +31,9 @@ public struct PageSetup: Codable, Equatable, Sendable {
     public var facingPages: Bool
     public var bleedMM: Double?
     public var layoutDirection: LayoutDirection
+    /// 是否自动生成目录页。默认 `false`（用户 2026-07-07 定：一章一章排版，默认不加目录）。
+    /// 需要整书目录时显式置 true。附加字段：旧 `.layoutd` 缺此键解码为 false。
+    public var includesTableOfContents: Bool
     /// Output color intent (global RGB/CMYK switch). Optional & additive: old
     /// `.layoutd` files decode with `colorSpace == nil` → treated as `.rgb`.
     public var colorSpace: LayoutColorSpace?
@@ -51,6 +54,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         facingPages: Bool,
         bleedMM: Double? = 3.0,
         layoutDirection: LayoutDirection = .horizontal,
+        includesTableOfContents: Bool = false,
         colorSpace: LayoutColorSpace? = nil,
         marginTopToken: String? = nil,
         marginRightToken: String? = nil,
@@ -68,6 +72,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.facingPages = facingPages
         self.bleedMM = bleedMM
         self.layoutDirection = layoutDirection
+        self.includesTableOfContents = includesTableOfContents
         self.colorSpace = colorSpace
         self.marginTopToken = marginTopToken
         self.marginRightToken = marginRightToken
@@ -79,7 +84,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case pageSize, margins, columns, gutter, baselineGrid, facingPages, bleedMM, layoutDirection, colorSpace
+        case pageSize, margins, columns, gutter, baselineGrid, facingPages, bleedMM, layoutDirection, includesTableOfContents, colorSpace
         case marginTopToken, marginRightToken, marginBottomToken, marginLeftToken
         case columnsToken, gutterToken, baselineGridToken
     }
@@ -94,6 +99,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.facingPages = try container.decode(Bool.self, forKey: .facingPages)
         self.bleedMM = try container.decodeIfPresent(Double.self, forKey: .bleedMM) ?? 3.0
         self.layoutDirection = try container.decodeIfPresent(LayoutDirection.self, forKey: .layoutDirection) ?? .horizontal
+        self.includesTableOfContents = try container.decodeIfPresent(Bool.self, forKey: .includesTableOfContents) ?? false
         self.colorSpace = try container.decodeIfPresent(LayoutColorSpace.self, forKey: .colorSpace)
         self.marginTopToken = try container.decodeIfPresent(String.self, forKey: .marginTopToken)
         self.marginRightToken = try container.decodeIfPresent(String.self, forKey: .marginRightToken)
@@ -114,6 +120,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
         try container.encode(facingPages, forKey: .facingPages)
         try container.encodeIfPresent(bleedMM, forKey: .bleedMM)
         try container.encode(layoutDirection, forKey: .layoutDirection)
+        try container.encode(includesTableOfContents, forKey: .includesTableOfContents)
         try container.encodeIfPresent(colorSpace, forKey: .colorSpace)
         try container.encodeIfPresent(marginTopToken, forKey: .marginTopToken)
         try container.encodeIfPresent(marginRightToken, forKey: .marginRightToken)
@@ -142,6 +149,13 @@ public struct PageSetup: Codable, Equatable, Sendable {
         baselineGridToken: "page.baselineGrid"
     )
 
+    /// 返回开启目录页的副本（整书场景显式启用；默认不含目录）。
+    public func withTableOfContents(_ enabled: Bool = true) -> PageSetup {
+        var copy = self
+        copy.includesTableOfContents = enabled
+        return copy
+    }
+
     public func resolved(using tokens: DesignTokens) -> PageSetup {
         PageSetup(
             pageSize: pageSize,
@@ -157,6 +171,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
             facingPages: facingPages,
             bleedMM: bleedMM,
             layoutDirection: layoutDirection,
+            includesTableOfContents: includesTableOfContents,
             colorSpace: colorSpace,
             marginTopToken: marginTopToken,
             marginRightToken: marginRightToken,

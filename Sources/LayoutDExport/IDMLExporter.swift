@@ -133,9 +133,10 @@ public struct IDMLExporter {
         var flowUnitsForSection: [Int: [SectionPageKey]] = [:] // sectionIndex -> 该章流经的(页,栏)（去重，出现顺序）
         var rectForSectionPage: [SectionPageKey: Rect] = [:]
         var nextOrphanSectionIndex = 0
-        // 2 = LayoutEngine.frontMatterPageCount（封面+目录）；该私有常量不跨模块导出，
-        // 这里保持同步的字面量副本——前置页天然不参与章串接。
-        for (pi, page) in pages.enumerated() where page.number > 2 {
+        // 前置页数与 LayoutEngine.frontMatterPageCount(for:) 保持一致：封面恒 1 页，
+        // 目录仅在 includesTableOfContents 时 +1（默认关）。前置页天然不参与章串接。
+        let frontMatterPages = project.pageSetup.includesTableOfContents ? 2 : 1
+        for (pi, page) in pages.enumerated() where page.number > frontMatterPages {
             for (fi, frame) in page.frames.enumerated() {
                 guard frame.kind == .text, case .text(let raw) = frame.content,
                       !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }

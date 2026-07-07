@@ -136,7 +136,7 @@ extension IDMLExporter {
             let applied = isComposite ? "CF_\(xmlSafe(style.id))" : famFallback
             let fontStyleAttr = isComposite ? "" : " FontStyle=\"\(esc(styleFallback))\""
             paras += """
-            \t\t<ParagraphStyle Self="ParagraphStyle/\(xmlSafe(style.id))" Imported="false" Name="\(esc(style.displayName))" PointSize="\(fmt(style.fontSize))" Leading="\(fmt(style.lineHeight))" FirstLineIndent="\(fmt(style.firstLineIndent))" SpaceBefore="\(fmt(style.spaceBefore))" SpaceAfter="\(fmt(style.spaceAfter))" FillColor="\(fill)"\(fontStyleAttr) Composer="\(composer)" Justification="LeftJustified" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="\(mojikumiTableSelf)">
+            \t\t<ParagraphStyle Self="ParagraphStyle/\(xmlSafe(style.id))" Imported="false" Name="\(esc(style.displayName))" PointSize="\(fmt(style.fontSize))" Leading="\(fmt(style.lineHeight))" FirstLineIndent="\(fmt(style.firstLineIndent))" SpaceBefore="\(fmt(style.spaceBefore))" SpaceAfter="\(fmt(style.spaceAfter))" FillColor="\(fill)"\(fontStyleAttr) Composer="\(composer)" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="\(mojikumiTableSelf)">
             \t\t\t<Properties>
             \t\t\t\t<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
             \t\t\t\t<PreviewColor type="enumeration">Nothing</PreviewColor>
@@ -180,7 +180,7 @@ extension IDMLExporter {
         <idPkg:Preferences \(pkgNS) DOMVersion="\(dom)">
         \t<DocumentPreference PageHeight="\(fmt(pageH))" PageWidth="\(fmt(pageW))" PagesPerDocument="1" FacingPages="\(facing)" DocumentBleedTopOffset="0" DocumentBleedBottomOffset="0" DocumentBleedInsideOrLeftOffset="0" DocumentBleedOutsideOrRightOffset="0" DocumentBleedUniformSize="true" SlugTopOffset="0" SlugBottomOffset="0" SlugInsideOrLeftOffset="0" SlugRightOrOutsideOffset="0" DocumentSlugUniformSize="false" PreserveLayoutWhenShuffling="true" AllowPageShuffle="true" OverprintBlack="true" PageBinding="LeftToRight" ColumnDirection="Horizontal" SpreadHiddenVisibility="false" Intent="PrintIntent" CreatePrimaryTextFrame="false" ColumnGuideLocked="true" MasterTextFrame="false" SnippetImportUsesOriginalLocation="false"/>
         \t<ViewPreference HorizontalMeasurementUnits="Points" VerticalMeasurementUnits="Points" RulerOrigin="PageOrigin"/>
-        \t<TextDefault Composer="\(composer)" AppliedLanguage="$ID/Chinese: Simplified" KinsokuType="KinsokuPushInFirst" GridAlignment="AlignAllLinesToGrid" GridAlignFirstLineOnly="false" Mojikumi="\(mojikumiTableSelf)"/>
+        \t<TextDefault Composer="\(composer)" AppliedLanguage="$ID/Chinese: Simplified" KinsokuType="KinsokuPushInFirst" GridAlignment="None" Mojikumi="\(mojikumiTableSelf)"/>
         </idPkg:Preferences>
         """
     }
