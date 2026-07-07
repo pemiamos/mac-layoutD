@@ -400,7 +400,9 @@ public struct PDFExporter {
             )
         )
 
-        for frame in page.frames {
+        let underlays = page.frames.filter { $0.isUnderlay }
+        let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+        for frame in underlays + nonUnderlays {
             draw(frame: frame, pageNumber: page.number, project: project, in: context, pageHeight: CGFloat(pageSize.height), bleedPoints: bleedPoints)
         }
 

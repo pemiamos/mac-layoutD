@@ -119,6 +119,9 @@ extension LayoutContext {
         pages.append(currentPage)
         let newPageNumber = pages.count + 1
         currentPage = LaidOutPage(number: newPageNumber)
+        if let deferred = deferredUnderlayFrames[newPageNumber] {
+            currentPage.frames.append(contentsOf: deferred)
+        }
         currentColumn = 0
         let absPageNum = absolutePageNumber(for: newPageNumber)
         let margins = project.resolvedMargins(for: absPageNum)

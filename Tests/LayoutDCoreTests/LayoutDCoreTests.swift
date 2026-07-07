@@ -2104,6 +2104,75 @@ extension LayoutDCoreTests {
         ]
         XCTAssertTrue(distributedOrigins(frames: frames, mode: .horizontalCenters).isEmpty)
     }
+
+    func testUnderlayAssetBypassesLayoutCursorAndWrap() throws {
+        let asset = Asset(fileName: "bg.png", role: .photo, pixelWidth: 100, pixelHeight: 100, wrapMode: .underlay)
+        let paragraph = Paragraph(
+            kind: .body,
+            text: "第一段正文，应该很长很长。第二段正文，应该很长很长。这是压在底图上的正文，它不应该避让图片，因为图片是underlay底图。",
+            styleId: StyleID.body.rawValue,
+            anchoredAssetIds: [asset.id]
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "底图测试", author: "Antigravity"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])],
+            assets: [asset]
+        )
+        
+        let doc = LayoutEngine().layout(project: project)
+        XCTAssertEqual(doc.pages.count, 2)
+        let frames = doc.pages[1].frames
+        
+        // Find image frame and text frame
+        let imgFrame = try XCTUnwrap(frames.first(where: { $0.kind == .image }))
+        let textFrame = try XCTUnwrap(frames.first(where: { $0.kind == .text }))
+        
+        // Image frame should have wrapMode == .underlay
+        XCTAssertEqual(imgFrame.wrapMode, .underlay)
+        XCTAssertTrue(imgFrame.isUnderlay)
+        
+        // Text frame should NOT have exclusionRects (because underlay bypasses layout rect exclusions)
+        XCTAssertNil(textFrame.exclusionRects)
+        
+        // Verify rendering partition (underlays before non-underlays)
+        let underlays = frames.filter { $0.isUnderlay }
+        let nonUnderlays = frames.filter { !$0.isUnderlay }
+        XCTAssertTrue(underlays.contains(imgFrame))
+        XCTAssertTrue(nonUnderlays.contains(textFrame))
+    }
+
+    func testUnderlaySpreadAssetDoesNotAdvancePage() throws {
+        let asset = Asset(fileName: "bg_spread.png", role: .spread, pixelWidth: 200, pixelHeight: 100, wrapMode: .underlay)
+        let paragraph = Paragraph(
+            kind: .body,
+            text: "第一段正文",
+            styleId: StyleID.body.rawValue,
+            anchoredAssetIds: [asset.id]
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "底图对开测试", author: "Antigravity"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])],
+            assets: [asset]
+        )
+        
+        let doc = LayoutEngine().layout(project: project)
+        let frames = doc.pages.flatMap(\.frames)
+        let leftSpreadFrames = frames.filter {
+            if case .spreadAsset(_, let isLeft) = $0.content { return isLeft }
+            return false
+        }
+        let rightSpreadFrames = frames.filter {
+            if case .spreadAsset(_, let isLeft) = $0.content { return !isLeft }
+            return false
+        }
+        
+        XCTAssertEqual(leftSpreadFrames.count, 1)
+        XCTAssertEqual(rightSpreadFrames.count, 1)
+        
+        // Verify wrapMode is set
+        XCTAssertEqual(leftSpreadFrames.first?.wrapMode, .underlay)
+        XCTAssertEqual(rightSpreadFrames.first?.wrapMode, .underlay)
+    }
 }
 
 private struct FailingPlanProvider: LayoutPlanProvider {

@@ -174,7 +174,9 @@ extension CanvasView {
             drawGuides(project: project, pageRect: pageRect, pageNumber: page.number)
         }
 
-        for frame in page.frames {
+        let underlays = page.frames.filter { $0.isUnderlay }
+        let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+        for frame in underlays + nonUnderlays {
             draw(frame: frame, project: project, pageRect: pageRect)
         }
 
@@ -636,7 +638,7 @@ extension CanvasView {
         rect: CGRect,
         kind: PageFrameKind,
         textColorOverride: NSColor? = nil,
-        applyDefaultInset: Bool = true,
+        applyDefaultInset: Bool = false,
         sourceParagraphId: UUID? = nil,
         tableOfContentsEntries: [TableOfContentsEntry]? = nil,
         exclusionRects: [Rect]? = nil,

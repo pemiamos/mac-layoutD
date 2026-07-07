@@ -170,7 +170,9 @@ public struct PNGExporter {
         context.setFillColor(NSColor.white.cgColor)
         context.fill(CGRect(x: 0, y: 0, width: pageSize.width, height: pageSize.height))
 
-        for frame in page.frames {
+        let underlays = page.frames.filter { $0.isUnderlay }
+        let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+        for frame in underlays + nonUnderlays {
             draw(frame: frame, pageNumber: page.number, project: project, in: context, bleedPoints: bleedPoints)
         }
 
@@ -308,7 +310,7 @@ public struct PNGExporter {
                     styleId: frame.styleId,
                     kind: frame.kind,
                     project: project,
-                    in: rect.insetBy(dx: 4, dy: 2),
+                    in: rect,
                     context: context,
                     textColorHex: frame.textColorHex,
                     sourceParagraphId: frame.sourceParagraphId,
