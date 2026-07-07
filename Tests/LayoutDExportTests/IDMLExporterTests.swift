@@ -354,8 +354,8 @@ final class IDMLExporterTests: XCTestCase {
         }
         XCTAssertFalse(stories.contains("名称    功能"), "不得残留 4 空格拍平的裸文字")
         // 单元格须左对齐且去掉正文首行缩进，否则窄列里文字被推到右边、参差不齐。
-        XCTAssertEqual(matches(in: stories, pattern: "(Justification=\"LeftJustified\")").count, 6,
-                       "每个单元格段落须左对齐")
+        XCTAssertEqual(matches(in: stories, pattern: "(Justification=\"LeftAlign\")").count, 6,
+                       "每个单元格段落须左对齐（LeftAlign 真左对齐，非 LeftJustified 两端对齐）")
         XCTAssertEqual(matches(in: stories, pattern: "(FirstLineIndent=\"0\")").count, 6,
                        "每个单元格段落须去掉首行缩进")
     }

@@ -310,7 +310,7 @@ extension IDMLExporter {
                 let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: runs)
                 cellsXML.append("""
                 \t\t\t\t\t<Cell Self="\(tableSelf)Cell\(c)_\(r)" Name="\(c):\(r)" RowSpan="1" ColumnSpan="1" AppliedCellStyle="CellStyle/$ID/[None]"\(fillAttr) \(border)>
-                \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" FirstLineIndent="0" Justification="LeftJustified">
+                \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" FirstLineIndent="0" Justification="LeftAlign">
                 \(cellBody)
                 \t\t\t\t\t\t</ParagraphStyleRange>
                 \t\t\t\t\t</Cell>
