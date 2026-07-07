@@ -65,12 +65,6 @@
 > **2026-07-06 定位校准（见 DECISIONS）**：layoutD 交付「初排灌版」给 InDesign，不替代 InDesign。开发价值标准 = 文流/样式/视觉规范/CMYK 高完成度迁移进 InDesign、给人工调整省时间。可编辑性 > 逐像素冻结（InDesign 里漂移可人工调校）。脚注/傍点/表格深化 = 初排细枝末节，不再投入。
 > **2026-07-07 规范包路线定案（见 DECISIONS）**：视觉规范/样张走「AI 生成规范包 JSON → layoutD 渲样张 → 人工比选 → 同一规范直通 IDML」。首测已过：`~/Desktop/layoutD-规范包测试/` 有 3 份规范包 JSON（**方案A-探索黄 已选为基准**）+ 视觉预览.html；总纲见桌面《layoutD 视觉规范与样张生成·开发计划 v1.0.pdf》。本批新任务：SPEC-PACK-1（Codex 道）→ FIXTURE-1（Claude 道）→ SAMPLE-1（AG 道，依赖前两个）。
 
-- [ ] **FRAME-CANVAS-0 抽取共享断流分组函数**（2026-07-08 用户定方案 A，**下一棒优先做**——AG 的 FRAME-CANVAS-1 等这个）
-  - 背景：`IDMLExporter.swift` 里「连续正文按断流分组、按 (run,页,栏) 合并 unionRect」的逻辑（`runIndexByParagraphId`/`isBodyFlowParagraph`/`FlowPageKey`，见 FRAME-SPLIT 实现）目前只服务 IDML 导出。画布/PDF/PNG 要「追平 IDML 分框」（AG 道 FRAME-CANVAS-1）得先有同一份分组结果可用，不能各自重新实现一遍断流判定（两套逻辑分裂、以后改一处忘了改另一处）。
-  - 目标：把断流分组抽成一个跨模块共享函数（建议签名类似 `func groupIntoFlowFrames(pages: [LaidOutPage], project: BookProject) -> [FlowFrameGroup]`，`FlowFrameGroup` 含分组后的合并 rect + 组内原始 frame 列表/段落引用），放进 `LayoutDCore` 或新增共享层（不要放только `LayoutDExport`，AG 道的 App/Engine 侧模块要能 import）。`IDMLExporter.swift` 改为调用它（**行为不变**，只是去重复用）。
-  - 验收：抽取后 IDML 导出结果逐字节不变（golden 一致）；全部测试/探针 PASS；共享函数有独立单测覆盖断流边界（标题/抽言/图/表打断正文流的场景）。
-  - 完成后立即更新本文件把 AG 的 FRAME-CANVAS-1 从「⏸ 等前置条件」改成可以开工。
-
 - [x] **FIXTURE-1 标准样章 fixture** — ✅ Claude（`eeb2a7a`，合 dev `1197b03`）。
   - 交付：`Samples/fixture-standard-chapter.md`（Markdown 角色标签格式，走现有导入器）——《深海不是黑暗的尽头》标准样章，覆盖 章名/节名/文章名/开节概述/正文/抽言/图注/引文/图片占位（+参考文献）全部角色，每个至少一次。
   - 回归语料：`Tests/LayoutDImportTests/FixtureStandardChapterTests.swift`（3 测）——从 `#filePath` 推算样章路径（不硬编码绝对路径），断言每个角色→正确段落种类/命名样式、标签字面不漏进正文、front matter 不泄漏。
@@ -150,24 +144,9 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`Sources/LayoutDApp/*`
 > ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）；**生成样张别提交进仓库**（B1 踩过，Claude 合并时剔除了 20 个 PNG/PDF）。
 
-- [ ] **FRAME-INSET-2 预览文字贴框边（追平 IDML InsetSpacing=0）**（2026-07-07 用户验收 FRAME-SPLIT 时提出）
-  - 背景：IDML 侧文字框内边距已归零（InsetSpacing=0，用户 InDesign 验收过文字贴框上/左边缘），但 layoutD 自家三渲染器还各有一份写死的默认内边距——画布 `CanvasView+Drawing.swift:678` `rect.insetBy(dx: 4, dy: 2)`（:721-722 同值），PNG `PNGExporter.swift:311` 同款，PDF 的 drawText 同构——导致预览里文字和框四周有空隙、与 InDesign 不一致（预览≠输出）。
-  - 目标：普通文字框默认内边距归零（贴框上/左边缘）；**组件类**（知识卡片/表格单元格等 componentStyle.textInset 驱动的）保持现状不动。注意验证零内边距下 CoreText 首行/行尾字形不被框边裁切。
-  - 文件：`CanvasView+Drawing.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
-  - 验收：画布/PDF/PNG 三处文字贴框边与 InDesign 一致；组件卡片/表格内边距无回归；全部测试/探针 PASS。
-- [ ] **UNDERLAY-1 垫底图预览/引擎追平**（2026-07-07 FRAME-SPLIT 配套，Claude 已做完 IDML 侧）
-  - 背景：`Asset.wrapMode`（`LayoutDCore/Asset.swift`）新增 `.underlay` 垫底图意图——图+图注组合垫在文字下面作背景，文字直接压图走、不绕排。IDML 导出已落地（TextWrapMode=None + spread 条目置底）；Markdown 语法 `![](img.png "wrap=under")`。
-  - **用户 2026-07-07 验收观察**：InDesign 里垫底图与文字目前并没有真的叠起来——因为引擎排版时仍给图**保留了版面空间**（文字几何上躲开了图），置底/不绕排只解决了叠放层级。所以本任务的「不占版面空间」是让垫底真正生效的关键一步（用户当场表示可接受现状、后期人工改，但引擎修好后就不用人工了）。
-  - 目标：引擎与预览追平——`wrapMode==.underlay` 的图片 ①LayoutEngine 排版时**不占版面空间**（不推进 cursor、不参与 B1 绕排避让），文字照常流；②Canvas/PDF/PNG 三渲染器把它画在文字**下层**（先画图后画字）。默认 `.wrap` 行为不变（占位+绕排）。
-  - 文件：`LayoutEngine+Assets.swift`（或相关放置逻辑）、`CanvasView+Drawing.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
-  - 验收：造 `wrap=under` 样张，PNG 预览可见文字压在图上、图在字下；`.wrap` 图零回归（B1 绕排照旧）；全部测试/探针 PASS。
-- [ ] **FRAME-CANVAS-1 画布/PDF/PNG 追平 IDML 分框（连续正文合并显示）**（2026-07-08 用户验收 FRAME-SPLIT 时提出，**方案 A**，⏸ 等 Claude 先做前置条件）
-  - 背景：FRAME-SPLIT（已合 main）只在 **IDML 导出层**把连续正文合并成一个串接流框（用户 InDesign 验收过）；但 layoutD 引擎产帧仍是「每段落一个 PageFrame」（`LayoutEngine+TextFlow.swift` 的 `placeTextFrame`/`addText` 逐段 append），画布/PDF/PNG 直接画这些原子帧——用户在画布里看到连续正文仍是一段一个虚线框，**预览 ≠ 输出**，达不到「在 layoutD 里编辑也方便」的初衷。
-  - **⏸ 前置条件（Claude 道，另开任务）**：`IDMLExporter.swift` 里的断流分组逻辑（`runIndexByParagraphId` + 按 `(run, 页, 栏)` 合并 `unionRect`，`isBodyFlowParagraph` 断流判定）需要先抽成一个**跨模块共享函数**（建议放 `LayoutDCore` 或新的共享层，输入 `[LaidOutPage]`+`BookProject`，输出「连续正文帧分组」结果），供 IDML 导出器与本任务共同调用——避免两套分组逻辑各自维护、行为分裂。**本任务开工前先确认 Claude 已完成该抽取并合了 dev**，否则会撞车/返工。
-  - 目标（方案 A，已用户拍板，**只做显示/交互聚合层，不改 engine 产帧/override/锁页模型**）：画布对每组连续正文（共享函数分组结果）画**一个合并的虚线框**（组内文字仍逐段渲染，渲染逻辑不用大改）；选中/移动时整组当一个交互单位；PDF/PNG 预览同理只改「画框」这一层。
-  - 明确不做：不要把 engine 改成产出「一个多段落大 frame」（方案 B，高风险大重构，已否决）——PageFrame 仍是原子单位，只是显示层按组聚合。
-  - 文件：`CanvasView+Drawing.swift`、`CanvasView+Interaction.swift`（选中/移动改按组）、`PDFExporter.swift`、`PNGExporter.swift`。
-  - 验收：标准样章画布里，被标题/抽言断开的每段连续正文各显示为一个合并虚线框（不再一段一框）；点击/拖拽整组一起选中移动；单段落属性面板显示仍正确（组内取第一段或提示"多段落"，具体交互细节可自行判断但不能崩溃/误编辑）；全部测试/探针 PASS。
+- [x] **FRAME-INSET-2 预览文字贴框边（追平 IDML InsetSpacing=0）** — ✅ AG（`4f4ff4b`，Claude 审核合 dev `bba4867`）。普通文字框默认内边距归零（`drawText` `applyDefaultInset` 默认改 false）；组件类（知识卡片/表格）走调用方预先按 `componentStyle.textInsetX/Y` 做过的 rect，不受影响（已核对调用点）。画布/PDF/PNG 三处一致。
+- [x] **UNDERLAY-1 垫底图预览/引擎追平** — ✅ AG（`51dcfdc`，Claude 审核合 dev `bba4867`）。`LayoutEngine+Assets.swift` 里 underlay 图片路径完全跳过 cursor 推进/绕排（提前 `return`，不进 `prepareWideAssetPlacement`），`exclusionRects`/`LayoutPlan` 侧同步排除；跨页 spread 底图用 `deferredUnderlayFrames` 处理"图片排到的页面还没生成"的时序、`finish()` 补页逻辑一并接好。三渲染器按 underlay 优先画（图在下字在上）。新增 2 个针对性单测。
+  - 验收：301 测试过、review-idml.sh 14/14、golden 逐字节一致。**审核时剔除**：51dcfdc 里误带进一个与功能无关的 1.8MB `layoutD-icon.png`（早前已知的待定去留文件），合并时已单独 commit(`bba4867`)移除。
 
 - [x] **SAMPLE-1 一键批量样张** — ✅ **重做版**（AG，`feature/ag-sample-1-v2` `10550c6`，Claude 审核合 dev `d85a730`）。首版打回重做（原因见下），v2 全部照做。
   - **交付**：CLI `--render-samples A.json B.json ... --chapter <fixture>`（默认 chapter=`Samples/fixture-standard-chapter.md`）→ 桌面出带方案名的样张 PDF。解析**只走** `StyleBaselineImporter.parseSpecPack`（唯一事实源，首版并行的 `SpecPack.swift` 已删）；新建**共享**应用函数 `BookProject.applySpecPack(_ result:)`（`LayoutDImport/BookProject+Tokens.swift`），`AppState.applyImportedTokens` 减 105 行改为委托它（单一应用路径）；补齐了 SPEC-PACK-1 没做的视觉三项——字体族（`fontResolutions`→复合中/西/数字字体）、角色色 + 装饰点缀色、开本 trim（`page.width/height`→`PageSetup`）；不支持字段打 stderr 告警不静默。
