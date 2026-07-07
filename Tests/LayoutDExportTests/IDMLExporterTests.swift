@@ -761,6 +761,34 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertTrue(spreads.contains("FillColor=\"Color/Black\""), "纯黑 CMYK 底色应引用内建 Black")
     }
 
+    func testTextFrameExportsWithZeroInsetSpacing() throws {
+        let paragraph = Paragraph(kind: .body, text: "测试内边距", styleId: StyleID.body.rawValue)
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "内边距测试", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])]
+        )
+        let frame = PageFrame(
+            kind: .text,
+            rect: Rect(x: 20, y: 30, width: 200, height: 80),
+            styleId: StyleID.body.rawValue,
+            content: .text("测试内边距"),
+            sourceParagraphId: paragraph.id
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-inset-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let spreads = try zipEntries(output).filter { $0.hasPrefix("Spreads/") }
+            .map { try entry(output, $0) }.joined()
+        
+        XCTAssertTrue(spreads.contains("<TextFramePreference"), "应包含 TextFramePreference 节点")
+        XCTAssertTrue(spreads.contains("<InsetSpacing type=\"list\">"), "应包含 InsetSpacing list")
+        XCTAssertTrue(spreads.contains("<ListItem type=\"unit\">0</ListItem>"), "InsetSpacing 包含 0pt 的 ListItem")
+    }
+
     // MARK: - helpers
 
     private func zipEntries(_ url: URL) throws -> [String] {
