@@ -144,8 +144,14 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`Sources/LayoutDApp/*`
 > ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）；**生成样张别提交进仓库**（B1 踩过，Claude 合并时剔除了 20 个 PNG/PDF）。
 
+- [ ] **FRAME-INSET-2 预览文字贴框边（追平 IDML InsetSpacing=0）**（2026-07-07 用户验收 FRAME-SPLIT 时提出）
+  - 背景：IDML 侧文字框内边距已归零（InsetSpacing=0，用户 InDesign 验收过文字贴框上/左边缘），但 layoutD 自家三渲染器还各有一份写死的默认内边距——画布 `CanvasView+Drawing.swift:678` `rect.insetBy(dx: 4, dy: 2)`（:721-722 同值），PNG `PNGExporter.swift:311` 同款，PDF 的 drawText 同构——导致预览里文字和框四周有空隙、与 InDesign 不一致（预览≠输出）。
+  - 目标：普通文字框默认内边距归零（贴框上/左边缘）；**组件类**（知识卡片/表格单元格等 componentStyle.textInset 驱动的）保持现状不动。注意验证零内边距下 CoreText 首行/行尾字形不被框边裁切。
+  - 文件：`CanvasView+Drawing.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
+  - 验收：画布/PDF/PNG 三处文字贴框边与 InDesign 一致；组件卡片/表格内边距无回归；全部测试/探针 PASS。
 - [ ] **UNDERLAY-1 垫底图预览/引擎追平**（2026-07-07 FRAME-SPLIT 配套，Claude 已做完 IDML 侧）
   - 背景：`Asset.wrapMode`（`LayoutDCore/Asset.swift`）新增 `.underlay` 垫底图意图——图+图注组合垫在文字下面作背景，文字直接压图走、不绕排。IDML 导出已落地（TextWrapMode=None + spread 条目置底）；Markdown 语法 `![](img.png "wrap=under")`。
+  - **用户 2026-07-07 验收观察**：InDesign 里垫底图与文字目前并没有真的叠起来——因为引擎排版时仍给图**保留了版面空间**（文字几何上躲开了图），置底/不绕排只解决了叠放层级。所以本任务的「不占版面空间」是让垫底真正生效的关键一步（用户当场表示可接受现状、后期人工改，但引擎修好后就不用人工了）。
   - 目标：引擎与预览追平——`wrapMode==.underlay` 的图片 ①LayoutEngine 排版时**不占版面空间**（不推进 cursor、不参与 B1 绕排避让），文字照常流；②Canvas/PDF/PNG 三渲染器把它画在文字**下层**（先画图后画字）。默认 `.wrap` 行为不变（占位+绕排）。
   - 文件：`LayoutEngine+Assets.swift`（或相关放置逻辑）、`CanvasView+Drawing.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
   - 验收：造 `wrap=under` 样张，PNG 预览可见文字压在图上、图在字下；`.wrap` 图零回归（B1 绕排照旧）；全部测试/探针 PASS。
