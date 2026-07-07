@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-08 04:18 | claude | FRAME-SPLIT 用户 InDesign 验收通过，合 dev(f222031)→main(360b097) 并推送，分支已删。验收结论：分框(标题/概述
+- **分支**：dev
+- **概述**：FRAME-SPLIT 用户 InDesign 验收通过，合 dev(f222031)→main(360b097) 并推送，分支已删。验收结论：分框(标题/概述/抽言/图注各独立框各套样式)、正文断流串接、图文独立两框、绕排图=正文避让——全部 OK；拉大图片文字自动重排也 OK。两处已知待办已登记 AG 道：①FRAME-INSET-2 预览文字贴框边——IDML 侧 InsetSpacing=0 已生效(InDesign 验收过)，但 layoutD 三渲染器(CanvasView+Drawing:678、PNGExporter:311、PDFExporter drawText)各写死 4/2pt 默认内边距，预览≠输出，需归零(组件卡片/表格 componentStyle.textInset 不动)；②UNDERLAY-1 垫底图——IDML 置底+不绕排已做，但引擎排版仍给垫底图保留版面空间致 InDesign 里图文没真叠上(用户可接受现状、后期人工改)，需引擎让 underlay 图不占版面。已用 FRAME-SPLIT 分支构建启动 layoutD GUI(载入标准样章)供用户看画布内边距现状。
+- **改动文件**：(未填)
+- **检查**：合并后 dev 与 main 各重跑 review-idml.sh：295 测试 0 失败、14/14 探针、golden 逐字节一致。
+- **下一步**：(未填)
+
 ## 2026-07-07 23:17 | claude | FRAME-SPLIT 实现完成（feature/claude-frame-split bb20d9d+合并1ff1a51，未合dev，待用户InDesign验
 - **分支**：dev
 - **概述**：FRAME-SPLIT 实现完成（feature/claude-frame-split bb20d9d+合并1ff1a51，未合dev，待用户InDesign验收）。三规则：①一个角色一个框——标题/概述/抽言/图注/参考文献各自独立框各套各样式，只有纯正文(styleId==body)进串接流；②断流——文流遇独立框角色即断，每段连续正文一条串接链(uStoryFlow/uFlowTF 取代按章的 uStoryChapter)；③彻底废除内嵌图锚定(cut2机制删除，绕开锚定文字拉伸bug)。新增 Asset.wrapMode(wrap绕排/underlay垫底=TextWrapMode None+spread置底)，Markdown 语法 wrap=under。已合入 dev 的 InsetSpacing=0（另一对话/AG做的①）。真稿《村落》自检：6条正文流/33独立框(8种角色样式)/流内仅body。UNDERLAY-1(引擎预览垫底追平)已登记AG道。

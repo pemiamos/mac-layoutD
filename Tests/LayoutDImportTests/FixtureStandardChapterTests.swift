@@ -1,4 +1,5 @@
 import LayoutDCore
+import LayoutDEngine
 import LayoutDImport
 import XCTest
 
@@ -33,6 +34,22 @@ final class FixtureStandardChapterTests: XCTestCase {
         XCTAssertEqual(project.metadata.author, "layoutD 示例")
         XCTAssertEqual(project.metadata.isbn, "978-7-115-90001-2")
         XCTAssertFalse(allParagraphs(project).isEmpty, "样章导入后应有正文段落")
+    }
+
+    /// 回归（2026-07-07 用户画布验收发现）：本样章全靠角色标签（无 Markdown `#` 标题），
+    /// `currentSectionTitle` 应保持默认空字符串，`LayoutEngine.addSectionTitle` 对空标题
+    /// 短路——不应在正文最前面多画出一个「正文」空壳标题框（真正的章名标题已由
+    /// 「一级标题/章名」角色段落本身画出）。
+    func testFixtureDoesNotEmitBogusSectionTitleFrame() throws {
+        let project = try importFixture()
+        XCTAssertEqual(project.sections.first?.title, "", "无 # 标题的角色标签样章，section.title 应为空占位")
+
+        let document = LayoutEngine().layout(project: project)
+        let bogusFrames = document.pages.flatMap(\.frames).filter {
+            if case .text("正文") = $0.content { return true }
+            return false
+        }
+        XCTAssertTrue(bogusFrames.isEmpty, "不应画出内容恰为「正文」的空壳标题框")
     }
 
     /// 覆盖 FIXTURE-1 要求的全部角色：章名/节名/文章名/开节概述/正文/抽言/图注/引文/图片占位（+参考文献）。
