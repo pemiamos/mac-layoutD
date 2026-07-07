@@ -223,9 +223,9 @@ else
   bad "DOCX fixture 导出失败（见 $TMP/docx-export.log）"
 fi
 
-# 2f. GUARD-4 串接文流：一章正文合成一个 Story、逐页框 Previous/NextTextFrame 首尾相连
-# （THREAD-1b）。用够长的正文撑出至少 3 页，断言链条完整（能从任一链头走到链尾、
-# 覆盖该 Story 的全部框、无孤儿）、story 数按章计不按段计。
+# 2f. GUARD-4 串接文流：连续纯正文合成一条串接流 Story、逐页框 Previous/NextTextFrame
+# 首尾相连（FRAME-SPLIT：标题/抽言等独立框会断流；60 段连续正文=恰好 1 条流）。
+# 断言链条完整（能从任一链头走到链尾、覆盖该 Story 的全部框、无孤儿）、story 数按流计不按段计。
 THREAD_FIX="$TMP/thread-fixture.md"
 python3 - "$THREAD_FIX" <<'PY'
 import sys
@@ -246,15 +246,15 @@ root = sys.argv[1]
 
 designmap = open(os.path.join(root, "designmap.xml"), encoding="utf-8").read()
 story_list = re.search(r'StoryList="([^"]*)"', designmap).group(1).split()
-chapter_stories = [s for s in story_list if s.startswith("uStoryChapter")]
+chapter_stories = [s for s in story_list if s.startswith("uStoryFlow")]
 
 spreads = "\n".join(open(f, encoding="utf-8").read() for f in glob.glob(os.path.join(root, "Spreads", "*.xml")))
 frames = re.findall(
-    r'<TextFrame Self="(uChapterTF[^"]*)" ParentStory="([^"]*)"[^>]*PreviousTextFrame="([^"]*)" NextTextFrame="([^"]*)"',
+    r'<TextFrame Self="(uFlowTF[^"]*)" ParentStory="([^"]*)"[^>]*PreviousTextFrame="([^"]*)" NextTextFrame="([^"]*)"',
     spreads)
 
 checks = []
-checks.append(("正文按章合成 Story（探针章节只应出现 1 个 uStoryChapter）", len(chapter_stories) == 1))
+checks.append(("连续正文合成一条流 Story（60 段连续正文应恰好 1 个 uStoryFlow）", len(chapter_stories) == 1))
 checks.append(("串接框存在（至少跨 2 页/栏）", len(frames) >= 2))
 
 by_story = {}

@@ -3,13 +3,14 @@ import Foundation
 import LayoutDCore
 
 extension IDMLExporter {
-    // MARK: - THREAD-1b 章串接辅助类型
+    // MARK: - FRAME-SPLIT 正文串接流辅助类型
 
     struct FrameKey: Hashable { let page: Int; let frame: Int }
     // `column` 是 frame.rect.x 的四分之一点取整——多栏页面里同一页会有多个不同 x 的栏，
     // 绝不能把它们粗暴并成一个宽框（会产出一个跨两栏的超宽 TextFrame，InDesign 里断行/
     // 对齐全乱）。同页同栏的相邻正文段落才合并成一个 TextFrame。
-    struct SectionPageKey: Hashable { let section: Int; let page: Int; let column: Int }
+    // `run` 是断流后的正文流序号（FRAME-SPLIT）：每段连续纯正文一条流。
+    struct FlowPageKey: Hashable { let run: Int; let page: Int; let column: Int }
     struct ChainInfo { let selfId: String; let previous: String; let next: String }
     struct ChapterParagraph {
         let styleRef: String
@@ -17,7 +18,6 @@ extension IDMLExporter {
         let inlineRuns: [InlineRun]?
         let footnotes: [Paragraph]
         let footnoteStyleRef: String
-        var anchoredAssets: [(asset: Asset, rect: Rect, packagedFileName: String?)] = []
     }
 
     func unionRect(_ a: Rect, _ b: Rect) -> Rect {
@@ -28,14 +28,17 @@ extension IDMLExporter {
         return Rect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
-    /// 章串接 Story 只收「正文流」段落：标题（含章名）+ body/listItem/quote/caption 等；
-    /// 图片/抽言/表格/脚注/旁注仍走各自独立的导出路径（本刀不动）。
-    func isBodyFlowParagraph(_ kind: ParagraphKind) -> Bool {
-        switch kind {
-        case .callout, .table, .footnote, .sideNote, .figure:
-            return false
-        default:
+    /// FRAME-SPLIT（2026-07-07 用户定）：串接文流**只收纯正文**——styleId 必须是 body
+    /// （一本书正文统一一个段落样式），kind 限 body/listItem。标题/开节概述/抽言/图注/
+    /// 参考文献等角色段落（kind 可能也是 .body 但 styleId 不同）一律独立框、各套各的
+    /// 段落样式；表格/脚注/旁注/图片本就独立。文流遇到任何独立框角色即断流。
+    func isBodyFlowParagraph(_ paragraph: Paragraph) -> Bool {
+        guard paragraph.styleId == StyleID.body.rawValue else { return false }
+        switch paragraph.kind {
+        case .body, .listItem:
             return true
+        default:
+            return false
         }
     }
 
