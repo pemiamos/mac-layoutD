@@ -278,6 +278,23 @@ extension LayoutContext {
             let imageRects = getImageRectsOnCurrentPage()
             let overlaps = imageRects.filter { $0.intersects(rect) }
             
+            var blockWrapMode: AssetWrapMode? = nil
+            if case .asset(let assetId) = block.contentReference,
+               let asset = project.assets.first(where: { $0.id == assetId }) {
+                blockWrapMode = asset.effectiveWrapMode
+            } else if kind == .caption {
+                if case .paragraph(let paragraphId) = block.contentReference,
+                   let paragraph = findParagraph(id: paragraphId) {
+                    for assetId in paragraph.anchoredAssetIds {
+                        if let asset = project.assets.first(where: { $0.id == assetId }),
+                           asset.effectiveWrapMode == .underlay {
+                            blockWrapMode = .underlay
+                            break
+                        }
+                    }
+                }
+            }
+
             currentPage.frames.append(PageFrame(
                 id: block.id,
                 kind: kind,
@@ -290,7 +307,8 @@ extension LayoutContext {
                 textColorHex: block.textColorHex,
                 sourceParagraphId: sourceParagraphId,
                 maskShape: block.maskShape,
-                exclusionRects: overlaps.isEmpty ? nil : overlaps
+                exclusionRects: overlaps.isEmpty ? nil : overlaps,
+                wrapMode: blockWrapMode
             ))
         }
         

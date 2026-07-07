@@ -14,32 +14,72 @@ extension LayoutContext {
         let desiredHeight = imageHeight(for: asset, width: imageWidth)
         
         let isUnderlay = asset.effectiveWrapMode == .underlay
-        
-        if !isUnderlay {
-            if shouldSpanColumns(asset) {
-                prepareWideAssetPlacement(requiredHeight: desiredHeight + 42)
+        let wrapModeValue: AssetWrapMode? = isUnderlay ? .underlay : nil
+
+        if isUnderlay {
+            let imageRect = Rect(x: cursorX, y: cursorY, width: imageWidth, height: desiredHeight)
+            currentPage.frames.append(PageFrame(
+                kind: .image,
+                rect: imageRect,
+                content: .asset(asset.id),
+                sourceParagraphId: sourceParagraphId,
+                wrapMode: wrapModeValue
+            ))
+
+            if let caption = asset.caption {
+                let captionText = numberedCaption(caption, number: figureCounter)
+                let captionRect = Rect(x: cursorX, y: cursorY + desiredHeight + 4, width: imageWidth, height: 28)
+                currentPage.frames.append(
+                    PageFrame(
+                        kind: .caption,
+                        rect: captionRect,
+                        styleId: StyleID.caption.rawValue,
+                        content: .text(captionText),
+                        sourceParagraphId: sourceParagraphId,
+                        wrapMode: wrapModeValue
+                    )
+                )
             } else {
-                advanceIfNeeded(desiredHeight + 42)
+                issues.append(
+                    LayoutIssue(
+                        severity: .warning,
+                        message: "图片 \(asset.fileName) 缺少图注",
+                        category: .assets,
+                        pageNumber: currentPage.number
+                    )
+                )
             }
+
+            if let effectiveDPI = effectiveDPI(asset: asset, widthPoints: imageRect.width), effectiveDPI < 220 {
+                issues.append(
+                    LayoutIssue(
+                        severity: .warning,
+                        message: "图片 \(asset.fileName) 预计印刷分辨率低于 220 DPI",
+                        category: .assets,
+                        pageNumber: currentPage.number
+                    )
+                )
+            }
+            return
+        }
+
+        if shouldSpanColumns(asset) {
+            prepareWideAssetPlacement(requiredHeight: desiredHeight + 42)
+        } else {
+            advanceIfNeeded(desiredHeight + 42)
         }
 
         let imageRect = Rect(x: cursorX, y: cursorY, width: imageWidth, height: desiredHeight)
         currentPage.frames.append(PageFrame(kind: .image, rect: imageRect, content: .asset(asset.id), sourceParagraphId: sourceParagraphId))
-        
-        if !isUnderlay {
-            cursorY += desiredHeight + 4
-        }
+        cursorY += desiredHeight + 4
 
         if let caption = asset.caption {
-            let captionText = numberedCaption(caption, number: figureCounter)
-            let captionY = isUnderlay ? (cursorY + desiredHeight + 4) : cursorY
-            let captionRect = Rect(x: cursorX, y: captionY, width: imageWidth, height: 28)
+            let caption = numberedCaption(caption, number: figureCounter)
+            let captionRect = Rect(x: cursorX, y: cursorY, width: imageWidth, height: 28)
             currentPage.frames.append(
-                PageFrame(kind: .caption, rect: captionRect, styleId: StyleID.caption.rawValue, content: .text(captionText), sourceParagraphId: sourceParagraphId)
+                PageFrame(kind: .caption, rect: captionRect, styleId: StyleID.caption.rawValue, content: .text(caption), sourceParagraphId: sourceParagraphId)
             )
-            if !isUnderlay {
-                cursorY += 34
-            }
+            cursorY += 34
         } else {
             issues.append(
                 LayoutIssue(
@@ -62,11 +102,9 @@ extension LayoutContext {
             )
         }
 
-        if !isUnderlay {
-            snapToBaseline()
-            if shouldSpanColumns(asset) {
-                currentColumnTopY = cursorY
-            }
+        snapToBaseline()
+        if shouldSpanColumns(asset) {
+            currentColumnTopY = cursorY
         }
     }
 
@@ -84,53 +122,61 @@ extension LayoutContext {
         let requiredHeight = desiredHeight + 42
         
         let isUnderlay = asset.effectiveWrapMode == .underlay
-        
+        let wrapModeValue: AssetWrapMode? = isUnderlay ? .underlay : nil
+
         if isUnderlay {
-            let startPageAbs = (currentAbsolutePageNumber % 2 == 1) ? (currentAbsolutePageNumber + 1) : currentAbsolutePageNumber
-            let startPageContent = startPageAbs - frontMatterPageCount(for: project)
-            let endPageContent = startPageContent + 1
+            var tempContext = self
+            if tempContext.currentAbsolutePageNumber % 2 == 1 {
+                tempContext.advanceToNextPage()
+            }
+
+            let bottomLimit = tempContext.resolvedBottomLimit(for: tempContext.currentAbsolutePageNumber)
+            if tempContext.cursorY + requiredHeight > bottomLimit {
+                tempContext.advanceToNextPage()
+                tempContext.advanceToNextPage()
+            }
             
-            let leftX = pageLeftMargin(for: startPageAbs)
+            let targetLeftPageNum = tempContext.currentPage.number
+            let targetRightPageNum = targetLeftPageNum + 1
+            let targetY = tempContext.cursorY
+            
+            let leftX = pageLeftMargin(for: tempContext.currentAbsolutePageNumber)
             let leftWidth = pageWidth - leftX
-            let leftRect = Rect(x: leftX, y: cursorY, width: leftWidth, height: desiredHeight)
+            let leftRect = Rect(x: leftX, y: targetY, width: leftWidth, height: desiredHeight)
             let leftFrame = PageFrame(
                 kind: .image,
                 rect: leftRect,
-                content: .spreadAsset(assetId: asset.id, isLeftHalf: true)
+                content: .spreadAsset(assetId: asset.id, isLeftHalf: true),
+                wrapMode: wrapModeValue
             )
             
-            let rightWidth = pageWidth - pageRightMargin(for: startPageAbs + 1)
-            let rightRect = Rect(x: 0, y: cursorY, width: rightWidth, height: desiredHeight)
+            let rightWidth = pageWidth - pageRightMargin(for: tempContext.currentAbsolutePageNumber + 1)
+            let rightRect = Rect(x: 0, y: targetY, width: rightWidth, height: desiredHeight)
             let rightFrame = PageFrame(
                 kind: .image,
                 rect: rightRect,
-                content: .spreadAsset(assetId: asset.id, isLeftHalf: false)
+                content: .spreadAsset(assetId: asset.id, isLeftHalf: false),
+                wrapMode: wrapModeValue
             )
             
-            if startPageContent == currentPage.number {
-                currentPage.frames.append(leftFrame)
-            } else {
-                pendingPageFrames[startPageContent, default: []].append(leftFrame)
-            }
-            pendingPageFrames[endPageContent, default: []].append(rightFrame)
-            
+            var captionFrame: PageFrame? = nil
             if let caption = asset.caption {
                 let captionText = numberedCaption(caption, number: figureCounter)
-                let captionRect = Rect(x: 0, y: cursorY + desiredHeight + 4, width: rightWidth, height: 28)
-                let captionFrame = PageFrame(
+                let captionRect = Rect(x: 0, y: targetY + desiredHeight + 4, width: rightWidth, height: 28)
+                captionFrame = PageFrame(
                     kind: .caption,
                     rect: captionRect,
                     styleId: StyleID.caption.rawValue,
-                    content: .text(captionText)
+                    content: .text(captionText),
+                    wrapMode: wrapModeValue
                 )
-                pendingPageFrames[endPageContent, default: []].append(captionFrame)
             } else {
                 issues.append(
                     LayoutIssue(
                         severity: .warning,
                         message: "图片 \(asset.fileName) 缺少图注",
                         category: .assets,
-                        pageNumber: startPageContent
+                        pageNumber: currentPage.number
                     )
                 )
             }
@@ -141,13 +187,51 @@ extension LayoutContext {
                         severity: .warning,
                         message: "图片 \(asset.fileName) 预计印刷分辨率低于 220 DPI",
                         category: .assets,
-                        pageNumber: startPageContent
+                        pageNumber: currentPage.number
                     )
                 )
             }
+            
+            // Add left frame
+            if targetLeftPageNum == currentPage.number {
+                currentPage.frames.append(leftFrame)
+            } else if targetLeftPageNum < currentPage.number {
+                let index = targetLeftPageNum - 1
+                if index >= 0 && index < pages.count {
+                    pages[index].frames.append(leftFrame)
+                }
+            } else {
+                deferredUnderlayFrames[targetLeftPageNum, default: []].append(leftFrame)
+            }
+
+            // Add right frame
+            if targetRightPageNum == currentPage.number {
+                currentPage.frames.append(rightFrame)
+            } else if targetRightPageNum < currentPage.number {
+                let index = targetRightPageNum - 1
+                if index >= 0 && index < pages.count {
+                    pages[index].frames.append(rightFrame)
+                }
+            } else {
+                deferredUnderlayFrames[targetRightPageNum, default: []].append(rightFrame)
+            }
+
+            // Add caption frame
+            if let captionFrame = captionFrame {
+                if targetRightPageNum == currentPage.number {
+                    currentPage.frames.append(captionFrame)
+                } else if targetRightPageNum < currentPage.number {
+                    let index = targetRightPageNum - 1
+                    if index >= 0 && index < pages.count {
+                        pages[index].frames.append(captionFrame)
+                    }
+                } else {
+                    deferredUnderlayFrames[targetRightPageNum, default: []].append(captionFrame)
+                }
+            }
             return
         }
-        
+
         if currentAbsolutePageNumber % 2 == 1 {
             advanceToNextPage()
         }

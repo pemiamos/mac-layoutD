@@ -170,41 +170,9 @@ public struct PNGExporter {
         context.setFillColor(NSColor.white.cgColor)
         context.fill(CGRect(x: 0, y: 0, width: pageSize.width, height: pageSize.height))
 
-        let underlayParagraphIds = Set(page.frames.compactMap { frame -> UUID? in
-            switch frame.content {
-            case .asset(let assetId), .spreadAsset(let assetId, _):
-                if let asset = project.assets.first(where: { $0.id == assetId }),
-                   asset.effectiveWrapMode == .underlay {
-                    return frame.sourceParagraphId
-                }
-            default:
-                break
-            }
-            return nil
-        })
-
-        let isUnderlayFrame = { (frame: PageFrame) -> Bool in
-            switch frame.content {
-            case .asset(let assetId), .spreadAsset(let assetId, _):
-                if let asset = project.assets.first(where: { $0.id == assetId }) {
-                    return asset.effectiveWrapMode == .underlay
-                }
-            default:
-                break
-            }
-            if frame.kind == .caption, let sourceId = frame.sourceParagraphId {
-                return underlayParagraphIds.contains(sourceId)
-            }
-            return false
-        }
-
-        // Pass 1: Draw underlay frames
-        for frame in page.frames where isUnderlayFrame(frame) {
-            draw(frame: frame, pageNumber: page.number, project: project, in: context, bleedPoints: bleedPoints)
-        }
-
-        // Pass 2: Draw other frames
-        for frame in page.frames where !isUnderlayFrame(frame) {
+        let underlays = page.frames.filter { $0.isUnderlay }
+        let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+        for frame in underlays + nonUnderlays {
             draw(frame: frame, pageNumber: page.number, project: project, in: context, bleedPoints: bleedPoints)
         }
 
@@ -342,7 +310,7 @@ public struct PNGExporter {
                     styleId: frame.styleId,
                     kind: frame.kind,
                     project: project,
-                    in: rect.insetBy(dx: 4, dy: 2),
+                    in: rect,
                     context: context,
                     textColorHex: frame.textColorHex,
                     sourceParagraphId: frame.sourceParagraphId,

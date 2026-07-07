@@ -244,7 +244,11 @@ extension CanvasView {
                 let localY = (point.y - pRect.minY) / zoomScale
                 localPoint = CGPoint(x: localX, y: localY)
                 
-                if let found = page.frames.reversed().first(where: { frame in
+                let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+                let underlays = page.frames.filter { $0.isUnderlay }
+                let hitTestOrder = nonUnderlays.reversed() + underlays.reversed()
+
+                if let found = hitTestOrder.first(where: { frame in
                     let extraWidth = (frame.kind == .text || frame.kind == .footnote || frame.kind == .sideNote) ? CGFloat(project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue).fontSize * 0.5) : 0.0
                     let fRect = CGRect(x: frame.rect.x, y: frame.rect.y, width: frame.rect.width + extraWidth, height: frame.rect.height)
                     return fRect.contains(CGPoint(x: localX, y: localY))
