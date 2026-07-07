@@ -3,6 +3,20 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-08 04:59 | claude | 验收 AG 道两个任务（UNDERLAY-1 垫底图、FRAME-INSET-2 预览贴边）：代码审查+301测试+14/14探针全过，合 dev(ad8496
+- **分支**：dev
+- **概述**：验收 AG 道两个任务（UNDERLAY-1 垫底图、FRAME-INSET-2 预览贴边）：代码审查+301测试+14/14探针全过，合 dev(ad8496a→bba4867，剔除误提交的1.8MB layoutD-icon.png)→push。随后做本道 FRAME-CANVAS-0（AG的FRAME-CANVAS-1前置条件）：把 IDMLExporter 里 FRAME-SPLIT 断流分组逻辑（runIndexByParagraphId/FlowPageKey/unionRect/isBodyFlowParagraph）抽成跨模块共享函数 groupIntoFlowFrames（新文件 Sources/LayoutDEngine/FlowFrameGrouping.swift，LayoutDApp/LayoutDExport 都已依赖 LayoutDEngine 可直接 import），IDMLExporter 改为消费该函数结果，纯搬家零行为变化（golden逐字节一致）。新增 FlowFrameGroup.memberFrameIndices 字段（原逻辑没有，供 FRAME-CANVAS-1 画布按组渲染用）。补 2 个独立单测覆盖断流边界（标题/抽言打断、表格打断）。已合 dev(2b37bdf)→push。⚠️ 过程中犯过一次错误已自行修复：merge AG 分支时把本地过期的 QUEUE.md 复制进 worktree 提交，误删了 FRAME-CANVAS-0/1 两条任务登记；发现后已补回并标注 FRAME-CANVAS-0 完成、FRAME-CANVAS-1 前置条件就绪。
+- **改动文件**：Sources/LayoutDEngine/FlowFrameGrouping.swift(新增), Sources/LayoutDExport/IDMLExporter.swift, Sources/LayoutDExport/IDMLExporter+Helpers.swift, Tests/LayoutDCoreTests/FlowFrameGroupingTests.swift(新增), .ai/QUEUE.md
+- **检查**：303测试0失败(+2)、review-idml.sh 14/14、golden逐字节一致（证明FRAME-CANVAS-0重构零行为变化）；AG道审核时301测试+14/14全过
+- **下一步**：AG 可以开工 FRAME-CANVAS-1（画布/PDF/PNG 按 groupIntoFlowFrames 分组结果画合并虚线框+按组选中移动）——前置条件已就绪，QUEUE.md 里有完整任务说明。dev 已推送(2b37bdf)，main 未合，等 FRAME-CANVAS-1 一起或用户视觉验收后再合。
+
+## 2026-07-08 04:42 | claude | 本轮收尾两件事，均已合 main(3305be8)并推送：①修复角色标签书稿画布/PDF 会多画出一个空壳「正文」章节标题框（用户标准样章画布验收时发现）——根
+- **分支**：feature/ag-underlay-1
+- **概述**：本轮收尾两件事，均已合 main(3305be8)并推送：①修复角色标签书稿画布/PDF 会多画出一个空壳「正文」章节标题框（用户标准样章画布验收时发现）——根因 MarkdownBookImporter.currentSectionTitle 默认写死"正文"占位、被 LayoutEngine.addSectionTitle 当真标题画出；改默认空字符串+addSectionTitle 对空标题短路，新增回归测试锁定。②用户对"画布连续正文仍是一段一个虚线框、没追平 IDML FRAME-SPLIT 的合并框"给出方案A拍板：只做显示/交互聚合层(画布按组显示一个合并虚线框+整组选中移动)，不改engine产帧/override/锁页模型(方案B高风险大重构已否决)。已拆两个任务登记QUEUE：FRAME-CANVAS-0(Claude下一棒优先，抽取IDMLExporter里的断流分组逻辑成跨模块共享函数)→FRAME-CANVAS-1(AG，画布/PDF/PNG消费共享函数按组显示，⏸等FRAME-CANVAS-0)。⚠️本轮全程主仓库checkout被另一并发会话占用(HEAD在feature/ag-underlay-1、有未提交改动)，我未触碰，全部工作在独立临时worktree完成后merge/push，未验证过main checkout当前脏状态与本次push有无冲突——下一棒开工前建议先git status确认现状。
+- **改动文件**：(未填)
+- **检查**：296测试0失败、review-idml.sh 14/14、golden逐字节一致（.sample走Markdown#标题路径不受影响）。PDF导出人工核实"正文"孤立字样已消失。
+- **下一步**：(未填)
+
 ## 2026-07-08 04:18 | claude | FRAME-SPLIT 用户 InDesign 验收通过，合 dev(f222031)→main(360b097) 并推送，分支已删。验收结论：分框(标题/概述
 - **分支**：dev
 - **概述**：FRAME-SPLIT 用户 InDesign 验收通过，合 dev(f222031)→main(360b097) 并推送，分支已删。验收结论：分框(标题/概述/抽言/图注各独立框各套样式)、正文断流串接、图文独立两框、绕排图=正文避让——全部 OK；拉大图片文字自动重排也 OK。两处已知待办已登记 AG 道：①FRAME-INSET-2 预览文字贴框边——IDML 侧 InsetSpacing=0 已生效(InDesign 验收过)，但 layoutD 三渲染器(CanvasView+Drawing:678、PNGExporter:311、PDFExporter drawText)各写死 4/2pt 默认内边距，预览≠输出，需归零(组件卡片/表格 componentStyle.textInset 不动)；②UNDERLAY-1 垫底图——IDML 置底+不绕排已做，但引擎排版仍给垫底图保留版面空间致 InDesign 里图文没真叠上(用户可接受现状、后期人工改)，需引擎让 underlay 图不占版面。已用 FRAME-SPLIT 分支构建启动 layoutD GUI(载入标准样章)供用户看画布内边距现状。
