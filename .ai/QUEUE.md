@@ -144,6 +144,12 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`Sources/LayoutDApp/*`
 > ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）；**生成样张别提交进仓库**（B1 踩过，Claude 合并时剔除了 20 个 PNG/PDF）。
 
+- [ ] **UNDERLAY-1 垫底图预览/引擎追平**（2026-07-07 FRAME-SPLIT 配套，Claude 已做完 IDML 侧）
+  - 背景：`Asset.wrapMode`（`LayoutDCore/Asset.swift`）新增 `.underlay` 垫底图意图——图+图注组合垫在文字下面作背景，文字直接压图走、不绕排。IDML 导出已落地（TextWrapMode=None + spread 条目置底）；Markdown 语法 `![](img.png "wrap=under")`。
+  - 目标：引擎与预览追平——`wrapMode==.underlay` 的图片 ①LayoutEngine 排版时**不占版面空间**（不推进 cursor、不参与 B1 绕排避让），文字照常流；②Canvas/PDF/PNG 三渲染器把它画在文字**下层**（先画图后画字）。默认 `.wrap` 行为不变（占位+绕排）。
+  - 文件：`LayoutEngine+Assets.swift`（或相关放置逻辑）、`CanvasView+Drawing.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
+  - 验收：造 `wrap=under` 样张，PNG 预览可见文字压在图上、图在字下；`.wrap` 图零回归（B1 绕排照旧）；全部测试/探针 PASS。
+
 - [x] **SAMPLE-1 一键批量样张** — ✅ **重做版**（AG，`feature/ag-sample-1-v2` `10550c6`，Claude 审核合 dev `d85a730`）。首版打回重做（原因见下），v2 全部照做。
   - **交付**：CLI `--render-samples A.json B.json ... --chapter <fixture>`（默认 chapter=`Samples/fixture-standard-chapter.md`）→ 桌面出带方案名的样张 PDF。解析**只走** `StyleBaselineImporter.parseSpecPack`（唯一事实源，首版并行的 `SpecPack.swift` 已删）；新建**共享**应用函数 `BookProject.applySpecPack(_ result:)`（`LayoutDImport/BookProject+Tokens.swift`），`AppState.applyImportedTokens` 减 105 行改为委托它（单一应用路径）；补齐了 SPEC-PACK-1 没做的视觉三项——字体族（`fontResolutions`→复合中/西/数字字体）、角色色 + 装饰点缀色、开本 trim（`page.width/height`→`PageSetup`）；不支持字段打 stderr 告警不静默。
   - **验收全过**：`swift test` 291；`review-idml.sh` 14/14（新增 2g 掩码确定性探针）；桌面 3 份规范包一条命令出 3 份**视觉可区分** PDF（md5 各异、方案A/B/C 点缀色+字体不同）；重跑**内容确定**（见下）。
