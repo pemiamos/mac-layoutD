@@ -202,6 +202,12 @@ struct LayoutContext {
     }
 
     mutating func addSectionTitle(_ title: String) {
+        // 角色标签书稿（DOCX 全部、Markdown 无 `#` 标题时）没有独立于正文的「章节标题」——
+        // 真正的标题已经是「一级标题/章名」角色段落本身，会随 addStory 正常画出。
+        // section.title 此时是空字符串占位（或 DOCX 侧退化成书名），再画一次就是重复的
+        // 空壳标题框（2026-07-07 用户在标准样章画布验收时发现的「正文」孤立框）。
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
         tableOfContents.append(TableOfContentsEntry(level: 1, title: title, pageNumber: currentPage.number))
         addText(title, style: .heading1, kind: .text)
     }
