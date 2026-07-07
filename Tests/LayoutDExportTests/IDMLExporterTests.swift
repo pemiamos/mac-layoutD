@@ -277,6 +277,7 @@ final class IDMLExporterTests: XCTestCase {
         // 正文里的二级标题也应进静态目录（否则只剩书名级 H1，需在 InDesign 手动更新目录才补全）。
         let project = BookProject(
             metadata: ProjectMetadata(title: "目录层级测试", author: "layoutD"),
+            pageSetup: .scienceBookDefault.withTableOfContents(),
             sections: [
                 BookSection(
                     title: "第一章",
@@ -354,8 +355,8 @@ final class IDMLExporterTests: XCTestCase {
         }
         XCTAssertFalse(stories.contains("名称    功能"), "不得残留 4 空格拍平的裸文字")
         // 单元格须左对齐且去掉正文首行缩进，否则窄列里文字被推到右边、参差不齐。
-        XCTAssertEqual(matches(in: stories, pattern: "(Justification=\"LeftJustified\")").count, 6,
-                       "每个单元格段落须左对齐")
+        XCTAssertEqual(matches(in: stories, pattern: "(Justification=\"LeftAlign\")").count, 6,
+                       "每个单元格段落须左对齐（LeftAlign 真左对齐，非 LeftJustified 两端对齐）")
         XCTAssertEqual(matches(in: stories, pattern: "(FirstLineIndent=\"0\")").count, 6,
                        "每个单元格段落须去掉首行缩进")
     }
@@ -693,13 +694,15 @@ final class IDMLExporterTests: XCTestCase {
             let styleID = NSRegularExpression.escapedPattern(for: style.id)
             // `\s` guards against matching `<ParagraphStyleRange>` (or a future
             // style-like element) while inspecting the concrete style definition.
-            let pattern = "(<ParagraphStyle\\s+[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*GridAlignment=\"AlignAllLinesToGrid\"[^>]*Mojikumi=\"\(NSRegularExpression.escapedPattern(for: mojikumiRef))\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?<MojikumiSet type=\"object\">\(NSRegularExpression.escapedPattern(for: mojikumiRef))</MojikumiSet>[\\s\\S]*?</ParagraphStyle>)"
+            // 2026-07-07 用户定「清爽段间空行式」：关闭逐行基线网格锁定（GridAlignment=None），
+            // 段间靠空一行区分；避头尾(Kinsoku)/约物(Mojikumi)保留。
+            let pattern = "(<ParagraphStyle\\s+[^>]*Self=\"ParagraphStyle/\(styleID)\"[^>]*KinsokuType=\"KinsokuPushInFirst\"[^>]*GridAlignment=\"None\"[^>]*Mojikumi=\"\(NSRegularExpression.escapedPattern(for: mojikumiRef))\"[^>]*>[\\s\\S]*?<KinsokuSet type=\"enumeration\">SimplifiedChineseKinsoku</KinsokuSet>[\\s\\S]*?<MojikumiSet type=\"object\">\(NSRegularExpression.escapedPattern(for: mojikumiRef))</MojikumiSet>[\\s\\S]*?</ParagraphStyle>)"
             XCTAssertEqual(matches(in: styles, pattern: pattern).count, 1,
-                           "段落样式 \(style.id) 未绑定 layoutD 禁则/约物/基线网格设置")
+                           "段落样式 \(style.id) 未绑定 layoutD 禁则/约物设置（网格已关）")
         }
 
         let preferences = try entry(output, "Resources/Preferences.xml")
-        XCTAssertTrue(preferences.contains("GridAlignment=\"AlignAllLinesToGrid\""))
+        XCTAssertTrue(preferences.contains("GridAlignment=\"None\""))
         XCTAssertTrue(preferences.contains("Mojikumi=\"\(mojikumiRef)\""))
     }
 

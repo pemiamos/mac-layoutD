@@ -68,15 +68,19 @@ extension IDMLExporter {
 
     /// THREAD-1b：一章的正文+标题合成一个 Story，`paragraphs` 按阅读顺序排列。
     /// 每段一个 ParagraphStyleRange——但 PSR 边界本身不是段落标记，InDesign 仍会把相邻
-    /// PSR 的文字接续渲染成一整段。真正的段落标记是 Content 末尾的字面 `\n`（THREAD-1a
-    /// spike 已用真·InDesign 验证过的写法），最后一段不带。
+    /// PSR 的文字接续渲染成一整段。真正的段落回车是 IDML 的 **`<Br/>` 元素**（放在段落
+    /// 最后，最后一段不带），InDesign 才把它们识别成各自独立的段落（各自套段落样式、
+    /// 段后间距 SpaceAfter 生效出空行）。
+    /// ⚠️ 段落回车不能用字符：实测 U+000A 被当「强制换行/软回车」（整章并成一段、标题不套
+    /// 样式、无空行）；U+2029 被当空格；不加分隔则文字全糊。只有 `<Br/>` 元素是对的
+    /// （2026-07-07 用户逐一实机验证 7 种写法，仅 `<Br/>` 通过：标题变大+分段+空行）。
     func chapterStoryXML(self id: String, vertical: Bool, paragraphs: [ChapterParagraph]) -> String {
         let orientation = vertical ? "Vertical" : "Horizontal"
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
         let lastIndex = paragraphs.count - 1
         let body = paragraphs.enumerated().map { index, p -> String in
-            // 顺序很关键：可见文字 → 锚定对象（挂在本段末尾，随本段走）→ 段落标记 \n
-            // （单独一个 CharacterStyleRange，不掺进正文的 Content，避免和锚点字符混在一起）。
+            // 顺序很关键：可见文字 → 锚定对象（挂在本段末尾，随本段走）→ 段落回车 <Br/>
+            // （单独一个 CharacterStyleRange 装 <Br/>，放在本段最后，标记本段结束）。
             let textRanges = characterStyleRanges(for: p.text, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef, noBreakTail: trailingNoBreakCount(for: p.text))
             let anchoredRanges = p.anchoredAssets.enumerated().map { assetIndex, anchored in
                 anchoredImageCharacterStyleRange(
@@ -86,9 +90,7 @@ extension IDMLExporter {
                     asset: anchored.asset, packagedFileName: anchored.packagedFileName,
                     width: anchored.rect.width, height: anchored.rect.height)
             }
-            let paragraphMark = index == lastIndex ? [] : [
-                "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"><Content>\n</Content></CharacterStyleRange>"
-            ]
+            let paragraphMark = index == lastIndex ? [] : [Self.paragraphBreakRange]
             let ranges = ([textRanges] + anchoredRanges + paragraphMark).joined(separator: "\n")
             return """
             \t\t<ParagraphStyleRange AppliedParagraphStyle="\(p.styleRef)">
@@ -107,7 +109,13 @@ extension IDMLExporter {
         """
     }
 
+    /// IDML 的段落回车：`<Br/>` 元素单独占一个 CharacterStyleRange，放在段落最后。
+    /// 不能用字符（U+000A=软回车、U+2029=空格，都会把相邻段落并成一段——见 chapterStoryXML 注释）。
+    static let paragraphBreakRange =
+        "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"><Br/></CharacterStyleRange>"
+
     /// 一段文本按非空行拆成若干 ParagraphStyleRange（沿用既有折行→段落的规则）。
+    /// 段与段之间加 `<Br/>` 段落回车，否则 InDesign 会把它们并成一整段（除末段外）。
     func paragraphStyleRangeXML(
         styleRef: String, text: String, inlineRuns: [InlineRun]?,
         footnotes: [Paragraph], footnoteStyleRef: String
@@ -120,10 +128,13 @@ extension IDMLExporter {
             return line.isEmpty ? nil : (line, lineStart + leading)
         }
         let effectiveLines = lines.isEmpty ? [(text, 0)] : lines
-        return effectiveLines.map { line, start in
-            """
+        let lastIndex = effectiveLines.count - 1
+        return effectiveLines.enumerated().map { index, pair in
+            let (line, start) = pair
+            let mark = index == lastIndex ? "" : "\n" + Self.paragraphBreakRange
+            return """
             \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
-            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes, footnoteStyleRef: footnoteStyleRef))
+            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes, footnoteStyleRef: footnoteStyleRef))\(mark)
             \t\t</ParagraphStyleRange>
             """
         }.joined(separator: "\n")
@@ -310,7 +321,7 @@ extension IDMLExporter {
                 let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: runs)
                 cellsXML.append("""
                 \t\t\t\t\t<Cell Self="\(tableSelf)Cell\(c)_\(r)" Name="\(c):\(r)" RowSpan="1" ColumnSpan="1" AppliedCellStyle="CellStyle/$ID/[None]"\(fillAttr) \(border)>
-                \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" FirstLineIndent="0" Justification="LeftJustified">
+                \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" FirstLineIndent="0" Justification="LeftAlign">
                 \(cellBody)
                 \t\t\t\t\t\t</ParagraphStyleRange>
                 \t\t\t\t\t</Cell>
@@ -362,16 +373,16 @@ extension IDMLExporter {
         \t\t\t\t</TabList>
         \t\t\t</Properties>
         """
-        // 一个 story 里多段并存时，IDML 必须有显式段落分隔符（<Content> 内的字面换行
-        // U+000A，InDesign 读作段落回车）；否则多个 ParagraphStyleRange 会被并成一段、
-        // 各条目录的 tab/页码串行到同一段里（实测 InDesign 现象）。末条不加，避免空段。
+        // 一个 story 里多段并存时，IDML 必须有显式段落回车 <Br/> 元素；否则多个
+        // ParagraphStyleRange 会被并成一段、各条目录的 tab/页码串行到同一段里（实测）。
+        // 末条不加，避免空段。（U+000A/U+2029 字符不行，见 chapterStoryXML 注释。）
         let body = entries.enumerated().map { index, entry in
             let style = entry.level <= 1 ? "tocLevel1" : "tocLevel2"
-            let paragraphBreak = index < entries.count - 1 ? "\n" : ""
+            let paragraphBreak = index < entries.count - 1 ? "\n" + Self.paragraphBreakRange : ""
             return """
             \t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/\(style)">
             \(tabList)
-            \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>\(esc(entry.title))\t\(entry.pageNumber)\(paragraphBreak)</Content></CharacterStyleRange>
+            \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>\(esc(entry.title))\t\(entry.pageNumber)</Content></CharacterStyleRange>\(paragraphBreak)
             \t\t</ParagraphStyleRange>
             """
         }.joined(separator: "\n")

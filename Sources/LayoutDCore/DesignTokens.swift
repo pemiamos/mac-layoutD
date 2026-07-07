@@ -138,8 +138,10 @@ public extension DesignTokens {
 
             ScalarToken(id: "paragraph.body.fontSize", value: 10.5, kind: .fontSize),
             ScalarToken(id: "paragraph.body.lineHeight", value: 16, kind: .lineHeight),
-            ScalarToken(id: "paragraph.body.firstLineIndent", value: 21, kind: .spacing),
-            ScalarToken(id: "paragraph.body.spaceAfter", value: 4, kind: .spacing),
+            // 默认排书规则（2026-07-07 用户定）：开头不空两格 → 首行缩进 0；
+            // 段与段之间空一行 → 段后间距 = 一行高（body lineHeight 16）；默认左对齐见导出器。
+            ScalarToken(id: "paragraph.body.firstLineIndent", value: 0, kind: .spacing),
+            ScalarToken(id: "paragraph.body.spaceAfter", value: 16, kind: .spacing),
 
             ScalarToken(id: "paragraph.caption.fontSize", value: 8.5, kind: .fontSize),
             ScalarToken(id: "paragraph.caption.lineHeight", value: 12, kind: .lineHeight),
