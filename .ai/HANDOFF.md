@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 18:27 | claude | 默认排书规则批次全部落地并合 main(029336e)，用户真稿《村落》逐点 InDesign 验收通过。5 项：①左对齐+首行不缩进(0)+段间空一行(Sp
+- **分支**：dev
+- **概述**：默认排书规则批次全部落地并合 main(029336e)，用户真稿《村落》逐点 InDesign 验收通过。5 项：①左对齐+首行不缩进(0)+段间空一行(SpaceAfter=16)②关基线网格逐行锁定(GridAlignment None)③默认不生成目录(PageSetup.includesTableOfContents 默认false，.sample 显式开启保留旧测试/golden)④【根子性】段落回车必须用 IDML <Br/> 元素——用户实机验证7种写法，U+000A被当软回车/U+2029被当空格/无分隔全糊，唯<Br/>得真段落(标题套样式+分段+空行)；统一修三处多段落路径(章串接/逐帧多行/目录)⑤沿途还修了 SPLIT-EXPORT/GOLDEN-GUARD/relay显示。⚠️另一个对话在主checkout有个只改标题LeftAlign的半成品(未提交)，是本方案子集，已 stash@{0} 保留不删。
+- **改动文件**：Sources/LayoutDCore/{PageSetup,DesignTokens,StyleLibrary,BookProject}.swift、Sources/LayoutDExport/IDMLExporter+{Resources,Stories}.swift、Sources/LayoutDEngine/LayoutEngine{,+Geometry}.swift、Tests/{LayoutDCoreTests,LayoutDExportTests}、Tests/golden/*、scripts/golden-update.sh+review-idml.sh
+- **检查**：292测试过、review-idml.sh 14/14、golden 经护栏--reason刷新。真稿《村落》导出43个<Br/>/44段/0软回车残留，用户InDesign验收：段落独立+各套样式+段间空行+左对齐+无目录+图文正常。
+- **下一步**：(未填)
+
 ## 2026-07-07 13:24 | claude | SAMPLE-1 重做版审核合 dev，规范包三件套全部落地。AG 已自觉领打回、基于 Codex 的 parseSpecPack 重做为 feature/ag
 - **分支**：dev
 - **概述**：SAMPLE-1 重做版审核合 dev，规范包三件套全部落地。AG 已自觉领打回、基于 Codex 的 parseSpecPack 重做为 feature/ag-sample-1-v2（10550c6），铁律全守：①并行 SpecPack.swift 已删、解析只走 StyleBaselineImporter.parseSpecPack（唯一事实源）；②新建共享 BookProject.applySpecPack(_:)（LayoutDImport/BookProject+Tokens.swift），AppState.applyImportedTokens 减105行改为委托它（单一应用路径，不再第三份）；③补齐 SPEC-PACK-1 没做的视觉三项=字体族(fontResolutions→复合中/西/数字)+角色色/装饰点缀色+开本trim(page.width/height)；④不支持字段打 stderr 不静默。实测：swift test 291、桌面3份规范包一条命令出3份视觉可区分PDF（md5各异）。合并提交 d85a730。PDF「重跑确定性」按用户拍板走方式1（内容级+掩码探针，见 DECISIONS 13:23）：Quartz每份PDF盖秒级CreationDate/ModDate+随机ID、字节永不复现且属平台行为，故不改PDF字节，改为 review-idml.sh 加 2g 掩码确定性探针（导出两次抹掉这三项后断言逐字节一致，已自证有效），探针13→14。QUEUE 已标 SAMPLE-1 [x]。
