@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 12:58 | claude | 集成规范包路线两道成果。① SPEC-PACK-1（Codex）审核合 dev（合并提交 1d354c5，含 a7ce358/70a49fd）：StyleBas
+- **分支**：dev
+- **概述**：集成规范包路线两道成果。① SPEC-PACK-1（Codex）审核合 dev（合并提交 1d354c5，含 a7ce358/70a49fd）：StyleBaselineImporter.parseSpecPack(jsonData:)→SpecPackImportResult{tokens,unsupportedFields,fontResolutions}，支持 meta/page/fonts/colors/roles/vertical，CoreText 校验字体、非法样例带 JSON path 报错、docs/spec-pack-guide.md 指南。dev 全绿：swift test 290、review-idml.sh 13/13。② SAMPLE-1（AG，feature/ag-sample-1 299450b）**未合、打回重做**：AG 首版自建了并行的 Sources/LayoutDImport/SpecPack.swift（独立解析+toBookProjectUpdates），与 Codex 的 parseSpecPack 在同模块重复解析同样 3 份 JSON。用户拍板收敛到单一解析器（Codex 版为事实源），已 record_decision。关键发现：parseSpecPack 只产出/校验 DesignTokens，未落地字体族/点缀色/开本 trim；applyImportedTokens 也只覆盖 margins/columns/grid/字号/行距/缩进/段距——AG 首版恰好补了字体/色/开本应用（样张视觉区分方案A/B/C 的关键），这才是 SAMPLE-1 重做的真正价值。QUEUE 已把 SPEC-PACK-1 标 [x]、SAMPLE-1 重写成详细打回条目。
+- **改动文件**：.ai/QUEUE.md, .ai/DECISIONS.md, .ai/HANDOFF.md（+ 合并带入 Sources/LayoutDImport/StyleBaselineImporter.swift, Tests/LayoutDImportTests/StyleBaselineImporterSpecPackTests.swift, docs/spec-pack-guide.md）
+- **检查**：dev: swift test 290 tests 0 failures; review-idml.sh 13/13 PASS。合并提交 1d354c5（Codex SPEC-PACK-1）；文档提交 932ae99。AG 的 feature/ag-sample-1 未合并、保留其分支/worktree 供参考。
+- **下一步**：AG：从最新 dev 起新分支重做 SAMPLE-1（详见 QUEUE 打回条目）——① 解析只走 StyleBaselineImporter.parseSpecPack（禁止再建 SpecPack.swift，删除首版的 SpecPack.swift + SpecPackTests.swift）；② token 应用抽成不依赖 AppState 的共享函数（放 LayoutDCore/LayoutDImport，别复制第三份 applyImportedTokens）；③ 补齐 token 未覆盖的字体族/点缀色/开本 trim 应用（本任务真正价值）；④ --chapter 默认指 Samples/fixture-standard-chapter.md（FIXTURE-1 已就绪）。验收=3 份桌面规范包出 3 份视觉可区分 PDF、无 tofu、确定性一致、PDF 不进仓库。Codex：若 AG 反馈 parseSpecPack 缺字段，在 StyleBaselineImporter 补，不要 App 层另起。dev 未 push（本地集成区）。
+
 ## 2026-07-07 12:29 | claude | FIXTURE-1 标准样章 fixture 完成。新增 Samples/fixture-standard-chapter.md（《深海不是黑暗的尽头》，Mar
 - **分支**：dev
 - **概述**：FIXTURE-1 标准样章 fixture 完成。新增 Samples/fixture-standard-chapter.md（《深海不是黑暗的尽头》，Markdown 角色标签格式走现有导入器），覆盖全部角色：章名/节名/文章名/开节概述/正文/抽言/图注/引文/图片占位（+参考文献），每个至少一次。配 FixtureStandardChapterTests（3 测）：从 #filePath 推算样章路径（不硬编码绝对路径，避 CI 失效），断言每角色→正确段落种类/命名样式、标签字面不漏进正文、front matter 不泄漏。全链路自验：导入→初排→PDF(267KB)+IDML(22KB) 均导出成功；解包确认 IDML 含全部中文命名样式（含 图注）且 Story 无「一级标题/开节概述/抽言/参考文献」等标签字面泄漏。提交 eeb2a7a → 合 dev（--no-ff 1197b03）→ QUEUE 记录 5e123f5。
