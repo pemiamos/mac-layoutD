@@ -20,15 +20,39 @@ public struct SpecPackFontResolution: Equatable, Sendable {
     }
 }
 
+public struct SpecPackDecoration: Equatable, Sendable {
+    public var type: String
+    public var color: String?
+    public var widthPt: Double?
+    public var lengthMM: Double?
+
+    public init(type: String, color: String? = nil, widthPt: Double? = nil, lengthMM: Double? = nil) {
+        self.type = type
+        self.color = color
+        self.widthPt = widthPt
+        self.lengthMM = lengthMM
+    }
+}
+
 public struct SpecPackImportResult: Sendable {
     public var tokens: DesignTokens
     public var unsupportedFields: [String]
     public var fontResolutions: [SpecPackFontResolution]
+    public var roleColors: [String: String]
+    public var roleDecorations: [String: SpecPackDecoration]
 
-    public init(tokens: DesignTokens, unsupportedFields: [String], fontResolutions: [SpecPackFontResolution]) {
+    public init(
+        tokens: DesignTokens,
+        unsupportedFields: [String],
+        fontResolutions: [SpecPackFontResolution],
+        roleColors: [String: String] = [:],
+        roleDecorations: [String: SpecPackDecoration] = [:]
+    ) {
         self.tokens = tokens
         self.unsupportedFields = unsupportedFields
         self.fontResolutions = fontResolutions
+        self.roleColors = roleColors
+        self.roleDecorations = roleDecorations
     }
 }
 
@@ -76,8 +100,8 @@ public struct StyleBaselineImporter {
     ]
 
     private static let unsupportedSpecPackRoleFields: Set<String> = [
-        "alignment", "blockColor", "blockSize_mm", "color", "cornerRadius_mm",
-        "decoration", "format", "maxLineWidth_chars", "numberStyle", "opacity",
+        "alignment", "blockColor", "blockSize_mm", "cornerRadius_mm",
+        "format", "maxLineWidth_chars", "numberStyle", "opacity",
         "position", "rule", "span", "textColor", "tracking_em", "treatment"
     ]
 
@@ -212,6 +236,9 @@ public struct StyleBaselineImporter {
 
         let roles = try requiredObject(jsonObject, key: "roles", path: "$")
         var unsupportedFields: [String] = []
+        var roleColors: [String: String] = [:]
+        var roleDecorations: [String: SpecPackDecoration] = [:]
+
         for (role, rawRole) in roles.sorted(by: { $0.key < $1.key }) {
             guard let roleObject = rawRole as? [String: Any] else {
                 throw StyleBaselineImportError(path: "$.roles.\(role)", message: "role style must be an object")
@@ -227,6 +254,25 @@ public struct StyleBaselineImporter {
                     throw StyleBaselineImportError(path: "$.roles.\(role).font", message: "unknown font alias '\(fontAlias)'")
                 }
                 fontResolutions.append(SpecPackFontResolution(roleOrAlias: role, requestedName: fontAlias, resolvedName: resolved))
+            }
+
+            if let color = roleObject["color"] as? String {
+                roleColors[role] = color
+            }
+
+            if let decObj = roleObject["decoration"] as? [String: Any] {
+                guard let type = decObj["type"] as? String else {
+                    throw StyleBaselineImportError(path: "$.roles.\(role).decoration.type", message: "decoration must have a 'type'")
+                }
+                let decColor = decObj["color"] as? String
+                let widthPt = decObj["width_pt"] as? Double ?? (decObj["width_pt"] as? Int).map(Double.init)
+                let lengthMM = decObj["length_mm"] as? Double ?? (decObj["length_mm"] as? Int).map(Double.init)
+                roleDecorations[role] = SpecPackDecoration(
+                    type: type,
+                    color: decColor,
+                    widthPt: widthPt,
+                    lengthMM: lengthMM
+                )
             }
 
             if let styleID = mappedStyleID {
@@ -275,7 +321,9 @@ public struct StyleBaselineImporter {
         return SpecPackImportResult(
             tokens: tokens,
             unsupportedFields: Array(Set(unsupportedFields)).sorted(),
-            fontResolutions: fontResolutions.sorted { $0.roleOrAlias < $1.roleOrAlias }
+            fontResolutions: fontResolutions.sorted { $0.roleOrAlias < $1.roleOrAlias },
+            roleColors: roleColors,
+            roleDecorations: roleDecorations
         )
     }
 
