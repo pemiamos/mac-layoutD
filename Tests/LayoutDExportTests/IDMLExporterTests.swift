@@ -761,6 +761,113 @@ final class IDMLExporterTests: XCTestCase {
         XCTAssertTrue(spreads.contains("FillColor=\"Color/Black\""), "纯黑 CMYK 底色应引用内建 Black")
     }
 
+    // MARK: - FRAME-SPLIT（2026-07-07 用户定：一个角色一个框，正文断流串接）
+
+    func testFlowBreaksAtStandaloneRolesAndRolesGetOwnFrames() throws {
+        // 结构：标题 → 正文×2 → 抽言 → 正文×2。期望：两条独立正文流（抽言断流），
+        // 标题与抽言各自独立框/Story，不混进正文流。
+        let paragraphs: [Paragraph] = [
+            Paragraph(kind: .heading(level: 1), text: "第一章", styleId: StyleID.heading1.rawValue),
+            Paragraph(kind: .body, text: "正文甲一。", styleId: StyleID.body.rawValue),
+            Paragraph(kind: .body, text: "正文甲二。", styleId: StyleID.body.rawValue),
+            Paragraph(kind: .body, text: "这是抽言金句。", styleId: StyleID.pullQuote.rawValue),
+            Paragraph(kind: .body, text: "正文乙一。", styleId: StyleID.body.rawValue),
+            Paragraph(kind: .body, text: "正文乙二。", styleId: StyleID.body.rawValue)
+        ]
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "断流测试", author: "layoutD"),
+            sections: [BookSection(title: "第一章", stories: [Story(title: "正文", paragraphs: paragraphs)])]
+        )
+        let document = LayoutEngine().layout(project: project)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-flowsplit-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let designmap = try entry(output, "designmap.xml")
+        let storyList = try XCTUnwrap(matches(in: designmap, pattern: "StoryList=\"([^\"]*)\"").first)
+        let flowStories = storyList.split(separator: " ").filter { $0.hasPrefix("uStoryFlow") }
+        XCTAssertEqual(flowStories.count, 2, "抽言应把正文切成两条独立串接流")
+
+        let stories = try zipEntries(output).filter { $0.hasPrefix("Stories/Story_") }
+        var flowTexts = "", standaloneTexts = "", standaloneRaw = ""
+        for name in stories {
+            // 段末 NoBreak 会把「正文甲一。」拆成多个 CSR，剥掉 XML 标签后再断言纯文本。
+            let raw = try entry(output, name)
+            let content = raw.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                .filter { !$0.isWhitespace }   // CSR 之间的换行缩进也剥掉，得到连续纯文本
+            if name.contains("uStoryFlow") {
+                flowTexts += content
+            } else {
+                standaloneTexts += content
+                standaloneRaw += raw
+            }
+        }
+        XCTAssertTrue(flowTexts.contains("正文甲一。") && flowTexts.contains("正文乙二。"), "正文应在串接流里")
+        XCTAssertFalse(flowTexts.contains("第一章") || flowTexts.contains("抽言金句"),
+                       "标题/抽言不得混进正文流（各自独立框）")
+        XCTAssertTrue(standaloneTexts.contains("第一章"), "标题应有自己的独立 Story")
+        XCTAssertTrue(standaloneTexts.contains("这是抽言金句。"), "抽言应有自己的独立 Story")
+        XCTAssertTrue(standaloneRaw.contains("ParagraphStyle/pullQuote"), "抽言应套抽言样式")
+    }
+
+    func testUnderlayImageSkipsTextWrapAndPaintsBehind() throws {
+        // wrapMode=.underlay：不绕排（TextWrapMode=None）且 spread 里排在文字框之前（垫底）。
+        let asset = Asset(fileName: "bg.png", role: .photo, pixelWidth: 100, pixelHeight: 100, wrapMode: .underlay)
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "垫底图", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [])])],
+            assets: [asset]
+        )
+        let text = PageFrame(kind: .text, rect: Rect(x: 40, y: 40, width: 200, height: 200),
+                             styleId: StyleID.body.rawValue, content: .text("压在底图上的正文"))
+        let image = PageFrame(kind: .image, rect: Rect(x: 30, y: 30, width: 220, height: 220),
+                              content: .asset(asset.id))
+        // 图片 frame 故意放在文字之后，导出仍须把垫底图挪到最前（最底层）。
+        let document = LaidOutDocument(projectId: project.id,
+                                       pages: [LaidOutPage(number: 1, frames: [text, image])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-underlay-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let spreads = try zipEntries(output).filter { $0.hasPrefix("Spreads/Spread_") }
+            .map { try entry(output, $0) }.joined()
+        XCTAssertTrue(spreads.contains("TextWrapMode=\"None\""), "垫底图不应绕排")
+        XCTAssertFalse(spreads.contains("BoundingBoxTextWrap"), "垫底图不应带矩形绕排")
+        let imagePos = try XCTUnwrap(spreads.range(of: "ContentType=\"GraphicType\"")?.lowerBound)
+        let textPos = try XCTUnwrap(spreads.range(of: "<TextFrame ")?.lowerBound)
+        XCTAssertTrue(imagePos < textPos, "垫底图必须排在文字框之前（画在最底层）")
+    }
+
+    func testTextFrameExportsWithZeroInsetSpacing() throws {
+        let paragraph = Paragraph(kind: .body, text: "测试内边距", styleId: StyleID.body.rawValue)
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "内边距测试", author: "layoutD"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])]
+        )
+        let frame = PageFrame(
+            kind: .text,
+            rect: Rect(x: 20, y: 30, width: 200, height: 80),
+            styleId: StyleID.body.rawValue,
+            content: .text("测试内边距"),
+            sourceParagraphId: paragraph.id
+        )
+        let document = LaidOutDocument(projectId: project.id, pages: [LaidOutPage(number: 1, frames: [frame])])
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layoutd-idml-inset-\(UUID().uuidString).idml")
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        try IDMLExporter().export(document: document, project: project, to: output)
+
+        let spreads = try zipEntries(output).filter { $0.hasPrefix("Spreads/") }
+            .map { try entry(output, $0) }.joined()
+        
+        XCTAssertTrue(spreads.contains("<TextFramePreference"), "应包含 TextFramePreference 节点")
+        XCTAssertTrue(spreads.contains("<InsetSpacing type=\"list\">"), "应包含 InsetSpacing list")
+        XCTAssertTrue(spreads.contains("<ListItem type=\"unit\">0</ListItem>"), "InsetSpacing 包含 0pt 的 ListItem")
+    }
+
     // MARK: - helpers
 
     private func zipEntries(_ url: URL) throws -> [String] {

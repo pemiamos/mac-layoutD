@@ -3,6 +3,27 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 23:17 | claude | FRAME-SPLIT 实现完成（feature/claude-frame-split bb20d9d+合并1ff1a51，未合dev，待用户InDesign验
+- **分支**：dev
+- **概述**：FRAME-SPLIT 实现完成（feature/claude-frame-split bb20d9d+合并1ff1a51，未合dev，待用户InDesign验收）。三规则：①一个角色一个框——标题/概述/抽言/图注/参考文献各自独立框各套各样式，只有纯正文(styleId==body)进串接流；②断流——文流遇独立框角色即断，每段连续正文一条串接链(uStoryFlow/uFlowTF 取代按章的 uStoryChapter)；③彻底废除内嵌图锚定(cut2机制删除，绕开锚定文字拉伸bug)。新增 Asset.wrapMode(wrap绕排/underlay垫底=TextWrapMode None+spread置底)，Markdown 语法 wrap=under。已合入 dev 的 InsetSpacing=0（另一对话/AG做的①）。真稿《村落》自检：6条正文流/33独立框(8种角色样式)/流内仅body。UNDERLAY-1(引擎预览垫底追平)已登记AG道。
+- **改动文件**：(未填)
+- **检查**：295测试0失败、review-idml.sh 14/14、golden经护栏合并态重生成。结构自检：真稿6流/33独立框/流内仅body样式；绕排图BoundingBox、垫底图None+置底。
+- **下一步**：(未填)
+
+## 2026-07-07 22:45 | claude | 接手「AG 交接」：AG 在 feature/ag-textframe-inset(363a4d7) 完成 TextFrame InsetSpacing=0 但
+- **分支**：dev
+- **概述**：接手「AG 交接」：AG 在 feature/ag-textframe-inset(363a4d7) 完成 TextFrame InsetSpacing=0 但只在自己工作副本写了 HANDOFF 草稿、未提交也未同步 relay（故交接链看不到）。本棒代为集成：审核该 commit=给导出 IDML 的每个 TextFrame 的 TextFramePreference 显式写入四边 InsetSpacing=0（IDMLExporter+PageItems 正式路径 + IDMLSpikeExporter 竖排/横排 spike 两处），使文字贴齐引擎算好的版心、避免 InDesign 默认内边距二次内缩版心。改动干净、加性、含正反单测。已 --no-ff 合入 dev。
+- **改动文件**：Sources/LayoutDExport/IDMLExporter+PageItems.swift, Sources/LayoutDExport/IDMLSpikeExporter.swift, Tests/LayoutDExportTests/IDMLExporterTests.swift, Tests/golden/GOLDEN-LOG.md, Tests/golden/sample-idml.snapshot.txt
+- **检查**：独立复验：swift test 293 tests 0 failures；review-idml.sh 14/14 PASS；golden 逐字节一致。与 AG 自报完全吻合。合并提交在 dev（--no-ff over 363a4d7）。dev 未 push（本地集成区）。
+- **下一步**：1) ⚠️视觉验收待办（不可自动化）：在 InDesign 打开导出 IDML，确认文本框四边内边距=0、正文贴齐版心、无二次内缩——人工确认前不算「验证通过」。2) 验收 OK 后 Claude 合 dev→main。3) 清理：AG 工作副本 mac-layoutD-ag 里 .ai/HANDOFF.md 有一份未提交的 AG 草稿（与本正式交接重复），AG 下次开工前可丢弃(git checkout .ai/HANDOFF.md)以免日后同步冲突。
+
+## 2026-07-07 18:27 | claude | 默认排书规则批次全部落地并合 main(029336e)，用户真稿《村落》逐点 InDesign 验收通过。5 项：①左对齐+首行不缩进(0)+段间空一行(Sp
+- **分支**：dev
+- **概述**：默认排书规则批次全部落地并合 main(029336e)，用户真稿《村落》逐点 InDesign 验收通过。5 项：①左对齐+首行不缩进(0)+段间空一行(SpaceAfter=16)②关基线网格逐行锁定(GridAlignment None)③默认不生成目录(PageSetup.includesTableOfContents 默认false，.sample 显式开启保留旧测试/golden)④【根子性】段落回车必须用 IDML <Br/> 元素——用户实机验证7种写法，U+000A被当软回车/U+2029被当空格/无分隔全糊，唯<Br/>得真段落(标题套样式+分段+空行)；统一修三处多段落路径(章串接/逐帧多行/目录)⑤沿途还修了 SPLIT-EXPORT/GOLDEN-GUARD/relay显示。⚠️另一个对话在主checkout有个只改标题LeftAlign的半成品(未提交)，是本方案子集，已 stash@{0} 保留不删。
+- **改动文件**：Sources/LayoutDCore/{PageSetup,DesignTokens,StyleLibrary,BookProject}.swift、Sources/LayoutDExport/IDMLExporter+{Resources,Stories}.swift、Sources/LayoutDEngine/LayoutEngine{,+Geometry}.swift、Tests/{LayoutDCoreTests,LayoutDExportTests}、Tests/golden/*、scripts/golden-update.sh+review-idml.sh
+- **检查**：292测试过、review-idml.sh 14/14、golden 经护栏--reason刷新。真稿《村落》导出43个<Br/>/44段/0软回车残留，用户InDesign验收：段落独立+各套样式+段间空行+左对齐+无目录+图文正常。
+- **下一步**：(未填)
+
 ## 2026-07-07 13:24 | claude | SAMPLE-1 重做版审核合 dev，规范包三件套全部落地。AG 已自觉领打回、基于 Codex 的 parseSpecPack 重做为 feature/ag
 - **分支**：dev
 - **概述**：SAMPLE-1 重做版审核合 dev，规范包三件套全部落地。AG 已自觉领打回、基于 Codex 的 parseSpecPack 重做为 feature/ag-sample-1-v2（10550c6），铁律全守：①并行 SpecPack.swift 已删、解析只走 StyleBaselineImporter.parseSpecPack（唯一事实源）；②新建共享 BookProject.applySpecPack(_:)（LayoutDImport/BookProject+Tokens.swift），AppState.applyImportedTokens 减105行改为委托它（单一应用路径，不再第三份）；③补齐 SPEC-PACK-1 没做的视觉三项=字体族(fontResolutions→复合中/西/数字)+角色色/装饰点缀色+开本trim(page.width/height)；④不支持字段打 stderr 不静默。实测：swift test 291、桌面3份规范包一条命令出3份视觉可区分PDF（md5各异）。合并提交 d85a730。PDF「重跑确定性」按用户拍板走方式1（内容级+掩码探针，见 DECISIONS 13:23）：Quartz每份PDF盖秒级CreationDate/ModDate+随机ID、字节永不复现且属平台行为，故不改PDF字节，改为 review-idml.sh 加 2g 掩码确定性探针（导出两次抹掉这三项后断言逐字节一致，已自证有效），探针13→14。QUEUE 已标 SAMPLE-1 [x]。

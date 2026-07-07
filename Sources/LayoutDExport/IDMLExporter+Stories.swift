@@ -66,11 +66,11 @@ extension IDMLExporter {
         """
     }
 
-    /// THREAD-1b：一章的正文+标题合成一个 Story，`paragraphs` 按阅读顺序排列。
-    /// 每段一个 ParagraphStyleRange——但 PSR 边界本身不是段落标记，InDesign 仍会把相邻
-    /// PSR 的文字接续渲染成一整段。真正的段落回车是 IDML 的 **`<Br/>` 元素**（放在段落
-    /// 最后，最后一段不带），InDesign 才把它们识别成各自独立的段落（各自套段落样式、
-    /// 段后间距 SpaceAfter 生效出空行）。
+    /// FRAME-SPLIT：一条正文串接流（连续纯正文段落）合成一个 Story，`paragraphs`
+    /// 按阅读顺序排列。每段一个 ParagraphStyleRange——但 PSR 边界本身不是段落标记，
+    /// InDesign 仍会把相邻 PSR 的文字接续渲染成一整段。真正的段落回车是 IDML 的
+    /// **`<Br/>` 元素**（放在段落最后，最后一段不带），InDesign 才把它们识别成各自
+    /// 独立的段落（各自套段落样式、段后间距 SpaceAfter 生效出空行）。
     /// ⚠️ 段落回车不能用字符：实测 U+000A 被当「强制换行/软回车」（整章并成一段、标题不套
     /// 样式、无空行）；U+2029 被当空格；不加分隔则文字全糊。只有 `<Br/>` 元素是对的
     /// （2026-07-07 用户逐一实机验证 7 种写法，仅 `<Br/>` 通过：标题变大+分段+空行）。
@@ -79,19 +79,10 @@ extension IDMLExporter {
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
         let lastIndex = paragraphs.count - 1
         let body = paragraphs.enumerated().map { index, p -> String in
-            // 顺序很关键：可见文字 → 锚定对象（挂在本段末尾，随本段走）→ 段落回车 <Br/>
-            // （单独一个 CharacterStyleRange 装 <Br/>，放在本段最后，标记本段结束）。
+            // 可见文字 → 段落回车 <Br/>（单独一个 CharacterStyleRange，放在本段最后）。
             let textRanges = characterStyleRanges(for: p.text, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef, noBreakTail: trailingNoBreakCount(for: p.text))
-            let anchoredRanges = p.anchoredAssets.enumerated().map { assetIndex, anchored in
-                anchoredImageCharacterStyleRange(
-                    self: "uAnchorImg\(id)_\(index)_\(assetIndex)",
-                    imageSelf: "uAnchorImgAsset\(id)_\(index)_\(assetIndex)",
-                    linkSelf: "uAnchorImgLink\(id)_\(index)_\(assetIndex)",
-                    asset: anchored.asset, packagedFileName: anchored.packagedFileName,
-                    width: anchored.rect.width, height: anchored.rect.height)
-            }
             let paragraphMark = index == lastIndex ? [] : [Self.paragraphBreakRange]
-            let ranges = ([textRanges] + anchoredRanges + paragraphMark).joined(separator: "\n")
+            let ranges = ([textRanges] + paragraphMark).joined(separator: "\n")
             return """
             \t\t<ParagraphStyleRange AppliedParagraphStyle="\(p.styleRef)">
             \(ranges)

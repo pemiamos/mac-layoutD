@@ -1,5 +1,13 @@
 import Foundation
 
+/// 图片（连同其紧邻图注框）在版面中的绕排意图（2026-07-07 用户定，FRAME-SPLIT 批）：
+/// - `wrap`：在文字流中，正文避让绕排（默认）。
+/// - `underlay`：垫底/背景图——不参与绕排、画在文字下层，文字直接压在图上走。
+public enum AssetWrapMode: String, Codable, Sendable {
+    case wrap
+    case underlay
+}
+
 public struct Asset: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
     public var fileName: String
@@ -11,6 +19,8 @@ public struct Asset: Codable, Equatable, Sendable, Identifiable {
     public var pixelHeight: Int
     public var dpi: Double?
     public var usage: AssetUsage
+    /// 绕排意图。附加字段：旧 `.layoutd` 缺此键解码为 nil → 视同 `.wrap`。
+    public var wrapMode: AssetWrapMode?
 
     public init(
         id: UUID = UUID(),
@@ -22,7 +32,8 @@ public struct Asset: Codable, Equatable, Sendable, Identifiable {
         pixelWidth: Int,
         pixelHeight: Int,
         dpi: Double? = nil,
-        usage: AssetUsage = .unused
+        usage: AssetUsage = .unused,
+        wrapMode: AssetWrapMode? = nil
     ) {
         self.id = id
         self.fileName = fileName
@@ -34,7 +45,10 @@ public struct Asset: Codable, Equatable, Sendable, Identifiable {
         self.pixelHeight = pixelHeight
         self.dpi = dpi
         self.usage = usage
+        self.wrapMode = wrapMode
     }
+
+    public var effectiveWrapMode: AssetWrapMode { wrapMode ?? .wrap }
 }
 
 public enum AssetRole: String, Codable, CaseIterable, Sendable {
