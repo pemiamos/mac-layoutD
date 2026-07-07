@@ -144,17 +144,12 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`Sources/LayoutDApp/*`
 > ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）；**生成样张别提交进仓库**（B1 踩过，Claude 合并时剔除了 20 个 PNG/PDF）。
 
-- [ ] **SAMPLE-1 一键批量样张**（🔁 **2026-07-07 打回重做**，用户拍板：不接受自建并行解析器，须基于 Codex 的 SPEC-PACK-1 重写）
-  - **打回原因**：AG 首版（`feature/ag-sample-1` `299450b`，未合 dev）自建了一套并行的 `Sources/LayoutDImport/SpecPack.swift`（Codable 模型 + 解析 + `toBookProjectUpdates`），与 Codex 刚落地的 `StyleBaselineImporter.parseSpecPack` 在同一模块里重复解析同样 3 份 JSON、逻辑不共享。用户决定：**规范包解析唯一事实源 = Codex 的 `parseSpecPack`**；SAMPLE-1 不得再自建 SpecPack.swift。首版的 CLI 骨架（`--render-samples`/`--chapter` 参数、桌面输出循环、PDF 导出封装）可作参考保留思路，但解析层必须换掉。
-  - 背景：规范包路线定案（见 DECISIONS 2026-07-07 两条）。目标体验：AI 改一版规范 JSON → 一条命令 → 桌面出新样张 PDF，分钟级比选闭环。
-  - **重做目标**：
-    1. CLI 子命令 `--render-samples 方案A.json 方案B.json ... --chapter <fixture>`：默认 `--chapter` 指向 **`Samples/fixture-standard-chapter.md`**（FIXTURE-1 已就绪）；每份规范包渲一份 PDF 到 `~/Desktop`，文件名含方案名；重跑确定性一致。
-    2. 解析走 **`StyleBaselineImporter.parseSpecPack(jsonData:)`**（唯一事实源）：拿到 `SpecPackImportResult{tokens, unsupportedFields, fontResolutions}`；非法规范直接 fail-fast 打印 JSON-path 错误；把 `unsupportedFields` 打到 stderr 提示（不静默）。
-    3. **把 tokens 应用到项目再渲染**：token 里已覆盖的 margins/columns/grid/fontSize/lineHeight/缩进/段距 —— 复用 `applyImportedTokens` 的等价逻辑（它在 App 层且依赖 AppState，CLI 需要抽一份不依赖 GUI 的纯函数应用，或把该逻辑下沉到 `LayoutDCore`/`LayoutDImport` 供两处共用，**别再复制第三份**）。
-    4. **补齐 token 未覆盖的视觉三项——字体族 / 点缀色 / 开本 trim**（这是样张能区分方案A/B/C 的关键，SPEC-PACK-1 明确没做）：用 `fontResolutions` 把每个角色的解析后字体名写进对应 `ParagraphStyle`；颜色 token 落到样式/装饰；`page.size` 落到 `PageSetup` trim。这一步是本任务的真正价值，做扎实。
-  - **⚠️ 铁律**：不新建与 Codex 重复的规范包解析/模型文件；解析只有一处（`parseSpecPack`）。若发现 `parseSpecPack` 缺字段，回头找 Codex 补在 `StyleBaselineImporter`，不要在 App 层另起炉灶。
-  - 文件：`Sources/LayoutDApp/`（CLI 入口 + 参数）、`Sources/LayoutDExport/PDFExporter.swift`（如需小改）；token→样式应用的共享函数放 `LayoutDCore` 或 `LayoutDImport`。**删除**首版的 `Sources/LayoutDImport/SpecPack.swift` 与 `Tests/LayoutDImportTests/SpecPackTests.swift`。
-  - 验收：3 份桌面规范包一条命令出 3 份**视觉可区分**的 PDF（点缀色/字体/版式确实不同）、真实字体无 tofu（GUARD-2 rule⑥ 兜底）；重跑确定性一致；非法规范报可读错误；全部测试/探针 PASS；**生成的 PDF 不进仓库**（投 ~/Desktop）。
+- [x] **SAMPLE-1 一键批量样张** — ✅ **重做版**（AG，`feature/ag-sample-1-v2` `10550c6`，Claude 审核合 dev `d85a730`）。首版打回重做（原因见下），v2 全部照做。
+  - **交付**：CLI `--render-samples A.json B.json ... --chapter <fixture>`（默认 chapter=`Samples/fixture-standard-chapter.md`）→ 桌面出带方案名的样张 PDF。解析**只走** `StyleBaselineImporter.parseSpecPack`（唯一事实源，首版并行的 `SpecPack.swift` 已删）；新建**共享**应用函数 `BookProject.applySpecPack(_ result:)`（`LayoutDImport/BookProject+Tokens.swift`），`AppState.applyImportedTokens` 减 105 行改为委托它（单一应用路径）；补齐了 SPEC-PACK-1 没做的视觉三项——字体族（`fontResolutions`→复合中/西/数字字体）、角色色 + 装饰点缀色、开本 trim（`page.width/height`→`PageSetup`）；不支持字段打 stderr 告警不静默。
+  - **验收全过**：`swift test` 291；`review-idml.sh` 14/14（新增 2g 掩码确定性探针）；桌面 3 份规范包一条命令出 3 份**视觉可区分** PDF（md5 各异、方案A/B/C 点缀色+字体不同）；重跑**内容确定**（见下）。
+  - **打回原因（存档）**：首版（`feature/ag-sample-1` `299450b`，**未合 dev**）自建并行 `SpecPack.swift`（独立解析+`toBookProjectUpdates`），与 Codex 的 `parseSpecPack` 在同模块重复解析同 3 份 JSON。用户拍板收敛到单一解析器（见 DECISIONS 2026-07-07 12:57）→ 打回。
+  - **PDF「重跑确定性」处理（用户 2026-07-07 拍板 = 方式1 内容级 + 掩码探针）**：Quartz PDFContext 给每份 PDF 盖 `/CreationDate`/`/ModDate`（秒级）+ 随机 `/ID`，字节级永不可复现（连朴素 `--export-pdf` 两次都不一致），属平台行为、非本代码问题。**不改 PDF 字节**（改字节要保等长否则毁 xref，遇压缩对象流还会静默失效——见 DECISIONS）。改为在 `review-idml.sh` 加 **2g 掩码确定性探针**：导出两次、抹掉这三处易变元数据后断言逐字节一致（已自证：未掩码≠、掩码后=），以内容级确定性验收。
+  - **轻量提醒（不阻塞）**：v2 为拿 roleColors/装饰色**直接改了 `StyleBaselineImporter.swift`（+58，Codex 道文件）**——加字段、能跑、已合，但属跨道；后续该类字段扩展应回归 Codex。首版分支 `feature/ag-sample-1` 与其 worktree 停靠可清理。
 - [x] **PERF-3 排版异步化 + 防抖** — ✅ AG `c99e48a`，排版及预检移出主线程，引入 150ms 防抖，支持首帧/测试环境同步回退。
   - 背景：每次改动全书重排两遍 + preflight 同步跑在界面线程（`AppState.recalculateLayout`），书稿变大会卡界面。
   - 目标：连续操作只排最后一次（防抖），layout/preflight 移出界面线程（异步化）；首帧仍同步保证打开即有版面；须防状态流里的 GUI 竞态（异步排版结果回来时用户可能已经切换了选中/页面）。

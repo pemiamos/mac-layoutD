@@ -308,6 +308,36 @@ else
   bad "串接探针 fixture 导出失败（见 $TMP/thread-export.log）"
 fi
 
+# 2g. SAMPLE-1 掩码确定性：PDF 导出的「重跑确定性」不能在字节级直接验——Quartz PDFContext
+# 每份 PDF 都盖 /CreationDate、/ModDate（精确到秒）和随机 /ID，连朴素 --export-pdf 两次都不一致。
+# 但版面/内容本身是确定的。故导出两次、抹掉这三处易变元数据后应「逐字节一致」，以此证明确定性
+# 而不去改 PDF 字节本身（改字节要保等长否则毁 xref、且遇压缩对象流会静默失效，见 DECISIONS）。
+sec "PDF 掩码确定性探针（SAMPLE-1）"
+DET1="$TMP/det1.pdf"; DET2="$TMP/det2.pdf"
+if swift run layoutD -- Samples/fixture-standard-chapter.md --export-pdf "$DET1" >"$TMP/det1.log" 2>&1 \
+   && swift run layoutD -- Samples/fixture-standard-chapter.md --export-pdf "$DET2" >"$TMP/det2.log" 2>&1; then
+  python3 - "$DET1" "$DET2" <<'PY'
+import re, sys
+def mask(path):
+    data = open(path, 'rb').read()
+    data = re.sub(rb'/CreationDate\s*\(D:[^)]*\)', b'/CreationDate(MASKED)', data)
+    data = re.sub(rb'/ModDate\s*\(D:[^)]*\)',      b'/ModDate(MASKED)',      data)
+    data = re.sub(rb'/ID\s*\[\s*<[0-9A-Fa-f]+>\s*<[0-9A-Fa-f]+>\s*\]', b'/ID[MASKED]', data)
+    return data
+a, b = mask(sys.argv[1]), mask(sys.argv[2])
+if a == b:
+    print("  ✅ 掩码 CreationDate/ModDate/ID 后两次导出逐字节一致")
+    sys.exit(0)
+n = min(len(a), len(b)); i = next((k for k in range(n) if a[k] != b[k]), n)
+print(f"  ❌ 掩码后仍不一致（len {len(a)} vs {len(b)}，首个差异 @ 偏移 {i}）")
+print("     …%r\n     vs %r" % (a[max(0,i-24):i+24], b[max(0,i-24):i+24]))
+sys.exit(1)
+PY
+  [ $? -eq 0 ] && ok "SAMPLE-1 掩码确定性断言全过" || bad "SAMPLE-1 掩码确定性有失败（见上）"
+else
+  bad "PDF 掩码确定性探针导出失败（见 $TMP/det1.log / det2.log）"
+fi
+
 # --- golden 回归（防漂移网）。仅本地跑：CI runner 的字体解析与本机有差异会误报，
 # 见 .github/workflows/ci.yml 注释；本地跑本脚本即自动带上，堵住「忘了单独跑」的洞。
 if [ -z "${CI:-}" ]; then
