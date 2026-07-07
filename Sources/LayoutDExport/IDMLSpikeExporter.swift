@@ -315,11 +315,29 @@ public struct IDMLSpikeExporter {
         \t\t</Page>
         \t\t<TextFrame Self="uTFH" ParentStory="uStoryH" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(h)
-        \t\t\t<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+        \t\t\t<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign">
+        \t\t\t\t<Properties>
+        \t\t\t\t\t<InsetSpacing type="list">
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t</InsetSpacing>
+        \t\t\t\t</Properties>
+        \t\t\t</TextFramePreference>
         \t\t</TextFrame>
         \t\t<TextFrame Self="uTFV" ParentStory="uStoryV" PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(v)
-        \t\t\t<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+        \t\t\t<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign">
+        \t\t\t\t<Properties>
+        \t\t\t\t\t<InsetSpacing type="list">
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t</InsetSpacing>
+        \t\t\t\t</Properties>
+        \t\t\t</TextFramePreference>
         \t\t</TextFrame>
         \t\t<Rectangle Self="uRect1" ContentType="GraphicType" StoryTitle="$ID/" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(imgRect)
