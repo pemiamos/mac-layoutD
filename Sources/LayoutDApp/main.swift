@@ -43,6 +43,8 @@ Options:
   --validate                Run preflight as a CLI quality gate.
   --apply-preflight-fixes   Apply conservative auto-fixes before export or validation.
   --idml-spike PATH         Write a minimal IDML probe (spread + 中文/竖排文本框 + 置入图 + CMYK Swatch) to open in InDesign. Optional second arg: image path.
+  --render-samples JSON...  Batch render a set of visual specification packages as proof PDFs on the Desktop.
+  --chapter PATH            Specify the chapter manuscript or package path to use for rendering samples.
   --help, -h                Show this help.
 """
 
@@ -76,6 +78,59 @@ if let idmlFlagIndex = CommandLine.arguments.firstIndex(of: "--idml-spike") {
 }
 
 let launchProject = ProjectLoader().loadFromCommandLine()
+
+if let renderSamplesPaths = launchProject.renderSamplesPaths, !renderSamplesPaths.isEmpty {
+    let chapterPath = launchProject.renderSamplesChapterPath ?? "Samples/fixture-standard-chapter.md"
+    let chapterURL = URL(fileURLWithPath: chapterPath).standardizedFileURL
+    print("Loading chapter fixture from: \(chapterURL.path)")
+    
+    let baseProject: BookProject
+    do {
+        baseProject = try ProjectLoader().loadProject(inputURL: chapterURL)
+    } catch {
+        fputs("Failed to load chapter fixture: \(error.localizedDescription)\n", stderr)
+        exit(EXIT_FAILURE)
+    }
+    
+    let desktopURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Desktop")
+    
+    for specPath in renderSamplesPaths {
+        let specURL = URL(fileURLWithPath: specPath).standardizedFileURL
+        print("Processing spec package: \(specURL.path)")
+        
+        do {
+            let jsonData = try Data(contentsOf: specURL)
+            let result = try StyleBaselineImporter.parseSpecPack(jsonData: jsonData)
+            
+            if !result.unsupportedFields.isEmpty {
+                fputs("Warning: Unsupported spec fields in \(specURL.lastPathComponent): \(result.unsupportedFields.joined(separator: ", "))\n", stderr)
+            }
+            
+            var updatedProject = baseProject
+            updatedProject.applySpecPack(result)
+            let document = LayoutEngine().layout(project: updatedProject)
+            
+            let baseName = specURL.deletingPathExtension().lastPathComponent
+            let filename = "layoutD-样张-\(baseName).pdf"
+            let outputPDFURL = desktopURL.appendingPathComponent(filename)
+            
+            try PDFExporter().export(
+                document: document,
+                project: updatedProject,
+                to: outputPDFURL,
+                pageRange: nil,
+                drawCropMarks: false,
+                drawGridGuides: false,
+                pdfxVersion: .none
+            )
+            print("Successfully rendered: \(outputPDFURL.path)")
+        } catch {
+            fputs("Error rendering spec \(specPath): \(error.localizedDescription)\n", stderr)
+            exit(EXIT_FAILURE)
+        }
+    }
+    exit(EXIT_SUCCESS)
+}
 
 if launchProject.showHelp {
     print(commandLineUsage)

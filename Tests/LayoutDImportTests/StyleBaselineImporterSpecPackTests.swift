@@ -24,7 +24,9 @@ final class StyleBaselineImporterSpecPackTests: XCTestCase {
         XCTAssertEqual(result.tokens.scalar("paragraph.body.firstLineIndent"), 20)
         XCTAssertEqual(result.tokens.scalar("paragraph.pullQuote.fontSize"), 16)
         XCTAssertTrue(result.unsupportedFields.contains("$.roles.章节序号.treatment"))
-        XCTAssertTrue(result.unsupportedFields.contains("$.roles.抽言.decoration"))
+        XCTAssertEqual(result.roleColors["章名"], "ink")
+        XCTAssertEqual(result.roleDecorations["抽言"], SpecPackDecoration(type: "left-rule", color: "accent", widthPt: 3))
+        XCTAssertEqual(result.roleDecorations["图注"], SpecPackDecoration(type: "top-tick", color: "accent", lengthMM: 6))
         XCTAssertTrue(result.fontResolutions.contains {
             $0.requestedName == "黑体-简 Medium" && $0.resolvedName == "Heiti SC Medium"
         })

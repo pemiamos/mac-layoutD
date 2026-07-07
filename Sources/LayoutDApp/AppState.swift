@@ -4,6 +4,7 @@ import LayoutDCore
 import LayoutDEngine
 import LayoutDDesignAI
 import LayoutDCheck
+import LayoutDImport
 
 final class AppState: ObservableObject {
     var isAsync: Bool = NSClassFromString("XCTestCase") == nil
@@ -898,104 +899,12 @@ final class AppState: ObservableObject {
     func applyImportedTokens(_ importedTokens: DesignTokens, baselineGridCompensate: Double? = nil) {
         commitState()
         var currentProject = project
-        
-        currentProject.styles.tokens = importedTokens
-        
-        var styles = currentProject.styles.paragraphStyles
-        for idx in styles.indices {
-            var style = styles[idx]
-            
-            let fsToken = "paragraph.\(style.id).fontSize"
-            if let val = importedTokens.scalar(fsToken) {
-                style.fontSizeToken = fsToken
-                style.fontSize = val
-            }
-            
-            let lhToken = "paragraph.\(style.id).lineHeight"
-            if let val = importedTokens.scalar(lhToken) {
-                style.lineHeightToken = lhToken
-                style.lineHeight = val
-            }
-            
-            let indentToken = "paragraph.\(style.id).firstLineIndent"
-            if let val = importedTokens.scalar(indentToken) {
-                style.firstLineIndentToken = indentToken
-                style.firstLineIndent = val
-            }
-            
-            let beforeToken = "paragraph.\(style.id).spaceBefore"
-            if let val = importedTokens.scalar(beforeToken) {
-                style.spaceBeforeToken = beforeToken
-                style.spaceBefore = val
-            }
-            
-            let afterToken = "paragraph.\(style.id).spaceAfter"
-            if let val = importedTokens.scalar(afterToken) {
-                style.spaceAfterToken = afterToken
-                style.spaceAfter = val
-            }
-            
-            styles[idx] = style
-        }
-        currentProject.styles.paragraphStyles = styles
-        
-        var setup = currentProject.pageSetup
-        var newMargins = setup.margins
-        
-        let mtToken = "page.margin.top"
-        if let val = importedTokens.scalar(mtToken) {
-            newMargins.top = val
-        }
-        let mrToken = "page.margin.right"
-        if let val = importedTokens.scalar(mrToken) {
-            newMargins.right = val
-        }
-        let mbToken = "page.margin.bottom"
-        if let val = importedTokens.scalar(mbToken) {
-            newMargins.bottom = val
-        }
-        let mlToken = "page.margin.left"
-        if let val = importedTokens.scalar(mlToken) {
-            newMargins.left = val
-        }
-        
-        setup.margins = newMargins // sets margins, triggers didSet (clearing tokens)
-        
-        // Re-apply tokens after setting margins
-        if importedTokens.scalar(mtToken) != nil {
-            setup.marginTopToken = mtToken
-        }
-        if importedTokens.scalar(mrToken) != nil {
-            setup.marginRightToken = mrToken
-        }
-        if importedTokens.scalar(mbToken) != nil {
-            setup.marginBottomToken = mbToken
-        }
-        if importedTokens.scalar(mlToken) != nil {
-            setup.marginLeftToken = mlToken
-        }
-        
-        let colsToken = "page.columns"
-        if let val = importedTokens.scalar(colsToken) {
-            setup.columns = max(1, Int(round(val)))
-            setup.columnsToken = colsToken
-        }
-        let gutToken = "page.gutter"
-        if let val = importedTokens.scalar(gutToken) {
-            setup.gutter = val
-            setup.gutterToken = gutToken
-        }
-        
-        let bgToken = "page.baselineGrid"
-        if let val = importedTokens.scalar(bgToken) {
-            setup.baselineGrid = val
-            setup.baselineGridToken = bgToken
-        } else if let comp = baselineGridCompensate {
-            setup.baselineGrid = comp
-            setup.baselineGridToken = nil
-        }
-        
-        currentProject.pageSetup = setup
+        let result = SpecPackImportResult(
+            tokens: importedTokens,
+            unsupportedFields: [],
+            fontResolutions: []
+        )
+        currentProject.applySpecPack(result, baselineGridCompensate: baselineGridCompensate)
         self.project = currentProject
     }
 
