@@ -65,6 +65,11 @@
 > **2026-07-06 定位校准（见 DECISIONS）**：layoutD 交付「初排灌版」给 InDesign，不替代 InDesign。开发价值标准 = 文流/样式/视觉规范/CMYK 高完成度迁移进 InDesign、给人工调整省时间。可编辑性 > 逐像素冻结（InDesign 里漂移可人工调校）。脚注/傍点/表格深化 = 初排细枝末节，不再投入。
 > **2026-07-07 规范包路线定案（见 DECISIONS）**：视觉规范/样张走「AI 生成规范包 JSON → layoutD 渲样张 → 人工比选 → 同一规范直通 IDML」。首测已过：`~/Desktop/layoutD-规范包测试/` 有 3 份规范包 JSON（**方案A-探索黄 已选为基准**）+ 视觉预览.html；总纲见桌面《layoutD 视觉规范与样张生成·开发计划 v1.0.pdf》。本批新任务：SPEC-PACK-1（Codex 道）→ FIXTURE-1（Claude 道）→ SAMPLE-1（AG 道，依赖前两个）。
 
+- [x] **FRAME-CANVAS-0 抽取共享断流分组函数** — ✅ Claude。
+  - 交付：新增 `Sources/LayoutDEngine/FlowFrameGrouping.swift`（`public func groupIntoFlowFrames(pages:project:) -> FlowFrameGrouping`，`FlowFrameGrouping` 含 `frameRunIndex`/`paragraphsForRun`/`groupsByPage`/`groupsByRun`，`FlowFrameGroup` 除合并 rect 外还带 `memberFrameIndices`——组内原始 frame 下标，供 FRAME-CANVAS-1 画布按组渲染用）。放在 `LayoutDEngine`（`LayoutDApp`/`LayoutDExport` 都已依赖它，天然可 import）。`IDMLExporter.swift` 的 `runIndexByParagraphId`/`FrameKey`/`FlowPageKey`/`ChainInfo`/`unionRect`/`isBodyFlowParagraph` 全部删除、改为调用共享函数（`IDMLExporter+Helpers.swift` 同步瘦身）。
+  - 验收：303 测试过（+2 新单测 `FlowFrameGroupingTests`：标题/抽言打断正文流分两条 run、表格打断正文流）、review-idml.sh 14/14、golden 逐字节一致（证明抽取零行为变化）。
+  - **AG 的 FRAME-CANVAS-1 前置条件已满足，可以开工**（见下方 Antigravity 道队列）。
+
 - [x] **FIXTURE-1 标准样章 fixture** — ✅ Claude（`eeb2a7a`，合 dev `1197b03`）。
   - 交付：`Samples/fixture-standard-chapter.md`（Markdown 角色标签格式，走现有导入器）——《深海不是黑暗的尽头》标准样章，覆盖 章名/节名/文章名/开节概述/正文/抽言/图注/引文/图片占位（+参考文献）全部角色，每个至少一次。
   - 回归语料：`Tests/LayoutDImportTests/FixtureStandardChapterTests.swift`（3 测）——从 `#filePath` 推算样章路径（不硬编码绝对路径），断言每个角色→正确段落种类/命名样式、标签字面不漏进正文、front matter 不泄漏。
@@ -147,6 +152,14 @@
 - [x] **FRAME-INSET-2 预览文字贴框边（追平 IDML InsetSpacing=0）** — ✅ AG（`4f4ff4b`，Claude 审核合 dev `bba4867`）。普通文字框默认内边距归零（`drawText` `applyDefaultInset` 默认改 false）；组件类（知识卡片/表格）走调用方预先按 `componentStyle.textInsetX/Y` 做过的 rect，不受影响（已核对调用点）。画布/PDF/PNG 三处一致。
 - [x] **UNDERLAY-1 垫底图预览/引擎追平** — ✅ AG（`51dcfdc`，Claude 审核合 dev `bba4867`）。`LayoutEngine+Assets.swift` 里 underlay 图片路径完全跳过 cursor 推进/绕排（提前 `return`，不进 `prepareWideAssetPlacement`），`exclusionRects`/`LayoutPlan` 侧同步排除；跨页 spread 底图用 `deferredUnderlayFrames` 处理"图片排到的页面还没生成"的时序、`finish()` 补页逻辑一并接好。三渲染器按 underlay 优先画（图在下字在上）。新增 2 个针对性单测。
   - 验收：301 测试过、review-idml.sh 14/14、golden 逐字节一致。**审核时剔除**：51dcfdc 里误带进一个与功能无关的 1.8MB `layoutD-icon.png`（早前已知的待定去留文件），合并时已单独 commit(`bba4867`)移除。
+
+- [ ] **FRAME-CANVAS-1 画布/PDF/PNG 追平 IDML 分框（连续正文合并显示）**（2026-07-08 用户验收 FRAME-SPLIT 时提出，**方案 A**，✅ 前置条件已就绪，可开工）
+  - 背景：FRAME-SPLIT（已合 main）只在 **IDML 导出层**把连续正文合并成一个串接流框（用户 InDesign 验收过）；但 layoutD 引擎产帧仍是「每段落一个 PageFrame」（`LayoutEngine+TextFlow.swift` 的 `placeTextFrame`/`addText` 逐段 append），画布/PDF/PNG 直接画这些原子帧——用户在画布里看到连续正文仍是一段一个虚线框，**预览 ≠ 输出**，达不到「在 layoutD 里编辑也方便」的初衷。
+  - **前置条件已完成（FRAME-CANVAS-0，Claude）**：断流分组逻辑已抽成跨模块共享函数 `groupIntoFlowFrames(pages:project:) -> FlowFrameGrouping`（`Sources/LayoutDEngine/FlowFrameGrouping.swift`），`LayoutDApp`/`LayoutDExport` 都能 import。`FlowFrameGrouping.groupsByPage[pageIndex]` 给出该页所有分组（`FlowFrameGroup.rect` = 合并 rect，`.memberFrameIndices` = 组内原始 frame 在 `pages[pageIndex].frames` 里的下标，按出现顺序）——本任务直接调用它，不用重新实现断流判定。IDML 导出器（`IDMLExporter.swift`）已改为消费同一份函数，两边行为保证一致。
+  - 目标（方案 A，已用户拍板，**只做显示/交互聚合层，不改 engine 产帧/override/锁页模型**）：画布对每组连续正文（`groupIntoFlowFrames` 分组结果）画**一个合并的虚线框**（组内文字仍逐段渲染，渲染逻辑不用大改）；选中/移动时整组当一个交互单位；PDF/PNG 预览同理只改「画框」这一层。
+  - 明确不做：不要把 engine 改成产出「一个多段落大 frame」（方案 B，高风险大重构，已否决）——PageFrame 仍是原子单位，只是显示层按组聚合。
+  - 文件：`CanvasView+Drawing.swift`、`CanvasView+Interaction.swift`（选中/移动改按组）、`PDFExporter.swift`、`PNGExporter.swift`。
+  - 验收：标准样章画布里，被标题/抽言断开的每段连续正文各显示为一个合并虚线框（不再一段一框）；点击/拖拽整组一起选中移动；单段落属性面板显示仍正确（组内取第一段或提示"多段落"，具体交互细节可自行判断但不能崩溃/误编辑）；全部测试/探针 PASS。
 
 - [x] **SAMPLE-1 一键批量样张** — ✅ **重做版**（AG，`feature/ag-sample-1-v2` `10550c6`，Claude 审核合 dev `d85a730`）。首版打回重做（原因见下），v2 全部照做。
   - **交付**：CLI `--render-samples A.json B.json ... --chapter <fixture>`（默认 chapter=`Samples/fixture-standard-chapter.md`）→ 桌面出带方案名的样张 PDF。解析**只走** `StyleBaselineImporter.parseSpecPack`（唯一事实源，首版并行的 `SpecPack.swift` 已删）；新建**共享**应用函数 `BookProject.applySpecPack(_ result:)`（`LayoutDImport/BookProject+Tokens.swift`），`AppState.applyImportedTokens` 减 105 行改为委托它（单一应用路径）；补齐了 SPEC-PACK-1 没做的视觉三项——字体族（`fontResolutions`→复合中/西/数字字体）、角色色 + 装饰点缀色、开本 trim（`page.width/height`→`PageSetup`）；不支持字段打 stderr 告警不静默。
