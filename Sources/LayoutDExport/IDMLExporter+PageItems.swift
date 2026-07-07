@@ -18,7 +18,16 @@ extension IDMLExporter {
         """
         \t\t<TextFrame Self="\(id)" ParentStory="\(story)" PreviousTextFrame="\(previous)" NextTextFrame="\(next)" ContentType="TextType" FillColor="\(colorRef(fillColor))" StrokeColor="\(colorRef(strokeColor))" StrokeWeight="\(fmt(max(strokeWidth, 0)))" ItemTransform="1 0 0 1 0 0">
         \t\t\t\(rectGeometry(rect, pageW: pageW, pageH: pageH, dx: dx))
-        \t\t\t<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign"/>
+        \t\t\t<TextFramePreference TextColumnCount="1" TextColumnGutter="12" VerticalJustification="TopAlign">
+        \t\t\t\t<Properties>
+        \t\t\t\t\t<InsetSpacing type="list">
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t\t<ListItem type="unit">0</ListItem>
+        \t\t\t\t\t</InsetSpacing>
+        \t\t\t\t</Properties>
+        \t\t\t</TextFramePreference>
         \t\t</TextFrame>
         """
     }

@@ -26,4 +26,9 @@
 
 ## 2026-07-07 22:59 | 约 +48/-17 行
 - 原因：FRAME-SPLIT（用户2026-07-07定）：一个角色一个框——标题/概述/图注等退出串接流各自独立框；纯正文按断流分段串接(uStoryFlow/uFlowTF)；废除内嵌图锚定(全部独立定位框)；新增 Asset.wrapMode 垫底图不绕排且置底
+## 2026-07-07 18:49 | 约 +100/-10 行
+- 原因：Set TextFrame InsetSpacing to all zeros to align text with edges
+
+## 2026-07-07 23:13 | 约 +75/-17 行
+- 原因：FRAME-SPLIT 合并 dev(InsetSpacing=0)后重生成：分框断流+去锚定+InsetSpacing 合并态基线
 
