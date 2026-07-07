@@ -38,7 +38,11 @@ struct MarkdownParser {
     var keywords: [String] = []
     var pageSetup: PageSetup = .scienceBookDefault
     var sections: [BookSection] = []
-    var currentSectionTitle = "正文"
+    // 空字符串 = 无显式章节标题（角色标签书稿靠正文里的「一级标题/章名」段落本身当标题，
+    // 不需要 section 再画一次）。只有真遇到 Markdown `#`/`##` 标题时才会被赋成实际文字
+    // （见下方两处 currentSectionTitle = headingText）。LayoutEngine.addSectionTitle 和
+    // Story 的 TOC 收录都已对空标题短路，不会画出/收入一个空壳「标题」。
+    var currentSectionTitle = ""
     var currentParagraphs: [Paragraph] = []
     var paragraphBuffer: [String] = []
     var calloutBuffer: [String] = []
