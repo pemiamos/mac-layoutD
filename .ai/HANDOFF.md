@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-07 12:29 | claude | FIXTURE-1 标准样章 fixture 完成。新增 Samples/fixture-standard-chapter.md（《深海不是黑暗的尽头》，Mar
+- **分支**：dev
+- **概述**：FIXTURE-1 标准样章 fixture 完成。新增 Samples/fixture-standard-chapter.md（《深海不是黑暗的尽头》，Markdown 角色标签格式走现有导入器），覆盖全部角色：章名/节名/文章名/开节概述/正文/抽言/图注/引文/图片占位（+参考文献），每个至少一次。配 FixtureStandardChapterTests（3 测）：从 #filePath 推算样章路径（不硬编码绝对路径，避 CI 失效），断言每角色→正确段落种类/命名样式、标签字面不漏进正文、front matter 不泄漏。全链路自验：导入→初排→PDF(267KB)+IDML(22KB) 均导出成功；解包确认 IDML 含全部中文命名样式（含 图注）且 Story 无「一级标题/开节概述/抽言/参考文献」等标签字面泄漏。提交 eeb2a7a → 合 dev（--no-ff 1197b03）→ QUEUE 记录 5e123f5。
+- **改动文件**：Samples/fixture-standard-chapter.md, Tests/LayoutDImportTests/FixtureStandardChapterTests.swift, .ai/QUEUE.md
+- **检查**：test: pass (Executed 286 tests, 0 failures，+3 新测); review-idml.sh: PASS 13/13; 端到端: fixture → --export-pdf / --export-idml 均成功、IDML 解包中文样式齐全无泄漏。commit eeb2a7a，合 dev 1197b03，QUEUE 记录 5e123f5。
+- **下一步**：FIXTURE-1 就绪，SAMPLE-1（AG 道）的固定输入依赖已解除——AG 的 --render-samples CLI 直接把 --chapter 指向 Samples/fixture-standard-chapter.md 即可。规范包三任务剩：SPEC-PACK-1（Codex 道，schema 以桌面 3 份真实 JSON 校准，仍待做）；SAMPLE-1（AG 道，SPEC-PACK-1 + FIXTURE-1 两依赖现只差 SPEC-PACK-1，可先用现有 DTCG token 搭 CLI 骨架并接入本样章过渡）。三者齐后用方案A JSON 重跑出真样张 PDF 交用户终验。注：dev 未 push（本地集成区）；layoutD-icon.png 仍是未跟踪文件，与本次无关。
+
 ## 2026-07-07 06:22 | claude | 用户拍板：规范包测试三套变体中选定「方案A · 探索黄（杂志感）」为样张基准。已 record_decision（规范包路线定案 + 方案A 基准）并把三个落地
 - **分支**：dev
 - **概述**：用户拍板：规范包测试三套变体中选定「方案A · 探索黄（杂志感）」为样张基准。已 record_decision（规范包路线定案 + 方案A 基准）并把三个落地任务排入 QUEUE：SPEC-PACK-1（Codex 道，最高优先，schema 须以桌面 3 份真实 JSON 为样例校准）、FIXTURE-1（Claude 道，标准样章）、SAMPLE-1（AG 道，依赖前两者，可先搭 CLI 骨架）。已提交 97891f6 docs(queue+decisions)。注意：存在并发对话（08634e8 于 06:19 提交了 GOLDEN-GUARD/SPLIT-EXPORT 记录），本次改动叠于其上，无冲突。
