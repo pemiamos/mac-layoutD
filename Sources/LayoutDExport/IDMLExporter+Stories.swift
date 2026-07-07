@@ -68,14 +68,17 @@ extension IDMLExporter {
 
     /// THREAD-1b：一章的正文+标题合成一个 Story，`paragraphs` 按阅读顺序排列。
     /// 每段一个 ParagraphStyleRange——但 PSR 边界本身不是段落标记，InDesign 仍会把相邻
-    /// PSR 的文字接续渲染成一整段。真正的段落标记是 Content 末尾的字面 `\n`（THREAD-1a
-    /// spike 已用真·InDesign 验证过的写法），最后一段不带。
+    /// PSR 的文字接续渲染成一整段。真正的段落标记是 Content 末尾的段落分隔符 U+2029
+    /// （`\u{2029}`，InDesign 的段落结束符），最后一段不带。
+    /// ⚠️ 必须用 U+2029 而非 U+000A：U+000A 在 InDesign 里是「强制换行/软回车」，会让整章
+    /// 变成一个大段落用软回车断行——段后间距(SpaceAfter)只在真段落结尾生效，软回车处不出空行。
+    /// （2026-07-07 用户实机验收「段间空一行」不出现，据此定位并改正。）
     func chapterStoryXML(self id: String, vertical: Bool, paragraphs: [ChapterParagraph]) -> String {
         let orientation = vertical ? "Vertical" : "Horizontal"
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
         let lastIndex = paragraphs.count - 1
         let body = paragraphs.enumerated().map { index, p -> String in
-            // 顺序很关键：可见文字 → 锚定对象（挂在本段末尾，随本段走）→ 段落标记 \n
+            // 顺序很关键：可见文字 → 锚定对象（挂在本段末尾，随本段走）→ 段落标记 U+2029
             // （单独一个 CharacterStyleRange，不掺进正文的 Content，避免和锚点字符混在一起）。
             let textRanges = characterStyleRanges(for: p.text, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef, noBreakTail: trailingNoBreakCount(for: p.text))
             let anchoredRanges = p.anchoredAssets.enumerated().map { assetIndex, anchored in
@@ -87,7 +90,7 @@ extension IDMLExporter {
                     width: anchored.rect.width, height: anchored.rect.height)
             }
             let paragraphMark = index == lastIndex ? [] : [
-                "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"><Content>\n</Content></CharacterStyleRange>"
+                "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"><Content>\u{2029}</Content></CharacterStyleRange>"
             ]
             let ranges = ([textRanges] + anchoredRanges + paragraphMark).joined(separator: "\n")
             return """
