@@ -3,6 +3,16 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 06:56 | codex | 完成 SPEC-PACK-2 规范包 v2 schema（feature/codex-spec-pack-2）。实现 `SpecPackImportResult
+- **分支**：feature/codex-spec-pack-2
+- **概述**：完成 SPEC-PACK-2 规范包 v2 schema（feature/codex-spec-pack-2）。实现 `SpecPackImportResult` 的 v2 强类型承载：`motifs`（chapterNumber/sectionNumber/header/captionTick/headingRule/pullQuoteRule）、`layoutGrammar`（spreadArchetypes + rhythm）、`qualityGates`；旧方案A 写在 `roles.章节序号` / `roles.节名.numberStyle` / `roles.页眉页码` 的字段兼容提升为 motif，不再只作为 unsupported；v2 未知字段按 JSON path 进入 `unsupportedFields`；新增非法值路径测试与指南更新。代码提交 `c2a89c7 feat(import): support spec pack v2 schema`，已按自主集成模式合入本地 `dev`，merge commit 待最终状态确认。
+- **改动文件**：Sources/LayoutDImport/StyleBaselineImporter.swift
+Tests/LayoutDImportTests/StyleBaselineImporterSpecPackTests.swift
+docs/spec-pack-guide.md
+.ai/HANDOFF.md
+- **检查**：Focused: `swift test --filter StyleBaselineImporterSpecPackTests` PASS（6 tests）。Full after merging local dev into feature: `run_checks("test")` PASS（314 tests, 0 failures）；`bash scripts/review-idml.sh` PASS（14/14，golden 基线逐字节一致）。
+- **下一步**：AG/Claude 可基于 `SpecPackImportResult.motifs/layoutGrammar/qualityGates` 接 PLANNER-1a/1b、STYLE-LOCK-1 与视觉 motif 渲染消费。Codex 下一条可继续 BOOK-SKILL-1/BOOK-SKILL-2 或 SKILL-HARVEST；若要让 v2 motif 真正影响渲染，还需 AG 实现对应消费者。
+
 ## 2026-07-09 06:50 | antigravity | Completed and merged ACCENT-2 (top tick and bottom underline decorations) and WI
 - **分支**：ag-lane
 - **概述**：Completed and merged ACCENT-2 (top tick and bottom underline decorations) and WIZARD-1 (initial layout six-stage wizard workbench skeleton with sequential gating and disk-persisted rollback tracking). All checks pass and dev is updated.
