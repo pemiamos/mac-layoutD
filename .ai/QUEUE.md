@@ -64,13 +64,20 @@
 
 > 本批为 2026-07-08 全项目 review 后的正式排期。P0 三项合起来回答「这套系统能不能真排出一本书」。
 > 各任务按文件边界仍走三道分工；跨道字段扩展回归原属道。
+>
+> **另：引擎修复已并入 dev（`d2c2644`，2026-07-08）**——`fix(engine): isolate invalid plan blocks instead of discarding the whole page`（另一对话 Opus 做，原 `74ec05d`）：手动编辑冻结页后单个越界块此前会让整页 override 被拒、已画图形全消失+工具失灵；改为按块校验、只跳过非法块保留其余，仅当整页无可救（文档级字体问题/全块非法）才整页回退。309 测试 0 失败 + 14/14 探针复验通过，Claude cherry-pick 合入（不含其分支上残留的 SPEC-APPLY-1 副本）。
 
 - [x] **SPEC-APPLY-1 规范包 GUI 应用闭环** — ✅ Claude（合 dev），**GUI 视觉验收待用户**。
   - 背景：`autoDetectAndParse` 认得规范包但只返回 `tokens`，丢掉 `fontResolutions`/`roleColors`/`roleDecorations`；GUI `applyImportedTokens` 再用空 `SpecPackImportResult` 包一层——App 里导入规范包只落地 margins/字号等 token，**字体族/角色色/开本 trim 全丢**（CLI `--render-samples` 路径反而是全的）。这是规范包路线的「最后一公里」。
   - 目标：GUI「导入样式基线」选规范包 JSON 时，把完整 `SpecPackImportResult` 透传到 `BookProject.applySpecPack`，让字体/角色色/开本真正落地到当前项目；figma/dtcg 路径不变。导入面板对规范包显示专属标注（含字体/色计数、不支持字段告警）。
   - 文件：`Sources/LayoutDImport/StyleBaselineImporter.swift`（加 spec-aware 解析出口，保留旧 API 兼容）、`Sources/LayoutDApp/{InspectorView,StyleImportSheet,AppState}.swift`。
   - 验收：新增单测——GUI 应用路径导入方案A规范包后，项目字体族/角色色/trim 与 CLI `applySpecPack` 落地结果一致（对照，非只测 tokens）；现有 StyleImport 测试零回归；`review-idml.sh` PASS。**GUI 视觉验收待用户**：App 里导入桌面方案A规范包，正文/标题字体与点缀色肉眼变化。
-- [ ] **PILOT-2 真书整本试排** — Claude 主导（P0，SPEC-APPLY-1 后）。用定稿规范包 + 角色标签整本书稿跑通 导入→初排→IDML→InDesign 全流程，检验整本规模的角色覆盖/性能/InDesign 打开体验，产出问题清单。⚠️ 需用户提供整本书稿路径（现仓库只有单章 fixture）。
+- [~] **PILOT-2 真书整本试排** — Claude（P0，2026-07-08 首跑，**结构验收 PASS，待用户 InDesign 肉眼终验**）。
+  - 输入：用户真书 `/Users/amos/Documents/GitHub/layoutD村落.docx`（单章《越山脉》，93 段/约1.6万字/3图，角色标签内嵌格式如「一级标题/章名」「二级标题/节名」「开节概述」）。
+  - 结果（全链路跑通，产物在桌面）：导入 0 报错；角色标签**零字面泄漏**（Stories 里搜不到任何标签词）；9 种命名样式全部套用到位（body19/bibliography13/caption8/pullQuote3/heading1×3/heading3×3/heading2/introduction/introductionEnglish）；6 条串接正文流 + 88 个 Next/Previous 串接框；3 图全 `file:Links/` 链接；全包 XML well-formed；预检 0 阻断错误（14 条全 info/warning：缺出版社/图注/RGB→CMYK 建议）。方案A规范包也已套到本章出对照 PDF（md5 不同 = 视觉区分成立）。
+  - 桌面产物：`村落-试排.idml`（交 InDesign）、`村落-试排.pdf`（默认初排）、`layoutD-样张-方案A-探索黄.pdf`（本章套方案A）、`村落-preflight.json`。
+  - ⚠️ **待查小疑点**：预检 `pageCount=7`，但 `--export-pdf` 默认路径导出 **4 页**——预检页面模型与 PDF 导出管线页数对不上，需查是前置页/模板差异还是真 bug（非阻断，登记待查）。
+  - **下一步**：用户在 InDesign 打开 `村落-试排.idml` 肉眼终验（样式/串接/图/中文排版）；有整本多章书稿时再跑一次验证多章串接与规模性能。
 - [ ] **RENDER-CORE-1 共享绘制模型** — Claude 设计 + AG 实施（P1，高风险重构，先出设计再动手）。页面→绘制指令列表，画布/PDF/PNG 只做「指令→各自画布」薄适配，从根上消灭「追平」类任务（FRAME-INSET-2/FRAME-CANVAS-1/UNDERLAY-1/E2-4p 都属此类）。
 - [ ] **SPLIT-APPSTATE** — AG（P1）。`AppState.swift` 1375 行拆分（照 SPLIT-ENGINE 配方，纯搬家零行为变化，三重验证）。
 - [ ] **IDML-RNG lint（E1b③）** — Codex（P2）。vendor `app.generateIDMLSchema()` 的 RNG 做名/枚举 lint。
