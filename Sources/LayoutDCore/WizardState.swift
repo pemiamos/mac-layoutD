@@ -19,6 +19,8 @@ public struct WizardState: Codable, Equatable, Sendable {
     
     // Step 5: Chosen archetypes or planner configurations
     public var chosenArchetypes: [String]
+    public var enabledArchetypeIds: [String]?
+    public var archetypeWeights: [String: Double]?
     
     // Step 6: Exported IDML path
     public var exportedIDMLPath: String?
@@ -32,6 +34,8 @@ public struct WizardState: Codable, Equatable, Sendable {
         samplePDFPath: String? = nil,
         isStyleFrozen: Bool = false,
         chosenArchetypes: [String] = [],
+        enabledArchetypeIds: [String]? = nil,
+        archetypeWeights: [String: Double]? = nil,
         exportedIDMLPath: String? = nil
     ) {
         self.currentStep = currentStep
@@ -42,6 +46,8 @@ public struct WizardState: Codable, Equatable, Sendable {
         self.samplePDFPath = samplePDFPath
         self.isStyleFrozen = isStyleFrozen
         self.chosenArchetypes = chosenArchetypes
+        self.enabledArchetypeIds = enabledArchetypeIds
+        self.archetypeWeights = archetypeWeights
         self.exportedIDMLPath = exportedIDMLPath
     }
 }

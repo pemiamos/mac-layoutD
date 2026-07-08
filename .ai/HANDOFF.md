@@ -3,6 +3,16 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 07:18 | codex | 完成 GHOST-NUM-1a：章节序号解析收口
+- **分支**：feature/codex-ghost-num-1a
+- **概述**：完成 GHOST-NUM-1a。SPEC-PACK-2 已经提前实现 `SpecPackChapterNumberMotif` 与 legacy `roles.章节序号` 兼容解析；本棒补专门回归测试锁住 `roles.章节序号.position` → `motifs.chapterNumber.anchor`、`treatment:"ghost"` → `layer:"behind"`，并断言 `章节序号` / `treatment` / `position` 不再进入 `unsupportedFields`。同步更新 `docs/spec-pack-guide.md`，明确解析层已支持，实际绘制仍由 GHOST-NUM-1b 消费。code commit `2e2255e test(import): lock chapter number motif parsing`。
+- **改动文件**：Tests/LayoutDImportTests/StyleBaselineImporterSpecPackTests.swift
+docs/spec-pack-guide.md
+.ai/QUEUE.md
+.ai/HANDOFF.md
+- **检查**：Focused `swift test --filter StyleBaselineImporterSpecPackTests` PASS（7 tests, 0 failures）；`git diff --check` PASS；`run_checks("test")` PASS（316 tests, 0 failures）；`bash scripts/review-idml.sh` PASS（14/14，golden 基线逐字节一致）。
+- **下一步**：AG 可接 GHOST-NUM-1b，把 `SpecPackImportResult.motifs.chapterNumber` 渲染成超大淡灰章号（四渲染器同算法）。Codex 道下一项是 HEADER-1a：`页眉页码` / 页眉章名字段解析收口。
+
 ## 2026-07-09 07:10 | codex | 完成 SKILL-HARVEST：整理 16 条可移植到印刷的默认字排/节奏规则
 - **分支**：feature/codex-skill-harvest
 - **概述**：完成 SKILL-HARVEST。把屏幕/网页设计技能里可迁移的“可测试规则”形态转译成印刷内页默认规则，写入 `docs/spec-pack-guide.md` 的 v2 指南，并同步进 `.ai/skills/spec-from-reference/SKILL.md` 与 `.ai/skills/sample-review/SKILL.md`。规则覆盖：先定版心再装饰、层级比例、display tracking 收紧边界、正文行高/基线、字体经济性、颜色 token 纪律、motif 可追踪、对开节奏、大小图间隔、文本/图片密度 gates、重复约束、threaded story editability、unsupportedFields 诚实交付。本机未发现 5 个技能仓库本地副本，公开检索也没有确认到可引用源码；因此本轮没有伪造逐仓库出处，只按已登记的评估结论筛选并转译为 layoutD 印刷规则。feature commit `6afe03d docs(skills): add print-portable layout rules`。

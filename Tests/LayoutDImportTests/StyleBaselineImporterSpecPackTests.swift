@@ -90,6 +90,30 @@ final class StyleBaselineImporterSpecPackTests: XCTestCase {
         XCTAssertTrue(result.unsupportedFields.contains("$.layoutGrammar.rhythm.unimplementedHint"))
     }
 
+    func testParsesLegacyChapterNumberRoleAsGhostMotif() throws {
+        let json = validSpecPack.replacingOccurrences(
+            of: #""章节序号":{"treatment":"ghost","font":"西文","fontSize_pt":200,"color":"ink","opacity":0.06}"#,
+            with: #""章节序号":{"treatment":"ghost","font":"西文","fontSize_pt":210,"color":"grayText","opacity":0.08,"position":"chapterStart.bottomRight"}"#
+        )
+
+        let result = try StyleBaselineImporter.parseSpecPack(
+            jsonData: json.data(using: .utf8)!,
+            fontAvailability: { self.installedFonts.contains($0) }
+        )
+
+        let motif = try XCTUnwrap(result.motifs.chapterNumber)
+        XCTAssertEqual(motif.fontAlias, "西文")
+        XCTAssertEqual(motif.resolvedFontName, "Georgia")
+        XCTAssertEqual(motif.fontSizePt, 210)
+        XCTAssertEqual(motif.color, "grayText")
+        XCTAssertEqual(motif.opacity, 0.08)
+        XCTAssertEqual(motif.anchor, "chapterStart.bottomRight")
+        XCTAssertEqual(motif.layer, "behind")
+        XCTAssertFalse(result.unsupportedFields.contains("$.roles.章节序号"))
+        XCTAssertFalse(result.unsupportedFields.contains("$.roles.章节序号.treatment"))
+        XCTAssertFalse(result.unsupportedFields.contains("$.roles.章节序号.position"))
+    }
+
     func testAutoDetectsSpecPack() throws {
         let installedOnlySpec = validSpecPack
             .replacingOccurrences(of: #""正文":"方正兰亭细黑""#, with: #""正文":"Georgia""#)
