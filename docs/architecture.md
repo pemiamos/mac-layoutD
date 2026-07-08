@@ -1,7 +1,7 @@
 # layoutD 软件架构
 
 状态：Draft  
-日期：2026-06-15（2026-06-23 修订）
+日期：2026-06-15（2026-07-08 修订）
 
 ## 架构目标
 
@@ -157,5 +157,18 @@ sudo xcodebuild -license accept
    「不变量断言闸 + InDesign 往返 oracle」两层守护化解（首战即修正了 CJK 排版器
    `Composer` 三处错误，见 `docs/idml-oracle/FINDINGS.md`）。CMYK/PDF/X 由 InDesign
    完成（不自建）。剩余可选增量：IDML-RNG lint（E1b③）、约物挤压/基线网格（E3-9）。
+
+**阶段 F（初排灌版主线，2026-07 定位校准后，✅ 核心已落地）**
+10. **串接文流 + 分框**：定位校准为「初排灌版交 InDesign、可编辑性 > 逐像素冻结」
+    （DECISIONS 2026-07-06）后落地：正文按章/按流串接（THREAD-1，跨页拆段/编辑自动
+    重排经 InDesign 验证）；一个角色一个框（FRAME-SPLIT：标题/概述/抽言/图注/参考
+    文献独立框，正文断流串接）；内嵌图锚定随文；主页自动页码（MASTER-1）；画布/PDF/
+    PNG 经共享分组函数 `groupIntoFlowFrames` 与 IDML 分框一致（FRAME-CANVAS）。段落
+    分隔统一为 IDML `<Br/>` 元素（实机验证定案）。
+11. **视觉规范包路线**（DECISIONS 2026-07-07）：AI 生成规范包 JSON →
+    `StyleBaselineImporter.parseSpecPack`（唯一解析事实源）→ CLI 一键批量样张 →
+    人工比选定稿 → 同一规范直通初排与 IDML。放弃 Figma 作为主路径。GUI 应用闭环
+    与整本真书试排见 [development-plan.md](development-plan.md) 文末「2026-07-08
+    项目复盘」。
 
 > 排版与中文（复合字体/竖排/禁则约物）必须是 layoutD 自有引擎——外部设计工具均不提供（见 [design-tool-comparison.md](design-tool-comparison.md)）。
