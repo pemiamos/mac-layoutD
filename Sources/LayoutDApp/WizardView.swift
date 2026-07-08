@@ -506,8 +506,130 @@ struct WizardView: View {
     }
     
     // MARK: - Step 5 View: Spread Archetypes
+    private var hasWorkhorse: Bool {
+        isArchetypeEnabled("running-text")
+    }
+    
+    private func roleColor(for role: ArchetypeRole) -> Color {
+        switch role {
+        case .opener: return .blue
+        case .workhorse: return .green
+        case .breathing: return .purple
+        case .feature: return .orange
+        case .reference: return .gray
+        }
+    }
+    
+    private func roleDescription(for role: ArchetypeRole) -> String {
+        switch role {
+        case .opener: return "用于每章第一对开，非对称，左页章节大字+引言，右页正文起"
+        case .workhorse: return "主力骨架，两栏对开正文河，挂载页眉与页码"
+        case .breathing: return "图文气口对开，一页主图/跨页出血，调整排版节奏"
+        case .feature: return "金句与大抽言强调对开，正文围绕"
+        case .reference: return "知识卡片与参考边栏对开"
+        }
+    }
+
     private var step5View: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Text("对开骨架选择与控制")
+                .font(.headline)
+            
+            Text("请圈选本书允许使用的对开骨架，并微调权重。")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            if !hasWorkhorse {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                    Text("⚠️ 必须启用至少一个正文流骨架（正文流对开），以确保正文流正常排版。")
+                        .font(.caption)
+                        .bold()
+                        .foregroundColor(.red)
+                }
+                .padding(8)
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(6)
+            }
+            
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(SpreadArchetype.defaults) { archetype in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .top) {
+                                Toggle("", isOn: Binding(
+                                    get: { self.isArchetypeEnabled(archetype.id) },
+                                    set: { _ in self.toggleArchetype(archetype.id) }
+                                ))
+                                .toggleStyle(.checkbox)
+                                .labelsHidden()
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack {
+                                        Text(archetype.displayName)
+                                            .font(.subheadline)
+                                            .bold()
+                                        
+                                        Text(archetype.role.rawValue.uppercased())
+                                            .font(.system(size: 8, weight: .bold))
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(roleColor(for: archetype.role))
+                                            .cornerRadius(3)
+                                            .foregroundColor(.white)
+                                    }
+                                    
+                                    Text(roleDescription(for: archetype.role))
+                                        .font(.system(size: 9))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                            }
+                            
+                            // Live rendered wireframe preview
+                            Image(nsImage: WireframeRenderer.renderSpread(archetype: archetype))
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 120)
+                                .background(Color.gray.opacity(0.1))
+                                .cornerRadius(4)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                )
+                                .opacity(self.isArchetypeEnabled(archetype.id) ? 1.0 : 0.4)
+                            
+                            if self.isArchetypeEnabled(archetype.id) {
+                                HStack(spacing: 8) {
+                                    Text("权重 (Weight):")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(.secondary)
+                                    
+                                    Slider(value: Binding(
+                                        get: { self.getArchetypeWeight(archetype.id) },
+                                        set: { val in self.setArchetypeWeight(archetype.id, weight: Double(round(10 * val) / 10)) }
+                                    ), in: 0.2...2.0, step: 0.1)
+                                    
+                                    Text(String(format: "%.1f", self.getArchetypeWeight(archetype.id)))
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .bold()
+                                        .frame(width: 25)
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.gray.opacity(0.03))
+                        .cornerRadius(6)
+                    }
+                }
+            }
+            .frame(maxHeight: 400)
+            
+            Divider()
+            
             Button("运行受控变体规划器 (自动配骨架)") {
                 onRunPlanner { archetypes in
                     if let archetypes {
@@ -521,6 +643,7 @@ struct WizardView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
+            .disabled(!hasWorkhorse)
             
             if !wizardState.chosenArchetypes.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -529,22 +652,18 @@ struct WizardView: View {
                         .bold()
                         .foregroundColor(.green)
                     
-                    Text("已自动选取以下骨架（Archetypes）：")
+                    Text("已自动选取以下对开骨架（SpreadArchetypes）：")
                         .font(.caption)
                         .bold()
                     
                     ForEach(wizardState.chosenArchetypes.indices, id: \.self) { idx in
-                        Text("Page \(idx + 1): \(wizardState.chosenArchetypes[idx])")
+                        Text("Spread \(idx + 1): \(wizardState.chosenArchetypes[idx])")
                             .font(.system(size: 10, design: .monospaced))
                     }
                 }
                 .padding(10)
-                .background(Color.gray.opacity(0.05))
+                .background(Color.green.opacity(0.05))
                 .cornerRadius(6)
-            } else {
-                Text("运行规划器为各页自动分配合适的对开骨架，支持手工微调。")
-                    .font(.callout)
-                    .foregroundColor(.secondary)
             }
         }
     }
@@ -652,6 +771,34 @@ struct WizardView: View {
         state.updateProject { proj in
             proj.wizardState = newState
         }
+    }
+
+    private func isArchetypeEnabled(_ id: String) -> Bool {
+        return wizardState.enabledArchetypeIds?.contains(id) ?? true
+    }
+    
+    private func toggleArchetype(_ id: String) {
+        var current = wizardState
+        var enabled = current.enabledArchetypeIds ?? SpreadArchetype.defaults.map(\.id)
+        if enabled.contains(id) {
+            enabled.removeAll { $0 == id }
+        } else {
+            enabled.append(id)
+        }
+        current.enabledArchetypeIds = enabled
+        updateWizardState(current)
+    }
+    
+    private func getArchetypeWeight(_ id: String) -> Double {
+        return wizardState.archetypeWeights?[id] ?? (SpreadArchetype.defaults.first(where: { $0.id == id })?.weight ?? 1.0)
+    }
+    
+    private func setArchetypeWeight(_ id: String, weight: Double) {
+        var current = wizardState
+        var weights = current.archetypeWeights ?? [:]
+        weights[id] = weight
+        current.archetypeWeights = weights
+        updateWizardState(current)
     }
 }
 
