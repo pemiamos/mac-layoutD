@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 07:20 | antigravity | Completed PLANNER-1a-IMPL: implemented multi-page SpreadArchetype layouts for th
+- **分支**：ag-lane
+- **概述**：Completed PLANNER-1a-IMPL: implemented multi-page SpreadArchetype layouts for the 7 standard layout archetypes. Implemented WireframeRenderer to render grey-box CoreGraphics vector previews of each archetype. Added an interactive checklist, weight sliders, and workhorse validation checks under Step 5 of WizardView, saving selections and weights back to the project configuration. All 318 tests pass.
+- **改动文件**：Sources/LayoutDCore/SpreadArchetype.swift, Sources/LayoutDCore/WizardState.swift, Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDApp/WireframeRenderer.swift, Sources/LayoutDApp/WizardView.swift, Sources/LayoutDApp/WorkspaceViewController.swift, Tests/LayoutDAppTests/SpreadArchetypeTests.swift, .ai/QUEUE.md
+- **检查**：swift build: pass, swift test: pass (318 tests), review-idml.sh: pass
+- **下一步**：Claude can proceed with PLANNER-1b-DESIGN / PLANNER-1b-IMPL (the controlled variant planner). Codex can proceed with parsing tasks (GHOST-NUM-1a, HEADER-1a, SECNUM-1a) to unblock AG's rendering tasks (GHOST-NUM-1b, HEADER-1b, SECNUM-1b).
+
 ## 2026-07-09 07:10 | codex | 完成 SKILL-HARVEST：整理 16 条可移植到印刷的默认字排/节奏规则
 - **分支**：feature/codex-skill-harvest
 - **概述**：完成 SKILL-HARVEST。把屏幕/网页设计技能里可迁移的“可测试规则”形态转译成印刷内页默认规则，写入 `docs/spec-pack-guide.md` 的 v2 指南，并同步进 `.ai/skills/spec-from-reference/SKILL.md` 与 `.ai/skills/sample-review/SKILL.md`。规则覆盖：先定版心再装饰、层级比例、display tracking 收紧边界、正文行高/基线、字体经济性、颜色 token 纪律、motif 可追踪、对开节奏、大小图间隔、文本/图片密度 gates、重复约束、threaded story editability、unsupportedFields 诚实交付。本机未发现 5 个技能仓库本地副本，公开检索也没有确认到可引用源码；因此本轮没有伪造逐仓库出处，只按已登记的评估结论筛选并转译为 layoutD 印刷规则。feature commit `6afe03d docs(skills): add print-portable layout rules`。
