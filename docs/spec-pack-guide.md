@@ -90,6 +90,27 @@
 
 `vertical` 当前会导出为 `page.vertical` token，供后续样张命令和竖排模板使用；现有 App token 绑定暂不自动切换项目排版方向。
 
+## 印刷可移植默认规则
+
+以下规则来自对屏幕/网页设计技能形态的筛选和转译，只保留能服务印刷内页的可测试部分；不要照搬网页组件、响应式断点、卡片装饰或营销 hero 结构。
+
+1. **先定版心后定装饰**：先确定 trim、内外边距、栏数、gutter、baselineGrid，再放标题、图片和 motif。
+2. **层级对比用比例表达**：章名字号约为正文的 3.0-3.8 倍，节名字号约为正文的 1.15-1.4 倍，图注约为正文的 0.7-0.85 倍；具体数值仍需按字体真实字面调整。
+3. **大字号收紧字距但保持可读**：章名或 ghost number 可以使用轻微负 tracking；正文、图注、长段落不使用负 tracking。
+4. **正文行高优先稳定**：横排正文 lineHeight 建议 1.5-1.75 倍字号，且尽量贴合 baselineGrid；不要为了视觉密度压到网页 UI 式紧行距。
+5. **中文正文只用少数可靠字族**：正文、标题、抽言、数字/西文四类足够；每个字体必须能解析到真实安装权重。
+6. **颜色保持一主一辅**：正文页以 `ink` / `grayText` / `paper` / `accent` 为主，accent 面积宁少勿多；每个 spread 至少可出现一个可识别 accent，但不要求每个元素都着色。
+7. **motif 必须可复现**：ghost 章号、节序号、页眉、图注 tick、标题线、抽言竖线都应有明确 JSON path；不能只写在设计意图里。
+8. **对开节奏优先于单页漂亮**：`layoutGrammar.rhythm.maxSameFamilyRun` 默认不超过 2，连续 12-20 页检查不应出现长串同骨架。
+9. **大图气口要有间隔**：如有大图或跨栏图，`bigImageEveryMinSpreads` 建议 3-5；避免每页都抢主视觉。
+10. **文本密度设上下限**：起始建议 `minTextDensity=0.30-0.35`、`maxTextDensity=0.70-0.75`，低于下限像广告页，高于上限像未排版稿。
+11. **图片密度设安全区间**：起始建议 `minImageDensity=0.05-0.10`、`maxImageDensity=0.40-0.45`；无图章节可降级，但不要让偶发图片破坏正文流。
+12. **重复约束可被机器检查**：`maxTemplateRepeat` 起始为 2；超过时应触发风格报告而不是靠肉眼回忆。
+13. **装饰必须让位给文流**：任何 rule/tick/ghost/header 都不能打断 threaded story，也不能制造后期 InDesign 改稿时难以修复的固定坐标依赖。
+14. **unsupportedFields 是交付物**：字段暂未消费时必须出现在支持率清单或评审报告里，不能静默消失。
+15. **视觉样张不等于印前终稿**：AI/样张负责定风格和节奏，最终 CMYK、细微避头尾、页内局部微调仍由 InDesign 完成。
+16. **所有默认值都允许被书稿推翻**：科普图书、文集、图册、竖排诗文的密度和 motif 频率不同；默认值是起点，不是硬编码审美。
+
 ## 当前会显式上报但暂不落地的字段
 
 仍未落地的角色级复杂版式字段会进入 `unsupportedFields`：`tracking_em`、`alignment`、`maxLineWidth_chars`、`span`、`format`、`blockColor`、`textColor`、`blockSize_mm`、`cornerRadius_mm`。`color`、`decoration`、`numberStyle`、`position`、`rule`、`treatment`、`opacity` 已被解析为角色颜色或 v2 motif，但除 `pullQuoteRule` / 既有段落点缀链路外，多数 motif 仍等待后续渲染任务消费。

@@ -28,6 +28,21 @@ Use 0-5 for each dimension.
 - **Content integrity**: no role-label leakage, no missing images/captions, no overlapping frames, no overflow.
 - **IDML handoff value**: threaded text remains editable; fixes needed in InDesign are localized and expected.
 
+## Print Rule Checks
+
+Run these before assigning a pass. They convert reusable design-skill lessons into print-specific checks, not screen-style copying.
+
+- **Architecture first**: trim, margins, columns, gutter, and baseline grid are coherent before evaluating decorative motifs.
+- **Hierarchy ratios**: chapter title is roughly `3.0-3.8x` body, section title `1.15-1.4x`, caption `0.7-0.85x`; deviations should be justified by the reference.
+- **Tracking discipline**: display text may be tightened, but body text, captions, and notes should not use negative tracking by default.
+- **Leading and baseline**: body leading sits in the `1.5-1.75x` range and repeated text roles visibly align to a baseline rhythm.
+- **Font economy**: ordinary science-book samples use no more than one serif and one sans family, with real installed weights.
+- **Color economy**: the sample reads as `ink`/`paper`/`grayText` plus one accent unless extra colors carry explicit content meaning.
+- **Motif traceability**: ghost numbers, running headers, section-number treatment, caption ticks, and rules map back to `motifs` or a documented manual-polish note.
+- **Rhythm gates**: no more than two same-family spreads in a row; large-image spreads are not crowded together.
+- **Density gates**: text and image coverage stay near the spec's `qualityGates`, usually text `0.30-0.75` and image `0.05-0.45`.
+- **Editability**: decoration must not break threaded story flow or require global InDesign surgery to edit ordinary text.
+
 ## Report Format
 
 Return:

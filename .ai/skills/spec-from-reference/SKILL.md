@@ -21,6 +21,21 @@ description: Extract a layoutD visual spec pack from one or more book, magazine,
 - **Layout grammar**: describe spread archetype families, image slots, pull-quote slots, mirroring, and rhythm constraints. Do not draw exact coordinates unless a later planner task asks for them.
 - **Quality gates**: set testable ranges for density, repeat limits, overflow tolerance, and required accent frequency.
 
+## Print-Portable Defaults
+
+Use these as defaults when the reference or manuscript is silent. They are adapted from screen-design skill patterns only where they survive print constraints; trim, margins, spreads, baseline rhythm, and IDML editability win over web-style decoration.
+
+- Start with page architecture: define trim, margins, columns, gutter, and baseline grid before motifs or cards.
+- Express hierarchy as ratios: chapter title `3.0-3.8x` body, section title `1.15-1.4x` body, caption `0.7-0.85x` body.
+- Tighten tracking only for large display text. Keep body, captions, notes, and long paragraphs at non-negative tracking unless a print proof says otherwise.
+- Keep body leading in the `1.5-1.75x` range and align repeated text roles to `grid.baseline`.
+- Use one serif and one sans family at most for ordinary science-book layouts; map weights to installed font names or approved aliases.
+- Prefer `ink`, `paper`, `grayText`, and one `accent`. Additional colors need semantic jobs such as warning, figure family, or sidebar class.
+- Encode repeatable visual signals as `motifs` with source JSON paths, not prose-only intent.
+- Keep spread rhythm testable: avoid more than two consecutive spreads from the same family, and give large-image spreads at least three to five spreads of breathing room.
+- Set density gates before judging polish: text coverage normally belongs around `0.30-0.75`, image coverage around `0.05-0.45`.
+- Treat unsupported fields as part of the deliverable. They preserve ideas for later planner/renderer work without pretending they already affect output.
+
 ## Spec-Pack Rules
 
 - Use v2 top-level objects: `motifs`, `layoutGrammar`, and `qualityGates` when the reference implies them.
