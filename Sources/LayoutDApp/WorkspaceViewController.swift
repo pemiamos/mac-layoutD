@@ -287,6 +287,27 @@ final class WorkspaceViewController: NSViewController {
         let sidebarView = SidebarView(state: appState) { [weak self] pageNum in
             self?.canvas.scrollToPage(number: pageNum)
         }
+        let wizardView = WizardView(
+            state: appState,
+            onAddReferenceImage: { [weak self] completion in
+                self?.addReferenceImage(completion: completion)
+            },
+            onImportSpecPack: { [weak self] completion in
+                self?.importSpecPackForWizard(completion: completion)
+            },
+            onGenerateSample: { [weak self] completion in
+                self?.generateSamplePDFForWizard(completion: completion)
+            },
+            onFreezeStyle: { [weak self] completion in
+                self?.freezeStyleForWizard(completion: completion)
+            },
+            onRunPlanner: { [weak self] completion in
+                self?.runPlannerForWizard(completion: completion)
+            },
+            onExportIDML: { [weak self] completion in
+                self?.exportIDMLForWizard(completion: completion)
+            }
+        )
         let inspectorView = InspectorView(
             state: appState,
             onIssueClick: { [weak self] issue in
@@ -335,9 +356,9 @@ final class WorkspaceViewController: NSViewController {
         canvasScroll.hasHorizontalScroller = true
         canvasScroll.translatesAutoresizingMaskIntoConstraints = false
 
-        // InDesign 式右侧面板坞：面板（页面/属性/图层/资产/色板）与检查器合并为
-        // 一列分段切换；两个 SwiftUI 面板自带滚动，由坞直接托管。
-        let dockHost = NSHostingView(rootView: PanelDockView(sidebar: sidebarView, inspector: inspectorView))
+        // InDesign 式右侧面板坞：面板（页面/属性/图层/资产/色板）、检查器与向导合并为
+        // 一列分段切换；三个 SwiftUI 面板自带滚动，由坞直接托管。
+        let dockHost = NSHostingView(rootView: PanelDockView(sidebar: sidebarView, inspector: inspectorView, wizard: wizardView))
         dockHost.translatesAutoresizingMaskIntoConstraints = false
         dockHost.wantsLayer = true
         dockHost.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
@@ -409,6 +430,7 @@ final class WorkspaceViewController: NSViewController {
                 self.sourceDescription = loader.sourceDescription(for: url)
                 self.appState.currentPageNumber = 1
                 self.appState.project = loadedProj
+                self.appState.projectURL = url
             } catch {
                 self.showExportResult(message: "Open failed", detail: error.localizedDescription)
             }
@@ -434,6 +456,7 @@ final class WorkspaceViewController: NSViewController {
             do {
                 let project = projectForSaving(self.appState.project)
                 self.appState.project = project
+                self.appState.projectURL = url
                 let data = try ProjectFile.encode(project)
                 try data.write(to: url, options: .atomic)
                 self.showExportResult(message: "Project saved", detail: url.path)
@@ -1017,5 +1040,196 @@ extension WorkspaceViewController: NSToolbarDelegate {
         }
         
         return item
+    }
+}
+
+extension WorkspaceViewController {
+    // MARK: - 初排向导工作台辅助方法 (WIZARD-1)
+    
+    private func getWizardProductsDir() -> URL {
+        let parentDir: URL
+        if let projectURL = appState.projectURL {
+            parentDir = projectURL.deletingLastPathComponent()
+        } else {
+            parentDir = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
+        }
+        let title = appState.project.metadata.title.isEmpty ? "untitled" : appState.project.metadata.title
+        let safeTitle = safeFileName(title)
+        let dir = parentDir.appendingPathComponent("\(safeTitle)_wizard_products")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+    
+    func addReferenceImage(completion: @escaping (String?) -> Void) {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "选择参考图"
+        openPanel.allowedContentTypes = [.image]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        
+        guard let window = view.window else { completion(nil); return }
+        
+        openPanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = openPanel.url, let self else {
+                completion(nil)
+                return
+            }
+            
+            do {
+                let step1Dir = self.getWizardProductsDir().appendingPathComponent("step1_references")
+                try FileManager.default.createDirectory(at: step1Dir, withIntermediateDirectories: true)
+                let destURL = step1Dir.appendingPathComponent(url.lastPathComponent)
+                
+                if FileManager.default.fileExists(atPath: destURL.path) {
+                    try? FileManager.default.removeItem(at: destURL)
+                }
+                try FileManager.default.copyItem(at: url, to: destURL)
+                completion(destURL.path)
+            } catch {
+                self.showExportResult(message: "添加参考图失败", detail: error.localizedDescription)
+                completion(nil)
+            }
+        }
+    }
+    
+    func importSpecPackForWizard(completion: @escaping (String?, String?) -> Void) {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "选择规范包 JSON"
+        openPanel.allowedContentTypes = [.json]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        
+        guard let window = view.window else { completion(nil, nil); return }
+        
+        openPanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = openPanel.url, let self else {
+                completion(nil, nil)
+                return
+            }
+            
+            do {
+                let data = try Data(contentsOf: url)
+                let detected = try StyleBaselineImporter.autoDetectAndParseDetailed(jsonData: data)
+                if let specResult = detected.specResult {
+                    self.appState.applySpecPackResult(specResult)
+                    
+                    let step2Dir = self.getWizardProductsDir().appendingPathComponent("step2_specpack")
+                    try FileManager.default.createDirectory(at: step2Dir, withIntermediateDirectories: true)
+                    let destURL = step2Dir.appendingPathComponent("spec_pack.json")
+                    if FileManager.default.fileExists(atPath: destURL.path) {
+                        try? FileManager.default.removeItem(at: destURL)
+                    }
+                    try FileManager.default.copyItem(at: url, to: destURL)
+                    
+                    let specName = specResult.tokens.defaultMode
+                    completion(destURL.path, specName)
+                } else {
+                    self.showExportResult(message: "导入失败", detail: "所选 JSON 不是有效的 layoutD 规范包")
+                    completion(nil, nil)
+                }
+            } catch {
+                self.showExportResult(message: "导入失败", detail: error.localizedDescription)
+                completion(nil, nil)
+            }
+        }
+    }
+    
+    func generateSamplePDFForWizard(completion: @escaping (String?) -> Void) {
+        let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
+        do {
+            let step3Dir = self.getWizardProductsDir().appendingPathComponent("step3_samples")
+            try FileManager.default.createDirectory(at: step3Dir, withIntermediateDirectories: true)
+            let destURL = step3Dir.appendingPathComponent("sample.pdf")
+            
+            try PDFExporter().export(
+                document: document,
+                project: self.appState.project,
+                to: destURL,
+                pageRange: nil,
+                drawCropMarks: false,
+                drawGridGuides: false,
+                pdfxVersion: .none
+            )
+            completion(destURL.path)
+        } catch {
+            self.showExportResult(message: "生成样张失败", detail: error.localizedDescription)
+            completion(nil)
+        }
+    }
+    
+    func freezeStyleForWizard(completion: @escaping (Bool) -> Void) {
+        do {
+            let step4Dir = self.getWizardProductsDir().appendingPathComponent("step4_finalize")
+            try FileManager.default.createDirectory(at: step4Dir, withIntermediateDirectories: true)
+            let destURL = step4Dir.appendingPathComponent("style_profile.json")
+            
+            // Serialize and freeze style library
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let profileData = try encoder.encode(self.appState.project.styles)
+            try profileData.write(to: destURL, options: .atomic)
+            completion(true)
+        } catch {
+            self.showExportResult(message: "冻结风格失败", detail: error.localizedDescription)
+            completion(false)
+        }
+    }
+    
+    func runPlannerForWizard(completion: @escaping ([String]?) -> Void) {
+        do {
+            let step5Dir = self.getWizardProductsDir().appendingPathComponent("step5_archetypes")
+            try FileManager.default.createDirectory(at: step5Dir, withIntermediateDirectories: true)
+            let destURL = step5Dir.appendingPathComponent("layout_plans.json")
+            
+            // Collect page layouts or strategies
+            let pages = appState.laidOutDocument?.pages ?? []
+            let pageCount = max(1, pages.count)
+            
+            var archetypes: [String] = []
+            var appliedPlans: [Int: LayoutPlan] = [:]
+            
+            for pageNum in 1...pageCount {
+                let strategy: LayoutStrategy = pageNum % 2 == 0 ? .balanced : .textLed
+                let plan = LayoutPlan(target: .page(pageNum), strategy: strategy, blocks: [])
+                appliedPlans[pageNum] = plan
+                archetypes.append(strategy.rawValue)
+            }
+            
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let planData = try encoder.encode(appliedPlans)
+            try planData.write(to: destURL, options: .atomic)
+            
+            completion(archetypes)
+        } catch {
+            self.showExportResult(message: "运行规划器失败", detail: error.localizedDescription)
+            completion(nil)
+        }
+    }
+    
+    func exportIDMLForWizard(completion: @escaping (String?) -> Void) {
+        let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
+        do {
+            let step6Dir = self.getWizardProductsDir().appendingPathComponent("step6_idml")
+            try FileManager.default.createDirectory(at: step6Dir, withIntermediateDirectories: true)
+            let destURL = step6Dir.appendingPathComponent("output.idml")
+            
+            let options = IDMLExportOptions(
+                facingPages: self.appState.project.pageSetup.facingPages,
+                cmykColors: self.appState.project.pageSetup.colorSpace == .cmyk
+            )
+            try IDMLExporter().export(
+                document: document,
+                project: self.appState.project,
+                to: destURL,
+                options: options
+            )
+            completion(destURL.path)
+        } catch {
+            self.showExportResult(message: "导出 IDML 失败", detail: error.localizedDescription)
+            completion(nil)
+        }
     }
 }
