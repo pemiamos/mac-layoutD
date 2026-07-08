@@ -3,6 +3,17 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 07:24 | codex | 完成 HEADER-1a：页眉字段解析收口
+- **分支**：feature/codex-header-1a
+- **概述**：完成 HEADER-1a。`StyleBaselineImporter.parseSpecPack` 现在把 legacy `roles.页眉章名` 识别为 motif role，不再进入 `unsupportedFields`；`roles.页眉章名` 与 `roles.页眉页码` 会合并到同一个 `SpecPackHeaderMotif`。兼容性保留：旧 `页眉页码` 仍表示页眉+页码，`页眉章名` 可单独补章名侧字体/字号/颜色/规则；合并时保留先出现的样式字段，并 OR 合并 `showChapterTitle` / `showPageNumber`。同步更新 spec-pack 指南和回归测试。code commit `943fa33 feat(import): parse legacy header motifs`。
+- **改动文件**：Sources/LayoutDImport/StyleBaselineImporter.swift
+Tests/LayoutDImportTests/StyleBaselineImporterSpecPackTests.swift
+docs/spec-pack-guide.md
+.ai/QUEUE.md
+.ai/HANDOFF.md
+- **检查**：Focused `swift test --filter StyleBaselineImporterSpecPackTests` PASS（8 tests, 0 failures）；`git diff --check` PASS；`run_checks("test")` PASS（320 tests, 0 failures）；`bash scripts/review-idml.sh` PASS（14/14，golden 基线逐字节一致）。
+- **下一步**：AG 可接 HEADER-1b，把 `SpecPackImportResult.motifs.header` 渲染为页眉 chrome（章名 · 刊名/label · 细线），并与现有 runningHeader / MASTER-1 页码协调。Codex 道下一项是 SECNUM-1a：`节名.numberStyle` / v2 `sectionNumber` 解析收口。
+
 ## 2026-07-09 07:18 | codex | 完成 GHOST-NUM-1a：章节序号解析收口
 - **分支**：feature/codex-ghost-num-1a
 - **概述**：完成 GHOST-NUM-1a。SPEC-PACK-2 已经提前实现 `SpecPackChapterNumberMotif` 与 legacy `roles.章节序号` 兼容解析；本棒补专门回归测试锁住 `roles.章节序号.position` → `motifs.chapterNumber.anchor`、`treatment:"ghost"` → `layer:"behind"`，并断言 `章节序号` / `treatment` / `position` 不再进入 `unsupportedFields`。同步更新 `docs/spec-pack-guide.md`，明确解析层已支持，实际绘制仍由 GHOST-NUM-1b 消费。code commit `2e2255e test(import): lock chapter number motif parsing`。

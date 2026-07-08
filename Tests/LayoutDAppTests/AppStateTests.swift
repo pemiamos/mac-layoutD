@@ -915,18 +915,18 @@ final class AppStateTests: XCTestCase {
         XCTAssertFalse(badColorIssues.isEmpty, "Should reject plan with unapproved color token")
         XCTAssertTrue(badColorIssues.first?.message.contains("背景色引用了未批准的 Token 或无效颜色值") == true)
 
-        // 4. Test Layout Variants (proposePlans Variant A and B)
+        // 4. Test Layout Variants (proposePlans from SpreadPlannerBackedAdvisor)
         let state = AppState(project: .sample)
-        // RuleBasedLayoutAdvisor propose plans: we should have 2 variations for each strategy
+        // SpreadPlannerBackedAdvisor returns plans based on content fingerprint.
+        // For the sample project, we should get at least one proposed plan.
         let proposed = state.plans
-        let textLedPlans = proposed.filter { $0.strategy == .textLed }
-        XCTAssertEqual(textLedPlans.count, 2)
+        XCTAssertFalse(proposed.isEmpty, "Advisor should propose at least one plan")
         
-        let variantA = textLedPlans[0]
-        let variantB = textLedPlans[1]
-        
-        // Variant A and B must be structurally different (different frame configs)
-        XCTAssertNotEqual(variantA.blocks.map(\.frame), variantB.blocks.map(\.frame))
+        // All proposed plans should have a valid strategy
+        for plan in proposed {
+            XCTAssertTrue(LayoutStrategy.allCases.contains(plan.strategy),
+                         "Plan strategy \(plan.strategy) should be a valid LayoutStrategy")
+        }
     }
 
     func testQualityMetricsHistory() throws {

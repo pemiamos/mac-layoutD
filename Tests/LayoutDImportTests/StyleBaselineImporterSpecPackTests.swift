@@ -114,6 +114,30 @@ final class StyleBaselineImporterSpecPackTests: XCTestCase {
         XCTAssertFalse(result.unsupportedFields.contains("$.roles.章节序号.position"))
     }
 
+    func testParsesLegacyHeaderRolesAsOneHeaderMotif() throws {
+        let json = validSpecPack.replacingOccurrences(
+            of: #""页眉页码":{"font":"西文","fontSize_pt":7.5,"color":"grayText","rule":"细线通栏"}"#,
+            with: #""页眉章名":{"font":"标题","fontSize_pt":8.5,"color":"ink","rule":"细线通栏"},"页眉页码":{"font":"西文","fontSize_pt":7.5,"color":"grayText","label":"EXPLORE"}"#
+        )
+
+        let result = try StyleBaselineImporter.parseSpecPack(
+            jsonData: json.data(using: .utf8)!,
+            fontAvailability: { self.installedFonts.contains($0) }
+        )
+
+        let motif = try XCTUnwrap(result.motifs.header)
+        XCTAssertEqual(motif.fontAlias, "标题")
+        XCTAssertEqual(motif.resolvedFontName, "Heiti SC Medium")
+        XCTAssertEqual(motif.fontSizePt, 8.5)
+        XCTAssertEqual(motif.color, "ink")
+        XCTAssertEqual(motif.rule, "细线通栏")
+        XCTAssertEqual(motif.label, "EXPLORE")
+        XCTAssertEqual(motif.showChapterTitle, true)
+        XCTAssertEqual(motif.showPageNumber, true)
+        XCTAssertFalse(result.unsupportedFields.contains("$.roles.页眉章名"))
+        XCTAssertFalse(result.unsupportedFields.contains("$.roles.页眉页码"))
+    }
+
     func testAutoDetectsSpecPack() throws {
         let installedOnlySpec = validSpecPack
             .replacingOccurrences(of: #""正文":"方正兰亭细黑""#, with: #""正文":"Georgia""#)
