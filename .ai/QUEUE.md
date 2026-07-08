@@ -92,7 +92,7 @@
     - ⚠️ **诚实结论（真 PILOT-2 缺口，已渲染 PNG 肉眼核实）**：即便套上方案A，渲染出的《村落》**只实现了字体/两栏/开本/字号**，方案A的视觉标识——**明黄点缀（抽言左侧竖线/图注顶部横线/标题下划线）、超大 ghost 章节序号、页眉章名+EXPLORE、节序号**——**全部没画出来**（整章扫描 0 明黄像素）。原因两类：① `章节序号`/`页眉页码`/`节名.numberStyle` 等本就在 `unsupportedFields` 里（解析器明确不支持）；② 即使受支持的 `抽言/图注` 点缀色，也只映射到 `.callout/.caption` **组件样式**，而真书的抽言是 `pullQuote` **段落样式**、图注是 caption 段落 → 点缀没挂上。**方案A的"杂志感"目前约 1/3 实现**。
   - **视觉标识层批次（让输出真正像图1，用户 2026-07-09「继续」拍板投入）**：
     - [x] **ACCENT-1 段落级明黄点缀·抽言左侧竖线** — ✅ Claude（合 dev `fba2462`）。`ParagraphStyle.accentRule`（共享 geometry，四渲染器同算法）+ applySpecPack 把 roleDecorations 接到 pullQuote 段落（此前只挂 .callout 组件、真书抽言是 pullQuote 段落挂不上）+ PDF/PNG/Canvas/IDML 全渲染。抽言竖线已渲染 PNG 肉眼核实；IDML 出 uPAccent 矩形。**✅ 用户 2026-07-09 InDesign 验收通过**（村落-方案A.idml 截图：抽言「人类对黄山的感知…」左侧明黄竖线 + 江城律动宋抽言体 + 正文两栏渲染全正确）。
-    - [ ] **ACCENT-2 图注顶部短横 + 标题线** — 数据已解析（caption.accentRule=.top），但各渲染器 y 翻转不同、顶边定位待逐一核实后开门控（现 `edge==.left` 门控关着 .top）；顺带把标题下划线接上。
+    - [x] **ACCENT-2 图注顶部短横 + 标题线** — 数据已解析（caption.accentRule=.top），但各渲染器 y 翻转不同、顶边定位已核实并开门控；已将标题下划线接上（commit f631549）。
     - [ ] **GHOST-NUM-1 超大 ghost 章节序号压底**（图1 那个巨大的「03」）— `章节序号` 现在 unsupportedFields 里；需新增"章节序号"角色渲染（超大淡灰数字，压在章名后面）。
     - [ ] **HEADER-1 页眉 chrome**（章名 · 刊名 · EXPLORE）— 现页眉只有书名 + 页码；`页眉页码` 在 unsupportedFields。
     - [ ] **SECNUM-1 节序号**（图1「01 /」黄色）— `节名.numberStyle` 在 unsupportedFields。
@@ -111,7 +111,7 @@
 
 ### 批次 V — 视觉标识层收尾（站2 前置，立即可开工）
 
-- [ ] **ACCENT-2 图注顶部短横 + 标题下划线** — **AG**。照 ACCENT-1 已建范式（`ParagraphStyle.accentRule` 共享 geometry + 四渲染器同算法 + IDML 明黄矩形）；本刀开 `edge==.top` 门控——**先逐渲染器核实 y 翻转/顶边定位**（PDF/PNG/Canvas 坐标系不同，ACCENT-1 就为此把 .top 门控关着）；顺带把标题下划线接上。验收：抽言竖线零回归、图注短横 PNG 肉眼正确、IDML 出对应矩形、golden 走 --reason 刷新。
+- [x] **ACCENT-2 图注顶部短横 + 标题下划线** — **AG**。已开 `edge==.top` 与 `edge==.bottom` 门控，并完成 Canvas, PDF, PNG, IDML 绘制逻辑与 IDML 导出（commit f631549）。
 - [ ] **GHOST-NUM-1a 章节序号解析** — **Codex**。`章节序号` 移出 `unsupportedFields`，`parseSpecPack` 支持其 motif 字段（字体/字号/透明度/锚点/压底层）。
 - [ ] **GHOST-NUM-1b 超大 ghost 章节号渲染** — **AG**（依赖 1a）。超大淡灰数字压在章名后/底，四渲染器同算法。
 - [ ] **HEADER-1a 页眉字段解析** — **Codex**。`页眉页码`/页眉章名字段移出 unsupportedFields，parseSpecPack 支持。
@@ -140,7 +140,7 @@
 
 ### 批次 W — 向导 GUI（可与 S 并行起步）
 
-- [ ] **WIZARD-1 六站向导工作台骨架** — **AG**。步骤条（六站顺序解锁）+ 状态门控（做完才解锁下一站，回退提示下游需重跑）+ 各站产物落盘可回溯。骨架先行，各站内容随对应任务接入。
+- [x] **WIZARD-1 六站向导工作台骨架** — **AG**。六站向导工作台骨架已在 PanelDockView 挂载，状态门控与各站产物落盘已落地（commit 5513803）。
 
 ### 批次 T — 真书验证（末端，全部完工后）
 
