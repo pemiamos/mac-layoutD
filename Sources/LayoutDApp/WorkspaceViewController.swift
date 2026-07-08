@@ -120,10 +120,10 @@ final class WorkspaceViewController: NSViewController {
             }
         }
 
-        canvas.onMarqueeSelected = { [weak self] ids in
+        canvas.onMarqueeSelected = { [weak self] ids, anchor in
             guard let self else { return }
             if self.appState.activeTool == .selection || self.appState.activeTool == .directSelection {
-                self.appState.setSelection(ids)
+                self.appState.setSelection(ids, anchor: anchor)
             }
         }
 

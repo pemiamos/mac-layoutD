@@ -138,6 +138,8 @@ public struct PDFExporter {
             }
         }
 
+        let grouping = groupIntoFlowFrames(pages: document.pages, project: project)
+
         for spread in spreads {
             let containsExportPage = spread.pages.contains { pagesToExport.contains($0.number) }
             guard containsExportPage else {
@@ -179,19 +181,19 @@ public struct PDFExporter {
             if isDoublePage {
                 if let leftPage = spread.leftPage {
                     context.saveGState()
-                    draw(page: leftPage, project: project, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0)
+                    draw(page: leftPage, project: project, document: document, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0, grouping: grouping)
                     context.restoreGState()
                 }
                 
                 if let rightPage = spread.rightPage {
                     context.saveGState()
                     context.translateBy(x: pageSize.width, y: 0)
-                    draw(page: rightPage, project: project, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0)
+                    draw(page: rightPage, project: project, document: document, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0, grouping: grouping)
                     context.restoreGState()
                 }
             } else {
                 let page = spread.leftPage ?? spread.rightPage!
-                draw(page: page, project: project, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0)
+                draw(page: page, project: project, document: document, in: context, bleedPoints: drawCropMarks ? bleedPoints : 0.0, grouping: grouping)
             }
             
             context.restoreGState()
@@ -388,7 +390,7 @@ public struct PDFExporter {
         return margins.right
     }
 
-    private func draw(page: LaidOutPage, project: BookProject, in context: CGContext, bleedPoints: CGFloat) {
+    private func draw(page: LaidOutPage, project: BookProject, document: LaidOutDocument, in context: CGContext, bleedPoints: CGFloat, grouping: FlowFrameGrouping) {
         let pageSize = project.pageSetup.pageSize
         context.setFillColor(NSColor.white.cgColor)
         context.fill(
@@ -400,16 +402,72 @@ public struct PDFExporter {
             )
         )
 
+        let sortedPages = document.pages.sorted { $0.number < $1.number }
+        guard let pageIndex = sortedPages.firstIndex(where: { $0.number == page.number }) else { return }
+        let pageGroups = grouping.groupsByPage[pageIndex] ?? []
+
+        // 1. Draw group backgrounds first
+        for group in pageGroups {
+            guard !group.memberFrameIndices.isEmpty else { continue }
+            let firstIdx = group.memberFrameIndices[0]
+            guard firstIdx >= 0 && firstIdx < page.frames.count else { continue }
+            let firstFrame = page.frames[firstIdx]
+            if let bgHex = firstFrame.backgroundColorHex, let color = NSColor.from(hex: bgHex) {
+                let layoutRect = CGRect(
+                    x: CGFloat(group.rect.x),
+                    y: CGFloat(group.rect.y),
+                    width: CGFloat(group.rect.width),
+                    height: CGFloat(group.rect.height)
+                )
+                let rect = pdfRect(fromLayoutRect: layoutRect, pageHeight: CGFloat(pageSize.height))
+                context.saveGState()
+                context.setFillColor(color.cgColor)
+                context.fill(rect)
+                context.restoreGState()
+            }
+        }
+
+        // 2. Draw all page frames
         let underlays = page.frames.filter { $0.isUnderlay }
         let nonUnderlays = page.frames.filter { !$0.isUnderlay }
         for frame in underlays + nonUnderlays {
-            draw(frame: frame, pageNumber: page.number, project: project, in: context, pageHeight: CGFloat(pageSize.height), bleedPoints: bleedPoints)
+            // Find if frame belongs to a group
+            var frameGroup: FlowFrameGroup? = nil
+            for group in pageGroups {
+                if group.memberFrameIndices.contains(where: { $0 >= 0 && $0 < page.frames.count && page.frames[$0].id == frame.id }) {
+                    frameGroup = group
+                    break
+                }
+            }
+            draw(frame: frame, pageNumber: page.number, project: project, in: context, pageHeight: CGFloat(pageSize.height), bleedPoints: bleedPoints, flowGroup: frameGroup)
+        }
+
+        // 3. Draw group strokes last
+        for group in pageGroups {
+            guard !group.memberFrameIndices.isEmpty else { continue }
+            let firstIdx = group.memberFrameIndices[0]
+            guard firstIdx >= 0 && firstIdx < page.frames.count else { continue }
+            let firstFrame = page.frames[firstIdx]
+            if let strokeHex = firstFrame.strokeColorHex, let color = NSColor.from(hex: strokeHex) {
+                let layoutRect = CGRect(
+                    x: CGFloat(group.rect.x),
+                    y: CGFloat(group.rect.y),
+                    width: CGFloat(group.rect.width),
+                    height: CGFloat(group.rect.height)
+                )
+                let rect = pdfRect(fromLayoutRect: layoutRect, pageHeight: CGFloat(pageSize.height))
+                context.saveGState()
+                context.setStrokeColor(color.cgColor)
+                context.setLineWidth(CGFloat(firstFrame.strokeWidth ?? 1.5))
+                context.stroke(rect)
+                context.restoreGState()
+            }
         }
 
         drawPageNumber(page.number, project: project, in: context)
     }
 
-    private func draw(frame: PageFrame, pageNumber: Int, project: BookProject, in context: CGContext, pageHeight: CGFloat, bleedPoints: CGFloat) {
+    private func draw(frame: PageFrame, pageNumber: Int, project: BookProject, in context: CGContext, pageHeight: CGFloat, bleedPoints: CGFloat, flowGroup: FlowFrameGroup? = nil) {
         let style: ParagraphStyle
         if frame.kind == .footnote {
             style = ParagraphStyle(
@@ -464,7 +522,7 @@ public struct PDFExporter {
             }
         }
 
-        if let bgHex = frame.backgroundColorHex, let color = NSColor.from(hex: bgHex) {
+        if flowGroup == nil, let bgHex = frame.backgroundColorHex, let color = NSColor.from(hex: bgHex) {
             context.saveGState()
             context.setFillColor(color.cgColor)
             let path = maskPath(in: rect, pageHeight: pageHeight, shape: frame.maskShape)
@@ -559,7 +617,7 @@ public struct PDFExporter {
             break
         }
 
-        if let strokeHex = frame.strokeColorHex, let color = NSColor.from(hex: strokeHex) {
+        if flowGroup == nil, let strokeHex = frame.strokeColorHex, let color = NSColor.from(hex: strokeHex) {
             context.saveGState()
             context.setStrokeColor(color.cgColor)
             context.setLineWidth(CGFloat(frame.strokeWidth ?? 1.5))

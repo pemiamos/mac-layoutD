@@ -153,13 +153,7 @@
 - [x] **UNDERLAY-1 垫底图预览/引擎追平** — ✅ AG（`51dcfdc`，Claude 审核合 dev `bba4867`）。`LayoutEngine+Assets.swift` 里 underlay 图片路径完全跳过 cursor 推进/绕排（提前 `return`，不进 `prepareWideAssetPlacement`），`exclusionRects`/`LayoutPlan` 侧同步排除；跨页 spread 底图用 `deferredUnderlayFrames` 处理"图片排到的页面还没生成"的时序、`finish()` 补页逻辑一并接好。三渲染器按 underlay 优先画（图在下字在上）。新增 2 个针对性单测。
   - 验收：301 测试过、review-idml.sh 14/14、golden 逐字节一致。**审核时剔除**：51dcfdc 里误带进一个与功能无关的 1.8MB `layoutD-icon.png`（早前已知的待定去留文件），合并时已单独 commit(`bba4867`)移除。
 
-- [ ] **FRAME-CANVAS-1 画布/PDF/PNG 追平 IDML 分框（连续正文合并显示）**（2026-07-08 用户验收 FRAME-SPLIT 时提出，**方案 A**，✅ 前置条件已就绪，可开工）
-  - 背景：FRAME-SPLIT（已合 main）只在 **IDML 导出层**把连续正文合并成一个串接流框（用户 InDesign 验收过）；但 layoutD 引擎产帧仍是「每段落一个 PageFrame」（`LayoutEngine+TextFlow.swift` 的 `placeTextFrame`/`addText` 逐段 append），画布/PDF/PNG 直接画这些原子帧——用户在画布里看到连续正文仍是一段一个虚线框，**预览 ≠ 输出**，达不到「在 layoutD 里编辑也方便」的初衷。
-  - **前置条件已完成（FRAME-CANVAS-0，Claude）**：断流分组逻辑已抽成跨模块共享函数 `groupIntoFlowFrames(pages:project:) -> FlowFrameGrouping`（`Sources/LayoutDEngine/FlowFrameGrouping.swift`），`LayoutDApp`/`LayoutDExport` 都能 import。`FlowFrameGrouping.groupsByPage[pageIndex]` 给出该页所有分组（`FlowFrameGroup.rect` = 合并 rect，`.memberFrameIndices` = 组内原始 frame 在 `pages[pageIndex].frames` 里的下标，按出现顺序）——本任务直接调用它，不用重新实现断流判定。IDML 导出器（`IDMLExporter.swift`）已改为消费同一份函数，两边行为保证一致。
-  - 目标（方案 A，已用户拍板，**只做显示/交互聚合层，不改 engine 产帧/override/锁页模型**）：画布对每组连续正文（`groupIntoFlowFrames` 分组结果）画**一个合并的虚线框**（组内文字仍逐段渲染，渲染逻辑不用大改）；选中/移动时整组当一个交互单位；PDF/PNG 预览同理只改「画框」这一层。
-  - 明确不做：不要把 engine 改成产出「一个多段落大 frame」（方案 B，高风险大重构，已否决）——PageFrame 仍是原子单位，只是显示层按组聚合。
-  - 文件：`CanvasView+Drawing.swift`、`CanvasView+Interaction.swift`（选中/移动改按组）、`PDFExporter.swift`、`PNGExporter.swift`。
-  - 验收：标准样章画布里，被标题/抽言断开的每段连续正文各显示为一个合并虚线框（不再一段一框）；点击/拖拽整组一起选中移动；单段落属性面板显示仍正确（组内取第一段或提示"多段落"，具体交互细节可自行判断但不能崩溃/误编辑）；全部测试/探针 PASS。
+- [x] **FRAME-CANVAS-1 画布/PDF/PNG 追平 IDML 分框（连续正文合并显示）** — ✅ AG (commit ae6f6ad)。普通模式下合并虚线框绘制与交互，PDF/PNG 导出合并背景与描边，ObjectPropertiesView 防抖防错，全部 303 单测 + 14 项端到端探针通过。
 
 - [x] **SAMPLE-1 一键批量样张** — ✅ **重做版**（AG，`feature/ag-sample-1-v2` `10550c6`，Claude 审核合 dev `d85a730`）。首版打回重做（原因见下），v2 全部照做。
   - **交付**：CLI `--render-samples A.json B.json ... --chapter <fixture>`（默认 chapter=`Samples/fixture-standard-chapter.md`）→ 桌面出带方案名的样张 PDF。解析**只走** `StyleBaselineImporter.parseSpecPack`（唯一事实源，首版并行的 `SpecPack.swift` 已删）；新建**共享**应用函数 `BookProject.applySpecPack(_ result:)`（`LayoutDImport/BookProject+Tokens.swift`），`AppState.applyImportedTokens` 减 105 行改为委托它（单一应用路径）；补齐了 SPEC-PACK-1 没做的视觉三项——字体族（`fontResolutions`→复合中/西/数字字体）、角色色 + 装饰点缀色、开本 trim（`page.width/height`→`PageSetup`）；不支持字段打 stderr 告警不静默。
