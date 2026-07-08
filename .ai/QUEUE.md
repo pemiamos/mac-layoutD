@@ -91,12 +91,12 @@
     - ✅ 图2/3 根因＝`--export-idml` 之前无法套规范包（只有 `--render-samples` 出 PDF 套）。**已加 CLI `--spec-pack PATH`**，任何导出前套规范包；实机 `村落.docx + 方案A → 村落-方案A.idml`：复合字体（方正兰亭细黑/江城律动宋/Georgia）+ 明黄 F5C518 色板 + 185x260mm 开本全落地。
     - ⚠️ **诚实结论（真 PILOT-2 缺口，已渲染 PNG 肉眼核实）**：即便套上方案A，渲染出的《村落》**只实现了字体/两栏/开本/字号**，方案A的视觉标识——**明黄点缀（抽言左侧竖线/图注顶部横线/标题下划线）、超大 ghost 章节序号、页眉章名+EXPLORE、节序号**——**全部没画出来**（整章扫描 0 明黄像素）。原因两类：① `章节序号`/`页眉页码`/`节名.numberStyle` 等本就在 `unsupportedFields` 里（解析器明确不支持）；② 即使受支持的 `抽言/图注` 点缀色，也只映射到 `.callout/.caption` **组件样式**，而真书的抽言是 `pullQuote` **段落样式**、图注是 caption 段落 → 点缀没挂上。**方案A的"杂志感"目前约 1/3 实现**。
   - **视觉标识层批次（让输出真正像图1，用户 2026-07-09「继续」拍板投入）**：
-    - [x] **ACCENT-1 段落级明黄点缀·抽言左侧竖线** — ✅ Claude（合 dev `fba2462`）。`ParagraphStyle.accentRule`（共享 geometry，四渲染器同算法）+ applySpecPack 把 roleDecorations 接到 pullQuote 段落（此前只挂 .callout 组件、真书抽言是 pullQuote 段落挂不上）+ PDF/PNG/Canvas/IDML 全渲染。抽言竖线已渲染 PNG 肉眼核实；IDML 出 uPAccent 矩形。**IDML 抽言竖线待用户 InDesign 肉眼确认**。
+    - [x] **ACCENT-1 段落级明黄点缀·抽言左侧竖线** — ✅ Claude（合 dev `fba2462`）。`ParagraphStyle.accentRule`（共享 geometry，四渲染器同算法）+ applySpecPack 把 roleDecorations 接到 pullQuote 段落（此前只挂 .callout 组件、真书抽言是 pullQuote 段落挂不上）+ PDF/PNG/Canvas/IDML 全渲染。抽言竖线已渲染 PNG 肉眼核实；IDML 出 uPAccent 矩形。**✅ 用户 2026-07-09 InDesign 验收通过**（村落-方案A.idml 截图：抽言「人类对黄山的感知…」左侧明黄竖线 + 江城律动宋抽言体 + 正文两栏渲染全正确）。
     - [ ] **ACCENT-2 图注顶部短横 + 标题线** — 数据已解析（caption.accentRule=.top），但各渲染器 y 翻转不同、顶边定位待逐一核实后开门控（现 `edge==.left` 门控关着 .top）；顺带把标题下划线接上。
     - [ ] **GHOST-NUM-1 超大 ghost 章节序号压底**（图1 那个巨大的「03」）— `章节序号` 现在 unsupportedFields 里；需新增"章节序号"角色渲染（超大淡灰数字，压在章名后面）。
     - [ ] **HEADER-1 页眉 chrome**（章名 · 刊名 · EXPLORE）— 现页眉只有书名 + 页码；`页眉页码` 在 unsupportedFields。
     - [ ] **SECNUM-1 节序号**（图1「01 /」黄色）— `节名.numberStyle` 在 unsupportedFields。
-  - **下一步**：用户在 InDesign 打开桌面 `村落-方案A.idml`（**已套方案A**，非默认版）肉眼终验字体/串接/图；并决定是否投入上面「视觉标识层」批次。
+  - **下一步**：✅ 用户 2026-07-09 InDesign 打开 `村落-方案A.idml` 终验通过（抽言竖线/字体/串接/两栏全对）；已拍板投入「视觉标识层」批次（见下 2026-07-09 初排工作台批次 V）。
 - [ ] **RENDER-CORE-1 共享绘制模型** — Claude 设计 + AG 实施（P1，高风险重构，先出设计再动手）。页面→绘制指令列表，画布/PDF/PNG 只做「指令→各自画布」薄适配，从根上消灭「追平」类任务（FRAME-INSET-2/FRAME-CANVAS-1/UNDERLAY-1/E2-4p 都属此类）。
 - [ ] **SPLIT-APPSTATE** — AG（P1）。`AppState.swift` 1375 行拆分（照 SPLIT-ENGINE 配方，纯搬家零行为变化，三重验证）。
 - [ ] **IDML-RNG lint（E1b③）** — Codex（P2）。vendor `app.generateIDMLSchema()` 的 RNG 做名/枚举 lint。
