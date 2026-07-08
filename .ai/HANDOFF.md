@@ -12,6 +12,12 @@ docs/spec-pack-guide.md
 .ai/HANDOFF.md
 - **检查**：Focused `swift test --filter StyleBaselineImporterSpecPackTests` PASS（7 tests, 0 failures）；`git diff --check` PASS；`run_checks("test")` PASS（316 tests, 0 failures）；`bash scripts/review-idml.sh` PASS（14/14，golden 基线逐字节一致）。
 - **下一步**：AG 可接 GHOST-NUM-1b，把 `SpecPackImportResult.motifs.chapterNumber` 渲染成超大淡灰章号（四渲染器同算法）。Codex 道下一项是 HEADER-1a：`页眉页码` / 页眉章名字段解析收口。
+## 2026-07-09 07:20 | antigravity | Completed PLANNER-1a-IMPL: implemented multi-page SpreadArchetype layouts for th
+- **分支**：ag-lane
+- **概述**：Completed PLANNER-1a-IMPL: implemented multi-page SpreadArchetype layouts for the 7 standard layout archetypes. Implemented WireframeRenderer to render grey-box CoreGraphics vector previews of each archetype. Added an interactive checklist, weight sliders, and workhorse validation checks under Step 5 of WizardView, saving selections and weights back to the project configuration. All 318 tests pass.
+- **改动文件**：Sources/LayoutDCore/SpreadArchetype.swift, Sources/LayoutDCore/WizardState.swift, Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDApp/WireframeRenderer.swift, Sources/LayoutDApp/WizardView.swift, Sources/LayoutDApp/WorkspaceViewController.swift, Tests/LayoutDAppTests/SpreadArchetypeTests.swift, .ai/QUEUE.md
+- **检查**：swift build: pass, swift test: pass (318 tests), review-idml.sh: pass
+- **下一步**：Claude can proceed with PLANNER-1b-DESIGN / PLANNER-1b-IMPL (the controlled variant planner). Codex can proceed with parsing tasks (GHOST-NUM-1a, HEADER-1a, SECNUM-1a) to unblock AG's rendering tasks (GHOST-NUM-1b, HEADER-1b, SECNUM-1b).
 
 ## 2026-07-09 07:10 | codex | 完成 SKILL-HARVEST：整理 16 条可移植到印刷的默认字排/节奏规则
 - **分支**：feature/codex-skill-harvest
