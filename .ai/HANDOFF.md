@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-08 17:11 | claude | 用户截图反馈三事(图1目标方案A杂志样式/图2-3 InDesign默认IDML无样式/图4 App导入报错)，全部定位并部分修复。①图4根因＝用户点了 Fil
+- **分支**：dev
+- **概述**：用户截图反馈三事(图1目标方案A杂志样式/图2-3 InDesign默认IDML无样式/图4 App导入报错)，全部定位并部分修复。①图4根因＝用户点了 File菜单「Import Layout Templates」(模板库导入器 schema 不符→data missing)；SPEC-APPLY-1 的规范包导入此前只藏在检查器按钮里、菜单栏没有。已在 File 菜单加「导入样式基线/规范包...」(⌘I)，走 autoDetectAndParseDetailed→规范包用 applySpecPackResult 全量落地、figma/dtcg 用 applyImportedTokens。②图2-3根因＝--export-idml 之前无法套规范包(只有 --render-samples 出 PDF)。已加 CLI --spec-pack PATH(ProjectLoader.applyingSpecPackIfNeeded，加载后任何导出前套)，实机 村落.docx+方案A→村落-方案A.idml 复合字体+明黄F5C518色板+185x260开本全落地。③诚实缺口(渲染PNG肉眼核实)：即便套方案A，村落只实现字体/两栏/开本/字号，方案A视觉标识——明黄点缀(抽言竖线/图注横线/标题线)、超大ghost章节序号、页眉chrome、节序号——整章0明黄像素全没画。原因：unsupportedFields(章节序号/页眉页码/节名numberStyle)明确不支持，且受支持的抽言/图注点缀只映射到 .callout/.caption 组件样式而真书抽言是 pullQuote 段落样式→点缀没挂上。方案A"杂志感"约1/3实现。合 dev(0a53950 feat + 0f9a2a3 queue)。
+- **改动文件**：Sources/LayoutDApp/ProjectLoader.swift(--spec-pack), Sources/LayoutDApp/main.swift(usage), Sources/LayoutDApp/WorkspaceViewController.swift(importStyleBaseline), Sources/LayoutDApp/AppDelegate+Menu.swift(菜单项+⌘I), Tests/LayoutDAppTests/ProjectLoaderTests.swift(+1测试), .ai/QUEUE.md
+- **检查**：310 测试 0 失败(+1 --spec-pack 回归)、review-idml.sh 14/14、golden 逐字节一致。实机 --spec-pack 出 styled IDML/PDF 核实字体+色板+开本落地；渲染 PNG 肉眼核实明黄点缀缺失(0 像素)。
+- **下一步**：1) 用户重新构建 App 后：File 菜单「导入样式基线/规范包...」(⌘I)选桌面 layoutD-规范包测试/方案A-探索黄.json，即可在 App 里套方案A(不再点 Import Layout Templates)。2) 用户在 InDesign 打开桌面 村落-方案A.idml(已套方案A，非默认版)看字体/串接/图。3) 用户拍板是否投入「视觉标识层」批次(候选已登记 QUEUE PILOT-2 条目)：ACCENT-1 段落级点缀(把 roleDecorations 接到段落渲染)→GHOST-NUM-1 超大章节序号→HEADER-1 页眉chrome→SECNUM-1 节序号——这是让输出真正像图1的关键，工作量中到大。4) 待查：预检7页 vs PDF导出4页页数不一致。
+
 ## 2026-07-08 11:30 | claude | 用户三件事全部处理：①合并另一对话的 debug 分支——feature/claude-planblock-isolation 上唯一新工作是 74ec05d「
 - **分支**：dev
 - **概述**：用户三件事全部处理：①合并另一对话的 debug 分支——feature/claude-planblock-isolation 上唯一新工作是 74ec05d「fix(engine): isolate invalid plan blocks」(手动编辑冻结页后单个越界块导致整页 override 被拒、已画图形全消失+工具失灵；改为按块校验只跳非法块、整页无可救才回退)。确认其 worktree 干净停在 74ec05d(已定稿)，在专用 detached worktree cherry-pick 只挑 74ec05d(不含残留的我 SPEC-APPLY-1 副本)、跑 309测试0失败+14/14探针全过后 FF 合 dev(d2c2644) push。②PILOT-2 首跑用户真书 /Users/amos/Documents/GitHub/layoutD村落.docx(单章《越山脉》93段/1.6万字/3图/角色标签内嵌「一级标题/章名」式)——全链路跑通：导入0报错、角色标签零字面泄漏、9种命名样式全套用到位、6条串接正文流+88串接框、3图全链接、XML全 well-formed、预检0阻断错误(14条全info/warning)。结构验收 PASS，桌面出 村落-试排.idml/.pdf + 村落-preflight.json。③把方案A规范包套到本章出对照 PDF layoutD-样张-方案A-探索黄.pdf(md5不同=SPEC-APPLY-1 视觉区分在真书上成立)。发现1个待查小疑点：预检 pageCount=7 但 --export-pdf 默认导出4页，页面模型与PDF管线页数对不上(非阻断，登记PILOT-2待查)。
