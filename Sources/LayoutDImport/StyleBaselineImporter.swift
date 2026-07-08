@@ -293,6 +293,7 @@ public struct StyleBaselineImporter {
 
     private static let legacyMotifRoleNames: Set<String> = [
         "章节序号",
+        "页眉章名",
         "页眉页码"
     ]
 
@@ -517,11 +518,23 @@ public struct StyleBaselineImporter {
                     )
                 }
             case "页眉页码":
-                motifs.header = try parseLegacyHeaderMotif(
+                let headerMotif = try parseLegacyHeaderMotif(
                     roleObject,
                     path: "$.roles.\(role)",
-                    resolvedFontsByAlias: resolvedFontsByAlias
+                    resolvedFontsByAlias: resolvedFontsByAlias,
+                    showChapterTitle: true,
+                    showPageNumber: true
                 )
+                motifs.header = mergeHeaderMotif(motifs.header, with: headerMotif)
+            case "页眉章名":
+                let headerMotif = try parseLegacyHeaderMotif(
+                    roleObject,
+                    path: "$.roles.\(role)",
+                    resolvedFontsByAlias: resolvedFontsByAlias,
+                    showChapterTitle: true,
+                    showPageNumber: false
+                )
+                motifs.header = mergeHeaderMotif(motifs.header, with: headerMotif)
             default:
                 break
             }
@@ -613,7 +626,9 @@ public struct StyleBaselineImporter {
     private static func parseLegacyHeaderMotif(
         _ object: [String: Any],
         path: String,
-        resolvedFontsByAlias: [String: String]
+        resolvedFontsByAlias: [String: String],
+        showChapterTitle: Bool,
+        showPageNumber: Bool
     ) throws -> SpecPackHeaderMotif {
         let fontAlias = try optionalString(object, key: "font", path: path)
         let resolvedFont = try resolvedFontName(fontAlias: fontAlias, resolvedFontsByAlias: resolvedFontsByAlias, path: "\(path).font")
@@ -622,7 +637,27 @@ public struct StyleBaselineImporter {
             resolvedFontName: resolvedFont,
             fontSizePt: try optionalPositiveNumber(object, key: "fontSize_pt", path: path),
             color: try optionalString(object, key: "color", path: path),
-            rule: try optionalString(object, key: "rule", path: path)
+            rule: try optionalString(object, key: "rule", path: path),
+            label: try optionalString(object, key: "label", path: path),
+            showChapterTitle: showChapterTitle,
+            showPageNumber: showPageNumber
+        )
+    }
+
+    private static func mergeHeaderMotif(
+        _ existing: SpecPackHeaderMotif?,
+        with incoming: SpecPackHeaderMotif
+    ) -> SpecPackHeaderMotif {
+        guard let existing else { return incoming }
+        return SpecPackHeaderMotif(
+            fontAlias: existing.fontAlias ?? incoming.fontAlias,
+            resolvedFontName: existing.resolvedFontName ?? incoming.resolvedFontName,
+            fontSizePt: existing.fontSizePt ?? incoming.fontSizePt,
+            color: existing.color ?? incoming.color,
+            rule: existing.rule ?? incoming.rule,
+            label: existing.label ?? incoming.label,
+            showChapterTitle: existing.showChapterTitle || incoming.showChapterTitle,
+            showPageNumber: existing.showPageNumber || incoming.showPageNumber
         )
     }
 
