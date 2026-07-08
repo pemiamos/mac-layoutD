@@ -65,7 +65,7 @@
 > 本批为 2026-07-08 全项目 review 后的正式排期。P0 三项合起来回答「这套系统能不能真排出一本书」。
 > 各任务按文件边界仍走三道分工；跨道字段扩展回归原属道。
 
-- [~] **SPEC-APPLY-1 规范包 GUI 应用闭环** — 认领: Claude @ feature/claude-spec-apply-1（P0，进行中）。
+- [x] **SPEC-APPLY-1 规范包 GUI 应用闭环** — ✅ Claude（合 dev），**GUI 视觉验收待用户**。
   - 背景：`autoDetectAndParse` 认得规范包但只返回 `tokens`，丢掉 `fontResolutions`/`roleColors`/`roleDecorations`；GUI `applyImportedTokens` 再用空 `SpecPackImportResult` 包一层——App 里导入规范包只落地 margins/字号等 token，**字体族/角色色/开本 trim 全丢**（CLI `--render-samples` 路径反而是全的）。这是规范包路线的「最后一公里」。
   - 目标：GUI「导入样式基线」选规范包 JSON 时，把完整 `SpecPackImportResult` 透传到 `BookProject.applySpecPack`，让字体/角色色/开本真正落地到当前项目；figma/dtcg 路径不变。导入面板对规范包显示专属标注（含字体/色计数、不支持字段告警）。
   - 文件：`Sources/LayoutDImport/StyleBaselineImporter.swift`（加 spec-aware 解析出口，保留旧 API 兼容）、`Sources/LayoutDApp/{InspectorView,StyleImportSheet,AppState}.swift`。
