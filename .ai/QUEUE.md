@@ -77,7 +77,12 @@
   - 结果（全链路跑通，产物在桌面）：导入 0 报错；角色标签**零字面泄漏**（Stories 里搜不到任何标签词）；9 种命名样式全部套用到位（body19/bibliography13/caption8/pullQuote3/heading1×3/heading3×3/heading2/introduction/introductionEnglish）；6 条串接正文流 + 88 个 Next/Previous 串接框；3 图全 `file:Links/` 链接；全包 XML well-formed；预检 0 阻断错误（14 条全 info/warning：缺出版社/图注/RGB→CMYK 建议）。方案A规范包也已套到本章出对照 PDF（md5 不同 = 视觉区分成立）。
   - 桌面产物：`村落-试排.idml`（交 InDesign）、`村落-试排.pdf`（默认初排）、`layoutD-样张-方案A-探索黄.pdf`（本章套方案A）、`村落-preflight.json`。
   - ⚠️ **待查小疑点**：预检 `pageCount=7`，但 `--export-pdf` 默认路径导出 **4 页**——预检页面模型与 PDF 导出管线页数对不上，需查是前置页/模板差异还是真 bug（非阻断，登记待查）。
-  - **下一步**：用户在 InDesign 打开 `村落-试排.idml` 肉眼终验（样式/串接/图/中文排版）；有整本多章书稿时再跑一次验证多章串接与规模性能。
+  - **2026-07-08 二轮（用户截图反馈）**：用户在 InDesign 打开默认 IDML（图2/3）发现「没有方案A样式」，App 里导入规范包报错（图4）。定位并已修：
+    - ✅ 图4 根因＝用户点了 File 菜单「Import Layout Templates」（模板库导入器，schema 不符 → data missing）；SPEC-APPLY-1 的规范包导入此前只藏在检查器按钮里、菜单栏没有。**已在 File 菜单加「导入样式基线 / 规范包...」(⌘I)**（合 dev `0a53950`）。
+    - ✅ 图2/3 根因＝`--export-idml` 之前无法套规范包（只有 `--render-samples` 出 PDF 套）。**已加 CLI `--spec-pack PATH`**，任何导出前套规范包；实机 `村落.docx + 方案A → 村落-方案A.idml`：复合字体（方正兰亭细黑/江城律动宋/Georgia）+ 明黄 F5C518 色板 + 185x260mm 开本全落地。
+    - ⚠️ **诚实结论（真 PILOT-2 缺口，已渲染 PNG 肉眼核实）**：即便套上方案A，渲染出的《村落》**只实现了字体/两栏/开本/字号**，方案A的视觉标识——**明黄点缀（抽言左侧竖线/图注顶部横线/标题下划线）、超大 ghost 章节序号、页眉章名+EXPLORE、节序号**——**全部没画出来**（整章扫描 0 明黄像素）。原因两类：① `章节序号`/`页眉页码`/`节名.numberStyle` 等本就在 `unsupportedFields` 里（解析器明确不支持）；② 即使受支持的 `抽言/图注` 点缀色，也只映射到 `.callout/.caption` **组件样式**，而真书的抽言是 `pullQuote` **段落样式**、图注是 caption 段落 → 点缀没挂上。**方案A的"杂志感"目前约 1/3 实现**。
+  - **候选后续（视觉标识层，待用户拍板是否投入）**：ACCENT-1 段落级点缀（抽言竖线/图注横线/标题线，把 roleDecorations 接到段落渲染而非仅组件）→ GHOST-NUM-1 超大章节序号压底 → HEADER-1 页眉章名/刊名 chrome → SECNUM-1 节序号。
+  - **下一步**：用户在 InDesign 打开桌面 `村落-方案A.idml`（**已套方案A**，非默认版）肉眼终验字体/串接/图；并决定是否投入上面「视觉标识层」批次。
 - [ ] **RENDER-CORE-1 共享绘制模型** — Claude 设计 + AG 实施（P1，高风险重构，先出设计再动手）。页面→绘制指令列表，画布/PDF/PNG 只做「指令→各自画布」薄适配，从根上消灭「追平」类任务（FRAME-INSET-2/FRAME-CANVAS-1/UNDERLAY-1/E2-4p 都属此类）。
 - [ ] **SPLIT-APPSTATE** — AG（P1）。`AppState.swift` 1375 行拆分（照 SPLIT-ENGINE 配方，纯搬家零行为变化，三重验证）。
 - [ ] **IDML-RNG lint（E1b③）** — Codex（P2）。vendor `app.generateIDMLSchema()` 的 RNG 做名/枚举 lint。
