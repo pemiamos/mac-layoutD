@@ -89,8 +89,37 @@ extension BookProject {
                 if let roleColor = result.roleColors[matchingRole] {
                     style.colorToken = roleColor
                 }
+
+                // 2.4 Decoration → paragraph accent rule (抽言左侧竖线 / 图注顶部短横 / 标题下划线)
+                if let dec = result.roleDecorations[matchingRole], let decColor = dec.color {
+                    let mmToPt = 72.0 / 25.4
+                    switch dec.type {
+                    case "left-rule":
+                        style.accentRule = ParagraphAccentRule(
+                            edge: .left,
+                            colorToken: decColor,
+                            width: dec.widthPt ?? 3
+                        )
+                    case "top-tick", "top-rule", "top-bottom-rules":
+                        style.accentRule = ParagraphAccentRule(
+                            edge: .top,
+                            colorToken: decColor,
+                            width: dec.widthPt ?? 2,
+                            length: dec.lengthMM.map { $0 * mmToPt }
+                        )
+                    case "bottom-rule", "underline", "bottom-tick":
+                        style.accentRule = ParagraphAccentRule(
+                            edge: .bottom,
+                            colorToken: decColor,
+                            width: dec.widthPt ?? 2,
+                            length: dec.lengthMM.map { $0 * mmToPt }
+                        )
+                    default:
+                        break
+                    }
+                }
             }
-            
+
             updatedParagraphStyles[idx] = style
         }
         self.styles.paragraphStyles = updatedParagraphStyles

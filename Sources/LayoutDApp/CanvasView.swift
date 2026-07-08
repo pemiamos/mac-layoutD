@@ -1,5 +1,6 @@
 import AppKit
 import LayoutDCore
+import LayoutDEngine
 
 final class CanvasView: NSView {
     var project: BookProject? {
@@ -59,7 +60,7 @@ final class CanvasView: NSView {
     var onToggleSelection: ((UUID) -> Void)?
     /// Rubber-band (marquee) selection finished. Payload: every frame intersecting
     /// the marquee (empty set clears the selection).
-    var onMarqueeSelected: ((Set<UUID>) -> Void)?
+    var onMarqueeSelected: ((Set<UUID>, UUID?) -> Void)?
     var onCanvasClick: ((Int, CGPoint) -> Void)?
     var onFrameDragged: ((UUID, Double, Double, Double, Double) -> Void)?
     /// Group-drag commit: new page-local rects for every moved frame, applied in one
@@ -292,6 +293,64 @@ final class CanvasView: NSView {
         return nil
     }
 
+    /// Groups for the current document
+    var currentFlowGrouping: FlowFrameGrouping? {
+        guard let document = document, let project = project else { return nil }
+        return groupIntoFlowFrames(pages: document.pages, project: project)
+    }
+
+    /// Finds the group containing the given frame on the given page
+    func flowGroup(for frameId: UUID, pageNumber: Int) -> FlowFrameGroup? {
+        guard let document = document, let project = project else { return nil }
+        let sortedPages = document.pages.sorted { $0.number < $1.number }
+        guard let pageIndex = sortedPages.firstIndex(where: { $0.number == pageNumber }) else { return nil }
+        guard let grouping = currentFlowGrouping else { return nil }
+        guard let groups = grouping.groupsByPage[pageIndex] else { return nil }
+        
+        let targetPage = sortedPages[pageIndex]
+        for group in groups {
+            for idx in group.memberFrameIndices {
+                if idx >= 0 && idx < targetPage.frames.count {
+                    if targetPage.frames[idx].id == frameId {
+                        return group
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Gets all member frame IDs of the group containing the given frame
+    func flowGroupMemberIds(for frameId: UUID, pageNumber: Int) -> Set<UUID>? {
+        guard let document = document else { return nil }
+        let sortedPages = document.pages.sorted { $0.number < $1.number }
+        guard let pageIndex = sortedPages.firstIndex(where: { $0.number == pageNumber }) else { return nil }
+        guard let group = flowGroup(for: frameId, pageNumber: pageNumber) else { return nil }
+        
+        let targetPage = sortedPages[pageIndex]
+        var memberIds = Set<UUID>()
+        for idx in group.memberFrameIndices {
+            if idx >= 0 && idx < targetPage.frames.count {
+                memberIds.insert(targetPage.frames[idx].id)
+            }
+        }
+        return memberIds
+    }
+
+    /// Gets the first member frame ID of the group containing the given frame
+    func firstFrameIdOfGroup(for frameId: UUID, pageNumber: Int) -> UUID? {
+        guard let group = flowGroup(for: frameId, pageNumber: pageNumber) else { return nil }
+        guard let document = document else { return nil }
+        let sortedPages = document.pages.sorted { $0.number < $1.number }
+        guard let pageIndex = sortedPages.firstIndex(where: { $0.number == pageNumber }) else { return nil }
+        let targetPage = sortedPages[pageIndex]
+        if let firstIdx = group.memberFrameIndices.first,
+           firstIdx >= 0 && firstIdx < targetPage.frames.count {
+            return targetPage.frames[firstIdx].id
+        }
+        return nil
+    }
+
     /// IDs of every frame whose on-canvas rectangle intersects the marquee.
     func framesIntersecting(_ marquee: CGRect?) -> Set<UUID> {
         guard let marquee, marquee.width > 1 || marquee.height > 1,
@@ -311,7 +370,33 @@ final class CanvasView: NSView {
                 }
             }
         }
-        return hits
+
+        // Expand hits to include entire flow frame groups. `flowGroupMemberIds` recomputes
+        // groupIntoFlowFrames over the whole document on every call — calling it per hit
+        // here would mean a full-document recompute per frame caught by the marquee, which
+        // gets slow fast during a drag over many frames. Compute the grouping once and
+        // build a frameId → group-members lookup instead.
+        var expandedHits = Set<UUID>()
+        if let grouping = currentFlowGrouping {
+            let sortedPages = document.pages.sorted { $0.number < $1.number }
+            var memberIdsByFrameId: [UUID: Set<UUID>] = [:]
+            for (pageIndex, groups) in grouping.groupsByPage {
+                guard pageIndex >= 0 && pageIndex < sortedPages.count else { continue }
+                let pageFrames = sortedPages[pageIndex].frames
+                for group in groups {
+                    let ids = Set(group.memberFrameIndices.compactMap { idx in
+                        idx >= 0 && idx < pageFrames.count ? pageFrames[idx].id : nil
+                    })
+                    for id in ids { memberIdsByFrameId[id] = ids }
+                }
+            }
+            for hit in hits {
+                expandedHits.formUnion(memberIdsByFrameId[hit] ?? [hit])
+            }
+        } else {
+            expandedHits = hits
+        }
+        return expandedHits
     }
 
     func resizeHandles(for rect: CGRect) -> [CGRect] {

@@ -33,6 +33,7 @@ Options:
   --idml-facing             Export IDML in facing-pages (对开跨页) spreads (默认单页).
   --export-templates PATH   Export saved layout templates as a reusable JSON library.
   --import-templates PATH   Import a layout template library before export or validation.
+  --spec-pack PATH          Apply a layoutD visual spec pack (规范包 JSON: 字体/角色色/开本/网格) before any export (IDML/PDF/PNG).
   --apply-chapter-template NAME
                             Apply a chapter template: scienceChapter, imageRichChapter, or studyGuideChapter.
   --chapter-template-section N

@@ -1,6 +1,7 @@
 import CoreText
 import Foundation
 import LayoutDCore
+import LayoutDEngine
 
 /// 阶段 E1：把真实 `BookProject` + 排版结果 `LaidOutDocument` 映射成 IDML，交 InDesign
 /// 人工精调 + 印前。结构沿用已在 InDesign 中文版验证通过的 spike(竖排 / 复合字体 /
@@ -119,80 +120,16 @@ public struct IDMLExporter {
         // Previous/NextTextFrame 相连），断流之后的正文另起新 run。
         // 内嵌图锚定（THREAD-1b cut2）同日废除：所有图片一律独立定位框（图注框紧邻其后），
         // 绕排意图由 Asset.wrapMode 表达（wrap=正文避让绕排 / underlay=垫底画在文字下层）。
-        let runIndexByParagraphId: [UUID: Int] = {
-            var map: [UUID: Int] = [:]
-            var run = 0
-            var runHasContent = false
-            func closeRun() {
-                if runHasContent { run += 1; runHasContent = false }
-            }
-            for section in project.sections {
-                closeRun() // 章边界必断流
-                for story in section.stories {
-                    for paragraph in story.paragraphs {
-                        if isBodyFlowParagraph(paragraph) {
-                            map[paragraph.id] = run
-                            runHasContent = true
-                        } else {
-                            closeRun() // 独立框角色（标题/抽言/图/表…）切断正文流
-                        }
-                    }
-                }
-            }
-            return map
-        }()
-
-        var frameRunIndex: [FrameKey: Int] = [:]
-        var runsOnPage: [Int: [FlowPageKey]] = [:]      // pageIndex -> 该页出现的(run,栏)（去重，出现顺序）
-        var flowUnitsForRun: [Int: [FlowPageKey]] = [:] // run -> 该流经过的(页,栏)（去重，出现顺序）
-        var rectForRunPage: [FlowPageKey: Rect] = [:]
-        // 前置页数与 LayoutEngine.frontMatterPageCount(for:) 保持一致：封面恒 1 页，
-        // 目录仅在 includesTableOfContents 时 +1（默认关）。前置页天然不参与串接。
-        let frontMatterPages = project.pageSetup.includesTableOfContents ? 2 : 1
-        for (pi, page) in pages.enumerated() where page.number > frontMatterPages {
-            for (fi, frame) in page.frames.enumerated() {
-                // 只认领纯正文段落的文字框；章名标题（无 sourceParagraphId）与标题/抽言等
-                // 角色段落一律落到下方「逐帧独立 Story」路径，各自独立成框。
-                guard frame.kind == .text, case .text(let raw) = frame.content,
-                      !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                      let pid = frame.sourceParagraphId,
-                      let runIndex = runIndexByParagraphId[pid] else { continue }
-                frameRunIndex[FrameKey(page: pi, frame: fi)] = runIndex
-                let column = Int((frame.rect.x * 4).rounded())
-                let key = FlowPageKey(run: runIndex, page: pi, column: column)
-                if let existing = rectForRunPage[key] {
-                    rectForRunPage[key] = unionRect(existing, frame.rect)
-                } else {
-                    rectForRunPage[key] = frame.rect
-                    runsOnPage[pi, default: []].append(key)
-                    flowUnitsForRun[runIndex, default: []].append(key)
-                }
-            }
-        }
-
-        var chainForRunPage: [FlowPageKey: ChainInfo] = [:]
-        for (runIndex, units) in flowUnitsForRun {
-            for (k, unitKey) in units.enumerated() {
-                let selfId = "uFlowTF\(runIndex)_\(k)"
-                let previous = k == 0 ? "n" : "uFlowTF\(runIndex)_\(k - 1)"
-                let next = k == units.count - 1 ? "n" : "uFlowTF\(runIndex)_\(k + 1)"
-                chainForRunPage[unitKey] = ChainInfo(selfId: selfId, previous: previous, next: next)
-            }
-        }
+        // FRAME-CANVAS-0：分组计算本身已抽成跨模块共享函数 groupIntoFlowFrames（供画布/
+        // PDF/PNG 的 FRAME-CANVAS-1 复用），此处只消费其结果。
+        let grouping = groupIntoFlowFrames(pages: pages, project: project)
+        let flowUnitsForRun: [Int: [FlowGroupKey]] = grouping.groupsByRun.mapValues { $0.map(\.key) }
 
         // 流 Story 的内容直接取 project.sections 的原文（未经 normalizedText 折行），
         // 与 frame 是否被拆分跨页无关——inlineRuns 天然对齐原文，无需二次映射。
         let flowVertical = project.pageSetup.layoutDirection == .vertical
         var flowStorySelf: [Int: String] = [:]
-        var paragraphsForRun: [Int: [Paragraph]] = [:]
-        for section in project.sections {
-            for story in section.stories {
-                for paragraph in story.paragraphs {
-                    guard let runIndex = runIndexByParagraphId[paragraph.id] else { continue }
-                    paragraphsForRun[runIndex, default: []].append(paragraph)
-                }
-            }
-        }
+        let paragraphsForRun = grouping.paragraphsForRun
         for runIndex in flowUnitsForRun.keys.sorted() {
             var flowParagraphs: [ChapterParagraph] = []
             for paragraph in paragraphsForRun[runIndex] ?? [] {
@@ -256,7 +193,7 @@ public struct IDMLExporter {
                         continue
                     }
                     // 已并入正文串接流；合并后的 TextFrame 在本页 frame 循环结束后统一追加一次。
-                    if let runIndex = frameRunIndex[FrameKey(page: pi, frame: fi)],
+                    if let runIndex = grouping.frameRunIndex[FlowFrameKey(page: pi, frame: fi)],
                        flowStorySelf[runIndex] != nil {
                         continue
                     }
@@ -271,8 +208,43 @@ public struct IDMLExporter {
                     let fillColor = frame.kind == .table ? nil : resolvedFillHex
                     let strokeColor = frame.strokeColorHex ?? component?.resolvedStrokeColorHex(project: project)
                     let strokeWidth = frame.strokeWidth ?? component?.strokeWidth ?? 0
+
+                    // Paragraph accent rule (抽言左侧明黄竖线): the frame has no
+                    // component, so shrink the text frame left and place the bar in
+                    // the reclaimed strip (matches the PDF/PNG/Canvas preview).
+                    var textFrameRect = frame.rect
+                    var paragraphAccent: (rect: Rect, color: String)? = nil
+                    if let rule = style.accentRule,
+                       let ruleHex = project.resolvedColorHex(rule.colorToken),
+                       rule.width > 0 {
+                        if rule.edge == .left, frame.rect.width > rule.width + rule.gap {
+                            let barRect = Rect(x: frame.rect.x, y: frame.rect.y,
+                                               width: rule.width, height: frame.rect.height)
+                            textFrameRect = Rect(x: frame.rect.x + rule.width + rule.gap, y: frame.rect.y,
+                                                 width: frame.rect.width - rule.width - rule.gap,
+                                                 height: frame.rect.height)
+                            paragraphAccent = (barRect, ruleHex)
+                        } else if rule.edge == .top, frame.rect.height > rule.width + rule.gap {
+                            let barLength = rule.length ?? frame.rect.width
+                            let barRect = Rect(x: frame.rect.x, y: frame.rect.y,
+                                               width: min(barLength, frame.rect.width), height: rule.width)
+                            textFrameRect = Rect(x: frame.rect.x, y: frame.rect.y + rule.width + rule.gap,
+                                                 width: frame.rect.width,
+                                                 height: frame.rect.height - rule.width - rule.gap)
+                            paragraphAccent = (barRect, ruleHex)
+                        } else if rule.edge == .bottom, frame.rect.height > rule.width + rule.gap {
+                            let barLength = rule.length ?? frame.rect.width
+                            let barRect = Rect(x: frame.rect.x, y: frame.rect.y + frame.rect.height - rule.width,
+                                               width: min(barLength, frame.rect.width), height: rule.width)
+                            textFrameRect = Rect(x: frame.rect.x, y: frame.rect.y,
+                                                 width: frame.rect.width,
+                                                 height: frame.rect.height - rule.width - rule.gap)
+                            paragraphAccent = (barRect, ruleHex)
+                        }
+                    }
+
                     items.append(textFrameItem(self: "uTF\(pi)_\(fi)", story: storySelf,
-                                               rect: frame.rect, fillColor: fillColor,
+                                               rect: textFrameRect, fillColor: fillColor,
                                                strokeColor: strokeColor, strokeWidth: strokeWidth,
                                                pageW: pageW, pageH: pageH, dx: dx))
                     // Accent 必须位于有底色的文本框之上，否则会被框架填色遮住。
@@ -282,6 +254,10 @@ public struct IDMLExporter {
                                               width: min(accentWidth, frame.rect.width), height: frame.rect.height)
                         items.append(colorRectangleItem(self: "uAccent\(pi)_\(fi)", rect: accentRect,
                                                         fillColor: accentColor, pageW: pageW, pageH: pageH, dx: dx))
+                    }
+                    if let pa = paragraphAccent {
+                        items.append(colorRectangleItem(self: "uPAccent\(pi)_\(fi)", rect: pa.rect,
+                                                        fillColor: pa.color, pageW: pageW, pageH: pageH, dx: dx))
                     }
                     // 原生表格：源段是 .table 且带结构化行列时，Story 内输出 InDesign
                     // <Table>（真行列/可调宽），而非把拍平文本当普通段落画。
@@ -360,10 +336,10 @@ public struct IDMLExporter {
                 }
             }
 
-            for unitKey in runsOnPage[pi] ?? [] {
-                guard let storySelf = flowStorySelf[unitKey.run],
-                      let rect = rectForRunPage[unitKey],
-                      let chain = chainForRunPage[unitKey] else { continue }
+            for group in grouping.groupsByPage[pi] ?? [] {
+                guard let storySelf = flowStorySelf[group.key.run] else { continue }
+                let rect = group.rect
+                let chain = group.chain
                 items.append(textFrameItem(self: chain.selfId, story: storySelf, rect: rect,
                                            fillColor: nil, strokeColor: nil, strokeWidth: 0,
                                            pageW: pageW, pageH: pageH, dx: dx,

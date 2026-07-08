@@ -3,6 +3,51 @@ import LayoutDCore
 import XCTest
 
 final class ProjectLoaderTests: XCTestCase {
+    /// `--spec-pack PATH` applies a visual spec pack to the loaded manuscript
+    /// before any export, so `--export-idml` / `--export-pdf` reflect the same
+    /// styling as the GUI import and `--render-samples` (PILOT-2 gap fix).
+    func testSpecPackFlagAppliesTrimAndColorsBeforeExport() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("specpack-cli-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let manuscriptURL = dir.appendingPathComponent("chapter.md")
+        try """
+        # 测试章
+
+        正文一段。
+        """.write(to: manuscriptURL, atomically: true, encoding: .utf8)
+
+        // Minimal valid spec pack: 185x260mm trim + a yellow accent color.
+        let specURL = dir.appendingPathComponent("spec.json")
+        try """
+        {
+          "meta": {"name": "测试规范包", "version": 1},
+          "page": {
+            "size_mm": {"width": 185, "height": 260},
+            "margins_mm": {"top": 22, "bottom": 26, "inner": 20, "outer": 24},
+            "grid": {"columns": 2, "gutter_mm": 8, "baselineGrid_pt": 15.5}
+          },
+          "fonts": {"正文": "方正兰亭细黑"},
+          "colors": {"modes": ["default"], "tokens": {"accent": {"default": "#F5C518"}, "ink": {"default": "#1B1B1B"}, "paper": {"default": "#FFFFFF"}}},
+          "roles": {"正文": {"font": "正文", "fontSize_pt": 10}}
+        }
+        """.write(to: specURL, atomically: true, encoding: .utf8)
+
+        let loaded = ProjectLoader().loadFromCommandLine(
+            arguments: ["layoutD", manuscriptURL.path, "--spec-pack", specURL.path]
+        )
+
+        XCTAssertNil(loaded.loadError)
+        // Trim size from the spec pack (185x260mm → points) landed on the project.
+        let mmToPt = 72.0 / 25.4
+        XCTAssertEqual(loaded.project.pageSetup.pageSize.width, 185 * mmToPt, accuracy: 0.5)
+        XCTAssertEqual(loaded.project.pageSetup.pageSize.height, 260 * mmToPt, accuracy: 0.5)
+        // The accent color token is present in the applied style library.
+        XCTAssertEqual(loaded.project.styles.colorHex("accent"), "#F5C518")
+    }
+
     func testChapterPackageLoadsRootManuscriptFirst() throws {
         let packageURL = try makeTemporaryPackage()
         defer { try? FileManager.default.removeItem(at: packageURL) }

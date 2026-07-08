@@ -1,7 +1,102 @@
 # 交接记录 Handoff Log
-> 最新在最上方。开工先读最新一条，收工必写一条。本文件不进行任何 git 写操作。
+> 最新在最上方。开工先读最新一条，收工必写一条。本文件不进行 any git 写操作。
 
 <!-- ENTRIES -->
+
+## 2026-07-09 06:37 | claude | 出正式开发计划并合 dev（e645243，已 push）。用户拍板：①新增「初排工作台六站流水线」（参考图→规范包→样张→定稿→约7骨架线框图→灌版自动选骨架
+- **分支**：dev
+- **概述**：出正式开发计划并合 dev（e645243，已 push）。用户拍板：①新增「初排工作台六站流水线」（参考图→规范包→样张→定稿→约7骨架线框图→灌版自动选骨架+手工微调→IDML）；②工作流切换为「自主集成模式」——Codex/AG 自检(run_checks+review-idml.sh PASS)通过后**自主合 dev**，不再每批等 Claude/用户；dev→main 仍用户唯一放行人，全部完工后一次性人工审核（必须含 InDesign 真打开看视觉，AI 自检验不了渲染对错）；③刻意压 Claude 算力，实现全给 Codex/AG，Claude 只出 PLANNER 设计文档+集成。评估了用户给的 5 个 AI 设计技能仓库：全是屏幕/网页设计不直接可用，形态可抄（SKILL.md 教材化站1读图=BOOK-SKILL-1/2、pencilplaybook 可测试规则文风→qualityGates）。QUEUE 已登记「2026-07-09 初排工作台批次」6 个子批（V/S/L/P/W/T）+ 顶部「自主集成模式」政策。产物：桌面 layoutD开发计划-初排工作台-v2.0.pdf（Chrome headless 渲染，3页）。
+- **改动文件**：.ai/QUEUE.md（自主集成模式政策+初排工作台6批次）、docs/development-plan.md（2026-07-09批次节）、.ai/HANDOFF.md；桌面 layoutD开发计划-初排工作台-v2.0.pdf（未进仓库）
+- **检查**：纯文档改动无需构建；已 commit e645243 + push origin dev；dev 领先 main 36。
+- **下一步**：【关键路径】Codex 立即开工 SPEC-PACK-2（总闸，卡 L/P 两批）；AG 立即开工 ACCENT-2（照 ACCENT-1 范式）+ WIZARD-1 骨架。三道按「自主集成模式」自检通过自主合 dev。SPEC-PACK-2 合 dev 后 Claude 出 PLANNER-1a-DESIGN→1b-DESIGN。全部完工后 PILOT-3 连续12-20页节奏验收→用户 InDesign 终验放行 main。另：用户仍待 InDesign 验 村落-方案A.idml 抽言竖线。
+
+## 2026-07-09 06:13 | claude | 纯设计轮（仓库零改动）：用户提出新增「初排模块」完整工作流（参考图→规范包→样张→反馈定稿→约7个骨架线框图备选→审核→灌版自动选骨架+手工微调→IDML），C
+- **分支**：dev
+- **概述**：纯设计轮（仓库零改动）：用户提出新增「初排模块」完整工作流（参考图→规范包→样张→反馈定稿→约7个骨架线框图备选→审核→灌版自动选骨架+手工微调→IDML），Claude 完善为「初排工作台」六站流水线并画流程图标注完成状态，产出《Claude-初排工作台六站流程.md》（桌面）。各站完成度：站1定规范≈60%（通道/⌘I导入✅，v2语法层❌）、站2出样张≈75%（导入/同引擎渲染✅，视觉标识1/5）、站3锁基线≈10%（❌新建）、站4选骨架≈15%（❌新建，仅4单页模板雏形）、站5灌版≈55%（串接灌版/手工微调锁页✅，自动选骨架/换一版❌）、站6交棒≈90%。关键设计裁决：用户的"随机选取骨架"升级为"受控抽签"（内容指纹过滤+节奏记忆+固定种子确定性+单页「换一版」重抽），理由：纯随机会排不下/单调/无法回归验收。新任务清单已拟（SPEC-PACK-2→STYLE-LOCK-1→PLANNER-1a/1b→REROLL-1→WIZARD-1→PILOT-3，含分道），待用户拍板后登记 QUEUE。
+- **改动文件**：~/Desktop/Claude-初排工作台六站流程.md、~/Desktop/Claude-layoutD初排攻坚思路.md（均为仓库外分析文档，仓库零改动）
+- **检查**：无代码改动，未跑构建；git 状态 clean（dev@eae4eca）
+- **下一步**：1) 用户审阅六站流程与新任务清单并拍板；2) 拍板后 Claude 把 SPEC-PACK-2/STYLE-LOCK-1/PLANNER-1a/1b/REROLL-1/WIZARD-1/PILOT-3 登记进 QUEUE 分道派发；3) 站2 前置＝视觉标识层四刀（ACCENT-2/GHOST-NUM-1/HEADER-1/SECNUM-1，已在 QUEUE）可先行开工；4) 未变待办：用户 InDesign 验 村落-方案A.idml 抽言竖线；dev 领先 main 33 待集中视觉验收。
+
+## 2026-07-09 05:45 | claude | 纯分析轮（无代码改动）：应用户要求对「初排」做深度思考，裁决 AG/Codex 两份报告并结合代码实况（PageLayoutTemplate 仅4单页模板、La
+- **分支**：dev
+- **概述**：纯分析轮（无代码改动）：应用户要求对「初排」做深度思考，裁决 AG/Codex 两份报告并结合代码实况（PageLayoutTemplate 仅4单页模板、LayoutAdvisor/LayoutPlanProvider 有协议无实现、LayoutPlanContext 已有内容指纹雏形、qualityMetricsHistory 只有壳），产出《Claude-layoutD初排攻坚思路.md》（桌面）。核心结论：①IDML 交棒≈88%、灌版引擎≈85%、但"视觉规范→有节奏初排"仅≈30-35%（layout grammar 为零），整体≈60%；②本阶段纲领=从 style token 升级到 style grammar：specPack v2（motifs+layoutGrammar+qualityGates 一次立 schema）+ LayoutPlanner v1（对开为单位、受控候选+硬过滤+软评分+节奏记忆）；③红线：变体只动帧几何不破串接文流、规划器必须确定性、LLM 只做骨架选择题不画坐标、unsupportedFields 诚实上报不动摇。落地批次：先收视觉标识层（ACCENT-2/GHOST-NUM-1/HEADER-1/SECNUM-1，已在 QUEUE）→ SPEC-PACK-2 schema → PLANNER-1（先设计文档）→ PILOT-3 村落连续12-20页节奏验收。
+- **改动文件**：~/Desktop/Claude-layoutD初排攻坚思路.md（仓库外分析报告，仓库零改动）
+- **检查**：无代码改动，未跑构建；git 状态 clean（dev@eae4eca）
+- **下一步**：1) 用户阅读桌面报告并拍板是否按「视觉标识层→SPEC-PACK-2→PLANNER-1→PILOT-3」排期；2) 拍板后 Claude 把 SPEC-PACK-2（Codex 道）与 PLANNER-1 设计文档任务登记进 QUEUE；3) 未变的待办：用户 InDesign 肉眼验 村落-方案A.idml 抽言竖线；dev 领先 main 33，尽快集中视觉验收合 main。
+
+## 2026-07-09 04:38 | claude | 用户「继续」＝投入视觉标识层，让输出真正像图1。做完 ACCENT-1（视觉标识层第一刀：抽言左侧明黄竖线），合 dev(fba2462)。根因：抽言成帧后 k
+- **分支**：dev
+- **概述**：用户「继续」＝投入视觉标识层，让输出真正像图1。做完 ACCENT-1（视觉标识层第一刀：抽言左侧明黄竖线），合 dev(fba2462)。根因：抽言成帧后 kind=.text+styleId=pullQuote，点缀只按 frame.kind 查组件→抽言查不到→0 明黄；且 resolved(using:) 重建样式丢新字段。改动：①ParagraphStyle 加 accentRule(edge/colorToken/width/length/gap，可选 Codable 兼容)+共享 geometry(四渲染器同算法)+resolved 保留；②applySpecPack 把 roleDecorations 的 left-rule/top-tick 接到 pullQuote/caption 段落(此前只挂 .callout 组件)；③PDF/PNG/Canvas draw(frame:) 画竖条+文本内缩；④IDML 给抽言框左侧腾条带 emit colorRectangleItem 明黄竖条。本刀只开 edge==.left(抽言竖线，PNG 肉眼核实正确)，.top(图注横线)数据已解析但渲染门控关闭(各渲染器 y 翻转不同、顶边定位待核实=ACCENT-2)。实机 村落+方案A：抽言竖线 PNG 核实、IDML 出3个 uPAccent 矩形。310测试0失败(+1)、14/14探针、golden 逐字节一致(默认样章无 accentRule 零影响)。附带上一轮也已合 dev：CLI --spec-pack(0a53950)+GUI File菜单「导入样式基线/规范包」(⌘I)修图4。
+- **改动文件**：Sources/LayoutDCore/StyleLibrary.swift(ParagraphAccentRule+accentRule+geometry+resolved), Sources/LayoutDImport/BookProject+Tokens.swift(decoration→accentRule), Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDApp/CanvasView+Drawing.swift, Sources/LayoutDExport/IDMLExporter.swift, Tests/LayoutDAppTests/StyleImportTests.swift, .ai/QUEUE.md
+- **检查**：310 测试 0 失败、review-idml.sh 14/14、golden 逐字节一致；PNG 肉眼核实抽言明黄竖线正确、无杂散点缀；IDML 出 3 个 uPAccent 矩形(对应3处抽言)。
+- **下一步**：1) 用户 InDesign 打开桌面 村落-方案A.idml 确认抽言左侧明黄竖线(IDML 侧自动化验不了)；桌面 村落-方案A-抽言竖线.png 是 PNG 预览效果。2) 视觉标识层剩余(已登记 QUEUE)：ACCENT-2 图注顶部短横+标题线(需逐渲染器核实 y 翻转再开 .top 门控)、GHOST-NUM-1 超大 ghost 章节序号、HEADER-1 页眉 chrome、SECNUM-1 节序号——这些让输出更接近图1，但 章节序号/页眉页码/节名numberStyle 现都在 unsupportedFields，需先在 parseSpecPack 支持再渲染。3) dev 领先 main 33，建议尽快集中一次视觉验收合 main。
+
+## 2026-07-08 17:11 | claude | 用户截图反馈三事(图1目标方案A杂志样式/图2-3 InDesign默认IDML无样式/图4 App导入报错)，全部定位并部分修复。①图4根因＝用户点了 Fil
+- **分支**：dev
+- **概述**：用户截图反馈三事(图1目标方案A杂志样式/图2-3 InDesign默认IDML无样式/图4 App导入报错)，全部定位并部分修复。①图4根因＝用户点了 File菜单「Import Layout Templates」(模板库导入器 schema 不符→data missing)；SPEC-APPLY-1 的规范包导入此前只藏在检查器按钮里、菜单栏没有。已在 File 菜单加「导入样式基线/规范包...」(⌘I)，走 autoDetectAndParseDetailed→规范包用 applySpecPackResult 全量落地、figma/dtcg 用 applyImportedTokens。②图2-3根因＝--export-idml 之前无法套规范包(只有 --render-samples 出 PDF)。已加 CLI --spec-pack PATH(ProjectLoader.applyingSpecPackIfNeeded，加载后任何导出前套)，实机 村落.docx+方案A→村落-方案A.idml 复合字体+明黄F5C518色板+185x260开本全落地。③诚实缺口(渲染PNG肉眼核实)：即便套方案A，村落只实现字体/两栏/开本/字号，方案A视觉标识——明黄点缀(抽言竖线/图注横线/标题线)、超大ghost章节序号、页眉chrome、节序号——整章0明黄像素全没画。原因：unsupportedFields(章节序号/页眉页码/节名numberStyle)明确不支持，且受支持的抽言/图注点缀只映射到 .callout/.caption 组件样式而真书抽言是 pullQuote 段落样式→点缀没挂上。方案A"杂志感"约1/3实现。合 dev(0a53950 feat + 0f9a2a3 queue)。
+- **改动文件**：Sources/LayoutDApp/ProjectLoader.swift(--spec-pack), Sources/LayoutDApp/main.swift(usage), Sources/LayoutDApp/WorkspaceViewController.swift(importStyleBaseline), Sources/LayoutDApp/AppDelegate+Menu.swift(菜单项+⌘I), Tests/LayoutDAppTests/ProjectLoaderTests.swift(+1测试), .ai/QUEUE.md
+- **检查**：310 测试 0 失败(+1 --spec-pack 回归)、review-idml.sh 14/14、golden 逐字节一致。实机 --spec-pack 出 styled IDML/PDF 核实字体+色板+开本落地；渲染 PNG 肉眼核实明黄点缀缺失(0 像素)。
+- **下一步**：1) 用户重新构建 App 后：File 菜单「导入样式基线/规范包...」(⌘I)选桌面 layoutD-规范包测试/方案A-探索黄.json，即可在 App 里套方案A(不再点 Import Layout Templates)。2) 用户在 InDesign 打开桌面 村落-方案A.idml(已套方案A，非默认版)看字体/串接/图。3) 用户拍板是否投入「视觉标识层」批次(候选已登记 QUEUE PILOT-2 条目)：ACCENT-1 段落级点缀(把 roleDecorations 接到段落渲染)→GHOST-NUM-1 超大章节序号→HEADER-1 页眉chrome→SECNUM-1 节序号——这是让输出真正像图1的关键，工作量中到大。4) 待查：预检7页 vs PDF导出4页页数不一致。
+
+## 2026-07-08 11:30 | claude | 用户三件事全部处理：①合并另一对话的 debug 分支——feature/claude-planblock-isolation 上唯一新工作是 74ec05d「
+- **分支**：dev
+- **概述**：用户三件事全部处理：①合并另一对话的 debug 分支——feature/claude-planblock-isolation 上唯一新工作是 74ec05d「fix(engine): isolate invalid plan blocks」(手动编辑冻结页后单个越界块导致整页 override 被拒、已画图形全消失+工具失灵；改为按块校验只跳非法块、整页无可救才回退)。确认其 worktree 干净停在 74ec05d(已定稿)，在专用 detached worktree cherry-pick 只挑 74ec05d(不含残留的我 SPEC-APPLY-1 副本)、跑 309测试0失败+14/14探针全过后 FF 合 dev(d2c2644) push。②PILOT-2 首跑用户真书 /Users/amos/Documents/GitHub/layoutD村落.docx(单章《越山脉》93段/1.6万字/3图/角色标签内嵌「一级标题/章名」式)——全链路跑通：导入0报错、角色标签零字面泄漏、9种命名样式全套用到位、6条串接正文流+88串接框、3图全链接、XML全 well-formed、预检0阻断错误(14条全info/warning)。结构验收 PASS，桌面出 村落-试排.idml/.pdf + 村落-preflight.json。③把方案A规范包套到本章出对照 PDF layoutD-样张-方案A-探索黄.pdf(md5不同=SPEC-APPLY-1 视觉区分在真书上成立)。发现1个待查小疑点：预检 pageCount=7 但 --export-pdf 默认导出4页，页面模型与PDF管线页数对不上(非阻断，登记PILOT-2待查)。
+- **改动文件**：.ai/QUEUE.md（PILOT-2 结论+引擎修复并入记录）；dev 新增 commit d2c2644(引擎修复,cherry-pick)
+- **检查**：引擎修复合入后 dev：309测试0失败、review-idml.sh 14/14、golden 逐字节一致。PILOT-2《村落》：导入0报错、IDML结构断言全过(零标签泄漏/9样式套用/6串流/3图链/XML well-formed)、预检0阻断。
+- **下一步**：1) 用户在 InDesign 打开桌面 村落-试排.idml 肉眼终验(样式/串接/图/中文排版)——这关自动化验不了。2) PILOT-2 待查：预检7页 vs PDF导出4页的页数不一致，需查前置页/模板差异还是真bug。3) feature/claude-planblock-isolation 分支的唯一新工作(74ec05d)已进 dev，该分支可由那个对话删除(其上 SPEC-APPLY-1 副本 d725162/f0cff38 也已以别的 hash 进 dev)。4) 剩余 P1：RENDER-CORE-1 共享绘制模型设计、SPLIT-APPSTATE。dev 领先 main 27+ commit，建议尽快集中一次 InDesign/GUI 视觉验收后合 main。
+
+## 2026-07-08 11:16 | claude | SPEC-APPLY-1 规范包 GUI 应用闭环完成，合 dev(1d35a58) push。用户「计划排起来再开工」：先把 2026-07-08 复盘的后续
+- **分支**：dev
+- **概述**：SPEC-APPLY-1 规范包 GUI 应用闭环完成，合 dev(1d35a58) push。用户「计划排起来再开工」：先把 2026-07-08 复盘的后续计划展开登记进 QUEUE（新增「2026-07-08 复盘批次」段：SPEC-APPLY-1/PILOT-2/RENDER-CORE-1/SPLIT-APPSTATE/IDML-RNG lint，标了优先级/负责道/验收），再开工做 SPEC-APPLY-1。改动：①StyleBaselineImporter 新增 autoDetectAndParseDetailed 出口——规范包保留完整 SpecPackImportResult（旧 autoDetectAndParse 委托它、向后兼容）；②AppState 新增 applySpecPackResult（透传完整结果给 BookProject.applySpecPack）；③InspectorView 导入走 detailed 出口、暂存 specResult 透传；④StyleImportSheet 接 specResult，规范包显示绿色「规范包」徽标+字体/角色色计数+不支持字段告警，确认导入时规范包走 applySpecPackResult。根因：此前 GUI 导入规范包只落地 DesignTokens（margins/字号），字体族/角色色/开本 trim 全丢（CLI --render-samples 反而是全的），这是规范包路线最后一公里。3 个新单测（GUI 应用落地字体/色/trim+undo；tokens-only 路径不携带字体的回归护栏；detailed 对 dtcg 返回 nil）。⚠️并发事故与恢复：本轮再次撞上共享 checkout 并发（另一对话在做 feature/claude-planblock-isolation「fix engine isolate invalid plan blocks」74ec05d，用的是独立 detached worktree /private/tmp/layoutD-verify-planblock）——但过程中主仓库 HEAD 被切到过它那条命名分支，导致我的两个提交(d725162/f0cff38)错落到 feature/claude-planblock-isolation 上、我自己的 feature/claude-spec-apply-1 反而空，首次 merge 是 no-op。已在专用 detached worktree 里用 cherry-pick 只挑我的两个提交（不含对方 74ec05d，零文件重叠）FF 到 dev、重跑 308测试/14探针/我的3测全过后 push，worktree 已 remove。
+- **改动文件**：Sources/LayoutDImport/StyleBaselineImporter.swift, Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/InspectorView.swift, Sources/LayoutDApp/StyleImportSheet.swift, Tests/LayoutDAppTests/StyleImportTests.swift, .ai/QUEUE.md, docs/development-plan.md, docs/architecture.md
+- **检查**：308 测试 0 失败（在专用 worktree 干净验证，只含我的两个 cherry-pick）、review-idml.sh 14/14、golden 逐字节一致；CLI --render-samples 实跑桌面方案A规范包正常出图。
+- **下一步**：1) ⚠️给做 feature/claude-planblock-isolation 的那个对话：你的分支上残留着我 SPEC-APPLY-1 的两个提交副本(d725162/f0cff38)——它们已用不同 hash cherry-pick 进 dev。你合 dev 前建议 rebase 掉这两个（git rebase --onto dev 74ec05d）或只 cherry-pick 你自己的 74ec05d 到 dev，避免 QUEUE.md/StyleImport 文件重复冲突。2) SPEC-APPLY-1 GUI 视觉验收待用户：App 里「导入样式基线」选桌面 方案A-探索黄.json，确认正文/标题字体族与点缀色肉眼变化（+绿色「规范包」徽标）。3) 下一个 P0=PILOT-2 真书整本试排，需用户提供整本角色标签书稿路径（仓库现只有单章 fixture）。
+
+## 2026-07-08 11:11 | claude | 修复"画线后再画矩形，两个图形连同其他工具一起消失"的真 bug（与问题2同源：手动编辑冻结整页为 LayoutPlan 覆盖层，引擎重排时处理不当）。根因：a
+- **分支**：feature/claude-planblock-isolation
+- **概述**：修复"画线后再画矩形，两个图形连同其他工具一起消失"的真 bug（与问题2同源：手动编辑冻结整页为 LayoutPlan 覆盖层，引擎重排时处理不当）。根因：applyPlanIfPresent() 的校验是"整页全或无"——同页所有图形共用一张计划，任一坏块（如矩形拖出页面边界）触发 planValidationFailures 就把整页计划丢弃回退，先画的线随之消失，且留下失效 Override + 悬空 selectedFrameId（"其他工具也没用了"）。治本：把校验拆成逐块(blockValidationFailures：几何/引用/线程/角色/颜色)与文档级(documentStyleFailures：字体安装)；applyPlanIfPresent 改为只跳过坏块、渲染其余好块，并逐块告警；仅当"无可挽救"（文档级字体问题 或 全部块都坏）才保留原整页回退——故所有既有单块 reject 测试(AppState 合规闸门/LayoutDCore 越界回退)不改自过。新增 LayoutDCore 测试 testInvalidBlockIsSkipped 验证一坏一好时好块照常渲染。commit 74ec05d 已 push 到 feature/claude-planblock-isolation。
+- **改动文件**：Sources/LayoutDEngine/LayoutEngine+LayoutPlan.swift, Tests/LayoutDCoreTests/LayoutDCoreTests.swift
+- **检查**：build: pass。test: 我的相关面全绿(LayoutDCore 113/含新测试, AppState 合规闸门通过)。全套 309 中有 2 个 StyleImportTests 失败——经核实属于另一会话在共享 checkout 里未提交的 style-import 工作(AppState/InspectorView/StyleImportSheet/StyleBaselineImporter/StyleImportTests 5 文件)，非本次改动，已刻意不碰/不提交。
+- **下一步**：1) 视觉验收：在 GUI 里画线→画矩形，确认两者共存、不再整页消失、工具不卡死（结构测试挡不住渲染/交互层，需真机点一遍）。2) 合并前留意：另一会话有 5 个 style-import 文件正未提交在同一 checkout，其 StyleImportTests 当前红——合我这条 feature 分支不受影响(只含 engine 2 文件)，但整树跑 test 会看到那 2 个红，别误判为我引入。3) 可选加固(治标，非本次范围)：createDrawnFrame 里对绘制矩形做页面边界钳制+最小尺寸，从源头减少坏块。
+
+## 2026-07-08 11:00 | claude | 全项目 review + 开发文档回写（docs-only，无代码改动）。development-plan.md 停在 6-23，把此后一个月主线补记为「阶段F
+- **分支**：dev
+- **概述**：全项目 review + 开发文档回写（docs-only，无代码改动）。development-plan.md 停在 6-23，把此后一个月主线补记为「阶段F 初排灌版主线」（THREAD-1a/1b三刀+<Br/>根治、MASTER-1、SPREAD-1、FRAME-SPLIT、FRAME-CANVAS-0/1、FRAME-INSET-2/UNDERLAY-1、默认排书规则、规范包路线 SPEC-PACK-1/FIXTURE-1/SAMPLE-1、PERF/GUARD/SPLIT 批次），并新增文末「2026-07-08 项目复盘」：①问题=待视觉验收积压(dev领先main 18 commit)、预览≠输出会反复再生(三渲染器无共享绘制模型)、规范包缺GUI应用闭环(只有CLI样张路径)、AppState 1375行等大文件回涨、跨道纪律drift、anchored-text stretch等未解bug存档、两道队列已清空；②改进=验收批次化、共享绘制模型、纪律回归；③后续计划候选表（P0: 验收批次/SPEC-APPLY-1规范包GUI应用/PILOT-2真书整本试排；P1: RENDER-CORE-1共享绘制模型/SPLIT-APPSTATE；P2: IDML-RNG lint）——均待用户拍板后才登记QUEUE。architecture.md 阶段概览同步补阶段F。已合 dev(019e0c2) push；顺手补提交了滞留未提交的 10:18 交接条目(7a5b9c1)。
+- **改动文件**：docs/development-plan.md, docs/architecture.md, .ai/HANDOFF.md
+- **检查**：docs-only 改动未跑 swift 检查；合并前 dev 即为上一棒全绿状态（303测试/14探针/golden）
+- **下一步**：1) 用户过目 development-plan.md 文末「2026-07-08 项目复盘」，对后续计划候选表拍板优先级；拍板后 Claude 把选中任务展开登记进 .ai/QUEUE.md（两道队列现已无活任务）。2) 仍在排队的视觉验收（FRAME-CANVAS-1 GUI 合并框、TYPE-1 段末孤字 InDesign、E3-9 约物挤压、工作区骨架、左侧工具栏）建议集中清一批后合 main。
+
+## 2026-07-08 10:18 | claude | 验收 AG 道 FRAME-CANVAS-1（画布/PDF/PNG 追平 IDML 分框：连续正文合并显示虚线框+整组选中移动，属性面板多选保护）：代码审查+3
+- **分支**：dev
+- **概述**：验收 AG 道 FRAME-CANVAS-1（画布/PDF/PNG 追平 IDML 分框：连续正文合并显示虚线框+整组选中移动，属性面板多选保护）：代码审查+303测试+14/14探针全过。审核中发现一处真实性能问题并直接修复：CanvasView+Drawing.swift 的 draw(page:) 对页内每个 frame 都调用 flowGroup(for:pageNumber:)，该函数每次调用都对整份文档重跑一遍 groupIntoFlowFrames——页内N个frame就是N倍全文档重算，画布重绘（滚动/悬停/拖拽都触发）在大稿子上会明显变慢；framesIntersecting()（marquee框选展开分组）同样每命中一个frame重算一次。两处都改成函数顶部只算一次分组+本地查找表复用，逻辑不变，验证过测试/探针仍全过。已合 dev(79d7708)+性能修复(6283043)+文档(14830f8)，push。
+- **改动文件**：Sources/LayoutDApp/CanvasView+Drawing.swift, Sources/LayoutDApp/CanvasView.swift（Claude审核性能修复）；AG原始改动：CanvasView+Interaction.swift, ObjectPropertiesView.swift, WorkspaceViewController.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, .ai/QUEUE.md
+- **检查**：AG提交时：303测试0失败、review-idml.sh 14/14、golden逐字节一致。Claude审核+性能修复后：重跑303测试+14/14探针+golden仍全过（证明性能修复零行为变化）
+- **下一步**：FRAME-SPLIT+FRAME-CANVAS-0/1 整条链路已完整（IDML导出+画布/PDF/PNG预览一致）。dev 已推送(14830f8)，main 未合，等用户在 GUI 里视觉验收（画布连续正文应显示为合并虚线框、点击/拖拽整组联动、多选时属性面板显示提示不可编辑）后再合 main。已用最新 dev 构建重启开发版 layoutD 窗口（加载 fixture-standard-chapter.md）供用户查看。
+
+## 2026-07-08 05:10 | Antigravity | 完成 FRAME-CANVAS-1 连续正文分框画布/PDF/PNG合并显示及交互聚合，通过303个单测及14项探针
+- **分支**：feature/ag-frame-canvas-1
+- **概述**：完成了连续正文在显示/交互层（画布/PDF/PNG）的合并框聚合。
+  1. **Canvas 绘制**：普通模式下连续正文（由 groupIntoFlowFrames 算出的分组）在渲染时不单独画单个虚线框，改为统一绘制该组 FlowFrameGroup.rect 的合并虚线框。若有 stroke 颜色/粗细 override，则同样绘制在组的合并矩形上。同时，若应用了 LayoutPlan 产生了 baseline diff，基线虚线框同样按 group 绘制合并框。
+  2. **Canvas 交互**：当用户点击或 Shift/Command 点击连续正文中的任一原子段落框时，交互均扩散到整组，将其作为整体选中并提供多选联动。在 mouseDown 时，如果点击了流文本框，调用 setSelection() 传入整组的 ID 集合，并将该组第一个 Frame 作为 primary selected ID (anchor)。在 Drag 拖拽移动时，整组作为统一的交互单位，通过 Group drag 机制一并移动。
+  3. **PDF/PNG 导出**：重构了 PDFExporter 与 PNGExporter，在导出 page 之前计算 flow frame 分组，并在绘制时将背景色（fill）和描边（stroke）应用到 FlowFrameGroup.rect 合并框级别，而各个原子 frame 只单独渲染自身的文字，从而避免了导出时生成重复多余的分段边框与背景。
+  4. **属性面板 (ObjectPropertiesView)**：防止用户误编辑或崩溃，在选中多个段落（即 selectedFrameIds.count > 1）时，文本编辑器与坐标变换 Stepper 被禁用，并明确提示“已选择多个段落，不可直接编辑文本 / 暂不支持批量编辑变换”，安全可靠。
+- **改动文件**：Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/CanvasView+Drawing.swift, Sources/LayoutDApp/CanvasView+Interaction.swift, Sources/LayoutDApp/WorkspaceViewController.swift, Sources/LayoutDApp/ObjectPropertiesView.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, .ai/HANDOFF.md
+- **检查**：本地通过 303 个 swift 单元测试，review-idml.sh 的所有 14 项端到端和回归测试全部通过，golden 逐字节一致。
+- **下一步**：提交 feature/ag-frame-canvas-1 分支由 Claude 审核和合并。
+
+## 2026-07-08 04:59 | claude | 验收 AG 道两个任务（UNDERLAY-1 垫底图、FRAME-INSET-2 预览贴边）：代码审查+301测试+14/14探针全过，合 dev(ad8496
+- **分支**：dev
+- **概述**：验收 AG 道两个任务（UNDERLAY-1 垫底图、FRAME-INSET-2 预览贴边）：代码审查+301测试+14/14探针全过，合 dev(ad8496a→bba4867，剔除误提交的1.8MB layoutD-icon.png)→push。随后做本道 FRAME-CANVAS-0（AG的FRAME-CANVAS-1前置条件）：把 IDMLExporter 里 FRAME-SPLIT 断流分组逻辑（runIndexByParagraphId/FlowPageKey/unionRect/isBodyFlowParagraph）抽成跨模块共享函数 groupIntoFlowFrames（新文件 Sources/LayoutDEngine/FlowFrameGrouping.swift，LayoutDApp/LayoutDExport 都已依赖 LayoutDEngine 可直接 import），IDMLExporter 改为消费该函数结果，纯搬家零行为变化（golden逐字节一致）。新增 FlowFrameGroup.memberFrameIndices 字段（原逻辑没有，供 FRAME-CANVAS-1 画布按组渲染用）。补 2 个独立单测覆盖断流边界（标题/抽言打断、表格打断）。已合 dev(2b37bdf)→push。⚠️ 过程中犯过一次错误已自行修复：merge AG 分支时把本地过期的 QUEUE.md 复制进 worktree 提交，误删了 FRAME-CANVAS-0/1 两条任务登记；发现后已补回并标注 FRAME-CANVAS-0 完成、FRAME-CANVAS-1 前置条件就绪。
+- **改动文件**：Sources/LayoutDEngine/FlowFrameGrouping.swift(新增), Sources/LayoutDExport/IDMLExporter.swift, Sources/LayoutDExport/IDMLExporter+Helpers.swift, Tests/LayoutDCoreTests/FlowFrameGroupingTests.swift(新增), .ai/QUEUE.md
+- **检查**：303测试0失败(+2)、review-idml.sh 14/14、golden逐字节一致（证明FRAME-CANVAS-0重构零行为变化）；AG道审核时301测试+14/14全过
+- **下一步**：AG 可以开工 FRAME-CANVAS-1（画布/PDF/PNG 按 groupIntoFlowFrames 分组结果画合并虚线框+按组选中移动）——前置条件已就绪，QUEUE.md 里有完整任务说明。dev 已推送(2b37bdf)，main 未合，等 FRAME-CANVAS-1 一起或用户视觉验收后再合。
+
+## 2026-07-08 04:42 | claude | 本轮收尾两件事，均已合 main(3305be8)并推送：①修复角色标签书稿画布/PDF 会多画出一个空壳「正文」章节标题框（用户标准样章画布验收时发现）——根
+- **分支**：feature/ag-underlay-1
+- **概述**：本轮收尾两件事，均已合 main(3305be8)并推送：①修复角色标签书稿画布/PDF 会多画出一个空壳「正文」章节标题框（用户标准样章画布验收时发现）——根因 MarkdownBookImporter.currentSectionTitle 默认写死"正文"占位、被 LayoutEngine.addSectionTitle 当真标题画出；改默认空字符串+addSectionTitle 对空标题短路，新增回归测试锁定。②用户对"画布连续正文仍是一段一个虚线框、没追平 IDML FRAME-SPLIT 的合并框"给出方案A拍板：只做显示/交互聚合层(画布按组显示一个合并虚线框+整组选中移动)，不改engine产帧/override/锁页模型(方案B高风险大重构已否决)。已拆两个任务登记QUEUE：FRAME-CANVAS-0(Claude下一棒优先，抽取IDMLExporter里的断流分组逻辑成跨模块共享函数)→FRAME-CANVAS-1(AG，画布/PDF/PNG消费共享函数按组显示，⏸等FRAME-CANVAS-0)。⚠️本轮全程主仓库checkout被另一并发会话占用(HEAD在feature/ag-underlay-1、有未提交改动)，我未触碰，全部工作在独立临时worktree完成后merge/push，未验证过main checkout当前脏状态与本次push有无冲突——下一棒开工前建议先git status确认现状。
+- **改动文件**：(未填)
+- **检查**：296测试0失败、review-idml.sh 14/14、golden逐字节一致（.sample走Markdown#标题路径不受影响）。PDF导出人工核实"正文"孤立字样已消失。
+- **下一步**：(未填)
 
 ## 2026-07-08 04:18 | claude | FRAME-SPLIT 用户 InDesign 验收通过，合 dev(f222031)→main(360b097) 并推送，分支已删。验收结论：分框(标题/概述
 - **分支**：dev

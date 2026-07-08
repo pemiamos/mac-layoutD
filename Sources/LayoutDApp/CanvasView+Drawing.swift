@@ -2,6 +2,7 @@ import AppKit
 import CoreText
 import Foundation
 import LayoutDCore
+import LayoutDEngine
 
 extension CanvasView {
     override func draw(_ dirtyRect: NSRect) {
@@ -91,7 +92,7 @@ extension CanvasView {
     }
 
     private func draw(page: LaidOutPage, project: BookProject) {
-        guard let pageRect = pageRect(number: page.number) else {
+        guard let pageRect = pageRect(number: page.number), let document = document else {
             return
         }
 
@@ -130,23 +131,44 @@ extension CanvasView {
            let baselinePage = baselineDocument.pages.first(where: { $0.number == page.number }) {
             
             NSColor(calibratedRed: 0.88, green: 0.38, blue: 0.08, alpha: 0.4).setStroke()
-            for bFrame in baselinePage.frames {
-                if bFrame.kind == .runningHeader {
-                    continue
+            let baselinePages = baselineDocument.pages.sorted { $0.number < $1.number }
+            if let bPageIndex = baselinePages.firstIndex(where: { $0.number == page.number }) {
+                let baselineGrouping = groupIntoFlowFrames(pages: baselinePages, project: project)
+                let bGroups = baselineGrouping.groupsByPage[bPageIndex] ?? []
+                let bGroupedFrameIndices = Set(bGroups.flatMap(\.memberFrameIndices))
+                
+                // Draw grouped baseline frames as a single box
+                for bGroup in bGroups {
+                    let rect = CGRect(
+                        x: pageRect.minX + CGFloat(bGroup.rect.x) * zoomScale,
+                        y: pageRect.minY + CGFloat(bGroup.rect.y) * zoomScale,
+                        width: CGFloat(bGroup.rect.width) * zoomScale,
+                        height: CGFloat(bGroup.rect.height) * zoomScale
+                    )
+                    let path = NSBezierPath(rect: rect)
+                    path.lineWidth = 1.0
+                    let dashedPattern: [CGFloat] = [3.0, 3.0]
+                    path.setLineDash(dashedPattern, count: dashedPattern.count, phase: 0.0)
+                    path.stroke()
                 }
                 
-                let rect = CGRect(
-                    x: pageRect.minX + CGFloat(bFrame.rect.x) * zoomScale,
-                    y: pageRect.minY + CGFloat(bFrame.rect.y) * zoomScale,
-                    width: CGFloat(bFrame.rect.width) * zoomScale,
-                    height: CGFloat(bFrame.rect.height) * zoomScale
-                )
-                
-                let path = NSBezierPath(rect: rect)
-                path.lineWidth = 1.0
-                let dashedPattern: [CGFloat] = [3.0, 3.0]
-                path.setLineDash(dashedPattern, count: dashedPattern.count, phase: 0.0)
-                path.stroke()
+                // Draw remaining non-grouped baseline frames individually
+                for (bfi, bFrame) in baselinePage.frames.enumerated() {
+                    if bFrame.kind == .runningHeader || bGroupedFrameIndices.contains(bfi) {
+                        continue
+                    }
+                    let rect = CGRect(
+                        x: pageRect.minX + CGFloat(bFrame.rect.x) * zoomScale,
+                        y: pageRect.minY + CGFloat(bFrame.rect.y) * zoomScale,
+                        width: CGFloat(bFrame.rect.width) * zoomScale,
+                        height: CGFloat(bFrame.rect.height) * zoomScale
+                    )
+                    let path = NSBezierPath(rect: rect)
+                    path.lineWidth = 1.0
+                    let dashedPattern: [CGFloat] = [3.0, 3.0]
+                    path.setLineDash(dashedPattern, count: dashedPattern.count, phase: 0.0)
+                    path.stroke()
+                }
             }
         }
         
@@ -174,8 +196,127 @@ extension CanvasView {
             drawGuides(project: project, pageRect: pageRect, pageNumber: page.number)
         }
 
-        for frame in page.frames {
-            draw(frame: frame, project: project, pageRect: pageRect)
+        // Group calculating for the current page
+        let sortedPages = document.pages.sorted { $0.number < $1.number }
+        var pageGroups: [FlowFrameGroup] = []
+        if let pageIndex = sortedPages.firstIndex(where: { $0.number == page.number }) {
+            let grouping = groupIntoFlowFrames(pages: sortedPages, project: project)
+            pageGroups = grouping.groupsByPage[pageIndex] ?? []
+        }
+
+        // Draw flow group background color overrides
+        for group in pageGroups {
+            guard !group.memberFrameIndices.isEmpty else { continue }
+            let firstIdx = group.memberFrameIndices[0]
+            guard firstIdx >= 0 && firstIdx < page.frames.count else { continue }
+            let firstFrame = page.frames[firstIdx]
+            if let bgColor = resolvedColor(memoryColor: frameBackgroundColors[firstFrame.id], persistedHex: firstFrame.backgroundColorHex) {
+                bgColor.setFill()
+                let groupRect = CGRect(
+                    x: pageRect.minX + CGFloat(group.rect.x) * zoomScale,
+                    y: pageRect.minY + CGFloat(group.rect.y) * zoomScale,
+                    width: CGFloat(group.rect.width) * zoomScale,
+                    height: CGFloat(group.rect.height) * zoomScale
+                )
+                let path = NSBezierPath(rect: groupRect)
+                path.fill()
+            }
+        }
+
+        // FRAME-CANVAS-1 perf: 分组已在本函数顶部按页算好一次（pageGroups），这里建一份
+        // frame.id → group 的本地查找表复用，不要对每个 frame 都调用 flowGroup(for:)——
+        // 那会对整份文档重新跑一遍 groupIntoFlowFrames，页内 N 个 frame 就是 N 倍全文档重算，
+        // 在大稿子上会让画布重绘（滚动/悬停/拖拽都会触发）明显变慢。
+        var groupByFrameId: [UUID: FlowFrameGroup] = [:]
+        for group in pageGroups {
+            for idx in group.memberFrameIndices where idx >= 0 && idx < page.frames.count {
+                groupByFrameId[page.frames[idx].id] = group
+            }
+        }
+
+        let underlays = page.frames.filter { $0.isUnderlay }
+        let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+        for frame in underlays + nonUnderlays {
+            let group = groupByFrameId[frame.id]
+            draw(frame: frame, project: project, pageRect: pageRect, flowGroup: group)
+        }
+
+        // Draw flow group strokes, selections, and highlights
+        for group in pageGroups {
+            let groupRect = CGRect(
+                x: pageRect.minX + CGFloat(group.rect.x) * zoomScale,
+                y: pageRect.minY + CGFloat(group.rect.y) * zoomScale,
+                width: CGFloat(group.rect.width) * zoomScale,
+                height: CGFloat(group.rect.height) * zoomScale
+            )
+
+            // Find member IDs
+            var memberIds = Set<UUID>()
+            for idx in group.memberFrameIndices {
+                if idx >= 0 && idx < page.frames.count {
+                    memberIds.insert(page.frames[idx].id)
+                }
+            }
+            guard !memberIds.isEmpty else { continue }
+
+            // Stroke override
+            if let firstIdx = group.memberFrameIndices.first,
+               firstIdx >= 0 && firstIdx < page.frames.count {
+                let firstFrame = page.frames[firstIdx]
+                if let strokeColor = resolvedColor(memoryColor: frameStrokeColors[firstFrame.id], persistedHex: firstFrame.strokeColorHex) {
+                    strokeColor.setStroke()
+                    let path = NSBezierPath(rect: groupRect)
+                    path.lineWidth = CGFloat(firstFrame.strokeWidth ?? 1.5)
+                    path.stroke()
+                }
+            }
+
+            if activeScreenMode == .normal {
+                let isGroupHighlighted = (highlightedFrameId != nil && memberIds.contains(highlightedFrameId!))
+                let isGroupSelected = !selectedFrameIds.isDisjoint(with: memberIds)
+
+                if isGroupHighlighted {
+                    NSColor.red.withAlphaComponent(0.15).setFill()
+                    groupRect.fill()
+                    NSColor.red.setStroke()
+                    let path = NSBezierPath(rect: groupRect)
+                    path.lineWidth = 2.0
+                    path.stroke()
+                }
+
+                if isGroupSelected {
+                    NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 0.15).setFill()
+                    groupRect.fill()
+                    NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).setStroke()
+                    let path = NSBezierPath(rect: groupRect)
+                    path.lineWidth = 2.0
+                    path.stroke()
+
+                    // Draw resize handles if the selection is exactly this group
+                    let isSingleGroupSelected = (selectedFrameIds == memberIds)
+                    if isSingleGroupSelected && activeTool == .selection {
+                        let handles = resizeHandles(for: groupRect)
+                        NSColor(calibratedRed: 0.12, green: 0.45, blue: 0.95, alpha: 1).setStroke()
+                        NSColor.white.setFill()
+                        for hRect in handles {
+                            let hPath = NSBezierPath(rect: hRect)
+                            hPath.lineWidth = 1.0
+                            hPath.fill()
+                            hPath.stroke()
+                        }
+                    }
+                }
+
+                // If not selected/highlighted, draw the default dashed box for the flow group
+                if !isGroupSelected && !isGroupHighlighted {
+                    NSColor(calibratedWhite: 0.72, alpha: 1.0).setStroke()
+                    let path = NSBezierPath(rect: groupRect)
+                    path.lineWidth = 1.0
+                    let dashedPattern: [CGFloat] = [3.0, 3.0]
+                    path.setLineDash(dashedPattern, count: dashedPattern.count, phase: 0.0)
+                    path.stroke()
+                }
+            }
         }
 
         // Draw annotations for this page
@@ -245,7 +386,7 @@ extension CanvasView {
         NSBezierPath(rect: marginRect).stroke()
     }
 
-    private func draw(frame: PageFrame, project: BookProject, pageRect: CGRect) {
+    private func draw(frame: PageFrame, project: BookProject, pageRect: CGRect, flowGroup: FlowFrameGroup? = nil) {
         let style: ParagraphStyle
         if frame.kind == .footnote {
             style = ParagraphStyle(
@@ -334,7 +475,7 @@ extension CanvasView {
         }
 
         // Draw background color override if any
-        if let bgColor = resolvedColor(memoryColor: frameBackgroundColors[frame.id], persistedHex: frame.backgroundColorHex) {
+        if flowGroup == nil, let bgColor = resolvedColor(memoryColor: frameBackgroundColors[frame.id], persistedHex: frame.backgroundColorHex) {
             bgColor.setFill()
             let path = maskPath(in: rect, shape: frame.maskShape)
             path.fill()
@@ -344,6 +485,8 @@ extension CanvasView {
         case .text(let text):
             let textColor = resolvedColor(memoryColor: frameTextColors[frame.id], persistedHex: frame.textColorHex)
             let hasBg = resolvedColor(memoryColor: frameBackgroundColors[frame.id], persistedHex: frame.backgroundColorHex) != nil
+            // Paragraph accent rule (抽言左侧竖线); scaled to the canvas zoom.
+            let contentRect = drawParagraphAccentRule(style.accentRule, in: rect, project: project)
             if let componentStyle = project.styles.componentStyle(for: frame.kind) {
                 if !hasBg {
                     drawComponentBackground(componentStyle, project: project, rect: rect)
@@ -363,7 +506,7 @@ extension CanvasView {
                         text,
                         styleId: frame.styleId,
                         project: project,
-                        rect: rect.insetBy(
+                        rect: contentRect.insetBy(
                             dx: CGFloat(componentStyle.textInsetX) * zoomScale,
                             dy: CGFloat(componentStyle.textInsetY) * zoomScale
                         ),
@@ -381,7 +524,7 @@ extension CanvasView {
                     text,
                     styleId: frame.styleId,
                     project: project,
-                    rect: rect,
+                    rect: contentRect,
                     kind: frame.kind,
                     textColorOverride: textColor,
                     sourceParagraphId: frame.sourceParagraphId,
@@ -399,14 +542,14 @@ extension CanvasView {
         }
 
         // Draw stroke color override if any
-        if let strokeColor = resolvedColor(memoryColor: frameStrokeColors[frame.id], persistedHex: frame.strokeColorHex) {
+        if flowGroup == nil, let strokeColor = resolvedColor(memoryColor: frameStrokeColors[frame.id], persistedHex: frame.strokeColorHex) {
             strokeColor.setStroke()
             let path = maskPath(in: rect, shape: frame.maskShape)
             path.lineWidth = CGFloat(frame.strokeWidth ?? 1.5)
             path.stroke()
         }
 
-        if activeScreenMode == .normal {
+        if flowGroup == nil, activeScreenMode == .normal {
             if frame.id == highlightedFrameId {
                 NSColor.red.withAlphaComponent(0.15).setFill()
                 rect.fill()
@@ -481,6 +624,20 @@ extension CanvasView {
                 }
             }
         }
+    }
+
+    /// Draw a paragraph accent bar (if any) scaled to the canvas zoom, and return
+    /// the content rect the text should occupy. No rule → returns `rect` unchanged.
+    private func drawParagraphAccentRule(_ rule: ParagraphAccentRule?, in rect: CGRect, project: BookProject) -> CGRect {
+        guard let rule,
+              let hex = project.resolvedColorHex(rule.colorToken),
+              let color = NSColor.fromHex(hex) else {
+            return rect
+        }
+        let (bar, content) = rule.geometry(in: rect, topAtMaxY: false, scale: zoomScale)
+        color.setFill()
+        bar.fill()
+        return content
     }
 
     private func drawComponentBackground(_ style: ComponentStyle, project: BookProject, rect: CGRect) {
@@ -636,7 +793,7 @@ extension CanvasView {
         rect: CGRect,
         kind: PageFrameKind,
         textColorOverride: NSColor? = nil,
-        applyDefaultInset: Bool = true,
+        applyDefaultInset: Bool = false,
         sourceParagraphId: UUID? = nil,
         tableOfContentsEntries: [TableOfContentsEntry]? = nil,
         exclusionRects: [Rect]? = nil,

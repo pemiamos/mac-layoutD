@@ -129,6 +129,7 @@ struct LayoutContext {
     var currentPageFootnoteParagraphs: [Paragraph] = []
     var currentPageSideNoteParagraphs: [(Paragraph, Double)] = []
     var threadedRemainingText: [UUID: String] = [:]
+    var deferredUnderlayFrames: [Int: [PageFrame]] = [:]
 
     var footnoteStyle: ParagraphStyle {
         ParagraphStyle(
@@ -293,6 +294,17 @@ struct LayoutContext {
         if !currentPage.frames.isEmpty || pages.isEmpty {
             pages.append(currentPage)
         }
+        
+        let maxDeferredPage = deferredUnderlayFrames.keys.max() ?? 0
+        while pages.count < maxDeferredPage {
+            let nextNum = pages.count + 1
+            var emptyPage = LaidOutPage(number: nextNum)
+            if let deferred = deferredUnderlayFrames[nextNum] {
+                emptyPage.frames.append(contentsOf: deferred)
+            }
+            pages.append(emptyPage)
+        }
+
         // 手动插入的空白页可能排在所有正文内容之后——正常翻页只在内容溢出时才触发
         // advanceToNextPage()/applyPlanIfPresent()，不会主动去看最后一页之后还有没有
         // 排版计划。这里补一次：只要下一页确实有计划（哪怕只是空白页占位）就继续
@@ -303,6 +315,9 @@ struct LayoutContext {
         while project.appliedLayoutPlans?[absolutePageNumber(for: pages.count + 1)] != nil {
             let countBefore = pages.count
             currentPage = LaidOutPage(number: pages.count + 1)
+            if let deferred = deferredUnderlayFrames[currentPage.number] {
+                currentPage.frames.append(contentsOf: deferred)
+            }
             applyPlanIfPresent()
             if pages.count == countBefore {
                 // 极端情况下计划命中了但没有触发翻页（既没有 blocks 也不满足

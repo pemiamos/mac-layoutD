@@ -13,6 +13,15 @@
 **Claude → 主仓库 `mac-layoutD`（集成区，`dev`/`main`）**。
 开工先确认 shell 在自己的副本里。详见 `.ai/AGENTS.md` 顶部「工作副本隔离」。
 
+## 🚦 自主集成模式（用户 2026-07-09 拍板，覆盖旧「绝不碰 dev」条）
+
+**本轮起，Codex / AG 自检通过后自主合 dev，不再每批停下等 Claude/用户。**
+- 自检门槛不变：`run_checks()` + `scripts/review-idml.sh` 必须 PASS；额外——**改了渲染/导出的任务，golden 不许无故漂**（真变化走 `scripts/golden-update.sh --reason`）。
+- 通过后：把自己的 `feature/*` 分支 **merge 进 dev**（本地共享 `.git`，`git merge --no-ff` 带任务名）。合前先 `git fetch && git merge origin/dev` 同步、解决冲突再合。
+- **仍绝不碰 main**：`dev → main` 是用户唯一放行人，全部完工后一次性人工审核（含在 InDesign 里真打开产物看视觉——AI 自检验不了渲染对错，PILOT-2 踩过）。
+- **合 dev 撞车协议**（同一 `.git` 两 AI 近乎同时合）：合前 `git log origin/dev --oneline -3` 看有没有刚被别人推进；HANDOFF.md/QUEUE.md 冲突各自保留双方条目再合，代码冲突谁合谁解。拿不准就在 handoff 记下、留给 Claude 集成。
+- Claude 角色收窄为：高风险**设计文档**（PLANNER 系列）+ 集成把关 + 冲突兜底，**不再逐个审后再合**。
+
 ## 🔁 连续作业模式（用户 2026-06-21 明确要求，最高优先）
 
 **用户已预先授权整条队列，连续干，不要停下来问确认。**
@@ -20,7 +29,7 @@
 - **Antigravity 注意**：你的 IDE 若弹"计划审批/Proceed"，**本队列就是审批**——视同已批准，直接开干，别等用户点。不要写一份 plan 然后停下问，要边做边交付。
 - 自审标准：每个任务 `run_checks()` + `scripts/review-idml.sh` 必须 PASS 才提交；FAIL 就**自己修**，修不动再在 handoff 里记下精确 repro 并跳到下一个能做的任务，**不要因此整体停摆**。
 - 一轮结束（约 1 小时 / 做完本批序列 / 撞到真阻塞）时，写**一条汇总 handoff**列出这轮所有 commit，不必每个任务一条。
-- **绝不碰 dev/main**：你们只在自己的 feature 分支提交，合 dev/main 是 Claude 的事。也**不要声称自己合并了 main**（之前出现过误报）。
+- **合 dev 见上「自主集成模式」（2026-07-09 起自主合 dev）；仍绝不碰 main**，也**不要声称自己合并了 main**（之前出现过误报）。
 
 ## 流程铁律（每一棒都照做）
 
@@ -60,16 +69,94 @@
 
 ---
 
+## 2026-07-08 复盘批次（用户拍板「计划排起来再开工」，见 development-plan.md 文末复盘）
+
+> 本批为 2026-07-08 全项目 review 后的正式排期。P0 三项合起来回答「这套系统能不能真排出一本书」。
+> 各任务按文件边界仍走三道分工；跨道字段扩展回归原属道。
+>
+> **另：引擎修复已并入 dev（`d2c2644`，2026-07-08）**——`fix(engine): isolate invalid plan blocks instead of discarding the whole page`（另一对话 Opus 做，原 `74ec05d`）：手动编辑冻结页后单个越界块此前会让整页 override 被拒、已画图形全消失+工具失灵；改为按块校验、只跳过非法块保留其余，仅当整页无可救（文档级字体问题/全块非法）才整页回退。309 测试 0 失败 + 14/14 探针复验通过，Claude cherry-pick 合入（不含其分支上残留的 SPEC-APPLY-1 副本）。
+
+- [x] **SPEC-APPLY-1 规范包 GUI 应用闭环** — ✅ Claude（合 dev），**GUI 视觉验收待用户**。
+  - 背景：`autoDetectAndParse` 认得规范包但只返回 `tokens`，丢掉 `fontResolutions`/`roleColors`/`roleDecorations`；GUI `applyImportedTokens` 再用空 `SpecPackImportResult` 包一层——App 里导入规范包只落地 margins/字号等 token，**字体族/角色色/开本 trim 全丢**（CLI `--render-samples` 路径反而是全的）。这是规范包路线的「最后一公里」。
+  - 目标：GUI「导入样式基线」选规范包 JSON 时，把完整 `SpecPackImportResult` 透传到 `BookProject.applySpecPack`，让字体/角色色/开本真正落地到当前项目；figma/dtcg 路径不变。导入面板对规范包显示专属标注（含字体/色计数、不支持字段告警）。
+  - 文件：`Sources/LayoutDImport/StyleBaselineImporter.swift`（加 spec-aware 解析出口，保留旧 API 兼容）、`Sources/LayoutDApp/{InspectorView,StyleImportSheet,AppState}.swift`。
+  - 验收：新增单测——GUI 应用路径导入方案A规范包后，项目字体族/角色色/trim 与 CLI `applySpecPack` 落地结果一致（对照，非只测 tokens）；现有 StyleImport 测试零回归；`review-idml.sh` PASS。**GUI 视觉验收待用户**：App 里导入桌面方案A规范包，正文/标题字体与点缀色肉眼变化。
+- [~] **PILOT-2 真书整本试排** — Claude（P0，2026-07-08 首跑，**结构验收 PASS，待用户 InDesign 肉眼终验**）。
+  - 输入：用户真书 `/Users/amos/Documents/GitHub/layoutD村落.docx`（单章《越山脉》，93 段/约1.6万字/3图，角色标签内嵌格式如「一级标题/章名」「二级标题/节名」「开节概述」）。
+  - 结果（全链路跑通，产物在桌面）：导入 0 报错；角色标签**零字面泄漏**（Stories 里搜不到任何标签词）；9 种命名样式全部套用到位（body19/bibliography13/caption8/pullQuote3/heading1×3/heading3×3/heading2/introduction/introductionEnglish）；6 条串接正文流 + 88 个 Next/Previous 串接框；3 图全 `file:Links/` 链接；全包 XML well-formed；预检 0 阻断错误（14 条全 info/warning：缺出版社/图注/RGB→CMYK 建议）。方案A规范包也已套到本章出对照 PDF（md5 不同 = 视觉区分成立）。
+  - 桌面产物：`村落-试排.idml`（交 InDesign）、`村落-试排.pdf`（默认初排）、`layoutD-样张-方案A-探索黄.pdf`（本章套方案A）、`村落-preflight.json`。
+  - ⚠️ **待查小疑点**：预检 `pageCount=7`，但 `--export-pdf` 默认路径导出 **4 页**——预检页面模型与 PDF 导出管线页数对不上，需查是前置页/模板差异还是真 bug（非阻断，登记待查）。
+  - **2026-07-08 二轮（用户截图反馈）**：用户在 InDesign 打开默认 IDML（图2/3）发现「没有方案A样式」，App 里导入规范包报错（图4）。定位并已修：
+    - ✅ 图4 根因＝用户点了 File 菜单「Import Layout Templates」（模板库导入器，schema 不符 → data missing）；SPEC-APPLY-1 的规范包导入此前只藏在检查器按钮里、菜单栏没有。**已在 File 菜单加「导入样式基线 / 规范包...」(⌘I)**（合 dev `0a53950`）。
+    - ✅ 图2/3 根因＝`--export-idml` 之前无法套规范包（只有 `--render-samples` 出 PDF 套）。**已加 CLI `--spec-pack PATH`**，任何导出前套规范包；实机 `村落.docx + 方案A → 村落-方案A.idml`：复合字体（方正兰亭细黑/江城律动宋/Georgia）+ 明黄 F5C518 色板 + 185x260mm 开本全落地。
+    - ⚠️ **诚实结论（真 PILOT-2 缺口，已渲染 PNG 肉眼核实）**：即便套上方案A，渲染出的《村落》**只实现了字体/两栏/开本/字号**，方案A的视觉标识——**明黄点缀（抽言左侧竖线/图注顶部横线/标题下划线）、超大 ghost 章节序号、页眉章名+EXPLORE、节序号**——**全部没画出来**（整章扫描 0 明黄像素）。原因两类：① `章节序号`/`页眉页码`/`节名.numberStyle` 等本就在 `unsupportedFields` 里（解析器明确不支持）；② 即使受支持的 `抽言/图注` 点缀色，也只映射到 `.callout/.caption` **组件样式**，而真书的抽言是 `pullQuote` **段落样式**、图注是 caption 段落 → 点缀没挂上。**方案A的"杂志感"目前约 1/3 实现**。
+  - **视觉标识层批次（让输出真正像图1，用户 2026-07-09「继续」拍板投入）**：
+    - [x] **ACCENT-1 段落级明黄点缀·抽言左侧竖线** — ✅ Claude（合 dev `fba2462`）。`ParagraphStyle.accentRule`（共享 geometry，四渲染器同算法）+ applySpecPack 把 roleDecorations 接到 pullQuote 段落（此前只挂 .callout 组件、真书抽言是 pullQuote 段落挂不上）+ PDF/PNG/Canvas/IDML 全渲染。抽言竖线已渲染 PNG 肉眼核实；IDML 出 uPAccent 矩形。**✅ 用户 2026-07-09 InDesign 验收通过**（村落-方案A.idml 截图：抽言「人类对黄山的感知…」左侧明黄竖线 + 江城律动宋抽言体 + 正文两栏渲染全正确）。
+    - [ ] **ACCENT-2 图注顶部短横 + 标题线** — 数据已解析（caption.accentRule=.top），但各渲染器 y 翻转不同、顶边定位待逐一核实后开门控（现 `edge==.left` 门控关着 .top）；顺带把标题下划线接上。
+    - [ ] **GHOST-NUM-1 超大 ghost 章节序号压底**（图1 那个巨大的「03」）— `章节序号` 现在 unsupportedFields 里；需新增"章节序号"角色渲染（超大淡灰数字，压在章名后面）。
+    - [ ] **HEADER-1 页眉 chrome**（章名 · 刊名 · EXPLORE）— 现页眉只有书名 + 页码；`页眉页码` 在 unsupportedFields。
+    - [ ] **SECNUM-1 节序号**（图1「01 /」黄色）— `节名.numberStyle` 在 unsupportedFields。
+  - **下一步**：✅ 用户 2026-07-09 InDesign 打开 `村落-方案A.idml` 终验通过（抽言竖线/字体/串接/两栏全对）；已拍板投入「视觉标识层」批次（见下 2026-07-09 初排工作台批次 V）。
+- [ ] **RENDER-CORE-1 共享绘制模型** — Claude 设计 + AG 实施（P1，高风险重构，先出设计再动手）。页面→绘制指令列表，画布/PDF/PNG 只做「指令→各自画布」薄适配，从根上消灭「追平」类任务（FRAME-INSET-2/FRAME-CANVAS-1/UNDERLAY-1/E2-4p 都属此类）。
+- [ ] **SPLIT-APPSTATE** — AG（P1）。`AppState.swift` 1375 行拆分（照 SPLIT-ENGINE 配方，纯搬家零行为变化，三重验证）。
+- [ ] **IDML-RNG lint（E1b③）** — Codex（P2）。vendor `app.generateIDMLSchema()` 的 RNG 做名/枚举 lint。
+
+---
+
+## 2026-07-09 初排工作台批次（用户拍板「初排六站流水线」，见桌面《layoutD开发计划-初排工作台-v2.0.pdf》）
+
+> 本批把「参考图→规范包→样张→定稿→约7骨架线框图→灌版自动选骨架+手工微调→IDML」六站落地。**关键路径 = SPEC-PACK-2 → PLANNER-1a → PLANNER-1b → REROLL-1 → PILOT-3**，决定项目成败。
+> 本轮**刻意压 Claude 算力**：实现全给 Codex/AG，Claude 只出 PLANNER 设计文档 + 集成。**自检通过自主合 dev**（见顶部「自主集成模式」）。
+> 三道天然按文件边界不撞车，可高度并行。各任务「立即可开工/依赖」已标。
+
+### 批次 V — 视觉标识层收尾（站2 前置，立即可开工）
+
+- [ ] **ACCENT-2 图注顶部短横 + 标题下划线** — **AG**。照 ACCENT-1 已建范式（`ParagraphStyle.accentRule` 共享 geometry + 四渲染器同算法 + IDML 明黄矩形）；本刀开 `edge==.top` 门控——**先逐渲染器核实 y 翻转/顶边定位**（PDF/PNG/Canvas 坐标系不同，ACCENT-1 就为此把 .top 门控关着）；顺带把标题下划线接上。验收：抽言竖线零回归、图注短横 PNG 肉眼正确、IDML 出对应矩形、golden 走 --reason 刷新。
+- [ ] **GHOST-NUM-1a 章节序号解析** — **Codex**。`章节序号` 移出 `unsupportedFields`，`parseSpecPack` 支持其 motif 字段（字体/字号/透明度/锚点/压底层）。
+- [ ] **GHOST-NUM-1b 超大 ghost 章节号渲染** — **AG**（依赖 1a）。超大淡灰数字压在章名后/底，四渲染器同算法。
+- [ ] **HEADER-1a 页眉字段解析** — **Codex**。`页眉页码`/页眉章名字段移出 unsupportedFields，parseSpecPack 支持。
+- [ ] **HEADER-1b 页眉 chrome 渲染** — **AG**（依赖 1a）。页眉（章名 · 刊名 · 细线）；注意与 MASTER-1 已有主页页码协调。
+- [ ] **SECNUM-1a 节序号解析** — **Codex**。`节名.numberStyle` 移出 unsupportedFields，parseSpecPack 支持。
+- [ ] **SECNUM-1b 节序号渲染** — **AG**（依赖 1a）。节序号「01 /」黄色。
+
+### 批次 S — 规范包 v2 + 技能教材（站1）
+
+- [ ] **SPEC-PACK-2 规范包 v2 schema（总闸，最高优先）** — **Codex**。一次立起三层：`motifs`（点缀词表：chapterNumber/sectionNumber/header/captionTick/headingRule/pullQuoteRule）+ `layoutGrammar`（`spreadArchetypes` 对开骨架枚举 + `rhythm` 节奏规则）+ `qualityGates`（版式重复度上限/图文密度区间/每对开 accent 要求）。解析+校验+**unsupported 诚实上报**（保留现有机制）；每个字段必须有消费者或明确 unsupported，禁止装饰性空字段。更新 `docs/spec-pack-guide.md`。**卡着 L/P 两批，Codex 第一件事做这个。**
+- [ ] **BOOK-SKILL-1 参考图→规范包提取技能** — **Codex**（依赖 SPEC-PACK-2）。写 `.ai/skills/spec-from-reference/SKILL.md`：固化方案A 成功做法 + 踩过的坑（字重必须真实存在见 [[idml-font-name-needs-valid-weight]]、别名映射、unsupportedFields 诚实上报、看图量什么=网格/字阶/边距/motif/节奏）。形态参考 taste-skill 看图清单 + pencilplaybook 规则文风。
+- [ ] **BOOK-SKILL-2 样张评审技能** — **Codex**。写 `.ai/skills/sample-review/SKILL.md`：样张像不像参考图的打分清单，将来直接变站3 风格报告词汇表。
+- [ ] **SKILL-HARVEST 印刷可移植规则** — **Codex**（依赖 SPEC-PACK-2）。从用户给的 5 个技能仓库（taste-skill/pencilplaybook 等）筛 10–20 条真能移植到印刷的字排规则（大字距收紧、层级对比比例等），并进 v2 默认值。**注意甄别：这 5 个仓库全是屏幕/网页设计，不懂开本/避头尾/对开，别整段照搬。**
+
+### 批次 L — 锁基线（站3）
+
+- [ ] **STYLE-LOCK-1 基线冻结 + 风格报告 v0** — **AG**（依赖 SPEC-PACK-2）。「定稿」时冻结四件套（规范包 JSON + 样章 fixture + 支持率清单 + 样张 PDF）为本书 `StyleProfile`；之后每次初排出风格报告（token 覆盖率 / motif 出现清单 / 版式重复度 / 图文密度 / 溢出重叠）。GUI 展示支持率。
+
+### 批次 P — 规划器（站4/站5，主战役）
+
+- [ ] **PLANNER-1a-DESIGN 骨架词表设计文档** — **Claude**（依赖 SPEC-PACK-2）。定义约 7 个对开骨架（家族 + 参数变体：镜像/图片档位/抽言位）+ 灰盒线框图渲染方案 + GUI 圈选交互。像 RENDER-CORE-1 先设计后动手。
+- [ ] **PLANNER-1a-IMPL 骨架 + 线框图 + 圈选** — **AG**（依赖 1a-DESIGN）。约 7 个对开骨架落地（扩现有 4 单页模板到对开级）+ 灰盒线框图渲染供圈选 + GUI 圈选界面，批准结果写进规范包 layoutGrammar。
+- [ ] **PLANNER-1b-DESIGN 受控变体规划器设计文档** — **Claude**（依赖 1a）。内容指纹（现 `LayoutPlanContext` 已有雏形）→ 受控抽签（固定种子）→ 硬过滤（不越界/不重叠/文流顺序/DPI）→ 软评分（防单调/图大小/贴近度/留白/accent 频率）→ 节奏记忆（相邻不重复、大图气口）。**以对开为单位规划，非单页。**
+- [ ] **PLANNER-1b-IMPL 受控变体规划器（引擎核心，高风险）** — **AG**（依赖 1b-DESIGN）。硬约束：① **只动帧几何不破串接文流**（正文永远一条河，见 [[layoutd-positioning-initial-pour]]）；② **纯函数同输入同输出**（固定种子，否则 golden/逐字节护栏全废）；③ 端到端验收不能只靠单测（本项目踩过单测全绿功能坏）。
+- [ ] **REROLL-1 「换一版」单页重抽** — **AG**（依赖 1b-IMPL）。某页不满意→在该对开其余候选里重抽；与锁页/手工微调/undo 协同（锁页不被重排覆盖）。
+
+### 批次 W — 向导 GUI（可与 S 并行起步）
+
+- [ ] **WIZARD-1 六站向导工作台骨架** — **AG**。步骤条（六站顺序解锁）+ 状态门控（做完才解锁下一站，回退提示下游需重跑）+ 各站产物落盘可回溯。骨架先行，各站内容随对应任务接入。
+
+### 批次 T — 真书验证（末端，全部完工后）
+
+- [ ] **PILOT-3 村落连续 12–20 页全流程** — **Claude + 用户终验**（依赖以上全部）。走完整六站，验收标准从「单页像不像」升级为「**连续翻页有没有节奏**」：无连续同骨架、大图气口分布合理、motif 全出现、风格报告全绿 → 用户 InDesign 肉眼终验 → 放行 dev→main。
+
+---
+
 ## Claude 道（灌版主线 + 高风险导出 + 集成）
 
 > **2026-07-06 定位校准（见 DECISIONS）**：layoutD 交付「初排灌版」给 InDesign，不替代 InDesign。开发价值标准 = 文流/样式/视觉规范/CMYK 高完成度迁移进 InDesign、给人工调整省时间。可编辑性 > 逐像素冻结（InDesign 里漂移可人工调校）。脚注/傍点/表格深化 = 初排细枝末节，不再投入。
 > **2026-07-07 规范包路线定案（见 DECISIONS）**：视觉规范/样张走「AI 生成规范包 JSON → layoutD 渲样张 → 人工比选 → 同一规范直通 IDML」。首测已过：`~/Desktop/layoutD-规范包测试/` 有 3 份规范包 JSON（**方案A-探索黄 已选为基准**）+ 视觉预览.html；总纲见桌面《layoutD 视觉规范与样张生成·开发计划 v1.0.pdf》。本批新任务：SPEC-PACK-1（Codex 道）→ FIXTURE-1（Claude 道）→ SAMPLE-1（AG 道，依赖前两个）。
 
-- [ ] **FRAME-CANVAS-0 抽取共享断流分组函数**（2026-07-08 用户定方案 A，**下一棒优先做**——AG 的 FRAME-CANVAS-1 等这个）
-  - 背景：`IDMLExporter.swift` 里「连续正文按断流分组、按 (run,页,栏) 合并 unionRect」的逻辑（`runIndexByParagraphId`/`isBodyFlowParagraph`/`FlowPageKey`，见 FRAME-SPLIT 实现）目前只服务 IDML 导出。画布/PDF/PNG 要「追平 IDML 分框」（AG 道 FRAME-CANVAS-1）得先有同一份分组结果可用，不能各自重新实现一遍断流判定（两套逻辑分裂、以后改一处忘了改另一处）。
-  - 目标：把断流分组抽成一个跨模块共享函数（建议签名类似 `func groupIntoFlowFrames(pages: [LaidOutPage], project: BookProject) -> [FlowFrameGroup]`，`FlowFrameGroup` 含分组后的合并 rect + 组内原始 frame 列表/段落引用），放进 `LayoutDCore` 或新增共享层（不要放только `LayoutDExport`，AG 道的 App/Engine 侧模块要能 import）。`IDMLExporter.swift` 改为调用它（**行为不变**，只是去重复用）。
-  - 验收：抽取后 IDML 导出结果逐字节不变（golden 一致）；全部测试/探针 PASS；共享函数有独立单测覆盖断流边界（标题/抽言/图/表打断正文流的场景）。
-  - 完成后立即更新本文件把 AG 的 FRAME-CANVAS-1 从「⏸ 等前置条件」改成可以开工。
+- [x] **FRAME-CANVAS-0 抽取共享断流分组函数** — ✅ Claude。
+  - 交付：新增 `Sources/LayoutDEngine/FlowFrameGrouping.swift`（`public func groupIntoFlowFrames(pages:project:) -> FlowFrameGrouping`，`FlowFrameGrouping` 含 `frameRunIndex`/`paragraphsForRun`/`groupsByPage`/`groupsByRun`，`FlowFrameGroup` 除合并 rect 外还带 `memberFrameIndices`——组内原始 frame 下标，供 FRAME-CANVAS-1 画布按组渲染用）。放在 `LayoutDEngine`（`LayoutDApp`/`LayoutDExport` 都已依赖它，天然可 import）。`IDMLExporter.swift` 的 `runIndexByParagraphId`/`FrameKey`/`FlowPageKey`/`ChainInfo`/`unionRect`/`isBodyFlowParagraph` 全部删除、改为调用共享函数（`IDMLExporter+Helpers.swift` 同步瘦身）。
+  - 验收：303 测试过（+2 新单测 `FlowFrameGroupingTests`：标题/抽言打断正文流分两条 run、表格打断正文流）、review-idml.sh 14/14、golden 逐字节一致（证明抽取零行为变化）。
+  - **AG 的 FRAME-CANVAS-1 前置条件已满足，可以开工**（见下方 Antigravity 道队列）。
 
 - [x] **FIXTURE-1 标准样章 fixture** — ✅ Claude（`eeb2a7a`，合 dev `1197b03`）。
   - 交付：`Samples/fixture-standard-chapter.md`（Markdown 角色标签格式，走现有导入器）——《深海不是黑暗的尽头》标准样章，覆盖 章名/节名/文章名/开节概述/正文/抽言/图注/引文/图片占位（+参考文献）全部角色，每个至少一次。
@@ -150,24 +237,12 @@
 > 负责文件：`Sources/LayoutDEngine/LayoutEngine.swift`、`PDFExporter.swift`、`PNGExporter.swift`、`Sources/LayoutDApp/*`
 > ⚠️ 教训复盘：每个新任务从**最新 dev** 起分支、真把 feat 本体迁过去（别只加 docs commit）；同步 dev 不碰 QUEUE.md（已归 Claude 独占）；**生成样张别提交进仓库**（B1 踩过，Claude 合并时剔除了 20 个 PNG/PDF）。
 
-- [ ] **FRAME-INSET-2 预览文字贴框边（追平 IDML InsetSpacing=0）**（2026-07-07 用户验收 FRAME-SPLIT 时提出）
-  - 背景：IDML 侧文字框内边距已归零（InsetSpacing=0，用户 InDesign 验收过文字贴框上/左边缘），但 layoutD 自家三渲染器还各有一份写死的默认内边距——画布 `CanvasView+Drawing.swift:678` `rect.insetBy(dx: 4, dy: 2)`（:721-722 同值），PNG `PNGExporter.swift:311` 同款，PDF 的 drawText 同构——导致预览里文字和框四周有空隙、与 InDesign 不一致（预览≠输出）。
-  - 目标：普通文字框默认内边距归零（贴框上/左边缘）；**组件类**（知识卡片/表格单元格等 componentStyle.textInset 驱动的）保持现状不动。注意验证零内边距下 CoreText 首行/行尾字形不被框边裁切。
-  - 文件：`CanvasView+Drawing.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
-  - 验收：画布/PDF/PNG 三处文字贴框边与 InDesign 一致；组件卡片/表格内边距无回归；全部测试/探针 PASS。
-- [ ] **UNDERLAY-1 垫底图预览/引擎追平**（2026-07-07 FRAME-SPLIT 配套，Claude 已做完 IDML 侧）
-  - 背景：`Asset.wrapMode`（`LayoutDCore/Asset.swift`）新增 `.underlay` 垫底图意图——图+图注组合垫在文字下面作背景，文字直接压图走、不绕排。IDML 导出已落地（TextWrapMode=None + spread 条目置底）；Markdown 语法 `![](img.png "wrap=under")`。
-  - **用户 2026-07-07 验收观察**：InDesign 里垫底图与文字目前并没有真的叠起来——因为引擎排版时仍给图**保留了版面空间**（文字几何上躲开了图），置底/不绕排只解决了叠放层级。所以本任务的「不占版面空间」是让垫底真正生效的关键一步（用户当场表示可接受现状、后期人工改，但引擎修好后就不用人工了）。
-  - 目标：引擎与预览追平——`wrapMode==.underlay` 的图片 ①LayoutEngine 排版时**不占版面空间**（不推进 cursor、不参与 B1 绕排避让），文字照常流；②Canvas/PDF/PNG 三渲染器把它画在文字**下层**（先画图后画字）。默认 `.wrap` 行为不变（占位+绕排）。
-  - 文件：`LayoutEngine+Assets.swift`（或相关放置逻辑）、`CanvasView+Drawing.swift`、`PDFExporter.swift`、`PNGExporter.swift`。
-  - 验收：造 `wrap=under` 样张，PNG 预览可见文字压在图上、图在字下；`.wrap` 图零回归（B1 绕排照旧）；全部测试/探针 PASS。
-- [ ] **FRAME-CANVAS-1 画布/PDF/PNG 追平 IDML 分框（连续正文合并显示）**（2026-07-08 用户验收 FRAME-SPLIT 时提出，**方案 A**，⏸ 等 Claude 先做前置条件）
-  - 背景：FRAME-SPLIT（已合 main）只在 **IDML 导出层**把连续正文合并成一个串接流框（用户 InDesign 验收过）；但 layoutD 引擎产帧仍是「每段落一个 PageFrame」（`LayoutEngine+TextFlow.swift` 的 `placeTextFrame`/`addText` 逐段 append），画布/PDF/PNG 直接画这些原子帧——用户在画布里看到连续正文仍是一段一个虚线框，**预览 ≠ 输出**，达不到「在 layoutD 里编辑也方便」的初衷。
-  - **⏸ 前置条件（Claude 道，另开任务）**：`IDMLExporter.swift` 里的断流分组逻辑（`runIndexByParagraphId` + 按 `(run, 页, 栏)` 合并 `unionRect`，`isBodyFlowParagraph` 断流判定）需要先抽成一个**跨模块共享函数**（建议放 `LayoutDCore` 或新的共享层，输入 `[LaidOutPage]`+`BookProject`，输出「连续正文帧分组」结果），供 IDML 导出器与本任务共同调用——避免两套分组逻辑各自维护、行为分裂。**本任务开工前先确认 Claude 已完成该抽取并合了 dev**，否则会撞车/返工。
-  - 目标（方案 A，已用户拍板，**只做显示/交互聚合层，不改 engine 产帧/override/锁页模型**）：画布对每组连续正文（共享函数分组结果）画**一个合并的虚线框**（组内文字仍逐段渲染，渲染逻辑不用大改）；选中/移动时整组当一个交互单位；PDF/PNG 预览同理只改「画框」这一层。
-  - 明确不做：不要把 engine 改成产出「一个多段落大 frame」（方案 B，高风险大重构，已否决）——PageFrame 仍是原子单位，只是显示层按组聚合。
-  - 文件：`CanvasView+Drawing.swift`、`CanvasView+Interaction.swift`（选中/移动改按组）、`PDFExporter.swift`、`PNGExporter.swift`。
-  - 验收：标准样章画布里，被标题/抽言断开的每段连续正文各显示为一个合并虚线框（不再一段一框）；点击/拖拽整组一起选中移动；单段落属性面板显示仍正确（组内取第一段或提示"多段落"，具体交互细节可自行判断但不能崩溃/误编辑）；全部测试/探针 PASS。
+- [x] **FRAME-INSET-2 预览文字贴框边（追平 IDML InsetSpacing=0）** — ✅ AG（`4f4ff4b`，Claude 审核合 dev `bba4867`）。普通文字框默认内边距归零（`drawText` `applyDefaultInset` 默认改 false）；组件类（知识卡片/表格）走调用方预先按 `componentStyle.textInsetX/Y` 做过的 rect，不受影响（已核对调用点）。画布/PDF/PNG 三处一致。
+- [x] **UNDERLAY-1 垫底图预览/引擎追平** — ✅ AG（`51dcfdc`，Claude 审核合 dev `bba4867`）。`LayoutEngine+Assets.swift` 里 underlay 图片路径完全跳过 cursor 推进/绕排（提前 `return`，不进 `prepareWideAssetPlacement`），`exclusionRects`/`LayoutPlan` 侧同步排除；跨页 spread 底图用 `deferredUnderlayFrames` 处理"图片排到的页面还没生成"的时序、`finish()` 补页逻辑一并接好。三渲染器按 underlay 优先画（图在下字在上）。新增 2 个针对性单测。
+  - 验收：301 测试过、review-idml.sh 14/14、golden 逐字节一致。**审核时剔除**：51dcfdc 里误带进一个与功能无关的 1.8MB `layoutD-icon.png`（早前已知的待定去留文件），合并时已单独 commit(`bba4867`)移除。
+
+- [x] **FRAME-CANVAS-1 画布/PDF/PNG 追平 IDML 分框（连续正文合并显示）** — ✅ AG (commit ae6f6ad)，Claude 审核合 dev。普通模式下合并虚线框绘制与交互，PDF/PNG 导出合并背景与描边，ObjectPropertiesView 防抖防错，全部 303 单测 + 14 项端到端探针通过。
+  - **审核时修复一处性能问题**（`6283043`）：`CanvasView+Drawing.swift` 的 `draw(page:)` 对页内每个 frame 都调用 `flowGroup(for:pageNumber:)`，而该函数内部每次调用都对**整份文档**重跑一遍 `groupIntoFlowFrames`——页内 N 个 frame 就是 N 倍全文档重算，画布重绘（滚动/悬停/拖拽都会触发）在大稿子上会明显变慢。`framesIntersecting()`（marquee 框选展开分组）同样对每个命中 frame 重算一次。两处均改为在函数顶部只算一次分组、建本地查找表复用。逻辑不变，303 测试 + 14/14 探针复跑仍全过。
 
 - [x] **SAMPLE-1 一键批量样张** — ✅ **重做版**（AG，`feature/ag-sample-1-v2` `10550c6`，Claude 审核合 dev `d85a730`）。首版打回重做（原因见下），v2 全部照做。
   - **交付**：CLI `--render-samples A.json B.json ... --chapter <fixture>`（默认 chapter=`Samples/fixture-standard-chapter.md`）→ 桌面出带方案名的样张 PDF。解析**只走** `StyleBaselineImporter.parseSpecPack`（唯一事实源，首版并行的 `SpecPack.swift` 已删）；新建**共享**应用函数 `BookProject.applySpecPack(_ result:)`（`LayoutDImport/BookProject+Tokens.swift`），`AppState.applyImportedTokens` 减 105 行改为委托它（单一应用路径）；补齐了 SPEC-PACK-1 没做的视觉三项——字体族（`fontResolutions`→复合中/西/数字字体）、角色色 + 装饰点缀色、开本 trim（`page.width/height`→`PageSetup`）；不支持字段打 stderr 告警不静默。

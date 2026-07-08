@@ -54,6 +54,7 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
     /// backwards compatibility with existing saved layout documents.
     public var tableOfContentsEntries: [TableOfContentsEntry]?
     public var exclusionRects: [Rect]?
+    public var wrapMode: AssetWrapMode?
 
     public init(
         id: UUID = UUID(),
@@ -68,7 +69,8 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
         sourceParagraphId: UUID? = nil,
         maskShape: ImageMaskShape? = nil,
         tableOfContentsEntries: [TableOfContentsEntry]? = nil,
-        exclusionRects: [Rect]? = nil
+        exclusionRects: [Rect]? = nil,
+        wrapMode: AssetWrapMode? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -83,6 +85,11 @@ public struct PageFrame: Codable, Equatable, Sendable, Identifiable {
         self.maskShape = maskShape
         self.tableOfContentsEntries = tableOfContentsEntries
         self.exclusionRects = exclusionRects
+        self.wrapMode = wrapMode
+    }
+
+    public var isUnderlay: Bool {
+        wrapMode == .underlay
     }
 }
 

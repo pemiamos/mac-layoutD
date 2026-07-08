@@ -170,6 +170,38 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertNil(try JSONDecoder().decode(PageSetup.self, from: legacy).colorSpace)
     }
 
+    func testParagraphAccentRuleGeometry() {
+        let rect = CGRect(x: 10, y: 20, width: 100, height: 200)
+
+        // 1. Left edge
+        let leftRule = ParagraphAccentRule(edge: .left, colorToken: "accent", width: 4, gap: 6)
+        let (leftBar, leftContent) = leftRule.geometry(in: rect, topAtMaxY: false, scale: 1.0)
+        XCTAssertEqual(leftBar, CGRect(x: 10, y: 20, width: 4, height: 200))
+        XCTAssertEqual(leftContent, CGRect(x: 20, y: 20, width: 90, height: 200))
+
+        // 2. Top edge, topAtMaxY = false (flipped/Canvas/IDML)
+        let topRule = ParagraphAccentRule(edge: .top, colorToken: "accent", width: 3, length: 80, gap: 5)
+        let (topBar, topContent) = topRule.geometry(in: rect, topAtMaxY: false, scale: 1.0)
+        XCTAssertEqual(topBar, CGRect(x: 10, y: 20, width: 80, height: 3))
+        XCTAssertEqual(topContent, CGRect(x: 10, y: 28, width: 100, height: 192))
+
+        // 3. Top edge, topAtMaxY = true (PDF/PNG)
+        let (topBarMaxY, topContentMaxY) = topRule.geometry(in: rect, topAtMaxY: true, scale: 1.0)
+        XCTAssertEqual(topBarMaxY, CGRect(x: 10, y: 217, width: 80, height: 3)) // 220 - 3
+        XCTAssertEqual(topContentMaxY, CGRect(x: 10, y: 20, width: 100, height: 192))
+
+        // 4. Bottom edge, topAtMaxY = false (flipped/Canvas/IDML)
+        let bottomRule = ParagraphAccentRule(edge: .bottom, colorToken: "accent", width: 3, length: 80, gap: 5)
+        let (bottomBar, bottomContent) = bottomRule.geometry(in: rect, topAtMaxY: false, scale: 1.0)
+        XCTAssertEqual(bottomBar, CGRect(x: 10, y: 217, width: 80, height: 3)) // 220 - 3
+        XCTAssertEqual(bottomContent, CGRect(x: 10, y: 20, width: 100, height: 192))
+
+        // 5. Bottom edge, topAtMaxY = true (PDF/PNG)
+        let (bottomBarMaxY, bottomContentMaxY) = bottomRule.geometry(in: rect, topAtMaxY: true, scale: 1.0)
+        XCTAssertEqual(bottomBarMaxY, CGRect(x: 10, y: 20, width: 80, height: 3))
+        XCTAssertEqual(bottomContentMaxY, CGRect(x: 10, y: 28, width: 100, height: 192))
+    }
+
     func testTableParsingAndAllocation() throws {
         let tableText = """
         结构    类比    主要作用
@@ -1832,6 +1864,63 @@ final class LayoutDCoreTests: XCTestCase {
         )
     }
 
+    func testInvalidBlockIsSkippedWhileGoodBlocksOnSamePageStillRender() {
+        // Regression: drawing a stray shape (out-of-bounds rectangle) must not wipe
+        // the shapes already drawn on the same page. Blocks share ONE plan, so the
+        // engine has to isolate the bad block and keep rendering the good ones,
+        // instead of discarding the whole page's plan (all-or-nothing gate).
+        let goodId = UUID()
+        let badId = UUID()
+        let goodBlock = LayoutPlanBlock(
+            id: goodId,
+            kind: .line,
+            role: "line",
+            frame: Rect(x: 0.1, y: 0.1, width: 0.6, height: 0.02),
+            contentReference: .generated(""),
+            strokeColorHex: "#000000",
+            strokeWidth: 1.0
+        )
+        let badBlock = LayoutPlanBlock(
+            id: badId,
+            kind: .rectangle,
+            role: "rectangle",
+            frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 2.0), // spills off the page
+            contentReference: .generated(""),
+            strokeColorHex: "#000000",
+            strokeWidth: 1.0
+        )
+        let plan = LayoutPlan(target: .page(3), strategy: .balanced, blocks: [goodBlock, badBlock])
+
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "隔离测试", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(title: "故事", paragraphs: [
+                            Paragraph(kind: .body, text: "正文内容。", styleId: StyleID.body.rawValue)
+                        ])
+                    ]
+                )
+            ],
+            appliedLayoutPlans: [3: plan]
+        )
+
+        let document = LayoutEngine().layout(project: project)
+        let renderedIds = Set(document.pages.flatMap(\.frames).map(\.id))
+
+        XCTAssertTrue(renderedIds.contains(goodId), "Good block on the same page should still render")
+        XCTAssertFalse(renderedIds.contains(badId), "Out-of-bounds block should be skipped")
+        XCTAssertTrue(
+            document.issues.contains { $0.severity == .warning && $0.message.contains("已跳过") },
+            "Engine should warn that the single bad block was skipped, not that the whole plan was rejected"
+        )
+        XCTAssertFalse(
+            document.issues.contains { $0.message.contains("版式计划无效") },
+            "A partial failure must NOT be reported as a whole-plan rejection"
+        )
+    }
+
     func testVerticalTypesettingLayoutFlow() {
         var setup = PageSetup.scienceBookDefault
         setup.layoutDirection = .vertical
@@ -2103,6 +2192,75 @@ extension LayoutDCoreTests {
             (b, Rect(x: 50, y: 0, width: 10, height: 10))
         ]
         XCTAssertTrue(distributedOrigins(frames: frames, mode: .horizontalCenters).isEmpty)
+    }
+
+    func testUnderlayAssetBypassesLayoutCursorAndWrap() throws {
+        let asset = Asset(fileName: "bg.png", role: .photo, pixelWidth: 100, pixelHeight: 100, wrapMode: .underlay)
+        let paragraph = Paragraph(
+            kind: .body,
+            text: "第一段正文，应该很长很长。第二段正文，应该很长很长。这是压在底图上的正文，它不应该避让图片，因为图片是underlay底图。",
+            styleId: StyleID.body.rawValue,
+            anchoredAssetIds: [asset.id]
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "底图测试", author: "Antigravity"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])],
+            assets: [asset]
+        )
+        
+        let doc = LayoutEngine().layout(project: project)
+        XCTAssertEqual(doc.pages.count, 2)
+        let frames = doc.pages[1].frames
+        
+        // Find image frame and text frame
+        let imgFrame = try XCTUnwrap(frames.first(where: { $0.kind == .image }))
+        let textFrame = try XCTUnwrap(frames.first(where: { $0.kind == .text }))
+        
+        // Image frame should have wrapMode == .underlay
+        XCTAssertEqual(imgFrame.wrapMode, .underlay)
+        XCTAssertTrue(imgFrame.isUnderlay)
+        
+        // Text frame should NOT have exclusionRects (because underlay bypasses layout rect exclusions)
+        XCTAssertNil(textFrame.exclusionRects)
+        
+        // Verify rendering partition (underlays before non-underlays)
+        let underlays = frames.filter { $0.isUnderlay }
+        let nonUnderlays = frames.filter { !$0.isUnderlay }
+        XCTAssertTrue(underlays.contains(imgFrame))
+        XCTAssertTrue(nonUnderlays.contains(textFrame))
+    }
+
+    func testUnderlaySpreadAssetDoesNotAdvancePage() throws {
+        let asset = Asset(fileName: "bg_spread.png", role: .spread, pixelWidth: 200, pixelHeight: 100, wrapMode: .underlay)
+        let paragraph = Paragraph(
+            kind: .body,
+            text: "第一段正文",
+            styleId: StyleID.body.rawValue,
+            anchoredAssetIds: [asset.id]
+        )
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "底图对开测试", author: "Antigravity"),
+            sections: [BookSection(title: "正文", stories: [Story(title: "正文", paragraphs: [paragraph])])],
+            assets: [asset]
+        )
+        
+        let doc = LayoutEngine().layout(project: project)
+        let frames = doc.pages.flatMap(\.frames)
+        let leftSpreadFrames = frames.filter {
+            if case .spreadAsset(_, let isLeft) = $0.content { return isLeft }
+            return false
+        }
+        let rightSpreadFrames = frames.filter {
+            if case .spreadAsset(_, let isLeft) = $0.content { return !isLeft }
+            return false
+        }
+        
+        XCTAssertEqual(leftSpreadFrames.count, 1)
+        XCTAssertEqual(rightSpreadFrames.count, 1)
+        
+        // Verify wrapMode is set
+        XCTAssertEqual(leftSpreadFrames.first?.wrapMode, .underlay)
+        XCTAssertEqual(rightSpreadFrames.first?.wrapMode, .underlay)
     }
 }
 

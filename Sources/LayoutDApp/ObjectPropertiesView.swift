@@ -75,56 +75,67 @@ struct ObjectPropertiesView: View {
         Divider()
 
         // Text content (text / caption frames)
-        if (frame.kind == .text || frame.kind == .caption),
-           case .text(let editableText) = frame.content {
+        if (frame.kind == .text || frame.kind == .caption) {
             sectionLabel("文本")
-            ObjectTextEditor(
-                frameId: frame.id,
-                initialText: editableText,
-                isPageLocked: ctx.isPageLocked,
-                state: state
-            )
-            .id(frame.id)
+            if state.selectedFrameIds.count > 1 {
+                Text("已选择多个段落，不可直接编辑文本。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else if case .text(let editableText) = frame.content {
+                ObjectTextEditor(
+                    frameId: frame.id,
+                    initialText: editableText,
+                    isPageLocked: ctx.isPageLocked,
+                    state: state
+                )
+                .id(frame.id)
+            }
             Divider()
         }
 
         // Transform
         sectionLabel("变换")
-        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
-            GridRow {
-                Text("X")
-                Stepper(String(format: "%.0f pt", frame.rect.x), onIncrement: {
-                    state.updateSelectedFrameCoordinate(x: frame.rect.x + 5, y: nil, width: nil, height: nil)
-                }, onDecrement: {
-                    state.updateSelectedFrameCoordinate(x: frame.rect.x - 5, y: nil, width: nil, height: nil)
-                })
+        if state.selectedFrameIds.count > 1 {
+            Text("已选择多个元素，暂不支持批量编辑变换。")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        } else {
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                GridRow {
+                    Text("X")
+                    Stepper(String(format: "%.0f pt", frame.rect.x), onIncrement: {
+                        state.updateSelectedFrameCoordinate(x: frame.rect.x + 5, y: nil, width: nil, height: nil)
+                    }, onDecrement: {
+                        state.updateSelectedFrameCoordinate(x: frame.rect.x - 5, y: nil, width: nil, height: nil)
+                    })
+                }
+                GridRow {
+                    Text("Y")
+                    Stepper(String(format: "%.0f pt", frame.rect.y), onIncrement: {
+                        state.updateSelectedFrameCoordinate(x: nil, y: frame.rect.y + 5, width: nil, height: nil)
+                    }, onDecrement: {
+                        state.updateSelectedFrameCoordinate(x: nil, y: frame.rect.y - 5, width: nil, height: nil)
+                    })
+                }
+                GridRow {
+                    Text("宽")
+                    Stepper(String(format: "%.0f pt", frame.rect.width), onIncrement: {
+                        state.updateSelectedFrameCoordinate(x: nil, y: nil, width: frame.rect.width + 5, height: nil)
+                    }, onDecrement: {
+                        state.updateSelectedFrameCoordinate(x: nil, y: nil, width: frame.rect.width - 5, height: nil)
+                    })
+                }
+                GridRow {
+                    Text("高")
+                    Stepper(String(format: "%.0f pt", frame.rect.height), onIncrement: {
+                        state.updateSelectedFrameCoordinate(x: nil, y: nil, width: nil, height: frame.rect.height + 5)
+                    }, onDecrement: {
+                        state.updateSelectedFrameCoordinate(x: nil, y: nil, width: nil, height: frame.rect.height - 5)
+                    })
+                }
             }
-            GridRow {
-                Text("Y")
-                Stepper(String(format: "%.0f pt", frame.rect.y), onIncrement: {
-                    state.updateSelectedFrameCoordinate(x: nil, y: frame.rect.y + 5, width: nil, height: nil)
-                }, onDecrement: {
-                    state.updateSelectedFrameCoordinate(x: nil, y: frame.rect.y - 5, width: nil, height: nil)
-                })
-            }
-            GridRow {
-                Text("宽")
-                Stepper(String(format: "%.0f pt", frame.rect.width), onIncrement: {
-                    state.updateSelectedFrameCoordinate(x: nil, y: nil, width: frame.rect.width + 5, height: nil)
-                }, onDecrement: {
-                    state.updateSelectedFrameCoordinate(x: nil, y: nil, width: frame.rect.width - 5, height: nil)
-                })
-            }
-            GridRow {
-                Text("高")
-                Stepper(String(format: "%.0f pt", frame.rect.height), onIncrement: {
-                    state.updateSelectedFrameCoordinate(x: nil, y: nil, width: nil, height: frame.rect.height + 5)
-                }, onDecrement: {
-                    state.updateSelectedFrameCoordinate(x: nil, y: nil, width: nil, height: frame.rect.height - 5)
-                })
-            }
+            .disabled(ctx.isPageLocked)
         }
-        .disabled(ctx.isPageLocked)
 
         Divider()
 

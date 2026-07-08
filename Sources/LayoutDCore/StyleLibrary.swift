@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 public enum StyleID: String, Codable, Sendable {
     case body
@@ -237,6 +238,79 @@ public extension Character {
     }
 }
 
+/// A colored decoration bar attached to a paragraph style's frame — e.g. the
+/// pull-quote's left rule (抽言左侧明黄竖线) or a caption's top tick. Rendered by
+/// PDF/PNG/Canvas/IDML beside the frame; the frame's text is inset to clear it.
+/// Optional so old `.layoutd`/spec packs without decorations decode unchanged.
+public struct ParagraphAccentRule: Codable, Equatable, Sendable {
+    public enum Edge: String, Codable, Sendable {
+        case left
+        case top
+        case bottom
+    }
+
+    public var edge: Edge
+    /// Color token (resolved against the project's palette, e.g. "accent").
+    public var colorToken: String
+    /// Bar thickness in points (left rule → width; top tick → height).
+    public var width: Double
+    /// For a top tick/bottom rule, the bar's horizontal length in points; nil = full frame width.
+    public var length: Double?
+    /// Gap in points between the bar and the paragraph text.
+    public var gap: Double
+
+    public init(edge: Edge, colorToken: String, width: Double, length: Double? = nil, gap: Double = 6) {
+        self.edge = edge
+        self.colorToken = colorToken
+        self.width = width
+        self.length = length
+        self.gap = gap
+    }
+
+    /// Given a frame's draw rect (renderer-local coordinates, matching the
+    /// convention `drawComponentBackground` uses — left edge at `minX`, top edge
+    /// at `maxY` when `topAtMaxY` is true), return the colored bar rect and the
+    /// content rect the paragraph text should be drawn into (inset to clear the
+    /// bar). All three renderers call this so the geometry never drifts.
+    public func geometry(in rect: CGRect, topAtMaxY: Bool, scale: CGFloat = 1) -> (bar: CGRect, content: CGRect) {
+        let w = CGFloat(width) * scale
+        let g = CGFloat(gap) * scale
+        switch edge {
+        case .left:
+            let bar = CGRect(x: rect.minX, y: rect.minY, width: w, height: rect.height)
+            let content = CGRect(x: rect.minX + w + g, y: rect.minY,
+                                 width: max(0, rect.width - w - g), height: rect.height)
+            return (bar, content)
+        case .top:
+            let barLength = length.map { CGFloat($0) * scale } ?? rect.width
+            let barY = topAtMaxY ? rect.maxY - w : rect.minY
+            let bar = CGRect(x: rect.minX, y: barY, width: min(barLength, rect.width), height: w)
+            let content: CGRect
+            if topAtMaxY {
+                content = CGRect(x: rect.minX, y: rect.minY,
+                                 width: rect.width, height: max(0, rect.height - w - g))
+            } else {
+                content = CGRect(x: rect.minX, y: rect.minY + w + g,
+                                 width: rect.width, height: max(0, rect.height - w - g))
+            }
+            return (bar, content)
+        case .bottom:
+            let barLength = length.map { CGFloat($0) * scale } ?? rect.width
+            let barY = topAtMaxY ? rect.minY : rect.maxY - w
+            let bar = CGRect(x: rect.minX, y: barY, width: min(barLength, rect.width), height: w)
+            let content: CGRect
+            if topAtMaxY {
+                content = CGRect(x: rect.minX, y: rect.minY + w + g,
+                                 width: rect.width, height: max(0, rect.height - w - g))
+            } else {
+                content = CGRect(x: rect.minX, y: rect.minY,
+                                 width: rect.width, height: max(0, rect.height - w - g))
+            }
+            return (bar, content)
+        }
+    }
+}
+
 public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var displayName: String
@@ -254,6 +328,7 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public var spaceAfterToken: String?
     public var compositeFont: [CompositeFontClass: CompositeFontMapping]?
     public var layoutDirection: LayoutDirection?
+    public var accentRule: ParagraphAccentRule?
 
     public init(
         id: String,
@@ -271,7 +346,8 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         spaceBeforeToken: String? = nil,
         spaceAfterToken: String? = nil,
         compositeFont: [CompositeFontClass: CompositeFontMapping]? = nil,
-        layoutDirection: LayoutDirection? = nil
+        layoutDirection: LayoutDirection? = nil,
+        accentRule: ParagraphAccentRule? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -289,6 +365,7 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         self.spaceAfterToken = spaceAfterToken
         self.compositeFont = compositeFont
         self.layoutDirection = layoutDirection
+        self.accentRule = accentRule
     }
 
     public static let body = ParagraphStyle(
@@ -459,7 +536,8 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
             spaceBeforeToken: spaceBeforeToken,
             spaceAfterToken: spaceAfterToken,
             compositeFont: self.compositeFont,
-            layoutDirection: self.layoutDirection
+            layoutDirection: self.layoutDirection,
+            accentRule: self.accentRule
         )
     }
 

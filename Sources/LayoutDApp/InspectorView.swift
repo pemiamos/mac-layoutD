@@ -157,6 +157,7 @@ struct InspectorView: View {
 
     @State private var importedTokens: DesignTokens? = nil
     @State private var importedFormat: ImportFormat = .dtcg
+    @State private var importedSpecResult: SpecPackImportResult? = nil
     @State private var showImportSheet = false
     @State private var importErrorMessage: String? = nil
     @State private var showImportErrorAlert = false
@@ -723,6 +724,7 @@ struct InspectorView: View {
                     state: state,
                     tokens: tokens,
                     format: importedFormat,
+                    specResult: importedSpecResult,
                     onDismiss: { showImportSheet = false }
                 )
             }
@@ -738,7 +740,7 @@ struct InspectorView: View {
 
     private func importStyleFile() {
         let openPanel = NSOpenPanel()
-        openPanel.title = "选择 Figma Variables 或 DTCG Design Tokens JSON 文件"
+        openPanel.title = "选择 layoutD 规范包 / Figma Variables / DTCG Design Tokens JSON 文件"
         openPanel.allowedContentTypes = [.json]
         openPanel.allowsMultipleSelection = false
         openPanel.canChooseDirectories = false
@@ -748,9 +750,10 @@ struct InspectorView: View {
             if response == .OK, let url = openPanel.url {
                 do {
                     let data = try Data(contentsOf: url)
-                    let result = try StyleBaselineImporter.autoDetectAndParse(jsonData: data)
+                    let result = try StyleBaselineImporter.autoDetectAndParseDetailed(jsonData: data)
                     self.importedTokens = result.tokens
                     self.importedFormat = result.format
+                    self.importedSpecResult = result.specResult
                     self.showImportSheet = true
                 } catch {
                     self.importErrorMessage = "解析失败: \(error.localizedDescription)"

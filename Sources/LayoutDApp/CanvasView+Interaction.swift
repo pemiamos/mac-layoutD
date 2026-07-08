@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import LayoutDCore
+import LayoutDEngine
 
 extension CanvasView {
     override var acceptsFirstResponder: Bool { true }
@@ -244,7 +245,11 @@ extension CanvasView {
                 let localY = (point.y - pRect.minY) / zoomScale
                 localPoint = CGPoint(x: localX, y: localY)
                 
-                if let found = page.frames.reversed().first(where: { frame in
+                let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+                let underlays = page.frames.filter { $0.isUnderlay }
+                let hitTestOrder = nonUnderlays.reversed() + underlays.reversed()
+
+                if let found = hitTestOrder.first(where: { frame in
                     let extraWidth = (frame.kind == .text || frame.kind == .footnote || frame.kind == .sideNote) ? CGFloat(project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue).fontSize * 0.5) : 0.0
                     let fRect = CGRect(x: frame.rect.x, y: frame.rect.y, width: frame.rect.width + extraWidth, height: frame.rect.height)
                     return fRect.contains(CGPoint(x: localX, y: localY))
@@ -376,7 +381,32 @@ extension CanvasView {
             if let frame = hitFrame {
                 if additive {
                     // Shift/⌘-click: toggle this frame in/out of the selection. No drag.
-                    onToggleSelection?(frame.id)
+                    if let pageNum = clickedPageNumber,
+                       let groupMembers = flowGroupMemberIds(for: frame.id, pageNumber: pageNum) {
+                        let anySelected = !groupMembers.isDisjoint(with: selectedFrameIds)
+                        var newSelection = selectedFrameIds
+                        if anySelected {
+                            for mId in groupMembers {
+                                newSelection.remove(mId)
+                            }
+                        } else {
+                            newSelection.formUnion(groupMembers)
+                        }
+                        onMarqueeSelected?(newSelection, nil)
+                    } else {
+                        onToggleSelection?(frame.id)
+                    }
+                    return
+                }
+
+                if let pageNum = clickedPageNumber,
+                   let groupMembers = flowGroupMemberIds(for: frame.id, pageNumber: pageNum) {
+                    let firstFrameId = firstFrameIdOfGroup(for: frame.id, pageNumber: pageNum) ?? frame.id
+                    onMarqueeSelected?(groupMembers, firstFrameId)
+                    if activeTool == .selection {
+                        onDragStarted?()
+                        beginFlowGroupDrag(groupMemberIds: groupMembers, anchorPoint: point)
+                    }
                     return
                 }
 
@@ -412,6 +442,18 @@ extension CanvasView {
         if let pageNum = clickedPageNumber, let localPt = localPoint {
             onCanvasClick?(pageNum, localPt)
         }
+    }
+
+    private func beginFlowGroupDrag(groupMemberIds: Set<UUID>, anchorPoint: CGPoint) {
+        guard let document else { return }
+        groupDragStartRects.removeAll()
+        for id in groupMemberIds {
+            if let info = findFrame(id: id, in: document) {
+                groupDragStartRects[id] = info.frame.rect
+            }
+        }
+        isDraggingFrame = true
+        dragStartLocalPoint = anchorPoint
     }
 
     /// Captures the start rects of every selected frame so they can be moved
@@ -702,9 +744,9 @@ extension CanvasView {
             let additive = event.modifierFlags.contains(.shift) || event.modifierFlags.contains(.command)
             let hits = framesIntersecting(marqueeRect)
             if additive {
-                onMarqueeSelected?(selectedFrameIds.union(hits))
+                onMarqueeSelected?(selectedFrameIds.union(hits), nil)
             } else {
-                onMarqueeSelected?(hits)
+                onMarqueeSelected?(hits, nil)
             }
             isMarqueeSelecting = false
             marqueeStartPoint = nil

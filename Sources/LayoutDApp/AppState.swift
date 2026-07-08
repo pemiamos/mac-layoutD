@@ -908,6 +908,16 @@ final class AppState: ObservableObject {
         self.project = currentProject
     }
 
+    /// Apply a full spec-pack import result (fonts / role colors / decorations /
+    /// trim), matching the CLI `--render-samples` apply path. Used by the GUI
+    /// import sheet when the chosen file is a layoutD spec pack.
+    func applySpecPackResult(_ result: SpecPackImportResult, baselineGridCompensate: Double? = nil) {
+        commitState()
+        var currentProject = project
+        currentProject.applySpecPack(result, baselineGridCompensate: baselineGridCompensate)
+        self.project = currentProject
+    }
+
     func applyStyleTemplate(_ template: StyleTemplate) {
         commitState()
         var currentProject = project

@@ -106,6 +106,18 @@ public struct StyleBaselineImporter {
     ]
 
     public static func autoDetectAndParse(jsonData: Data) throws -> (tokens: DesignTokens, format: ImportFormat) {
+        let detected = try autoDetectAndParseDetailed(jsonData: jsonData)
+        return (detected.tokens, detected.format)
+    }
+
+    /// Spec-pack-aware detection: for a spec pack the full `SpecPackImportResult`
+    /// (fonts / role colors / decorations / trim tokens) is preserved so the GUI
+    /// apply path can land the same visual state as the CLI `--render-samples`
+    /// path. For Figma / DTCG, `specResult` is nil and everything lives in `tokens`.
+    public static func autoDetectAndParseDetailed(
+        jsonData: Data,
+        fontAvailability: FontAvailabilityChecker? = nil
+    ) throws -> (tokens: DesignTokens, format: ImportFormat, specResult: SpecPackImportResult?) {
         guard let jsonObject = try JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any] else {
             throw NSError(
                 domain: "StyleBaselineImporter",
@@ -116,13 +128,13 @@ public struct StyleBaselineImporter {
 
         if jsonObject["collections"] != nil {
             let tokens = try parseFigmaVariables(jsonObject)
-            return (tokens, .figma)
+            return (tokens, .figma, nil)
         } else if isSpecPack(jsonObject) {
-            let result = try parseSpecPack(jsonObject)
-            return (result.tokens, .specPack)
+            let result = try parseSpecPack(jsonObject, fontAvailability: fontAvailability)
+            return (result.tokens, .specPack, result)
         } else {
             let tokens = try parseDTCG(jsonObject)
-            return (tokens, .dtcg)
+            return (tokens, .dtcg, nil)
         }
     }
 

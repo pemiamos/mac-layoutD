@@ -39,6 +39,9 @@ extension LayoutContext {
         var rects: [Rect] = []
         for frame in currentPage.frames {
             if frame.kind == .image {
+                if frame.isUnderlay {
+                    continue
+                }
                 rects.append(frame.rect)
             }
         }
@@ -48,6 +51,16 @@ extension LayoutContext {
             let pageSize = project.pageSetup.pageSize
             for block in plan.blocks {
                 if block.kind == .image {
+                    var isUnderlayBlock = false
+                    if case .asset(let assetId) = block.contentReference,
+                       let asset = project.assets.first(where: { $0.id == assetId }),
+                       asset.effectiveWrapMode == .underlay {
+                        isUnderlayBlock = true
+                    }
+                    if isUnderlayBlock {
+                        continue
+                    }
+
                     let rect = Rect(
                         x: block.frame.x * pageSize.width,
                         y: block.frame.y * pageSize.height,
