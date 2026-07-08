@@ -114,7 +114,7 @@
 - [x] **ACCENT-2 图注顶部短横 + 标题下划线** — **AG**。已开 `edge==.top` 与 `edge==.bottom` 门控，并完成 Canvas, PDF, PNG, IDML 绘制逻辑与 IDML 导出（commit f631549）。
 - [x] **GHOST-NUM-1a 章节序号解析** — ✅ **Codex**（`2e2255e`）。`章节序号` 已移出 `unsupportedFields`，`parseSpecPack` 支持其 motif 字段（字体/字号/透明度/锚点/压底层）；本棒补专门回归锁住 legacy `position`→`anchor`、`treatment:"ghost"`→`layer:"behind"`。
 - [ ] **GHOST-NUM-1b 超大 ghost 章节号渲染** — **AG**（依赖 1a）。超大淡灰数字压在章名后/底，四渲染器同算法。
-- [ ] **HEADER-1a 页眉字段解析** — **Codex**。`页眉页码`/页眉章名字段移出 unsupportedFields，parseSpecPack 支持。
+- [x] **HEADER-1a 页眉字段解析** — ✅ **Codex**（`943fa33`）。`页眉页码` / `页眉章名` 已移出 `unsupportedFields`，parseSpecPack 合并为 `motifs.header`；旧 `页眉页码` 保持页眉+页码兼容，`页眉章名` 可单独补章名侧样式。
 - [ ] **HEADER-1b 页眉 chrome 渲染** — **AG**（依赖 1a）。页眉（章名 · 刊名 · 细线）；注意与 MASTER-1 已有主页页码协调。
 - [ ] **SECNUM-1a 节序号解析** — **Codex**。`节名.numberStyle` 移出 unsupportedFields，parseSpecPack 支持。
 - [ ] **SECNUM-1b 节序号渲染** — **AG**（依赖 1a）。节序号「01 /」黄色。
