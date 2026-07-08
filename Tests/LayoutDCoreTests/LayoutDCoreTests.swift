@@ -1832,6 +1832,63 @@ final class LayoutDCoreTests: XCTestCase {
         )
     }
 
+    func testInvalidBlockIsSkippedWhileGoodBlocksOnSamePageStillRender() {
+        // Regression: drawing a stray shape (out-of-bounds rectangle) must not wipe
+        // the shapes already drawn on the same page. Blocks share ONE plan, so the
+        // engine has to isolate the bad block and keep rendering the good ones,
+        // instead of discarding the whole page's plan (all-or-nothing gate).
+        let goodId = UUID()
+        let badId = UUID()
+        let goodBlock = LayoutPlanBlock(
+            id: goodId,
+            kind: .line,
+            role: "line",
+            frame: Rect(x: 0.1, y: 0.1, width: 0.6, height: 0.02),
+            contentReference: .generated(""),
+            strokeColorHex: "#000000",
+            strokeWidth: 1.0
+        )
+        let badBlock = LayoutPlanBlock(
+            id: badId,
+            kind: .rectangle,
+            role: "rectangle",
+            frame: Rect(x: 0.1, y: 0.1, width: 0.8, height: 2.0), // spills off the page
+            contentReference: .generated(""),
+            strokeColorHex: "#000000",
+            strokeWidth: 1.0
+        )
+        let plan = LayoutPlan(target: .page(3), strategy: .balanced, blocks: [goodBlock, badBlock])
+
+        let project = BookProject(
+            metadata: ProjectMetadata(title: "隔离测试", author: "layoutD"),
+            sections: [
+                BookSection(
+                    title: "第一章",
+                    stories: [
+                        Story(title: "故事", paragraphs: [
+                            Paragraph(kind: .body, text: "正文内容。", styleId: StyleID.body.rawValue)
+                        ])
+                    ]
+                )
+            ],
+            appliedLayoutPlans: [3: plan]
+        )
+
+        let document = LayoutEngine().layout(project: project)
+        let renderedIds = Set(document.pages.flatMap(\.frames).map(\.id))
+
+        XCTAssertTrue(renderedIds.contains(goodId), "Good block on the same page should still render")
+        XCTAssertFalse(renderedIds.contains(badId), "Out-of-bounds block should be skipped")
+        XCTAssertTrue(
+            document.issues.contains { $0.severity == .warning && $0.message.contains("已跳过") },
+            "Engine should warn that the single bad block was skipped, not that the whole plan was rejected"
+        )
+        XCTAssertFalse(
+            document.issues.contains { $0.message.contains("版式计划无效") },
+            "A partial failure must NOT be reported as a whole-plan rejection"
+        )
+    }
+
     func testVerticalTypesettingLayoutFlow() {
         var setup = PageSetup.scienceBookDefault
         setup.layoutDirection = .vertical
