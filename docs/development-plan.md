@@ -1,7 +1,7 @@
 # layoutD 开发计划（执行权威）
 
 状态：Living（本文件是执行计划的唯一权威；PRD 管需求，本文管落地）
-更新：2026-06-23
+更新：2026-07-08（补记阶段 F「初排灌版主线」；新增文末「2026-07-08 项目复盘」）
 
 进度图例：✅ 已实现　🟡 部分　⬜ 未开始
 
@@ -191,6 +191,79 @@
 
 - **E3-8 token → CMYK 色板：暂缓**（用户 2026-06-21 决定先不做；印前转色本就交 InDesign，非阻塞）。
 - **E3-9 约物挤压 + 基线网格对齐**：维持原排期，未纳入本批。
+
+---
+
+## 阶段 F — 初排灌版主线（2026-07 定位校准后，核心已落地）
+
+> **2026-07-06 定位校准（DECISIONS）**：layoutD 的交付物是给 InDesign 的「初排灌版」，不是替代 InDesign。
+> 开发价值标准 = 文流结构/样式体系/视觉规范/色彩能否高完成度迁移进 InDesign、给人工调整省时间。
+> **可编辑性 > 逐像素冻结**（InDesign 里漂移可人工调校）；脚注/傍点/表格深化 = 初排细枝末节，不再投入。
+> 任务级细节见 `.ai/QUEUE.md` 与 `.ai/QUEUE-ARCHIVE.md`，此处只记里程碑。
+
+### F1. 串接文流（THE core gap，✅ 全部 InDesign 人工验收通过）
+- [x] **THREAD-1a** 串接 spike：一章一 Story + Previous/NextTextFrame 串接，跨页拆段/编辑自动重排铁证成立。
+- [x] **THREAD-1b 三刀**：①正文+标题按章串接（含多栏 (页,栏) 分组修复）；②内嵌图锚定（AnchoredAboveLine 随宿主段落走；图注锚定因 InDesign 字距拉伸 bug 回退为独立框，见 DECISIONS 2026-07-06）；③收边（GUARD-4 串接探针 + 表格/目录不误并入文流）。
+- [x] **段落回车根治**：段落分隔必须用 IDML `<Br/>` 元素（用户 7 种写法实机验证定案），统一修复章串接/逐帧/目录三路径。
+- [x] **MASTER-1** 主页自动页码（`<?ACE 18?>` 当前页码变量，正文页统一 AppliedMaster）。
+- [x] **SPREAD-1** GUI 导出面板对开开关默认跟随项目 `pageSetup.facingPages`（真对开 spread 早于 E2-4 完成）。
+
+### F2. 一个角色一个框（FRAME-SPLIT 链路，✅ IDML 与预览一致）
+- [x] **FRAME-SPLIT**：标题/概述/抽言/图注/参考文献各自独立框各套样式，只有纯正文进串接流；文流遇独立框角色即断（每段连续正文一条串接链）；废除内嵌图锚定 cut2 机制之外的锚定文字路径；新增 `Asset.wrapMode`（wrap 绕排 / underlay 垫底）。
+- [x] **FRAME-CANVAS-0/1**：断流分组逻辑抽成共享函数 `groupIntoFlowFrames`（LayoutDEngine），画布/PDF/PNG 消费同一分组——连续正文显示合并虚线框、整组选中移动、属性面板多选保护（审核时顺手修复画布每帧全文档重算的性能问题）。
+- [x] **FRAME-INSET-2** 预览文字贴框边（追平 IDML InsetSpacing=0）；**UNDERLAY-1** 垫底图不占版面、图下字上，三渲染器一致。
+- [x] **默认排书规则批次**：左对齐/首行不缩进/段间空行、关基线网格逐行锁定、默认不生成目录。
+- [x] **TYPE-1** 段末孤字（NoBreak 末两字）— 代码已合，待用户 InDesign 终验。
+
+### F3. 视觉规范包路线（✅ 首链路跑通，见 DECISIONS 2026-07-07）
+> AI 生成规范包 JSON → layoutD 校验渲染样张 → 人工比选定稿 → 同一规范直通初排与 IDML。放弃 Figma 作为主路径。
+- [x] **SPEC-PACK-1**（Codex）：`StyleBaselineImporter.parseSpecPack` 唯一解析事实源（schema 校验/字体 CoreText 核验/不支持字段显式上报）+ `docs/spec-pack-guide.md`。
+- [x] **FIXTURE-1**（Claude）：`Samples/fixture-standard-chapter.md` 标准样章覆盖全部角色标签 + 回归语料。
+- [x] **SAMPLE-1**（AG，重做版）：CLI `--render-samples` 一键批量样张；共享应用函数 `BookProject.applySpecPack`（字体族/角色色/开本 trim 落地）；PDF 重跑确定性按内容级掩码探针验收。
+- [ ] **规范包 → 正式项目应用闭环**：目前只有 CLI 样张路径；GUI「导入规范包应用到当前项目」入口未做（见文末复盘 → 后续计划）。
+
+### F4. 工程与性能
+- [x] PERF-1 基准（161 页 ≈1179ms）/ PERF-2 baseline 缓存 / PERF-3 排版异步化+防抖 / PERF-4a 测高缓存（16%）；4b 暂缓（用户 2026-07-05）。
+- [x] GOLDEN-GUARD 防漂移护栏（--reason 审计 + 强制 diff + 本地 golden 探针）；GUARD-1～4 端到端探针进 `review-idml.sh`（14 项）。
+- [x] SPLIT-ENGINE / SPLIT-EXPORT / SPLIT-IMPORT / SPLIT-GUI 巨型文件拆分。
+
+---
+
+## 2026-07-08 项目复盘（问题 / 改进 / 后续计划）
+
+> 本节为 2026-07-08 全项目 review 的结论存档。「后续计划」为**候选提案，优先级待用户拍板**后才登记进 `.ai/QUEUE.md`。
+
+### 现状一句话
+
+主链路已完整且多轮 InDesign 人工验收通过：角色标签稿（Markdown/DOCX）→ 确定性引擎 → 画布/PDF/PNG 预览 → IDML（串接文流/分框/锚定图/主页页码/对开）→ InDesign 人工精调。303 单测 + 14 项端到端探针 + golden 护栏 + CI 全绿。规范包路线首链路跑通。
+
+### 目前的问题
+
+1. **待视觉验收积压，dev 领先 main 18 个 commit**。排队中的至少有：FRAME-CANVAS-1 合并框 GUI、TYPE-1 段末孤字（InDesign）、E3-9 约物挤压/基线贴齐（InDesign）、InDesign 式工作区骨架、左侧工具栏（见 QUEUE「待用户视觉验收」段）。积压越久，验收发现问题时越难定位是哪笔改动引入的。
+2. **「预览≠输出」会反复再生**。画布/PDF/PNG 三个渲染器各自实现绘制，IDML 侧每改一个行为，就要出一个「追平」任务（FRAME-INSET-2、FRAME-CANVAS-1、UNDERLAY-1、E2-4p 全是这一类）。根因是没有共享的「绘制模型」层，三处代码天然会漂。
+3. **规范包路线断在最后一公里**。规范包能出样张（CLI），但定稿后无法在 GUI 里一键应用到真实书稿项目——目前视觉三项（字体族/角色色/开本）只有 `--render-samples` 路径会走 `applySpecPack`。
+4. **大文件回涨**。AppState.swift 已到 1375 行（从未拆过）；CanvasView+Drawing 1089、PDFExporter 1085、WorkspaceViewController 982——SPLIT 批次之后 GUI/导出侧又长回来了。
+5. **纪律性 drift**：SAMPLE-1 v2 跨道直改了 Codex 的 StyleBaselineImporter（已合，欠回归）；QUEUE.md 曾在合并中被误删任务（已补回）；HANDOFF.md 交接条目常滞留未提交状态。
+6. **已知未解 bug 存档**：锚定字符后紧跟文字在 InDesign 里字距拉伸/丢字（anchored-text stretch，未解，需真机迭代，不盲改）；图注不随图锚定（已接受为限制）。
+7. **两个队列（Codex 道/AG 道）活任务已清空**，下一批任务未规划——本复盘的「后续计划」即为此准备。
+
+### 改进意见
+
+- **流程**：约定「dev 领先 main 超过 ~10 commit 或攒满一批功能」就集中做一次用户视觉验收+合 main，不让验收无限后置。
+- **架构**（中期最有价值的一刀）：提取共享绘制模型（页面→绘制指令列表），画布/PDF/PNG 只做「指令→各自画布」的薄适配层，从根上消灭「追平」类任务。
+- **纪律**：StyleBaselineImporter 后续字段扩展回归 Codex 道；交接后 HANDOFF.md 随批提交；每合一批 main 顺手回写本文件（本次已补 6-23 以来全部欠账）。
+
+### 后续开发计划（候选，待用户拍板排期）
+
+| 优先 | 任务 | 说明 | 建议道 |
+|---|---|---|---|
+| P0 | **验收批次** | 集中清掉「待视觉验收」积压 → 合 main | 用户 + Claude |
+| P0 | **SPEC-APPLY-1 规范包应用闭环** | GUI「导入规范包」入口：定稿规范 JSON 一键应用到当前项目（复用 `applySpecPack`），即从「出样张」走到「用规范排真书」 | AG（GUI）+ Codex（解析字段补全） |
+| P0 | **PILOT-2 真书整本试排** | 用定稿规范包 + 角色标签整本书稿（如《村落》）跑通 导入→初排→IDML→InDesign 全流程，检验整本规模下的角色覆盖/性能/InDesign 打开体验，产出问题清单 | Claude 主导 |
+| P1 | **RENDER-CORE-1 共享绘制模型** | 见改进意见第 2 条；先出设计再动手，属高风险重构 | Claude 设计 + AG 实施 |
+| P1 | **SPLIT-APPSTATE** | AppState.swift 1375 行拆分（照 SPLIT-ENGINE 配方，纯搬家零行为变化） | AG |
+| P2 | **IDML-RNG lint**（E1b③） | vendor `app.generateIDMLSchema()` RNG 做名/枚举 lint | Codex |
+| 按需 | anchored-text stretch bug | 只在真实书稿再撞上时，真机 InDesign 迭代定位，不盲改 | Claude |
 
 ---
 
