@@ -132,7 +132,7 @@
 
 ### 批次 P — 规划器（站4/站5，主战役）
 
-- [ ] **PLANNER-1a-DESIGN 骨架词表设计文档** — **Claude**（依赖 SPEC-PACK-2）。定义约 7 个对开骨架（家族 + 参数变体：镜像/图片档位/抽言位）+ 灰盒线框图渲染方案 + GUI 圈选交互。像 RENDER-CORE-1 先设计后动手。
+- [x] **PLANNER-1a-DESIGN 骨架词表设计文档** — ✅ Claude（`docs/planner-1a-skeleton-design.md`）。定义 7 个对开骨架（A1 章节开篇/A2 正文流/A3 图文均衡/A4 大图气口/A5 图集/A6 抽言强调/A7 知识卡片，家族 + 参数变体：镜像/图片档位/抽言位）+ 槽位词表 + 灰盒线框图渲染方案 + GUI 站4 圈选交互 + **倒推 SPEC-PACK-2 的 `layoutGrammar` schema 需求**（新增 imageTiers/pullQuotePositions/carriesMotifs/role/openerAlwaysArchetype，禁止装饰性空字段）。设计文档不改代码，与 Codex 的 SPEC-PACK-2 并行、不撞车。**下一步交 AG 做 PLANNER-1a-IMPL、Claude 接 PLANNER-1b-DESIGN。**
 - [ ] **PLANNER-1a-IMPL 骨架 + 线框图 + 圈选** — **AG**（依赖 1a-DESIGN）。约 7 个对开骨架落地（扩现有 4 单页模板到对开级）+ 灰盒线框图渲染供圈选 + GUI 圈选界面，批准结果写进规范包 layoutGrammar。
 - [ ] **PLANNER-1b-DESIGN 受控变体规划器设计文档** — **Claude**（依赖 1a）。内容指纹（现 `LayoutPlanContext` 已有雏形）→ 受控抽签（固定种子）→ 硬过滤（不越界/不重叠/文流顺序/DPI）→ 软评分（防单调/图大小/贴近度/留白/accent 频率）→ 节奏记忆（相邻不重复、大图气口）。**以对开为单位规划，非单页。**
 - [ ] **PLANNER-1b-IMPL 受控变体规划器（引擎核心，高风险）** — **AG**（依赖 1b-DESIGN）。硬约束：① **只动帧几何不破串接文流**（正文永远一条河，见 [[layoutd-positioning-initial-pour]]）；② **纯函数同输入同输出**（固定种子，否则 golden/逐字节护栏全废）；③ 端到端验收不能只靠单测（本项目踩过单测全绿功能坏）。
