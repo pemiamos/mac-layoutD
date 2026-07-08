@@ -230,8 +230,17 @@ extension LayoutContext {
                 }
             }
 
+            // Honor the block's own styleId when it carries one. `freezePageToPlan`
+            // records each frozen frame's real style (heading1/heading2/pullQuote/…);
+            // forcing every .text block to `body` here silently flattened frozen
+            // headings to body size the moment a page got a manual override (move a
+            // frame → whole page freezes → both chapter/section titles re-materialize
+            // as body). AI/template plans leave styleId nil, so they keep the
+            // kind-based fallback and render exactly as before.
             let styleId: String?
-            if block.kind == .text {
+            if let savedStyleId = block.styleId {
+                styleId = savedStyleId
+            } else if block.kind == .text {
                 styleId = StyleID.body.rawValue
             } else if block.kind == .caption {
                 styleId = StyleID.caption.rawValue
