@@ -3,6 +3,15 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 07:03 | codex | 完成 BOOK-SKILL-1/BOOK-SKILL-2：新增 `.ai/skills/spec-from-reference/SKILL.md` 与 `.ai
+- **分支**：feature/codex-book-skills
+- **概述**：完成 BOOK-SKILL-1/BOOK-SKILL-2：新增 `.ai/skills/spec-from-reference/SKILL.md` 与 `.ai/skills/sample-review/SKILL.md`。前者固化参考图→layoutD v2 规范包提取流程，强调先读 `docs/spec-pack-guide.md`、测量 trim/grid/type/motif/rhythm/qualityGates、字体真实权重、unsupportedFields 诚实上报、Figma 不作主路径；后者固化样张/IDML 预览评审流程，提供 7 维 0-5 打分、报告格式、诊断 parsed-but-not-consumed / renderer gap / planner gap / InDesign 手工项的词汇表。feature commit `f9463b9 docs(skills): add layout spec extraction and sample review skills`，已合入本地 dev merge `66c0f8d`。
+- **改动文件**：.ai/skills/spec-from-reference/SKILL.md
+.ai/skills/sample-review/SKILL.md
+.ai/HANDOFF.md
+- **检查**：`quick_validate.py .ai/skills/spec-from-reference` PASS；`quick_validate.py .ai/skills/sample-review` PASS；`run_checks("test")` PASS（314 tests, 0 failures）；`bash scripts/review-idml.sh` PASS（14/14，golden 基线逐字节一致）。合入最新 dev 后只带入 .ai/HANDOFF.md/.ai/QUEUE.md，技能格式复验 PASS。
+- **下一步**：Codex 下一项可做 SKILL-HARVEST：从用户给的 5 个屏幕/网页设计技能仓库中筛 10-20 条能迁移到印刷的规则，并回写 v2 默认值/指南。注意这些仓库不懂开本、避头尾和对开节奏，不能整段照搬。
+
 ## 2026-07-09 06:59 | antigravity | Completed SPLIT-APPSTATE: split the 1387-line AppState.swift into 6 clean, modul
 - **分支**：ag-lane
 - **概述**：Completed SPLIT-APPSTATE: split the 1387-line AppState.swift into 6 clean, modular files without any logic changes. All unit tests, IDML structural tag checks, and golden regressions are pass.
