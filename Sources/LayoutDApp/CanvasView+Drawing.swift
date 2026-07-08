@@ -223,10 +223,21 @@ extension CanvasView {
             }
         }
 
+        // FRAME-CANVAS-1 perf: 分组已在本函数顶部按页算好一次（pageGroups），这里建一份
+        // frame.id → group 的本地查找表复用，不要对每个 frame 都调用 flowGroup(for:)——
+        // 那会对整份文档重新跑一遍 groupIntoFlowFrames，页内 N 个 frame 就是 N 倍全文档重算，
+        // 在大稿子上会让画布重绘（滚动/悬停/拖拽都会触发）明显变慢。
+        var groupByFrameId: [UUID: FlowFrameGroup] = [:]
+        for group in pageGroups {
+            for idx in group.memberFrameIndices where idx >= 0 && idx < page.frames.count {
+                groupByFrameId[page.frames[idx].id] = group
+            }
+        }
+
         let underlays = page.frames.filter { $0.isUnderlay }
         let nonUnderlays = page.frames.filter { !$0.isUnderlay }
         for frame in underlays + nonUnderlays {
-            let group = flowGroup(for: frame.id, pageNumber: page.number)
+            let group = groupByFrameId[frame.id]
             draw(frame: frame, project: project, pageRect: pageRect, flowGroup: group)
         }
 

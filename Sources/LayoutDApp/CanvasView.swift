@@ -371,15 +371,30 @@ final class CanvasView: NSView {
             }
         }
 
-        // Expand hits to include entire flow frame groups
+        // Expand hits to include entire flow frame groups. `flowGroupMemberIds` recomputes
+        // groupIntoFlowFrames over the whole document on every call — calling it per hit
+        // here would mean a full-document recompute per frame caught by the marquee, which
+        // gets slow fast during a drag over many frames. Compute the grouping once and
+        // build a frameId → group-members lookup instead.
         var expandedHits = Set<UUID>()
-        for hit in hits {
-            if let pageNum = findFrame(id: hit, in: document)?.pageNumber,
-               let groupMembers = flowGroupMemberIds(for: hit, pageNumber: pageNum) {
-                expandedHits.formUnion(groupMembers)
-            } else {
-                expandedHits.insert(hit)
+        if let grouping = currentFlowGrouping {
+            let sortedPages = document.pages.sorted { $0.number < $1.number }
+            var memberIdsByFrameId: [UUID: Set<UUID>] = [:]
+            for (pageIndex, groups) in grouping.groupsByPage {
+                guard pageIndex >= 0 && pageIndex < sortedPages.count else { continue }
+                let pageFrames = sortedPages[pageIndex].frames
+                for group in groups {
+                    let ids = Set(group.memberFrameIndices.compactMap { idx in
+                        idx >= 0 && idx < pageFrames.count ? pageFrames[idx].id : nil
+                    })
+                    for id in ids { memberIdsByFrameId[id] = ids }
+                }
             }
+            for hit in hits {
+                expandedHits.formUnion(memberIdsByFrameId[hit] ?? [hit])
+            }
+        } else {
+            expandedHits = hits
         }
         return expandedHits
     }
