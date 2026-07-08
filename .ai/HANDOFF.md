@@ -3,6 +3,20 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 06:13 | claude | 纯设计轮（仓库零改动）：用户提出新增「初排模块」完整工作流（参考图→规范包→样张→反馈定稿→约7个骨架线框图备选→审核→灌版自动选骨架+手工微调→IDML），C
+- **分支**：dev
+- **概述**：纯设计轮（仓库零改动）：用户提出新增「初排模块」完整工作流（参考图→规范包→样张→反馈定稿→约7个骨架线框图备选→审核→灌版自动选骨架+手工微调→IDML），Claude 完善为「初排工作台」六站流水线并画流程图标注完成状态，产出《Claude-初排工作台六站流程.md》（桌面）。各站完成度：站1定规范≈60%（通道/⌘I导入✅，v2语法层❌）、站2出样张≈75%（导入/同引擎渲染✅，视觉标识1/5）、站3锁基线≈10%（❌新建）、站4选骨架≈15%（❌新建，仅4单页模板雏形）、站5灌版≈55%（串接灌版/手工微调锁页✅，自动选骨架/换一版❌）、站6交棒≈90%。关键设计裁决：用户的"随机选取骨架"升级为"受控抽签"（内容指纹过滤+节奏记忆+固定种子确定性+单页「换一版」重抽），理由：纯随机会排不下/单调/无法回归验收。新任务清单已拟（SPEC-PACK-2→STYLE-LOCK-1→PLANNER-1a/1b→REROLL-1→WIZARD-1→PILOT-3，含分道），待用户拍板后登记 QUEUE。
+- **改动文件**：~/Desktop/Claude-初排工作台六站流程.md、~/Desktop/Claude-layoutD初排攻坚思路.md（均为仓库外分析文档，仓库零改动）
+- **检查**：无代码改动，未跑构建；git 状态 clean（dev@eae4eca）
+- **下一步**：1) 用户审阅六站流程与新任务清单并拍板；2) 拍板后 Claude 把 SPEC-PACK-2/STYLE-LOCK-1/PLANNER-1a/1b/REROLL-1/WIZARD-1/PILOT-3 登记进 QUEUE 分道派发；3) 站2 前置＝视觉标识层四刀（ACCENT-2/GHOST-NUM-1/HEADER-1/SECNUM-1，已在 QUEUE）可先行开工；4) 未变待办：用户 InDesign 验 村落-方案A.idml 抽言竖线；dev 领先 main 33 待集中视觉验收。
+
+## 2026-07-09 05:45 | claude | 纯分析轮（无代码改动）：应用户要求对「初排」做深度思考，裁决 AG/Codex 两份报告并结合代码实况（PageLayoutTemplate 仅4单页模板、La
+- **分支**：dev
+- **概述**：纯分析轮（无代码改动）：应用户要求对「初排」做深度思考，裁决 AG/Codex 两份报告并结合代码实况（PageLayoutTemplate 仅4单页模板、LayoutAdvisor/LayoutPlanProvider 有协议无实现、LayoutPlanContext 已有内容指纹雏形、qualityMetricsHistory 只有壳），产出《Claude-layoutD初排攻坚思路.md》（桌面）。核心结论：①IDML 交棒≈88%、灌版引擎≈85%、但"视觉规范→有节奏初排"仅≈30-35%（layout grammar 为零），整体≈60%；②本阶段纲领=从 style token 升级到 style grammar：specPack v2（motifs+layoutGrammar+qualityGates 一次立 schema）+ LayoutPlanner v1（对开为单位、受控候选+硬过滤+软评分+节奏记忆）；③红线：变体只动帧几何不破串接文流、规划器必须确定性、LLM 只做骨架选择题不画坐标、unsupportedFields 诚实上报不动摇。落地批次：先收视觉标识层（ACCENT-2/GHOST-NUM-1/HEADER-1/SECNUM-1，已在 QUEUE）→ SPEC-PACK-2 schema → PLANNER-1（先设计文档）→ PILOT-3 村落连续12-20页节奏验收。
+- **改动文件**：~/Desktop/Claude-layoutD初排攻坚思路.md（仓库外分析报告，仓库零改动）
+- **检查**：无代码改动，未跑构建；git 状态 clean（dev@eae4eca）
+- **下一步**：1) 用户阅读桌面报告并拍板是否按「视觉标识层→SPEC-PACK-2→PLANNER-1→PILOT-3」排期；2) 拍板后 Claude 把 SPEC-PACK-2（Codex 道）与 PLANNER-1 设计文档任务登记进 QUEUE；3) 未变的待办：用户 InDesign 肉眼验 村落-方案A.idml 抽言竖线；dev 领先 main 33，尽快集中视觉验收合 main。
+
 ## 2026-07-09 04:38 | claude | 用户「继续」＝投入视觉标识层，让输出真正像图1。做完 ACCENT-1（视觉标识层第一刀：抽言左侧明黄竖线），合 dev(fba2462)。根因：抽言成帧后 k
 - **分支**：dev
 - **概述**：用户「继续」＝投入视觉标识层，让输出真正像图1。做完 ACCENT-1（视觉标识层第一刀：抽言左侧明黄竖线），合 dev(fba2462)。根因：抽言成帧后 kind=.text+styleId=pullQuote，点缀只按 frame.kind 查组件→抽言查不到→0 明黄；且 resolved(using:) 重建样式丢新字段。改动：①ParagraphStyle 加 accentRule(edge/colorToken/width/length/gap，可选 Codable 兼容)+共享 geometry(四渲染器同算法)+resolved 保留；②applySpecPack 把 roleDecorations 的 left-rule/top-tick 接到 pullQuote/caption 段落(此前只挂 .callout 组件)；③PDF/PNG/Canvas draw(frame:) 画竖条+文本内缩；④IDML 给抽言框左侧腾条带 emit colorRectangleItem 明黄竖条。本刀只开 edge==.left(抽言竖线，PNG 肉眼核实正确)，.top(图注横线)数据已解析但渲染门控关闭(各渲染器 y 翻转不同、顶边定位待核实=ACCENT-2)。实机 村落+方案A：抽言竖线 PNG 核实、IDML 出3个 uPAccent 矩形。310测试0失败(+1)、14/14探针、golden 逐字节一致(默认样章无 accentRule 零影响)。附带上一轮也已合 dev：CLI --spec-pack(0a53950)+GUI File菜单「导入样式基线/规范包」(⌘I)修图4。

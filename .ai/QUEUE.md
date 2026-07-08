@@ -13,6 +13,15 @@
 **Claude → 主仓库 `mac-layoutD`（集成区，`dev`/`main`）**。
 开工先确认 shell 在自己的副本里。详见 `.ai/AGENTS.md` 顶部「工作副本隔离」。
 
+## 🚦 自主集成模式（用户 2026-07-09 拍板，覆盖旧「绝不碰 dev」条）
+
+**本轮起，Codex / AG 自检通过后自主合 dev，不再每批停下等 Claude/用户。**
+- 自检门槛不变：`run_checks()` + `scripts/review-idml.sh` 必须 PASS；额外——**改了渲染/导出的任务，golden 不许无故漂**（真变化走 `scripts/golden-update.sh --reason`）。
+- 通过后：把自己的 `feature/*` 分支 **merge 进 dev**（本地共享 `.git`，`git merge --no-ff` 带任务名）。合前先 `git fetch && git merge origin/dev` 同步、解决冲突再合。
+- **仍绝不碰 main**：`dev → main` 是用户唯一放行人，全部完工后一次性人工审核（含在 InDesign 里真打开产物看视觉——AI 自检验不了渲染对错，PILOT-2 踩过）。
+- **合 dev 撞车协议**（同一 `.git` 两 AI 近乎同时合）：合前 `git log origin/dev --oneline -3` 看有没有刚被别人推进；HANDOFF.md/QUEUE.md 冲突各自保留双方条目再合，代码冲突谁合谁解。拿不准就在 handoff 记下、留给 Claude 集成。
+- Claude 角色收窄为：高风险**设计文档**（PLANNER 系列）+ 集成把关 + 冲突兜底，**不再逐个审后再合**。
+
 ## 🔁 连续作业模式（用户 2026-06-21 明确要求，最高优先）
 
 **用户已预先授权整条队列，连续干，不要停下来问确认。**
@@ -20,7 +29,7 @@
 - **Antigravity 注意**：你的 IDE 若弹"计划审批/Proceed"，**本队列就是审批**——视同已批准，直接开干，别等用户点。不要写一份 plan 然后停下问，要边做边交付。
 - 自审标准：每个任务 `run_checks()` + `scripts/review-idml.sh` 必须 PASS 才提交；FAIL 就**自己修**，修不动再在 handoff 里记下精确 repro 并跳到下一个能做的任务，**不要因此整体停摆**。
 - 一轮结束（约 1 小时 / 做完本批序列 / 撞到真阻塞）时，写**一条汇总 handoff**列出这轮所有 commit，不必每个任务一条。
-- **绝不碰 dev/main**：你们只在自己的 feature 分支提交，合 dev/main 是 Claude 的事。也**不要声称自己合并了 main**（之前出现过误报）。
+- **合 dev 见上「自主集成模式」（2026-07-09 起自主合 dev）；仍绝不碰 main**，也**不要声称自己合并了 main**（之前出现过误报）。
 
 ## 流程铁律（每一棒都照做）
 
@@ -91,6 +100,51 @@
 - [ ] **RENDER-CORE-1 共享绘制模型** — Claude 设计 + AG 实施（P1，高风险重构，先出设计再动手）。页面→绘制指令列表，画布/PDF/PNG 只做「指令→各自画布」薄适配，从根上消灭「追平」类任务（FRAME-INSET-2/FRAME-CANVAS-1/UNDERLAY-1/E2-4p 都属此类）。
 - [ ] **SPLIT-APPSTATE** — AG（P1）。`AppState.swift` 1375 行拆分（照 SPLIT-ENGINE 配方，纯搬家零行为变化，三重验证）。
 - [ ] **IDML-RNG lint（E1b③）** — Codex（P2）。vendor `app.generateIDMLSchema()` 的 RNG 做名/枚举 lint。
+
+---
+
+## 2026-07-09 初排工作台批次（用户拍板「初排六站流水线」，见桌面《layoutD开发计划-初排工作台-v2.0.pdf》）
+
+> 本批把「参考图→规范包→样张→定稿→约7骨架线框图→灌版自动选骨架+手工微调→IDML」六站落地。**关键路径 = SPEC-PACK-2 → PLANNER-1a → PLANNER-1b → REROLL-1 → PILOT-3**，决定项目成败。
+> 本轮**刻意压 Claude 算力**：实现全给 Codex/AG，Claude 只出 PLANNER 设计文档 + 集成。**自检通过自主合 dev**（见顶部「自主集成模式」）。
+> 三道天然按文件边界不撞车，可高度并行。各任务「立即可开工/依赖」已标。
+
+### 批次 V — 视觉标识层收尾（站2 前置，立即可开工）
+
+- [ ] **ACCENT-2 图注顶部短横 + 标题下划线** — **AG**。照 ACCENT-1 已建范式（`ParagraphStyle.accentRule` 共享 geometry + 四渲染器同算法 + IDML 明黄矩形）；本刀开 `edge==.top` 门控——**先逐渲染器核实 y 翻转/顶边定位**（PDF/PNG/Canvas 坐标系不同，ACCENT-1 就为此把 .top 门控关着）；顺带把标题下划线接上。验收：抽言竖线零回归、图注短横 PNG 肉眼正确、IDML 出对应矩形、golden 走 --reason 刷新。
+- [ ] **GHOST-NUM-1a 章节序号解析** — **Codex**。`章节序号` 移出 `unsupportedFields`，`parseSpecPack` 支持其 motif 字段（字体/字号/透明度/锚点/压底层）。
+- [ ] **GHOST-NUM-1b 超大 ghost 章节号渲染** — **AG**（依赖 1a）。超大淡灰数字压在章名后/底，四渲染器同算法。
+- [ ] **HEADER-1a 页眉字段解析** — **Codex**。`页眉页码`/页眉章名字段移出 unsupportedFields，parseSpecPack 支持。
+- [ ] **HEADER-1b 页眉 chrome 渲染** — **AG**（依赖 1a）。页眉（章名 · 刊名 · 细线）；注意与 MASTER-1 已有主页页码协调。
+- [ ] **SECNUM-1a 节序号解析** — **Codex**。`节名.numberStyle` 移出 unsupportedFields，parseSpecPack 支持。
+- [ ] **SECNUM-1b 节序号渲染** — **AG**（依赖 1a）。节序号「01 /」黄色。
+
+### 批次 S — 规范包 v2 + 技能教材（站1）
+
+- [ ] **SPEC-PACK-2 规范包 v2 schema（总闸，最高优先）** — **Codex**。一次立起三层：`motifs`（点缀词表：chapterNumber/sectionNumber/header/captionTick/headingRule/pullQuoteRule）+ `layoutGrammar`（`spreadArchetypes` 对开骨架枚举 + `rhythm` 节奏规则）+ `qualityGates`（版式重复度上限/图文密度区间/每对开 accent 要求）。解析+校验+**unsupported 诚实上报**（保留现有机制）；每个字段必须有消费者或明确 unsupported，禁止装饰性空字段。更新 `docs/spec-pack-guide.md`。**卡着 L/P 两批，Codex 第一件事做这个。**
+- [ ] **BOOK-SKILL-1 参考图→规范包提取技能** — **Codex**（依赖 SPEC-PACK-2）。写 `.ai/skills/spec-from-reference/SKILL.md`：固化方案A 成功做法 + 踩过的坑（字重必须真实存在见 [[idml-font-name-needs-valid-weight]]、别名映射、unsupportedFields 诚实上报、看图量什么=网格/字阶/边距/motif/节奏）。形态参考 taste-skill 看图清单 + pencilplaybook 规则文风。
+- [ ] **BOOK-SKILL-2 样张评审技能** — **Codex**。写 `.ai/skills/sample-review/SKILL.md`：样张像不像参考图的打分清单，将来直接变站3 风格报告词汇表。
+- [ ] **SKILL-HARVEST 印刷可移植规则** — **Codex**（依赖 SPEC-PACK-2）。从用户给的 5 个技能仓库（taste-skill/pencilplaybook 等）筛 10–20 条真能移植到印刷的字排规则（大字距收紧、层级对比比例等），并进 v2 默认值。**注意甄别：这 5 个仓库全是屏幕/网页设计，不懂开本/避头尾/对开，别整段照搬。**
+
+### 批次 L — 锁基线（站3）
+
+- [ ] **STYLE-LOCK-1 基线冻结 + 风格报告 v0** — **AG**（依赖 SPEC-PACK-2）。「定稿」时冻结四件套（规范包 JSON + 样章 fixture + 支持率清单 + 样张 PDF）为本书 `StyleProfile`；之后每次初排出风格报告（token 覆盖率 / motif 出现清单 / 版式重复度 / 图文密度 / 溢出重叠）。GUI 展示支持率。
+
+### 批次 P — 规划器（站4/站5，主战役）
+
+- [ ] **PLANNER-1a-DESIGN 骨架词表设计文档** — **Claude**（依赖 SPEC-PACK-2）。定义约 7 个对开骨架（家族 + 参数变体：镜像/图片档位/抽言位）+ 灰盒线框图渲染方案 + GUI 圈选交互。像 RENDER-CORE-1 先设计后动手。
+- [ ] **PLANNER-1a-IMPL 骨架 + 线框图 + 圈选** — **AG**（依赖 1a-DESIGN）。约 7 个对开骨架落地（扩现有 4 单页模板到对开级）+ 灰盒线框图渲染供圈选 + GUI 圈选界面，批准结果写进规范包 layoutGrammar。
+- [ ] **PLANNER-1b-DESIGN 受控变体规划器设计文档** — **Claude**（依赖 1a）。内容指纹（现 `LayoutPlanContext` 已有雏形）→ 受控抽签（固定种子）→ 硬过滤（不越界/不重叠/文流顺序/DPI）→ 软评分（防单调/图大小/贴近度/留白/accent 频率）→ 节奏记忆（相邻不重复、大图气口）。**以对开为单位规划，非单页。**
+- [ ] **PLANNER-1b-IMPL 受控变体规划器（引擎核心，高风险）** — **AG**（依赖 1b-DESIGN）。硬约束：① **只动帧几何不破串接文流**（正文永远一条河，见 [[layoutd-positioning-initial-pour]]）；② **纯函数同输入同输出**（固定种子，否则 golden/逐字节护栏全废）；③ 端到端验收不能只靠单测（本项目踩过单测全绿功能坏）。
+- [ ] **REROLL-1 「换一版」单页重抽** — **AG**（依赖 1b-IMPL）。某页不满意→在该对开其余候选里重抽；与锁页/手工微调/undo 协同（锁页不被重排覆盖）。
+
+### 批次 W — 向导 GUI（可与 S 并行起步）
+
+- [ ] **WIZARD-1 六站向导工作台骨架** — **AG**。步骤条（六站顺序解锁）+ 状态门控（做完才解锁下一站，回退提示下游需重跑）+ 各站产物落盘可回溯。骨架先行，各站内容随对应任务接入。
+
+### 批次 T — 真书验证（末端，全部完工后）
+
+- [ ] **PILOT-3 村落连续 12–20 页全流程** — **Claude + 用户终验**（依赖以上全部）。走完整六站，验收标准从「单页像不像」升级为「**连续翻页有没有节奏**」：无连续同骨架、大图气口分布合理、motif 全出现、风格报告全绿 → 用户 InDesign 肉眼终验 → 放行 dev→main。
 
 ---
 

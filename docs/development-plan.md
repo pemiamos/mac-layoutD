@@ -267,6 +267,20 @@
 
 ---
 
+## 2026-07-09 初排工作台批次（已排期，见 QUEUE）
+
+用户拍板新增「初排模块」，把 **参考图→规范包→样张→定稿→约 7 个对开骨架线框图→灌版自动选骨架+手工微调→IDML** 落地为**六站流水线**。完整计划见桌面《layoutD开发计划-初排工作台-v2.0.pdf》，任务已登记 `.ai/QUEUE.md`「2026-07-09 初排工作台批次」。
+
+**现状盘点**：IDML 交棒 ≈88%、灌版引擎 ≈85%，但「视觉规范→有节奏的初排」仅 ≈30–35%（layout grammar 为零）。真正的下一道墙 = **视觉规则编译器（specPack v2）+ 有节奏的版式规划器（LayoutPlanner）**。
+
+**工作流切换（2026-07-09）**：Codex/AG 自检通过后**自主合 dev**（不再每批等 Claude/用户）；`dev→main` 仍是用户唯一放行人，全部完工后一次性人工审核（**必须含在 InDesign 里真打开产物看视觉**——AI 自检验不了渲染对错）。Claude 角色收窄为 PLANNER 设计文档 + 集成把关，为省算力，实现全给 Codex/AG。
+
+**关键路径**：SPEC-PACK-2（总闸，Codex 优先）→ PLANNER-1a（Claude 设计 + AG 实施）→ PLANNER-1b（同）→ REROLL-1（AG）→ PILOT-3（连续 12–20 页节奏验收）。
+
+**五个 AI 设计技能仓库评估**（taste-skill / awesome-design-skills / claude-design-skill / awesome-design-md / pencilplaybook）：内容全是屏幕/网页设计，不懂开本/避头尾/对开节奏，**不直接可用**；但「形态」值得抄——SKILL.md 教材化站1 读图流程（BOOK-SKILL-1/2）、pencilplaybook 的可测试规则文风 → qualityGates、DESIGN.md 概念验证规范包路线正确。硬骨头（骨架/节奏/规划器）仍需自造。
+
+---
+
 ## 维护约定
 
 - 任务状态在本文勾选；PRD/architecture 不再重复任务级清单，只保留高层支柱并指向本文。
