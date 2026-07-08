@@ -110,6 +110,7 @@ public enum LayoutStrategy: String, Codable, CaseIterable, Sendable {
     case fullPageImage
     case titlePage
     case cover
+    case opener
 }
 
 public enum ImageMaskShape: String, Codable, CaseIterable, Sendable {

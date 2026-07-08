@@ -1233,7 +1233,14 @@ extension WorkspaceViewController {
             try FileManager.default.createDirectory(at: step5Dir, withIntermediateDirectories: true)
             let destURL = step5Dir.appendingPathComponent("layout_plans.json")
             
-            // Collect page layouts or strategies
+            // 1. Resolve active archetypes from WizardState
+            let enabledIds = self.appState.project.wizardState?.enabledArchetypeIds ?? SpreadArchetype.defaults.map(\.id)
+            let activeArchetypes = SpreadArchetype.defaults.filter { enabledIds.contains($0.id) }
+            
+            // Fallback to all if empty
+            let chosenSkeletons = activeArchetypes.isEmpty ? SpreadArchetype.defaults : activeArchetypes
+            
+            // 2. Collect page layouts or strategies
             let pages = appState.laidOutDocument?.pages ?? []
             let pageCount = max(1, pages.count)
             
@@ -1241,7 +1248,15 @@ extension WorkspaceViewController {
             var appliedPlans: [Int: LayoutPlan] = [:]
             
             for pageNum in 1...pageCount {
-                let strategy: LayoutStrategy = pageNum % 2 == 0 ? .balanced : .textLed
+                // Determine a strategy based on page number and chosen archetypes
+                let strategy: LayoutStrategy
+                if pageNum == 1 {
+                    strategy = chosenSkeletons.first(where: { $0.role == .opener })?.family ?? .opener
+                } else {
+                    let index = (pageNum / 2) % chosenSkeletons.count
+                    strategy = chosenSkeletons[index].family
+                }
+                
                 let plan = LayoutPlan(target: .page(pageNum), strategy: strategy, blocks: [])
                 appliedPlans[pageNum] = plan
                 archetypes.append(strategy.rawValue)
