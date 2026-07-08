@@ -3,6 +3,16 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 07:10 | codex | 完成 SKILL-HARVEST：整理 16 条可移植到印刷的默认字排/节奏规则
+- **分支**：feature/codex-skill-harvest
+- **概述**：完成 SKILL-HARVEST。把屏幕/网页设计技能里可迁移的“可测试规则”形态转译成印刷内页默认规则，写入 `docs/spec-pack-guide.md` 的 v2 指南，并同步进 `.ai/skills/spec-from-reference/SKILL.md` 与 `.ai/skills/sample-review/SKILL.md`。规则覆盖：先定版心再装饰、层级比例、display tracking 收紧边界、正文行高/基线、字体经济性、颜色 token 纪律、motif 可追踪、对开节奏、大小图间隔、文本/图片密度 gates、重复约束、threaded story editability、unsupportedFields 诚实交付。本机未发现 5 个技能仓库本地副本，公开检索也没有确认到可引用源码；因此本轮没有伪造逐仓库出处，只按已登记的评估结论筛选并转译为 layoutD 印刷规则。feature commit `6afe03d docs(skills): add print-portable layout rules`。
+- **改动文件**：docs/spec-pack-guide.md
+.ai/skills/spec-from-reference/SKILL.md
+.ai/skills/sample-review/SKILL.md
+.ai/HANDOFF.md
+- **检查**：`quick_validate.py .ai/skills/spec-from-reference` PASS；`quick_validate.py .ai/skills/sample-review` PASS；`git diff --check` PASS；`run_checks("test")` PASS（315 tests, 0 failures）；`bash scripts/review-idml.sh` PASS（14/14，golden 基线逐字节一致）。
+- **下一步**：按队列继续 Codex 道的视觉 motif/规划器相关任务。若后续用户补齐 5 个技能仓库原文，可再做一次 source-backed 对照审计，把规则标注到具体来源；当前版本已经可供 spec pack v2、站1技能和站3评审技能使用。
+
 ## 2026-07-09 07:03 | codex | 完成 BOOK-SKILL-1/BOOK-SKILL-2：新增 `.ai/skills/spec-from-reference/SKILL.md` 与 `.ai
 - **分支**：feature/codex-book-skills
 - **概述**：完成 BOOK-SKILL-1/BOOK-SKILL-2：新增 `.ai/skills/spec-from-reference/SKILL.md` 与 `.ai/skills/sample-review/SKILL.md`。前者固化参考图→layoutD v2 规范包提取流程，强调先读 `docs/spec-pack-guide.md`、测量 trim/grid/type/motif/rhythm/qualityGates、字体真实权重、unsupportedFields 诚实上报、Figma 不作主路径；后者固化样张/IDML 预览评审流程，提供 7 维 0-5 打分、报告格式、诊断 parsed-but-not-consumed / renderer gap / planner gap / InDesign 手工项的词汇表。feature commit `f9463b9 docs(skills): add layout spec extraction and sample review skills`，已合入本地 dev merge `66c0f8d`。
