@@ -60,6 +60,23 @@
 
 ---
 
+## 2026-07-08 复盘批次（用户拍板「计划排起来再开工」，见 development-plan.md 文末复盘）
+
+> 本批为 2026-07-08 全项目 review 后的正式排期。P0 三项合起来回答「这套系统能不能真排出一本书」。
+> 各任务按文件边界仍走三道分工；跨道字段扩展回归原属道。
+
+- [~] **SPEC-APPLY-1 规范包 GUI 应用闭环** — 认领: Claude @ feature/claude-spec-apply-1（P0，进行中）。
+  - 背景：`autoDetectAndParse` 认得规范包但只返回 `tokens`，丢掉 `fontResolutions`/`roleColors`/`roleDecorations`；GUI `applyImportedTokens` 再用空 `SpecPackImportResult` 包一层——App 里导入规范包只落地 margins/字号等 token，**字体族/角色色/开本 trim 全丢**（CLI `--render-samples` 路径反而是全的）。这是规范包路线的「最后一公里」。
+  - 目标：GUI「导入样式基线」选规范包 JSON 时，把完整 `SpecPackImportResult` 透传到 `BookProject.applySpecPack`，让字体/角色色/开本真正落地到当前项目；figma/dtcg 路径不变。导入面板对规范包显示专属标注（含字体/色计数、不支持字段告警）。
+  - 文件：`Sources/LayoutDImport/StyleBaselineImporter.swift`（加 spec-aware 解析出口，保留旧 API 兼容）、`Sources/LayoutDApp/{InspectorView,StyleImportSheet,AppState}.swift`。
+  - 验收：新增单测——GUI 应用路径导入方案A规范包后，项目字体族/角色色/trim 与 CLI `applySpecPack` 落地结果一致（对照，非只测 tokens）；现有 StyleImport 测试零回归；`review-idml.sh` PASS。**GUI 视觉验收待用户**：App 里导入桌面方案A规范包，正文/标题字体与点缀色肉眼变化。
+- [ ] **PILOT-2 真书整本试排** — Claude 主导（P0，SPEC-APPLY-1 后）。用定稿规范包 + 角色标签整本书稿跑通 导入→初排→IDML→InDesign 全流程，检验整本规模的角色覆盖/性能/InDesign 打开体验，产出问题清单。⚠️ 需用户提供整本书稿路径（现仓库只有单章 fixture）。
+- [ ] **RENDER-CORE-1 共享绘制模型** — Claude 设计 + AG 实施（P1，高风险重构，先出设计再动手）。页面→绘制指令列表，画布/PDF/PNG 只做「指令→各自画布」薄适配，从根上消灭「追平」类任务（FRAME-INSET-2/FRAME-CANVAS-1/UNDERLAY-1/E2-4p 都属此类）。
+- [ ] **SPLIT-APPSTATE** — AG（P1）。`AppState.swift` 1375 行拆分（照 SPLIT-ENGINE 配方，纯搬家零行为变化，三重验证）。
+- [ ] **IDML-RNG lint（E1b③）** — Codex（P2）。vendor `app.generateIDMLSchema()` 的 RNG 做名/枚举 lint。
+
+---
+
 ## Claude 道（灌版主线 + 高风险导出 + 集成）
 
 > **2026-07-06 定位校准（见 DECISIONS）**：layoutD 交付「初排灌版」给 InDesign，不替代 InDesign。开发价值标准 = 文流/样式/视觉规范/CMYK 高完成度迁移进 InDesign、给人工调整省时间。可编辑性 > 逐像素冻结（InDesign 里漂移可人工调校）。脚注/傍点/表格深化 = 初排细枝末节，不再投入。
