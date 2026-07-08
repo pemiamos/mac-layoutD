@@ -511,7 +511,7 @@ public struct StyleBaselineImporter {
                     resolvedFontsByAlias: resolvedFontsByAlias
                 )
             case "节名":
-                if let numberStyle = roleObject["numberStyle"] as? String {
+                if let numberStyle = try optionalString(roleObject, key: "numberStyle", path: "$.roles.\(role)") {
                     motifs.sectionNumber = SpecPackSectionNumberMotif(
                         style: numberStyle,
                         color: roleObject["color"] as? String

@@ -138,6 +138,26 @@ final class StyleBaselineImporterSpecPackTests: XCTestCase {
         XCTAssertFalse(result.unsupportedFields.contains("$.roles.页眉页码"))
     }
 
+    func testParsesLegacySectionNumberStyleAsMotif() throws {
+        let json = validSpecPack.replacingOccurrences(
+            of: #""节名":{"font":"标题","fontSize_pt":12,"lineHeight":1.5,"numberStyle":"西文序号着accent色","spaceBefore_pt":24,"spaceAfter_pt":10}"#,
+            with: #""节名":{"font":"标题","fontSize_pt":12,"lineHeight":1.5,"numberStyle":"westernAccentSlash","color":"accent","spaceBefore_pt":24,"spaceAfter_pt":10}"#
+        )
+
+        let result = try StyleBaselineImporter.parseSpecPack(
+            jsonData: json.data(using: .utf8)!,
+            fontAvailability: { self.installedFonts.contains($0) }
+        )
+
+        let motif = try XCTUnwrap(result.motifs.sectionNumber)
+        XCTAssertEqual(motif.style, "westernAccentSlash")
+        XCTAssertEqual(motif.color, "accent")
+        XCTAssertNil(motif.minDigits)
+        XCTAssertNil(motif.prefix)
+        XCTAssertNil(motif.suffix)
+        XCTAssertFalse(result.unsupportedFields.contains("$.roles.节名.numberStyle"))
+    }
+
     func testAutoDetectsSpecPack() throws {
         let installedOnlySpec = validSpecPack
             .replacingOccurrences(of: #""正文":"方正兰亭细黑""#, with: #""正文":"Georgia""#)
@@ -179,7 +199,8 @@ final class StyleBaselineImporterSpecPackTests: XCTestCase {
             ("missing font alias", #""正文":{"font":"正文""#, "$.roles.正文.font"),
             ("missing installed font", #""正文":"方正兰亭细黑""#, "$.fonts.正文"),
             ("line height without font size", #""fontSize_pt":10, "lineHeight":1.6"#, "$.roles.正文.lineHeight"),
-            ("bad chapter opacity", #""opacity":0.06"#, "$.roles.章节序号.opacity")
+            ("bad chapter opacity", #""opacity":0.06"#, "$.roles.章节序号.opacity"),
+            ("bad section number style", #""numberStyle":"西文序号着accent色""#, "$.roles.节名.numberStyle")
         ]
 
         for (label, find, expectedPath) in cases {
@@ -228,6 +249,8 @@ final class StyleBaselineImporterSpecPackTests: XCTestCase {
             return validSpecPack.replacingOccurrences(of: caseFind, with: #""lineHeight":1.6"#)
         case #""opacity":0.06"#:
             return validSpecPack.replacingOccurrences(of: caseFind, with: #""opacity":1.4"#)
+        case #""numberStyle":"西文序号着accent色""#:
+            return validSpecPack.replacingOccurrences(of: caseFind, with: #""numberStyle":2"#)
         default:
             return validSpecPack
         }
