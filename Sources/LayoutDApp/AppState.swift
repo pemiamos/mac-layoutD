@@ -85,6 +85,7 @@ final class AppState: ObservableObject {
         selectedFrameId = anchor ?? ids.first
     }
     @Published var activeTool: LayoutTool = .selection
+    @Published var projectURL: URL?
     
     @Published var activeFormattingTarget: FormattingTarget = .container
     @Published var activeScreenMode: ScreenMode = .normal
