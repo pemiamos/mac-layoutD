@@ -97,7 +97,7 @@ final class AppState: ObservableObject {
     
     let engine = LayoutEngine()
     let inspectorEngine = ProjectInspector()
-    let advisor = RuleBasedLayoutAdvisor()
+    let advisor = SpreadPlannerBackedAdvisor()
     
     var onLayoutCompleted: ((BookProject, LaidOutDocument) -> Void)?
     
