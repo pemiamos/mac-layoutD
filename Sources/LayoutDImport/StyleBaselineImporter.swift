@@ -34,25 +34,217 @@ public struct SpecPackDecoration: Equatable, Sendable {
     }
 }
 
+public struct SpecPackChapterNumberMotif: Equatable, Sendable {
+    public var fontAlias: String?
+    public var resolvedFontName: String?
+    public var fontSizePt: Double?
+    public var color: String?
+    public var opacity: Double?
+    public var anchor: String?
+    public var layer: String?
+
+    public init(
+        fontAlias: String? = nil,
+        resolvedFontName: String? = nil,
+        fontSizePt: Double? = nil,
+        color: String? = nil,
+        opacity: Double? = nil,
+        anchor: String? = nil,
+        layer: String? = nil
+    ) {
+        self.fontAlias = fontAlias
+        self.resolvedFontName = resolvedFontName
+        self.fontSizePt = fontSizePt
+        self.color = color
+        self.opacity = opacity
+        self.anchor = anchor
+        self.layer = layer
+    }
+}
+
+public struct SpecPackSectionNumberMotif: Equatable, Sendable {
+    public var style: String?
+    public var color: String?
+    public var minDigits: Int?
+    public var prefix: String?
+    public var suffix: String?
+
+    public init(style: String? = nil, color: String? = nil, minDigits: Int? = nil, prefix: String? = nil, suffix: String? = nil) {
+        self.style = style
+        self.color = color
+        self.minDigits = minDigits
+        self.prefix = prefix
+        self.suffix = suffix
+    }
+}
+
+public struct SpecPackHeaderMotif: Equatable, Sendable {
+    public var fontAlias: String?
+    public var resolvedFontName: String?
+    public var fontSizePt: Double?
+    public var color: String?
+    public var rule: String?
+    public var label: String?
+    public var showChapterTitle: Bool
+    public var showPageNumber: Bool
+
+    public init(
+        fontAlias: String? = nil,
+        resolvedFontName: String? = nil,
+        fontSizePt: Double? = nil,
+        color: String? = nil,
+        rule: String? = nil,
+        label: String? = nil,
+        showChapterTitle: Bool = true,
+        showPageNumber: Bool = true
+    ) {
+        self.fontAlias = fontAlias
+        self.resolvedFontName = resolvedFontName
+        self.fontSizePt = fontSizePt
+        self.color = color
+        self.rule = rule
+        self.label = label
+        self.showChapterTitle = showChapterTitle
+        self.showPageNumber = showPageNumber
+    }
+}
+
+public struct SpecPackMotifs: Equatable, Sendable {
+    public var chapterNumber: SpecPackChapterNumberMotif?
+    public var sectionNumber: SpecPackSectionNumberMotif?
+    public var header: SpecPackHeaderMotif?
+    public var captionTick: SpecPackDecoration?
+    public var headingRule: SpecPackDecoration?
+    public var pullQuoteRule: SpecPackDecoration?
+
+    public init(
+        chapterNumber: SpecPackChapterNumberMotif? = nil,
+        sectionNumber: SpecPackSectionNumberMotif? = nil,
+        header: SpecPackHeaderMotif? = nil,
+        captionTick: SpecPackDecoration? = nil,
+        headingRule: SpecPackDecoration? = nil,
+        pullQuoteRule: SpecPackDecoration? = nil
+    ) {
+        self.chapterNumber = chapterNumber
+        self.sectionNumber = sectionNumber
+        self.header = header
+        self.captionTick = captionTick
+        self.headingRule = headingRule
+        self.pullQuoteRule = pullQuoteRule
+    }
+}
+
+public struct SpecPackSpreadArchetype: Equatable, Sendable {
+    public var id: String
+    public var displayName: String
+    public var family: String
+    public var pages: Int
+    public var imageSlots: Int
+    public var pullQuoteSlots: Int
+    public var mirror: Bool
+    public var weight: Double
+
+    public init(
+        id: String,
+        displayName: String,
+        family: String,
+        pages: Int = 2,
+        imageSlots: Int = 0,
+        pullQuoteSlots: Int = 0,
+        mirror: Bool = true,
+        weight: Double = 1
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.family = family
+        self.pages = pages
+        self.imageSlots = imageSlots
+        self.pullQuoteSlots = pullQuoteSlots
+        self.mirror = mirror
+        self.weight = weight
+    }
+}
+
+public struct SpecPackRhythmRules: Equatable, Sendable {
+    public var maxSameFamilyRun: Int?
+    public var bigImageEveryMinSpreads: Int?
+    public var accentEverySpread: Bool?
+    public var seed: String?
+
+    public init(maxSameFamilyRun: Int? = nil, bigImageEveryMinSpreads: Int? = nil, accentEverySpread: Bool? = nil, seed: String? = nil) {
+        self.maxSameFamilyRun = maxSameFamilyRun
+        self.bigImageEveryMinSpreads = bigImageEveryMinSpreads
+        self.accentEverySpread = accentEverySpread
+        self.seed = seed
+    }
+}
+
+public struct SpecPackLayoutGrammar: Equatable, Sendable {
+    public var spreadArchetypes: [SpecPackSpreadArchetype]
+    public var rhythm: SpecPackRhythmRules?
+
+    public init(spreadArchetypes: [SpecPackSpreadArchetype] = [], rhythm: SpecPackRhythmRules? = nil) {
+        self.spreadArchetypes = spreadArchetypes
+        self.rhythm = rhythm
+    }
+}
+
+public struct SpecPackQualityGates: Equatable, Sendable {
+    public var maxTemplateRepeat: Int?
+    public var minTextDensity: Double?
+    public var maxTextDensity: Double?
+    public var minImageDensity: Double?
+    public var maxImageDensity: Double?
+    public var requireAccentPerSpread: Bool?
+    public var maxOverflowRatio: Double?
+
+    public init(
+        maxTemplateRepeat: Int? = nil,
+        minTextDensity: Double? = nil,
+        maxTextDensity: Double? = nil,
+        minImageDensity: Double? = nil,
+        maxImageDensity: Double? = nil,
+        requireAccentPerSpread: Bool? = nil,
+        maxOverflowRatio: Double? = nil
+    ) {
+        self.maxTemplateRepeat = maxTemplateRepeat
+        self.minTextDensity = minTextDensity
+        self.maxTextDensity = maxTextDensity
+        self.minImageDensity = minImageDensity
+        self.maxImageDensity = maxImageDensity
+        self.requireAccentPerSpread = requireAccentPerSpread
+        self.maxOverflowRatio = maxOverflowRatio
+    }
+}
+
 public struct SpecPackImportResult: Sendable {
     public var tokens: DesignTokens
     public var unsupportedFields: [String]
     public var fontResolutions: [SpecPackFontResolution]
     public var roleColors: [String: String]
     public var roleDecorations: [String: SpecPackDecoration]
+    public var motifs: SpecPackMotifs
+    public var layoutGrammar: SpecPackLayoutGrammar?
+    public var qualityGates: SpecPackQualityGates?
 
     public init(
         tokens: DesignTokens,
         unsupportedFields: [String],
         fontResolutions: [SpecPackFontResolution],
         roleColors: [String: String] = [:],
-        roleDecorations: [String: SpecPackDecoration] = [:]
+        roleDecorations: [String: SpecPackDecoration] = [:],
+        motifs: SpecPackMotifs = SpecPackMotifs(),
+        layoutGrammar: SpecPackLayoutGrammar? = nil,
+        qualityGates: SpecPackQualityGates? = nil
     ) {
         self.tokens = tokens
         self.unsupportedFields = unsupportedFields
         self.fontResolutions = fontResolutions
         self.roleColors = roleColors
         self.roleDecorations = roleDecorations
+        self.motifs = motifs
+        self.layoutGrammar = layoutGrammar
+        self.qualityGates = qualityGates
     }
 }
 
@@ -99,10 +291,14 @@ public struct StyleBaselineImporter {
         "引文": StyleID.bibliography.rawValue
     ]
 
+    private static let legacyMotifRoleNames: Set<String> = [
+        "章节序号",
+        "页眉页码"
+    ]
+
     private static let unsupportedSpecPackRoleFields: Set<String> = [
         "alignment", "blockColor", "blockSize_mm", "cornerRadius_mm",
-        "format", "maxLineWidth_chars", "numberStyle", "opacity",
-        "position", "rule", "span", "textColor", "tracking_em", "treatment"
+        "format", "maxLineWidth_chars", "span", "textColor", "tracking_em"
     ]
 
     public static func autoDetectAndParse(jsonData: Data) throws -> (tokens: DesignTokens, format: ImportFormat) {
@@ -250,6 +446,7 @@ public struct StyleBaselineImporter {
         var unsupportedFields: [String] = []
         var roleColors: [String: String] = [:]
         var roleDecorations: [String: SpecPackDecoration] = [:]
+        var motifs = SpecPackMotifs()
 
         for (role, rawRole) in roles.sorted(by: { $0.key < $1.key }) {
             guard let roleObject = rawRole as? [String: Any] else {
@@ -257,7 +454,7 @@ public struct StyleBaselineImporter {
             }
 
             let mappedStyleID = roleStyleIDs[role]
-            if mappedStyleID == nil {
+            if mappedStyleID == nil && !legacyMotifRoleNames.contains(role) {
                 unsupportedFields.append("$.roles.\(role)")
             }
 
@@ -268,23 +465,12 @@ public struct StyleBaselineImporter {
                 fontResolutions.append(SpecPackFontResolution(roleOrAlias: role, requestedName: fontAlias, resolvedName: resolved))
             }
 
-            if let color = roleObject["color"] as? String {
+            if let color = try optionalString(roleObject, key: "color", path: "$.roles.\(role)") {
                 roleColors[role] = color
             }
 
             if let decObj = roleObject["decoration"] as? [String: Any] {
-                guard let type = decObj["type"] as? String else {
-                    throw StyleBaselineImportError(path: "$.roles.\(role).decoration.type", message: "decoration must have a 'type'")
-                }
-                let decColor = decObj["color"] as? String
-                let widthPt = decObj["width_pt"] as? Double ?? (decObj["width_pt"] as? Int).map(Double.init)
-                let lengthMM = decObj["length_mm"] as? Double ?? (decObj["length_mm"] as? Int).map(Double.init)
-                roleDecorations[role] = SpecPackDecoration(
-                    type: type,
-                    color: decColor,
-                    widthPt: widthPt,
-                    lengthMM: lengthMM
-                )
+                roleDecorations[role] = try parseDecoration(decObj, path: "$.roles.\(role).decoration", unsupportedFields: &unsupportedFields)
             }
 
             if let styleID = mappedStyleID {
@@ -315,6 +501,70 @@ public struct StyleBaselineImporter {
             for key in roleObject.keys where unsupportedSpecPackRoleFields.contains(key) {
                 unsupportedFields.append("$.roles.\(role).\(key)")
             }
+
+            switch role {
+            case "章节序号":
+                motifs.chapterNumber = try parseLegacyChapterNumberMotif(
+                    roleObject,
+                    path: "$.roles.\(role)",
+                    resolvedFontsByAlias: resolvedFontsByAlias
+                )
+            case "节名":
+                if let numberStyle = roleObject["numberStyle"] as? String {
+                    motifs.sectionNumber = SpecPackSectionNumberMotif(
+                        style: numberStyle,
+                        color: roleObject["color"] as? String
+                    )
+                }
+            case "页眉页码":
+                motifs.header = try parseLegacyHeaderMotif(
+                    roleObject,
+                    path: "$.roles.\(role)",
+                    resolvedFontsByAlias: resolvedFontsByAlias
+                )
+            default:
+                break
+            }
+        }
+
+        if let pullQuoteRule = roleDecorations["抽言"] {
+            motifs.pullQuoteRule = pullQuoteRule
+        }
+        if let captionTick = roleDecorations["图注"] {
+            motifs.captionTick = captionTick
+        }
+
+        if let rawMotifs = jsonObject["motifs"] {
+            guard let motifObject = rawMotifs as? [String: Any] else {
+                throw StyleBaselineImportError(path: "$.motifs", message: "must be an object")
+            }
+            motifs = try parseMotifs(
+                motifObject,
+                path: "$.motifs",
+                base: motifs,
+                resolvedFontsByAlias: resolvedFontsByAlias,
+                unsupportedFields: &unsupportedFields
+            )
+        }
+
+        let layoutGrammar: SpecPackLayoutGrammar?
+        if let rawLayoutGrammar = jsonObject["layoutGrammar"] {
+            guard let layoutObject = rawLayoutGrammar as? [String: Any] else {
+                throw StyleBaselineImportError(path: "$.layoutGrammar", message: "must be an object")
+            }
+            layoutGrammar = try parseLayoutGrammar(layoutObject, path: "$.layoutGrammar", unsupportedFields: &unsupportedFields)
+        } else {
+            layoutGrammar = nil
+        }
+
+        let qualityGates: SpecPackQualityGates?
+        if let rawQualityGates = jsonObject["qualityGates"] {
+            guard let gatesObject = rawQualityGates as? [String: Any] else {
+                throw StyleBaselineImportError(path: "$.qualityGates", message: "must be an object")
+            }
+            qualityGates = try parseQualityGates(gatesObject, path: "$.qualityGates", unsupportedFields: &unsupportedFields)
+        } else {
+            qualityGates = nil
         }
 
         if let marginColumn = grid["marginColumn"] {
@@ -335,7 +585,287 @@ public struct StyleBaselineImporter {
             unsupportedFields: Array(Set(unsupportedFields)).sorted(),
             fontResolutions: fontResolutions.sorted { $0.roleOrAlias < $1.roleOrAlias },
             roleColors: roleColors,
-            roleDecorations: roleDecorations
+            roleDecorations: roleDecorations,
+            motifs: motifs,
+            layoutGrammar: layoutGrammar,
+            qualityGates: qualityGates
+        )
+    }
+
+    private static func parseLegacyChapterNumberMotif(
+        _ object: [String: Any],
+        path: String,
+        resolvedFontsByAlias: [String: String]
+    ) throws -> SpecPackChapterNumberMotif {
+        let fontAlias = try optionalString(object, key: "font", path: path)
+        let resolvedFont = try resolvedFontName(fontAlias: fontAlias, resolvedFontsByAlias: resolvedFontsByAlias, path: "\(path).font")
+        return SpecPackChapterNumberMotif(
+            fontAlias: fontAlias,
+            resolvedFontName: resolvedFont,
+            fontSizePt: try optionalPositiveNumber(object, key: "fontSize_pt", path: path),
+            color: try optionalString(object, key: "color", path: path),
+            opacity: try optionalUnitNumber(object, key: "opacity", path: path),
+            anchor: try optionalString(object, key: "position", path: path),
+            layer: (try optionalString(object, key: "treatment", path: path)) == "ghost" ? "behind" : nil
+        )
+    }
+
+    private static func parseLegacyHeaderMotif(
+        _ object: [String: Any],
+        path: String,
+        resolvedFontsByAlias: [String: String]
+    ) throws -> SpecPackHeaderMotif {
+        let fontAlias = try optionalString(object, key: "font", path: path)
+        let resolvedFont = try resolvedFontName(fontAlias: fontAlias, resolvedFontsByAlias: resolvedFontsByAlias, path: "\(path).font")
+        return SpecPackHeaderMotif(
+            fontAlias: fontAlias,
+            resolvedFontName: resolvedFont,
+            fontSizePt: try optionalPositiveNumber(object, key: "fontSize_pt", path: path),
+            color: try optionalString(object, key: "color", path: path),
+            rule: try optionalString(object, key: "rule", path: path)
+        )
+    }
+
+    private static func parseMotifs(
+        _ object: [String: Any],
+        path: String,
+        base: SpecPackMotifs,
+        resolvedFontsByAlias: [String: String],
+        unsupportedFields: inout [String]
+    ) throws -> SpecPackMotifs {
+        var motifs = base
+        let knownKeys: Set<String> = ["chapterNumber", "sectionNumber", "header", "captionTick", "headingRule", "pullQuoteRule"]
+        appendUnknownKeys(object, knownKeys: knownKeys, path: path, unsupportedFields: &unsupportedFields)
+
+        if let raw = object["chapterNumber"] {
+            guard let motifObject = raw as? [String: Any] else {
+                throw StyleBaselineImportError(path: "\(path).chapterNumber", message: "must be an object")
+            }
+            motifs.chapterNumber = try parseChapterNumberMotif(
+                motifObject,
+                path: "\(path).chapterNumber",
+                resolvedFontsByAlias: resolvedFontsByAlias,
+                unsupportedFields: &unsupportedFields
+            )
+        }
+        if let raw = object["sectionNumber"] {
+            guard let motifObject = raw as? [String: Any] else {
+                throw StyleBaselineImportError(path: "\(path).sectionNumber", message: "must be an object")
+            }
+            motifs.sectionNumber = try parseSectionNumberMotif(motifObject, path: "\(path).sectionNumber", unsupportedFields: &unsupportedFields)
+        }
+        if let raw = object["header"] {
+            guard let motifObject = raw as? [String: Any] else {
+                throw StyleBaselineImportError(path: "\(path).header", message: "must be an object")
+            }
+            motifs.header = try parseHeaderMotif(
+                motifObject,
+                path: "\(path).header",
+                resolvedFontsByAlias: resolvedFontsByAlias,
+                unsupportedFields: &unsupportedFields
+            )
+        }
+        if let raw = object["captionTick"] {
+            guard let motifObject = raw as? [String: Any] else {
+                throw StyleBaselineImportError(path: "\(path).captionTick", message: "must be an object")
+            }
+            motifs.captionTick = try parseDecoration(motifObject, path: "\(path).captionTick", unsupportedFields: &unsupportedFields)
+        }
+        if let raw = object["headingRule"] {
+            guard let motifObject = raw as? [String: Any] else {
+                throw StyleBaselineImportError(path: "\(path).headingRule", message: "must be an object")
+            }
+            motifs.headingRule = try parseDecoration(motifObject, path: "\(path).headingRule", unsupportedFields: &unsupportedFields)
+        }
+        if let raw = object["pullQuoteRule"] {
+            guard let motifObject = raw as? [String: Any] else {
+                throw StyleBaselineImportError(path: "\(path).pullQuoteRule", message: "must be an object")
+            }
+            motifs.pullQuoteRule = try parseDecoration(motifObject, path: "\(path).pullQuoteRule", unsupportedFields: &unsupportedFields)
+        }
+
+        return motifs
+    }
+
+    private static func parseChapterNumberMotif(
+        _ object: [String: Any],
+        path: String,
+        resolvedFontsByAlias: [String: String],
+        unsupportedFields: inout [String]
+    ) throws -> SpecPackChapterNumberMotif {
+        let knownKeys: Set<String> = ["font", "fontSize_pt", "color", "opacity", "anchor", "layer"]
+        appendUnknownKeys(object, knownKeys: knownKeys, path: path, unsupportedFields: &unsupportedFields)
+        let fontAlias = try optionalString(object, key: "font", path: path)
+        let resolvedFont = try resolvedFontName(fontAlias: fontAlias, resolvedFontsByAlias: resolvedFontsByAlias, path: "\(path).font")
+        return SpecPackChapterNumberMotif(
+            fontAlias: fontAlias,
+            resolvedFontName: resolvedFont,
+            fontSizePt: try optionalPositiveNumber(object, key: "fontSize_pt", path: path),
+            color: try optionalString(object, key: "color", path: path),
+            opacity: try optionalUnitNumber(object, key: "opacity", path: path),
+            anchor: try optionalString(object, key: "anchor", path: path),
+            layer: try optionalString(object, key: "layer", path: path)
+        )
+    }
+
+    private static func parseSectionNumberMotif(
+        _ object: [String: Any],
+        path: String,
+        unsupportedFields: inout [String]
+    ) throws -> SpecPackSectionNumberMotif {
+        let knownKeys: Set<String> = ["style", "color", "minDigits", "prefix", "suffix"]
+        appendUnknownKeys(object, knownKeys: knownKeys, path: path, unsupportedFields: &unsupportedFields)
+        return SpecPackSectionNumberMotif(
+            style: try optionalString(object, key: "style", path: path),
+            color: try optionalString(object, key: "color", path: path),
+            minDigits: try optionalPositiveInt(object, key: "minDigits", path: path),
+            prefix: try optionalString(object, key: "prefix", path: path),
+            suffix: try optionalString(object, key: "suffix", path: path)
+        )
+    }
+
+    private static func parseHeaderMotif(
+        _ object: [String: Any],
+        path: String,
+        resolvedFontsByAlias: [String: String],
+        unsupportedFields: inout [String]
+    ) throws -> SpecPackHeaderMotif {
+        let knownKeys: Set<String> = ["font", "fontSize_pt", "color", "rule", "label", "showChapterTitle", "showPageNumber"]
+        appendUnknownKeys(object, knownKeys: knownKeys, path: path, unsupportedFields: &unsupportedFields)
+        let fontAlias = try optionalString(object, key: "font", path: path)
+        let resolvedFont = try resolvedFontName(fontAlias: fontAlias, resolvedFontsByAlias: resolvedFontsByAlias, path: "\(path).font")
+        return SpecPackHeaderMotif(
+            fontAlias: fontAlias,
+            resolvedFontName: resolvedFont,
+            fontSizePt: try optionalPositiveNumber(object, key: "fontSize_pt", path: path),
+            color: try optionalString(object, key: "color", path: path),
+            rule: try optionalString(object, key: "rule", path: path),
+            label: try optionalString(object, key: "label", path: path),
+            showChapterTitle: try optionalBool(object, key: "showChapterTitle", path: path) ?? true,
+            showPageNumber: try optionalBool(object, key: "showPageNumber", path: path) ?? true
+        )
+    }
+
+    private static func parseDecoration(
+        _ object: [String: Any],
+        path: String,
+        unsupportedFields: inout [String]
+    ) throws -> SpecPackDecoration {
+        let knownKeys: Set<String> = ["type", "color", "width_pt", "length_mm"]
+        appendUnknownKeys(object, knownKeys: knownKeys, path: path, unsupportedFields: &unsupportedFields)
+        let type = try requiredString(object, key: "type", path: path)
+        return SpecPackDecoration(
+            type: type,
+            color: try optionalString(object, key: "color", path: path),
+            widthPt: try optionalPositiveNumber(object, key: "width_pt", path: path),
+            lengthMM: try optionalPositiveNumber(object, key: "length_mm", path: path)
+        )
+    }
+
+    private static func parseLayoutGrammar(
+        _ object: [String: Any],
+        path: String,
+        unsupportedFields: inout [String]
+    ) throws -> SpecPackLayoutGrammar {
+        let knownKeys: Set<String> = ["spreadArchetypes", "rhythm"]
+        appendUnknownKeys(object, knownKeys: knownKeys, path: path, unsupportedFields: &unsupportedFields)
+
+        guard let rawArchetypes = object["spreadArchetypes"] else {
+            throw StyleBaselineImportError(path: "\(path).spreadArchetypes", message: "missing required array")
+        }
+        guard let array = rawArchetypes as? [[String: Any]], !array.isEmpty else {
+            throw StyleBaselineImportError(path: "\(path).spreadArchetypes", message: "must be a non-empty array of objects")
+        }
+        var archetypes: [SpecPackSpreadArchetype] = []
+        var ids = Set<String>()
+        for (index, raw) in array.enumerated() {
+            let archetypePath = "\(path).spreadArchetypes[\(index)]"
+            let archetype = try parseSpreadArchetype(raw, path: archetypePath, unsupportedFields: &unsupportedFields)
+            guard ids.insert(archetype.id).inserted else {
+                throw StyleBaselineImportError(path: "\(archetypePath).id", message: "duplicate spread archetype id '\(archetype.id)'")
+            }
+            archetypes.append(archetype)
+        }
+
+        let rhythm: SpecPackRhythmRules?
+        if let rawRhythm = object["rhythm"] {
+            guard let rhythmObject = rawRhythm as? [String: Any] else {
+                throw StyleBaselineImportError(path: "\(path).rhythm", message: "must be an object")
+            }
+            rhythm = try parseRhythmRules(rhythmObject, path: "\(path).rhythm", unsupportedFields: &unsupportedFields)
+        } else {
+            rhythm = nil
+        }
+
+        return SpecPackLayoutGrammar(spreadArchetypes: archetypes, rhythm: rhythm)
+    }
+
+    private static func parseSpreadArchetype(
+        _ object: [String: Any],
+        path: String,
+        unsupportedFields: inout [String]
+    ) throws -> SpecPackSpreadArchetype {
+        let knownKeys: Set<String> = ["id", "displayName", "family", "pages", "imageSlots", "pullQuoteSlots", "mirror", "weight"]
+        appendUnknownKeys(object, knownKeys: knownKeys, path: path, unsupportedFields: &unsupportedFields)
+        let id = try requiredString(object, key: "id", path: path)
+        let displayName = try optionalString(object, key: "displayName", path: path) ?? id
+        let family = try optionalString(object, key: "family", path: path) ?? id
+        return SpecPackSpreadArchetype(
+            id: id,
+            displayName: displayName,
+            family: family,
+            pages: try optionalPositiveInt(object, key: "pages", path: path) ?? 2,
+            imageSlots: try optionalNonNegativeInt(object, key: "imageSlots", path: path) ?? 0,
+            pullQuoteSlots: try optionalNonNegativeInt(object, key: "pullQuoteSlots", path: path) ?? 0,
+            mirror: try optionalBool(object, key: "mirror", path: path) ?? true,
+            weight: try optionalPositiveNumber(object, key: "weight", path: path) ?? 1
+        )
+    }
+
+    private static func parseRhythmRules(
+        _ object: [String: Any],
+        path: String,
+        unsupportedFields: inout [String]
+    ) throws -> SpecPackRhythmRules {
+        let knownKeys: Set<String> = ["maxSameFamilyRun", "bigImageEveryMinSpreads", "accentEverySpread", "seed"]
+        appendUnknownKeys(object, knownKeys: knownKeys, path: path, unsupportedFields: &unsupportedFields)
+        return SpecPackRhythmRules(
+            maxSameFamilyRun: try optionalPositiveInt(object, key: "maxSameFamilyRun", path: path),
+            bigImageEveryMinSpreads: try optionalPositiveInt(object, key: "bigImageEveryMinSpreads", path: path),
+            accentEverySpread: try optionalBool(object, key: "accentEverySpread", path: path),
+            seed: try optionalString(object, key: "seed", path: path)
+        )
+    }
+
+    private static func parseQualityGates(
+        _ object: [String: Any],
+        path: String,
+        unsupportedFields: inout [String]
+    ) throws -> SpecPackQualityGates {
+        let knownKeys: Set<String> = [
+            "maxTemplateRepeat", "minTextDensity", "maxTextDensity",
+            "minImageDensity", "maxImageDensity", "requireAccentPerSpread",
+            "maxOverflowRatio"
+        ]
+        appendUnknownKeys(object, knownKeys: knownKeys, path: path, unsupportedFields: &unsupportedFields)
+        let minTextDensity = try optionalUnitNumber(object, key: "minTextDensity", path: path)
+        let maxTextDensity = try optionalUnitNumber(object, key: "maxTextDensity", path: path)
+        if let minTextDensity, let maxTextDensity, minTextDensity > maxTextDensity {
+            throw StyleBaselineImportError(path: "\(path).minTextDensity", message: "must be less than or equal to maxTextDensity")
+        }
+        let minImageDensity = try optionalUnitNumber(object, key: "minImageDensity", path: path)
+        let maxImageDensity = try optionalUnitNumber(object, key: "maxImageDensity", path: path)
+        if let minImageDensity, let maxImageDensity, minImageDensity > maxImageDensity {
+            throw StyleBaselineImportError(path: "\(path).minImageDensity", message: "must be less than or equal to maxImageDensity")
+        }
+        return SpecPackQualityGates(
+            maxTemplateRepeat: try optionalPositiveInt(object, key: "maxTemplateRepeat", path: path),
+            minTextDensity: minTextDensity,
+            maxTextDensity: maxTextDensity,
+            minImageDensity: minImageDensity,
+            maxImageDensity: maxImageDensity,
+            requireAccentPerSpread: try optionalBool(object, key: "requireAccentPerSpread", path: path),
+            maxOverflowRatio: try optionalUnitNumber(object, key: "maxOverflowRatio", path: path)
         )
     }
 
@@ -573,6 +1103,11 @@ public struct StyleBaselineImporter {
         return string
     }
 
+    private static func optionalString(_ object: [String: Any], key: String, path: String) throws -> String? {
+        guard object[key] != nil else { return nil }
+        return try requiredString(object, key: key, path: path)
+    }
+
     private static func positiveNumber(_ object: [String: Any], key: String, path: String) throws -> Double {
         let value = try number(object, key: key, path: path)
         guard value > 0 else {
@@ -599,6 +1134,41 @@ public struct StyleBaselineImporter {
         return try nonNegativeNumber(object, key: key, path: path)
     }
 
+    private static func optionalUnitNumber(_ object: [String: Any], key: String, path: String) throws -> Double? {
+        guard object[key] != nil else { return nil }
+        let value = try nonNegativeNumber(object, key: key, path: path)
+        guard value <= 1 else {
+            throw StyleBaselineImportError(path: "\(path).\(key)", message: "must be between 0 and 1")
+        }
+        return value
+    }
+
+    private static func optionalPositiveInt(_ object: [String: Any], key: String, path: String) throws -> Int? {
+        guard object[key] != nil else { return nil }
+        let value = try positiveNumber(object, key: key, path: path)
+        guard value.rounded() == value else {
+            throw StyleBaselineImportError(path: "\(path).\(key)", message: "must be an integer")
+        }
+        return Int(value)
+    }
+
+    private static func optionalNonNegativeInt(_ object: [String: Any], key: String, path: String) throws -> Int? {
+        guard object[key] != nil else { return nil }
+        let value = try nonNegativeNumber(object, key: key, path: path)
+        guard value.rounded() == value else {
+            throw StyleBaselineImportError(path: "\(path).\(key)", message: "must be an integer")
+        }
+        return Int(value)
+    }
+
+    private static func optionalBool(_ object: [String: Any], key: String, path: String) throws -> Bool? {
+        guard let value = object[key] else { return nil }
+        guard let bool = value as? Bool else {
+            throw StyleBaselineImportError(path: "\(path).\(key)", message: "must be a boolean")
+        }
+        return bool
+    }
+
     private static func number(_ object: [String: Any], key: String, path: String) throws -> Double {
         guard let value = object[key] else {
             throw StyleBaselineImportError(path: "\(path).\(key)", message: "missing required number")
@@ -610,6 +1180,29 @@ public struct StyleBaselineImporter {
 
     private static func mmToPt(_ value: Double) -> Double {
         value * pointsPerMillimeter
+    }
+
+    private static func resolvedFontName(
+        fontAlias: String?,
+        resolvedFontsByAlias: [String: String],
+        path: String
+    ) throws -> String? {
+        guard let fontAlias else { return nil }
+        guard let resolved = resolvedFontsByAlias[fontAlias] else {
+            throw StyleBaselineImportError(path: path, message: "unknown font alias '\(fontAlias)'")
+        }
+        return resolved
+    }
+
+    private static func appendUnknownKeys(
+        _ object: [String: Any],
+        knownKeys: Set<String>,
+        path: String,
+        unsupportedFields: inout [String]
+    ) {
+        for key in object.keys where !knownKeys.contains(key) {
+            unsupportedFields.append("\(path).\(key)")
+        }
     }
 
     private static func isHexColor(_ value: String) -> Bool {
