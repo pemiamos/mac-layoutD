@@ -23,6 +23,7 @@ final class AppState: ObservableObject {
     @Published var baselineDocument: LaidOutDocument?
     @Published var report: PreflightReport?
     @Published var plans: [LayoutPlan] = []
+    @Published var importedSpecResult: SpecPackImportResult?
     @Published var currentPageNumber: Int = 1 {
         didSet {
             updateAIPlans()

@@ -278,43 +278,229 @@ struct WizardView: View {
     }
     
     // MARK: - Step 4 View: Freeze Style
+    // MARK: - Step 4 View: Freeze Style
     private var step4View: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button(wizardState.isStyleFrozen ? "重新基线定稿" : "基线定稿 (冻结当前风格)") {
-                onFreezeStyle { success in
-                    if success {
-                        var current = wizardState
-                        current.isStyleFrozen = true
-                        if current.maxUnlockedStep < 5 {
-                            current.maxUnlockedStep = 5
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Button(wizardState.isStyleFrozen ? "重新基线定稿" : "基线定稿 (冻结当前风格)") {
+                    onFreezeStyle { success in
+                        if success {
+                            var current = wizardState
+                            current.isStyleFrozen = true
+                            if current.maxUnlockedStep < 5 {
+                                current.maxUnlockedStep = 5
+                            }
+                            updateWizardState(current)
                         }
-                        updateWizardState(current)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                
+                if wizardState.isStyleFrozen {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("风格已冻结 (StyleProfile)")
+                            .font(.subheadline)
+                            .bold()
+                            .foregroundColor(.green)
                     }
                 }
             }
-            .buttonStyle(.borderedProminent)
             
-            if wizardState.isStyleFrozen {
-                VStack(alignment: .leading, spacing: 8) {
+            // 1. Spec Pack Support Rate
+            if let spec = state.importedSpecResult {
+                VStack(alignment: .leading, spacing: 6) {
+                    let unsupported = spec.unsupportedFields
+                    let fontCount = spec.fontResolutions.count
+                    let colorCount = spec.roleColors.count
+                    let supportedCount = fontCount + colorCount
+                    let totalCount = supportedCount + unsupported.count
+                    let rate = totalCount > 0 ? Double(supportedCount) / Double(totalCount) : 1.0
+                    
                     HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("风格已冻结！")
-                            .font(.subheadline)
+                        Text("规范包解析与支持率")
+                            .font(.caption)
                             .bold()
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(String(format: "%.0f%%", rate * 100))
+                            .font(.caption)
+                            .bold()
+                            .foregroundColor(rate > 0.8 ? .green : .orange)
                     }
                     
-                    Text("已成功将当前规范包的字体、角色色和版边距锁定为本项目基线（StyleProfile）。")
-                        .font(.caption)
+                    // Simple progress bar
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.1))
+                                .frame(height: 6)
+                            Rectangle()
+                                .fill(rate > 0.8 ? Color.green : Color.orange)
+                                .frame(width: geo.size.width * CGFloat(rate), height: 6)
+                        }
+                        .cornerRadius(3)
+                    }
+                    .frame(height: 6)
+                    
+                    Text("包含 \(fontCount) 个字体映射，\(colorCount) 个角色色值。")
+                        .font(.system(size: 10))
                         .foregroundColor(.secondary)
+                    
+                    if !unsupported.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("暂不支持的字段 (\(unsupported.count)):")
+                                .font(.system(size: 9))
+                                .bold()
+                                .foregroundColor(.orange)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 4) {
+                                    ForEach(unsupported, id: \.self) { field in
+                                        Text(field)
+                                            .font(.system(size: 8, design: .monospaced))
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(Color.orange.opacity(0.1))
+                                            .cornerRadius(3)
+                                            .foregroundColor(.orange)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.top, 2)
+                    }
                 }
                 .padding(10)
-                .background(Color.gray.opacity(0.05))
+                .background(Color.gray.opacity(0.04))
                 .cornerRadius(6)
-            } else {
-                Text("定稿会冻结当前的视觉规则与文字基线，完成后方可进行骨架选择与初排。")
-                    .font(.callout)
-                    .foregroundColor(.secondary)
+            }
+            
+            // 2. Style Report v0
+            if let report = state.project.styleReport {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("项目风格分析报告 (v0)")
+                        .font(.headline)
+                        .bold()
+                    
+                    Divider()
+                    
+                    // Token Coverage
+                    HStack {
+                        Text("Token 覆盖率")
+                            .font(.subheadline)
+                            .bold()
+                        Spacer()
+                        Text(String(format: "%.0f%%", report.tokenCoverage * 100))
+                            .font(.subheadline)
+                            .bold()
+                            .foregroundColor(report.tokenCoverage > 0.7 ? .green : .orange)
+                    }
+                    
+                    // Motif checklist
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("视觉标识 (Motifs) 出现清单:")
+                            .font(.caption)
+                            .bold()
+                            .foregroundColor(.secondary)
+                        
+                        let sortedMotifs = report.motifsChecklist.sorted(by: { $0.key < $1.key })
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+                            ForEach(sortedMotifs, id: \.key) { key, active in
+                                HStack {
+                                    Image(systemName: active ? "checkmark.square.fill" : "square")
+                                        .foregroundColor(active ? .green : .secondary)
+                                    Text(key)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(active ? .primary : .secondary)
+                                    Spacer()
+                                }
+                            }
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    // Layout repetition limits
+                    HStack {
+                        Text("版式最大连续重复数:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(report.layoutRepeatCount) 页")
+                            .font(.caption)
+                            .bold()
+                        
+                        if report.repeatViolationCount > 0 {
+                            Text("⚠️ 超过限额")
+                                .font(.system(size: 10))
+                                .bold()
+                                .foregroundColor(.red)
+                        } else {
+                            Text("✅ 合规")
+                                .font(.system(size: 10))
+                                .bold()
+                                .foregroundColor(.green)
+                        }
+                    }
+                    
+                    // Overlaps and Overflows
+                    HStack(spacing: 12) {
+                        HStack(spacing: 4) {
+                            Image(systemName: report.overlapsCheck ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                                .foregroundColor(report.overlapsCheck ? .orange : .green)
+                            Text("重叠框检测")
+                                .font(.caption)
+                            Spacer()
+                        }
+                        
+                        HStack(spacing: 4) {
+                            Image(systemName: report.overflowsCheck ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                                .foregroundColor(report.overflowsCheck ? .orange : .green)
+                            Text("文本溢出检测")
+                                .font(.caption)
+                            Spacer()
+                        }
+                    }
+                    .padding(6)
+                    .background(Color.gray.opacity(0.05))
+                    .cornerRadius(4)
+                    
+                    // Density distribution
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("每页图文空间密度:")
+                            .font(.caption)
+                            .bold()
+                            .foregroundColor(.secondary)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(report.densityReport, id: \.pageNumber) { page in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("第 \(page.pageNumber) 页")
+                                            .font(.system(size: 9))
+                                            .bold()
+                                        Text("文流: \(Int(page.textDensity * 100))%")
+                                            .font(.system(size: 8))
+                                        Text("图片: \(Int(page.imageDensity * 100))%")
+                                            .font(.system(size: 8))
+                                        Text(page.layoutStrategy)
+                                            .font(.system(size: 7))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(6)
+                                    .background(Color.gray.opacity(0.08))
+                                    .cornerRadius(4)
+                                    .frame(width: 80)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color.gray.opacity(0.03))
+                .cornerRadius(8)
+                .border(Color.gray.opacity(0.1), width: 1)
             }
         }
     }

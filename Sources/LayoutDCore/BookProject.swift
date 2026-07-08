@@ -53,6 +53,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     /// `.layoutd` files decode with `customSwatches == nil`.
     public var customSwatches: [PrintSwatch]?
     public var wizardState: WizardState?
+    public var styleProfile: StyleProfile?
+    public var styleReport: StyleReport?
 
     public init(
         schemaVersion: Int = BookProject.currentSchemaVersion,
@@ -69,7 +71,9 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         qualityMetricsHistory: [QualityHistoryEntry]? = nil,
         annotations: [BookAnnotation]? = nil,
         customSwatches: [PrintSwatch]? = nil,
-        wizardState: WizardState? = nil
+        wizardState: WizardState? = nil,
+        styleProfile: StyleProfile? = nil,
+        styleReport: StyleReport? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.id = id
@@ -86,6 +90,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         self.annotations = annotations
         self.customSwatches = customSwatches
         self.wizardState = wizardState
+        self.styleProfile = styleProfile
+        self.styleReport = styleReport
     }
 
     public var safeAnnotations: [BookAnnotation] {
@@ -114,6 +120,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         case annotations
         case customSwatches
         case wizardState
+        case styleProfile
+        case styleReport
     }
 
     public init(from decoder: Decoder) throws {
@@ -133,6 +141,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         annotations = try container.decodeIfPresent([BookAnnotation].self, forKey: .annotations)
         customSwatches = try container.decodeIfPresent([PrintSwatch].self, forKey: .customSwatches)
         wizardState = try container.decodeIfPresent(WizardState.self, forKey: .wizardState)
+        styleProfile = try container.decodeIfPresent(StyleProfile.self, forKey: .styleProfile)
+        styleReport = try container.decodeIfPresent(StyleReport.self, forKey: .styleReport)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -152,6 +162,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         try container.encodeIfPresent(annotations, forKey: .annotations)
         try container.encodeIfPresent(customSwatches, forKey: .customSwatches)
         try container.encodeIfPresent(wizardState, forKey: .wizardState)
+        try container.encodeIfPresent(styleProfile, forKey: .styleProfile)
+        try container.encodeIfPresent(styleReport, forKey: .styleReport)
     }
 
     /// Resolves a color token id to a hex value under the project's active color
