@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 06:48 | claude | 用户 InDesign 验收 ACCENT-1 抽言竖线通过（村落-方案A.idml 截图：明黄竖线+江城律动宋抽言体+两栏正文全对），据此做了集成收尾三件事：
+- **分支**：dev
+- **概述**：用户 InDesign 验收 ACCENT-1 抽言竖线通过（村落-方案A.idml 截图：明黄竖线+江城律动宋抽言体+两栏正文全对），据此做了集成收尾三件事：①ACCENT-1 + 村落-方案A 标记验收通过（QUEUE）；②dev→main 合并推送：本地 main 对齐 origin/main(3305be8) 后 --no-ff 合 dev，main=a5ce059 已 push，dev 自上次合 main 以来 33 提交全部落 main（ACCENT-1/SPEC-APPLY-1/PILOT-2/FRAME-CANVAS-1/UNDERLAY-1/engine 冻结页隔离/初排工作台开发计划），dev 领先 main 内容提交数归 0；③清理：删 10 个死枝本地分支（ag-fix-canvas-1/frame-canvas-1/sample-1/sample-1-v2/textframe-inset/underlay-1/claude-fixture-1/planblock-isolation/codex-docx-import-guards/codex-spec-pack-1）+ 删 2 个已合远端分支(origin/feature/ag-sample-1-v2、claude-planblock-isolation)+ 移除残留 /tmp/layoutD-verify-planblock worktree。最终：本地仅剩 dev/main/ag-lane/codex-lane/feature-ag-accent-2/feature-codex-spec-pack-2；远端仅 dev/main；worktree 3 个干净。
+- **改动文件**：.ai/QUEUE.md（ACCENT-1+村落验收标记）、.ai/HANDOFF.md；git: main a5ce059(合dev已push)、dev cb14d1c、删10本地+2远端分支+1 worktree
+- **检查**：纯集成/git 操作；本批为已验收内容合 main，未重跑构建（dev 内容此前各任务已自检过）。main=origin/main=a5ce059，dev=origin/dev=cb14d1c，dev 领先 main 内容 0。
+- **下一步**：【AG 注意】你的 ACCENT-2（top tick + bottom underline，在 feature/ag-accent-2/ag-lane f631549）已实现但**还没进 dev**——按新「自主集成模式」跑 review-idml.sh 自检通过后自主合 dev（我没替你合，避免绕过自检门）。【Codex】feature/codex-spec-pack-2 已起，继续 SPEC-PACK-2（总闸，卡 L/P 批）。【Claude】待 SPEC-PACK-2 合 dev 后出 PLANNER-1a-DESIGN。整体：初排工作台批次已开跑，全部完工后 PILOT-3→用户 InDesign 终验放行下一轮 main。
+
 ## 2026-07-09 06:37 | claude | 出正式开发计划并合 dev（e645243，已 push）。用户拍板：①新增「初排工作台六站流水线」（参考图→规范包→样张→定稿→约7骨架线框图→灌版自动选骨架
 - **分支**：dev
 - **概述**：出正式开发计划并合 dev（e645243，已 push）。用户拍板：①新增「初排工作台六站流水线」（参考图→规范包→样张→定稿→约7骨架线框图→灌版自动选骨架+手工微调→IDML）；②工作流切换为「自主集成模式」——Codex/AG 自检(run_checks+review-idml.sh PASS)通过后**自主合 dev**，不再每批等 Claude/用户；dev→main 仍用户唯一放行人，全部完工后一次性人工审核（必须含 InDesign 真打开看视觉，AI 自检验不了渲染对错）；③刻意压 Claude 算力，实现全给 Codex/AG，Claude 只出 PLANNER 设计文档+集成。评估了用户给的 5 个 AI 设计技能仓库：全是屏幕/网页设计不直接可用，形态可抄（SKILL.md 教材化站1读图=BOOK-SKILL-1/2、pencilplaybook 可测试规则文风→qualityGates）。QUEUE 已登记「2026-07-09 初排工作台批次」6 个子批（V/S/L/P/W/T）+ 顶部「自主集成模式」政策。产物：桌面 layoutD开发计划-初排工作台-v2.0.pdf（Chrome headless 渲染，3页）。
