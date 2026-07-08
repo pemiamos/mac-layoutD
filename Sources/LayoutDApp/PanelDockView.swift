@@ -5,6 +5,7 @@ import SwiftUI
 struct PanelDockView: View {
     let sidebar: SidebarView
     let inspector: InspectorView
+    let wizard: WizardView
 
     @State private var selectedDock = 0
 
@@ -13,6 +14,7 @@ struct PanelDockView: View {
             Picker("", selection: $selectedDock) {
                 Text("面板").tag(0)
                 Text("检查器").tag(1)
+                Text("向导").tag(2)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -21,12 +23,14 @@ struct PanelDockView: View {
 
             Divider()
 
-            // 两个面板都保持挂载（隐藏而非销毁），切换不丢内部状态（滚动位置、筛选等）。
+            // 多个面板都保持挂载（隐藏而非销毁），切换不丢内部状态。
             ZStack {
                 sidebar.opacity(selectedDock == 0 ? 1 : 0)
                     .allowsHitTesting(selectedDock == 0)
                 inspector.opacity(selectedDock == 1 ? 1 : 0)
                     .allowsHitTesting(selectedDock == 1)
+                wizard.opacity(selectedDock == 2 ? 1 : 0)
+                    .allowsHitTesting(selectedDock == 2)
             }
         }
         .background(Color(NSColor.windowBackgroundColor))

@@ -246,6 +246,7 @@ public struct ParagraphAccentRule: Codable, Equatable, Sendable {
     public enum Edge: String, Codable, Sendable {
         case left
         case top
+        case bottom
     }
 
     public var edge: Edge
@@ -253,7 +254,7 @@ public struct ParagraphAccentRule: Codable, Equatable, Sendable {
     public var colorToken: String
     /// Bar thickness in points (left rule → width; top tick → height).
     public var width: Double
-    /// For a top tick, the bar's horizontal length in points; nil = full frame width.
+    /// For a top tick/bottom rule, the bar's horizontal length in points; nil = full frame width.
     public var length: Double?
     /// Gap in points between the bar and the paragraph text.
     public var gap: Double
@@ -290,6 +291,19 @@ public struct ParagraphAccentRule: Codable, Equatable, Sendable {
                                  width: rect.width, height: max(0, rect.height - w - g))
             } else {
                 content = CGRect(x: rect.minX, y: rect.minY + w + g,
+                                 width: rect.width, height: max(0, rect.height - w - g))
+            }
+            return (bar, content)
+        case .bottom:
+            let barLength = length.map { CGFloat($0) * scale } ?? rect.width
+            let barY = topAtMaxY ? rect.minY : rect.maxY - w
+            let bar = CGRect(x: rect.minX, y: barY, width: min(barLength, rect.width), height: w)
+            let content: CGRect
+            if topAtMaxY {
+                content = CGRect(x: rect.minX, y: rect.minY + w + g,
+                                 width: rect.width, height: max(0, rect.height - w - g))
+            } else {
+                content = CGRect(x: rect.minX, y: rect.minY,
                                  width: rect.width, height: max(0, rect.height - w - g))
             }
             return (bar, content)

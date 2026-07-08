@@ -630,7 +630,6 @@ extension CanvasView {
     /// the content rect the text should occupy. No rule → returns `rect` unchanged.
     private func drawParagraphAccentRule(_ rule: ParagraphAccentRule?, in rect: CGRect, project: BookProject) -> CGRect {
         guard let rule,
-              rule.edge == .left,  // top-edge tick pending per-renderer orientation verification (ACCENT-2)
               let hex = project.resolvedColorHex(rule.colorToken),
               let color = NSColor.fromHex(hex) else {
             return rect

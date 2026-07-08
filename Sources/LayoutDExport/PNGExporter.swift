@@ -401,7 +401,6 @@ public struct PNGExporter {
     /// should occupy (inset to clear the bar). No rule → returns `rect` unchanged.
     private func drawParagraphAccentRule(_ rule: ParagraphAccentRule?, in rect: CGRect, project: BookProject, topAtMaxY: Bool, context: CGContext) -> CGRect {
         guard let rule,
-              rule.edge == .left,  // top-edge tick pending per-renderer orientation verification (ACCENT-2)
               let hex = project.resolvedColorHex(rule.colorToken),
               let color = NSColor.from(hex: hex) else {
             return rect

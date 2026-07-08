@@ -170,6 +170,38 @@ final class LayoutDCoreTests: XCTestCase {
         XCTAssertNil(try JSONDecoder().decode(PageSetup.self, from: legacy).colorSpace)
     }
 
+    func testParagraphAccentRuleGeometry() {
+        let rect = CGRect(x: 10, y: 20, width: 100, height: 200)
+
+        // 1. Left edge
+        let leftRule = ParagraphAccentRule(edge: .left, colorToken: "accent", width: 4, gap: 6)
+        let (leftBar, leftContent) = leftRule.geometry(in: rect, topAtMaxY: false, scale: 1.0)
+        XCTAssertEqual(leftBar, CGRect(x: 10, y: 20, width: 4, height: 200))
+        XCTAssertEqual(leftContent, CGRect(x: 20, y: 20, width: 90, height: 200))
+
+        // 2. Top edge, topAtMaxY = false (flipped/Canvas/IDML)
+        let topRule = ParagraphAccentRule(edge: .top, colorToken: "accent", width: 3, length: 80, gap: 5)
+        let (topBar, topContent) = topRule.geometry(in: rect, topAtMaxY: false, scale: 1.0)
+        XCTAssertEqual(topBar, CGRect(x: 10, y: 20, width: 80, height: 3))
+        XCTAssertEqual(topContent, CGRect(x: 10, y: 28, width: 100, height: 192))
+
+        // 3. Top edge, topAtMaxY = true (PDF/PNG)
+        let (topBarMaxY, topContentMaxY) = topRule.geometry(in: rect, topAtMaxY: true, scale: 1.0)
+        XCTAssertEqual(topBarMaxY, CGRect(x: 10, y: 217, width: 80, height: 3)) // 220 - 3
+        XCTAssertEqual(topContentMaxY, CGRect(x: 10, y: 20, width: 100, height: 192))
+
+        // 4. Bottom edge, topAtMaxY = false (flipped/Canvas/IDML)
+        let bottomRule = ParagraphAccentRule(edge: .bottom, colorToken: "accent", width: 3, length: 80, gap: 5)
+        let (bottomBar, bottomContent) = bottomRule.geometry(in: rect, topAtMaxY: false, scale: 1.0)
+        XCTAssertEqual(bottomBar, CGRect(x: 10, y: 217, width: 80, height: 3)) // 220 - 3
+        XCTAssertEqual(bottomContent, CGRect(x: 10, y: 20, width: 100, height: 192))
+
+        // 5. Bottom edge, topAtMaxY = true (PDF/PNG)
+        let (bottomBarMaxY, bottomContentMaxY) = bottomRule.geometry(in: rect, topAtMaxY: true, scale: 1.0)
+        XCTAssertEqual(bottomBarMaxY, CGRect(x: 10, y: 20, width: 80, height: 3))
+        XCTAssertEqual(bottomContentMaxY, CGRect(x: 10, y: 28, width: 100, height: 192))
+    }
+
     func testTableParsingAndAllocation() throws {
         let tableText = """
         结构    类比    主要作用
