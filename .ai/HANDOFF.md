@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-08 11:00 | claude | 全项目 review + 开发文档回写（docs-only，无代码改动）。development-plan.md 停在 6-23，把此后一个月主线补记为「阶段F
+- **分支**：dev
+- **概述**：全项目 review + 开发文档回写（docs-only，无代码改动）。development-plan.md 停在 6-23，把此后一个月主线补记为「阶段F 初排灌版主线」（THREAD-1a/1b三刀+<Br/>根治、MASTER-1、SPREAD-1、FRAME-SPLIT、FRAME-CANVAS-0/1、FRAME-INSET-2/UNDERLAY-1、默认排书规则、规范包路线 SPEC-PACK-1/FIXTURE-1/SAMPLE-1、PERF/GUARD/SPLIT 批次），并新增文末「2026-07-08 项目复盘」：①问题=待视觉验收积压(dev领先main 18 commit)、预览≠输出会反复再生(三渲染器无共享绘制模型)、规范包缺GUI应用闭环(只有CLI样张路径)、AppState 1375行等大文件回涨、跨道纪律drift、anchored-text stretch等未解bug存档、两道队列已清空；②改进=验收批次化、共享绘制模型、纪律回归；③后续计划候选表（P0: 验收批次/SPEC-APPLY-1规范包GUI应用/PILOT-2真书整本试排；P1: RENDER-CORE-1共享绘制模型/SPLIT-APPSTATE；P2: IDML-RNG lint）——均待用户拍板后才登记QUEUE。architecture.md 阶段概览同步补阶段F。已合 dev(019e0c2) push；顺手补提交了滞留未提交的 10:18 交接条目(7a5b9c1)。
+- **改动文件**：docs/development-plan.md, docs/architecture.md, .ai/HANDOFF.md
+- **检查**：docs-only 改动未跑 swift 检查；合并前 dev 即为上一棒全绿状态（303测试/14探针/golden）
+- **下一步**：1) 用户过目 development-plan.md 文末「2026-07-08 项目复盘」，对后续计划候选表拍板优先级；拍板后 Claude 把选中任务展开登记进 .ai/QUEUE.md（两道队列现已无活任务）。2) 仍在排队的视觉验收（FRAME-CANVAS-1 GUI 合并框、TYPE-1 段末孤字 InDesign、E3-9 约物挤压、工作区骨架、左侧工具栏）建议集中清一批后合 main。
+
 ## 2026-07-08 10:18 | claude | 验收 AG 道 FRAME-CANVAS-1（画布/PDF/PNG 追平 IDML 分框：连续正文合并显示虚线框+整组选中移动，属性面板多选保护）：代码审查+3
 - **分支**：dev
 - **概述**：验收 AG 道 FRAME-CANVAS-1（画布/PDF/PNG 追平 IDML 分框：连续正文合并显示虚线框+整组选中移动，属性面板多选保护）：代码审查+303测试+14/14探针全过。审核中发现一处真实性能问题并直接修复：CanvasView+Drawing.swift 的 draw(page:) 对页内每个 frame 都调用 flowGroup(for:pageNumber:)，该函数每次调用都对整份文档重跑一遍 groupIntoFlowFrames——页内N个frame就是N倍全文档重算，画布重绘（滚动/悬停/拖拽都触发）在大稿子上会明显变慢；framesIntersecting()（marquee框选展开分组）同样每命中一个frame重算一次。两处都改成函数顶部只算一次分组+本地查找表复用，逻辑不变，验证过测试/探针仍全过。已合 dev(79d7708)+性能修复(6283043)+文档(14830f8)，push。
