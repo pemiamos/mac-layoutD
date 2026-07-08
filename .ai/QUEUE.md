@@ -153,7 +153,8 @@
 - [x] **UNDERLAY-1 垫底图预览/引擎追平** — ✅ AG（`51dcfdc`，Claude 审核合 dev `bba4867`）。`LayoutEngine+Assets.swift` 里 underlay 图片路径完全跳过 cursor 推进/绕排（提前 `return`，不进 `prepareWideAssetPlacement`），`exclusionRects`/`LayoutPlan` 侧同步排除；跨页 spread 底图用 `deferredUnderlayFrames` 处理"图片排到的页面还没生成"的时序、`finish()` 补页逻辑一并接好。三渲染器按 underlay 优先画（图在下字在上）。新增 2 个针对性单测。
   - 验收：301 测试过、review-idml.sh 14/14、golden 逐字节一致。**审核时剔除**：51dcfdc 里误带进一个与功能无关的 1.8MB `layoutD-icon.png`（早前已知的待定去留文件），合并时已单独 commit(`bba4867`)移除。
 
-- [x] **FRAME-CANVAS-1 画布/PDF/PNG 追平 IDML 分框（连续正文合并显示）** — ✅ AG (commit ae6f6ad)。普通模式下合并虚线框绘制与交互，PDF/PNG 导出合并背景与描边，ObjectPropertiesView 防抖防错，全部 303 单测 + 14 项端到端探针通过。
+- [x] **FRAME-CANVAS-1 画布/PDF/PNG 追平 IDML 分框（连续正文合并显示）** — ✅ AG (commit ae6f6ad)，Claude 审核合 dev。普通模式下合并虚线框绘制与交互，PDF/PNG 导出合并背景与描边，ObjectPropertiesView 防抖防错，全部 303 单测 + 14 项端到端探针通过。
+  - **审核时修复一处性能问题**（`6283043`）：`CanvasView+Drawing.swift` 的 `draw(page:)` 对页内每个 frame 都调用 `flowGroup(for:pageNumber:)`，而该函数内部每次调用都对**整份文档**重跑一遍 `groupIntoFlowFrames`——页内 N 个 frame 就是 N 倍全文档重算，画布重绘（滚动/悬停/拖拽都会触发）在大稿子上会明显变慢。`framesIntersecting()`（marquee 框选展开分组）同样对每个命中 frame 重算一次。两处均改为在函数顶部只算一次分组、建本地查找表复用。逻辑不变，303 测试 + 14/14 探针复跑仍全过。
 
 - [x] **SAMPLE-1 一键批量样张** — ✅ **重做版**（AG，`feature/ag-sample-1-v2` `10550c6`，Claude 审核合 dev `d85a730`）。首版打回重做（原因见下），v2 全部照做。
   - **交付**：CLI `--render-samples A.json B.json ... --chapter <fixture>`（默认 chapter=`Samples/fixture-standard-chapter.md`）→ 桌面出带方案名的样张 PDF。解析**只走** `StyleBaselineImporter.parseSpecPack`（唯一事实源，首版并行的 `SpecPack.swift` 已删）；新建**共享**应用函数 `BookProject.applySpecPack(_ result:)`（`LayoutDImport/BookProject+Tokens.swift`），`AppState.applyImportedTokens` 减 105 行改为委托它（单一应用路径）；补齐了 SPEC-PACK-1 没做的视觉三项——字体族（`fontResolutions`→复合中/西/数字字体）、角色色 + 装饰点缀色、开本 trim（`page.width/height`→`PageSetup`）；不支持字段打 stderr 告警不静默。
