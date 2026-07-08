@@ -98,7 +98,7 @@
     - [ ] **SECNUM-1 节序号**（图1「01 /」黄色）— `节名.numberStyle` 在 unsupportedFields。
   - **下一步**：✅ 用户 2026-07-09 InDesign 打开 `村落-方案A.idml` 终验通过（抽言竖线/字体/串接/两栏全对）；已拍板投入「视觉标识层」批次（见下 2026-07-09 初排工作台批次 V）。
 - [ ] **RENDER-CORE-1 共享绘制模型** — Claude 设计 + AG 实施（P1，高风险重构，先出设计再动手）。页面→绘制指令列表，画布/PDF/PNG 只做「指令→各自画布」薄适配，从根上消灭「追平」类任务（FRAME-INSET-2/FRAME-CANVAS-1/UNDERLAY-1/E2-4p 都属此类）。
-- [ ] **SPLIT-APPSTATE** — AG（P1）。`AppState.swift` 1375 行拆分（照 SPLIT-ENGINE 配方，纯搬家零行为变化，三重验证）。
+- [x] **SPLIT-APPSTATE** — AG（P1）。`AppState.swift` 1375 行拆分成功（照 SPLIT-ENGINE 配方，拆分为 6 个模块化文件，通过 build + test + review-idml.sh 验证，commit a2c7724）。
 - [ ] **IDML-RNG lint（E1b③）** — Codex（P2）。vendor `app.generateIDMLSchema()` 的 RNG 做名/枚举 lint。
 
 ---
