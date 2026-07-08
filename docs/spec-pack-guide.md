@@ -82,7 +82,7 @@
 
 `roles` 当前可落地到段落样式的中文角色：`章名`、`节名`、`正文`、`抽言`、`图注`、`开节概述`、`引文`。这些角色支持 `fontSize_pt`、`lineHeight`、`firstLineIndent_em`、`indent_em`、`spaceBefore_pt`、`spaceAfter_pt`。`lineHeight` 小于等于 4 时按倍数处理，例如 `1.6` 会转换为 `fontSize_pt * 1.6`；大于 4 时按 point 处理。
 
-`motifs` 是 v2 视觉标识词表，当前导入器会强类型解析并保存在 `SpecPackImportResult.motifs`，供后续渲染器和规划器消费。支持项：`chapterNumber`（`font`、`fontSize_pt`、`color`、`opacity`、`anchor`、`layer`）、`sectionNumber`（`style`、`color`、`minDigits`、`prefix`、`suffix`）、`header`（`font`、`fontSize_pt`、`color`、`rule`、`label`、`showChapterTitle`、`showPageNumber`）、`captionTick` / `headingRule` / `pullQuoteRule`（共用装饰对象：`type`、`color`、`width_pt`、`length_mm`）。`font` 必须引用 `fonts` 里的别名；`opacity` 必须在 0...1。旧方案A 写在 `roles.章节序号`、`roles.节名.numberStyle`、`roles.页眉页码` 的字段会兼容解析到相应 motif，不再只作为 unsupported 上报。
+`motifs` 是 v2 视觉标识词表，当前导入器会强类型解析并保存在 `SpecPackImportResult.motifs`，供后续渲染器和规划器消费。支持项：`chapterNumber`（`font`、`fontSize_pt`、`color`、`opacity`、`anchor`、`layer`）、`sectionNumber`（`style`、`color`、`minDigits`、`prefix`、`suffix`）、`header`（`font`、`fontSize_pt`、`color`、`rule`、`label`、`showChapterTitle`、`showPageNumber`）、`captionTick` / `headingRule` / `pullQuoteRule`（共用装饰对象：`type`、`color`、`width_pt`、`length_mm`）。`font` 必须引用 `fonts` 里的别名；`opacity` 必须在 0...1。旧方案A 写在 `roles.章节序号`、`roles.节名.numberStyle`、`roles.页眉页码` 的字段会兼容解析到相应 motif，不再只作为 unsupported 上报。其中 `roles.章节序号.position` 会映射为 `chapterNumber.anchor`，`treatment:"ghost"` 会映射为 `layer:"behind"`；这只表示解析层已支持，真正绘制超大淡灰章号仍由 GHOST-NUM-1b 渲染任务消费。
 
 `layoutGrammar` 是站4/站5规划器使用的对开骨架语法。`spreadArchetypes` 是非空数组时会校验 `id` 唯一；每项支持 `id`、`displayName`、`family`、`pages`、`imageSlots`、`pullQuoteSlots`、`mirror`、`weight`。`rhythm` 支持 `maxSameFamilyRun`、`bigImageEveryMinSpreads`、`accentEverySpread`、`seed`，用于后续受控抽签和防单调评分。当前导入器只解析和校验，不直接生成 `LayoutPlan`。
 
