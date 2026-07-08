@@ -26,6 +26,10 @@ extension AppDelegate {
         workspaceController?.importLayoutTemplates()
     }
 
+    @objc private func importStyleBaseline(_ sender: Any?) {
+        workspaceController?.importStyleBaseline()
+    }
+
     @objc private func exportLayoutTemplates(_ sender: Any?) {
         workspaceController?.exportLayoutTemplates()
     }
@@ -147,9 +151,17 @@ extension AppDelegate {
         fileMenu.addItem(NSMenuItem.separator())
         fileMenu.addItem(
             NSMenuItem(
+                title: "导入样式基线 / 规范包...",
+                action: #selector(importStyleBaseline(_:)),
+                keyEquivalent: "i"
+            )
+        )
+        fileMenu.items.last?.target = self
+        fileMenu.addItem(
+            NSMenuItem(
                 title: "Import Layout Templates...",
                 action: #selector(importLayoutTemplates(_:)),
-                keyEquivalent: "i"
+                keyEquivalent: ""
             )
         )
         fileMenu.items.last?.target = self

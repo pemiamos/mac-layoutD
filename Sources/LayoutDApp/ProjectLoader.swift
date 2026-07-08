@@ -41,9 +41,13 @@ struct ProjectLoader {
             let project: BookProject
             let loadError: String?
             do {
-                project = try importingTemplateLibraryIfNeeded(
+                let withTemplates = try importingTemplateLibraryIfNeeded(
                     into: .sample,
                     from: options.importTemplateLibraryPath
+                )
+                project = try applyingSpecPackIfNeeded(
+                    into: withTemplates,
+                    from: options.specPackPath
                 )
                 loadError = nil
             } catch {
@@ -88,9 +92,13 @@ struct ProjectLoader {
                 inputURL: manuscriptURL,
                 assetDirectoryURL: options.assetDirectoryPath.map { URL(fileURLWithPath: $0).standardizedFileURL }
             )
-            let project = try importingTemplateLibraryIfNeeded(
+            let withTemplates = try importingTemplateLibraryIfNeeded(
                 into: loadedProject,
                 from: options.importTemplateLibraryPath
+            )
+            let project = try applyingSpecPackIfNeeded(
+                into: withTemplates,
+                from: options.specPackPath
             )
             return LoadedProject(
                 project: project,
@@ -223,6 +231,28 @@ struct ProjectLoader {
         let data = try Data(contentsOf: url)
         let library = try LayoutTemplateLibrary.decode(data)
         return project.importingLayoutTemplateLibrary(library)
+    }
+
+    /// Apply a layoutD visual spec pack (fonts / role colors / trim / grid) to the
+    /// project before layout, so `--export-idml` / `--export-pdf` reflect the same
+    /// styling the GUI import (SPEC-APPLY-1) and `--render-samples` produce.
+    private func applyingSpecPackIfNeeded(
+        into project: BookProject,
+        from path: String?
+    ) throws -> BookProject {
+        guard let path else {
+            return project
+        }
+
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        let data = try Data(contentsOf: url)
+        let result = try StyleBaselineImporter.parseSpecPack(jsonData: data)
+        if !result.unsupportedFields.isEmpty {
+            fputs("Warning: Unsupported spec fields in \(url.lastPathComponent): \(result.unsupportedFields.joined(separator: ", "))\n", stderr)
+        }
+        var updated = project
+        updated.applySpecPack(result)
+        return updated
     }
 
     private func loadPackageProject(packageURL: URL, assetDirectoryURL: URL?) throws -> BookProject {
@@ -392,6 +422,7 @@ private struct CommandLineOptions {
     var exportProjectPath: String?
     var exportTemplateLibraryPath: String?
     var importTemplateLibraryPath: String?
+    var specPackPath: String?
     var preflightReportPath: String?
     var validateOnly = false
     var applyPreflightFixes = false
@@ -552,6 +583,12 @@ private struct CommandLineOptions {
 
             if argument == "--import-templates", index + 1 < arguments.count {
                 importTemplateLibraryPath = arguments[index + 1]
+                index += 2
+                continue
+            }
+
+            if argument == "--spec-pack", index + 1 < arguments.count {
+                specPackPath = arguments[index + 1]
                 index += 2
                 continue
             }

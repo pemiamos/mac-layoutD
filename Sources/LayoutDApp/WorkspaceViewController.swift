@@ -735,6 +735,45 @@ final class WorkspaceViewController: NSViewController {
         }
     }
 
+    /// Import a layoutD visual spec pack / Figma / DTCG style baseline from the menu
+    /// bar and apply it to the current project. Spec packs carry the full
+    /// SpecPackImportResult (fonts / role colors / trim), matching the CLI
+    /// `--spec-pack` and Inspector「导入样式基线」paths (SPEC-APPLY-1).
+    func importStyleBaseline() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "导入样式基线 / 规范包（layoutD 规范包 / Figma / DTCG JSON）"
+        openPanel.allowedContentTypes = [.json]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+
+        guard let window = view.window else { return }
+
+        openPanel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = openPanel.url, let self else { return }
+            do {
+                let data = try Data(contentsOf: url)
+                let detected = try StyleBaselineImporter.autoDetectAndParseDetailed(jsonData: data)
+                if let specResult = detected.specResult {
+                    self.appState.applySpecPackResult(specResult)
+                    var detail = "规范包已应用：\(specResult.fontResolutions.count) 项字体、\(specResult.roleColors.count) 个角色色，字体/角色色/开本已落地。"
+                    if !specResult.unsupportedFields.isEmpty {
+                        detail += "\n\(specResult.unsupportedFields.count) 个字段暂不支持（已忽略）。"
+                    }
+                    self.showExportResult(message: "规范包导入成功", detail: detail)
+                } else {
+                    self.appState.applyImportedTokens(detected.tokens)
+                    self.showExportResult(
+                        message: "样式基线导入成功",
+                        detail: "\(detected.format == .figma ? "Figma" : "DTCG") token 已应用（\(detected.tokens.colors.count) 色 / \(detected.tokens.scalars.count) 数值）。"
+                    )
+                }
+            } catch {
+                self.showExportResult(message: "样式导入失败", detail: error.localizedDescription)
+            }
+        }
+    }
+
     func exportLayoutTemplates() {
         let savePanel = NSSavePanel()
         savePanel.title = "Export Layout Templates"
