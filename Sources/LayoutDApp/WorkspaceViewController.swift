@@ -1233,41 +1233,49 @@ extension WorkspaceViewController {
             try FileManager.default.createDirectory(at: step5Dir, withIntermediateDirectories: true)
             let destURL = step5Dir.appendingPathComponent("layout_plans.json")
             
-            // 1. Resolve active archetypes from WizardState
+            // 1. Generate content fingerprint
+            let fingerprint = SpreadPlanner.generateFingerprint(from: self.appState.project)
+            
+            // 2. Resolve active archetypes and weights
             let enabledIds = self.appState.project.wizardState?.enabledArchetypeIds ?? SpreadArchetype.defaults.map(\.id)
             let activeArchetypes = SpreadArchetype.defaults.filter { enabledIds.contains($0.id) }
             
-            // Fallback to all if empty
-            let chosenSkeletons = activeArchetypes.isEmpty ? SpreadArchetype.defaults : activeArchetypes
-            
-            // 2. Collect page layouts or strategies
-            let pages = appState.laidOutDocument?.pages ?? []
-            let pageCount = max(1, pages.count)
-            
-            var archetypes: [String] = []
-            var appliedPlans: [Int: LayoutPlan] = [:]
-            
-            for pageNum in 1...pageCount {
-                // Determine a strategy based on page number and chosen archetypes
-                let strategy: LayoutStrategy
-                if pageNum == 1 {
-                    strategy = chosenSkeletons.first(where: { $0.role == .opener })?.family ?? .opener
-                } else {
-                    let index = (pageNum / 2) % chosenSkeletons.count
-                    strategy = chosenSkeletons[index].family
+            var customArchetypes = activeArchetypes
+            for i in 0..<customArchetypes.count {
+                let id = customArchetypes[i].id
+                if let customW = self.appState.project.wizardState?.archetypeWeights?[id] {
+                    customArchetypes[i].weight = customW
                 }
-                
-                let plan = LayoutPlan(target: .page(pageNum), strategy: strategy, blocks: [])
-                appliedPlans[pageNum] = plan
-                archetypes.append(strategy.rawValue)
+            }
+            
+            let finalArchetypes = customArchetypes.isEmpty ? SpreadArchetype.defaults : customArchetypes
+            
+            // 3. Run the planner
+            let selections = SpreadPlanner.planSpreads(
+                fingerprint: fingerprint,
+                archetypes: finalArchetypes,
+                seed: 42
+            )
+            
+            // 4. Materialize plans
+            let materializedPlans = SpreadPlanner.materialize(
+                selections: selections,
+                archetypes: SpreadArchetype.defaults,
+                project: self.appState.project
+            )
+            
+            // 5. Update app state project's appliedLayoutPlans
+            self.appState.updateProject { project in
+                project.appliedLayoutPlans = materializedPlans
             }
             
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
-            let planData = try encoder.encode(appliedPlans)
+            let planData = try encoder.encode(materializedPlans)
             try planData.write(to: destURL, options: .atomic)
             
-            completion(archetypes)
+            let chosenArchetypeIds = selections.map { $0.archetypeId }
+            completion(chosenArchetypeIds)
         } catch {
             self.showExportResult(message: "运行规划器失败", detail: error.localizedDescription)
             completion(nil)
