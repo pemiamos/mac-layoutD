@@ -1165,11 +1165,61 @@ extension WorkspaceViewController {
             try FileManager.default.createDirectory(at: step4Dir, withIntermediateDirectories: true)
             let destURL = step4Dir.appendingPathComponent("style_profile.json")
             
-            // Serialize and freeze style library
+            // 1. Export sample PDF snapshot
+            let samplePDFURL = step4Dir.appendingPathComponent("sample_snapshot.pdf")
+            let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
+            try PDFExporter().export(
+                document: document,
+                project: self.appState.project,
+                to: samplePDFURL,
+                pageRange: nil,
+                drawCropMarks: false,
+                drawGridGuides: false,
+                pdfxVersion: .none
+            )
+            
+            // 2. Load Spec Pack JSON
+            let specPackURL = self.getWizardProductsDir().appendingPathComponent("step2_specpack/spec_pack.json")
+            let specPackJSON = (try? String(contentsOf: specPackURL)) ?? ""
+            
+            // 3. Export Manuscript Fixture
+            let manuscriptURL = step4Dir.appendingPathComponent("manuscript_fixture.json")
+            struct ManuscriptFixture: Codable {
+                var title: String
+                var sections: [BookSection]
+            }
+            let manuscript = ManuscriptFixture(
+                title: self.appState.project.metadata.title,
+                sections: self.appState.project.sections
+            )
+            
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
-            let profileData = try encoder.encode(self.appState.project.styles)
+            let manuscriptData = try encoder.encode(manuscript)
+            try manuscriptData.write(to: manuscriptURL, options: .atomic)
+            
+            // 4. Assemble and write StyleProfile
+            let unsupported = self.appState.importedSpecResult?.unsupportedFields ?? []
+            let fontCount = self.appState.importedSpecResult?.fontResolutions.count ?? 0
+            let colorCount = self.appState.importedSpecResult?.roleColors.count ?? 0
+            let supportedCount = fontCount + colorCount
+            
+            let styleProfile = StyleProfile(
+                specPackJSON: specPackJSON,
+                samplePDFPath: samplePDFURL.path,
+                unsupportedFields: unsupported,
+                supportedTokensCount: supportedCount,
+                styles: self.appState.project.styles,
+                timestamp: Date()
+            )
+            
+            let profileData = try encoder.encode(styleProfile)
             try profileData.write(to: destURL, options: .atomic)
+            
+            self.appState.isUpdatingQualityHistory = true
+            self.appState.project.styleProfile = styleProfile
+            self.appState.isUpdatingQualityHistory = false
+            
             completion(true)
         } catch {
             self.showExportResult(message: "冻结风格失败", detail: error.localizedDescription)

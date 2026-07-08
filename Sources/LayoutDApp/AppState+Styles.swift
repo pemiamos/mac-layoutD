@@ -72,12 +72,13 @@ extension AppState {
 
     func applyImportedTokens(_ importedTokens: DesignTokens, baselineGridCompensate: Double? = nil) {
         commitState()
-        var currentProject = project
         let result = SpecPackImportResult(
             tokens: importedTokens,
             unsupportedFields: [],
             fontResolutions: []
         )
+        self.importedSpecResult = result
+        var currentProject = project
         currentProject.applySpecPack(result, baselineGridCompensate: baselineGridCompensate)
         self.project = currentProject
     }
@@ -87,6 +88,7 @@ extension AppState {
     /// import sheet when the chosen file is a layoutD spec pack.
     func applySpecPackResult(_ result: SpecPackImportResult, baselineGridCompensate: Double? = nil) {
         commitState()
+        self.importedSpecResult = result
         var currentProject = project
         currentProject.applySpecPack(result, baselineGridCompensate: baselineGridCompensate)
         self.project = currentProject

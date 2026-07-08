@@ -28,6 +28,7 @@ extension AppState {
         var baselineProj = project
         baselineProj.appliedLayoutPlans = nil
         baselineProj.qualityMetricsHistory = nil
+        baselineProj.styleReport = nil
         if baselineDocument == nil || baselineSource != baselineProj {
             self.baselineDocument = engine.layout(project: baselineProj)
             baselineSource = baselineProj
@@ -38,6 +39,17 @@ extension AppState {
         self.report = report
         
         updateAIPlans()
+        
+        let reportObj = StyleReportGenerator.generateReport(
+            project: project,
+            document: doc,
+            preflightReport: report,
+            specResult: importedSpecResult
+        )
+        
+        isUpdatingQualityHistory = true
+        project.styleReport = reportObj
+        isUpdatingQualityHistory = false
         
         if let report = self.report {
             updateQualityHistorySilently(with: report)
@@ -58,6 +70,7 @@ extension AppState {
         var baselineProj = projectSnapshot
         baselineProj.appliedLayoutPlans = nil
         baselineProj.qualityMetricsHistory = nil
+        baselineProj.styleReport = nil
         let needsBaselineLayout = self.baselineDocument == nil || self.baselineSource != baselineProj
         let existingBaselineDocument = self.baselineDocument
         
@@ -108,6 +121,17 @@ extension AppState {
                 }
                 self.report = report
                 self.plans = proposedPlans
+                
+                let reportObj = StyleReportGenerator.generateReport(
+                    project: self.project,
+                    document: doc,
+                    preflightReport: report,
+                    specResult: self.importedSpecResult
+                )
+                
+                self.isUpdatingQualityHistory = true
+                self.project.styleReport = reportObj
+                self.isUpdatingQualityHistory = false
                 
                 self.updateQualityHistorySilently(with: report)
                 
