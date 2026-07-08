@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-08 10:18 | claude | 验收 AG 道 FRAME-CANVAS-1（画布/PDF/PNG 追平 IDML 分框：连续正文合并显示虚线框+整组选中移动，属性面板多选保护）：代码审查+3
+- **分支**：dev
+- **概述**：验收 AG 道 FRAME-CANVAS-1（画布/PDF/PNG 追平 IDML 分框：连续正文合并显示虚线框+整组选中移动，属性面板多选保护）：代码审查+303测试+14/14探针全过。审核中发现一处真实性能问题并直接修复：CanvasView+Drawing.swift 的 draw(page:) 对页内每个 frame 都调用 flowGroup(for:pageNumber:)，该函数每次调用都对整份文档重跑一遍 groupIntoFlowFrames——页内N个frame就是N倍全文档重算，画布重绘（滚动/悬停/拖拽都触发）在大稿子上会明显变慢；framesIntersecting()（marquee框选展开分组）同样每命中一个frame重算一次。两处都改成函数顶部只算一次分组+本地查找表复用，逻辑不变，验证过测试/探针仍全过。已合 dev(79d7708)+性能修复(6283043)+文档(14830f8)，push。
+- **改动文件**：Sources/LayoutDApp/CanvasView+Drawing.swift, Sources/LayoutDApp/CanvasView.swift（Claude审核性能修复）；AG原始改动：CanvasView+Interaction.swift, ObjectPropertiesView.swift, WorkspaceViewController.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, .ai/QUEUE.md
+- **检查**：AG提交时：303测试0失败、review-idml.sh 14/14、golden逐字节一致。Claude审核+性能修复后：重跑303测试+14/14探针+golden仍全过（证明性能修复零行为变化）
+- **下一步**：FRAME-SPLIT+FRAME-CANVAS-0/1 整条链路已完整（IDML导出+画布/PDF/PNG预览一致）。dev 已推送(14830f8)，main 未合，等用户在 GUI 里视觉验收（画布连续正文应显示为合并虚线框、点击/拖拽整组联动、多选时属性面板显示提示不可编辑）后再合 main。已用最新 dev 构建重启开发版 layoutD 窗口（加载 fixture-standard-chapter.md）供用户查看。
+
 ## 2026-07-08 05:10 | Antigravity | 完成 FRAME-CANVAS-1 连续正文分框画布/PDF/PNG合并显示及交互聚合，通过303个单测及14项探针
 - **分支**：feature/ag-frame-canvas-1
 - **概述**：完成了连续正文在显示/交互层（画布/PDF/PNG）的合并框聚合。
