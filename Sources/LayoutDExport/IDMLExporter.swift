@@ -214,15 +214,33 @@ public struct IDMLExporter {
                     // the reclaimed strip (matches the PDF/PNG/Canvas preview).
                     var textFrameRect = frame.rect
                     var paragraphAccent: (rect: Rect, color: String)? = nil
-                    if let rule = style.accentRule, rule.edge == .left,
+                    if let rule = style.accentRule,
                        let ruleHex = project.resolvedColorHex(rule.colorToken),
-                       rule.width > 0, frame.rect.width > rule.width + rule.gap {
-                        let barRect = Rect(x: frame.rect.x, y: frame.rect.y,
-                                           width: rule.width, height: frame.rect.height)
-                        textFrameRect = Rect(x: frame.rect.x + rule.width + rule.gap, y: frame.rect.y,
-                                             width: frame.rect.width - rule.width - rule.gap,
-                                             height: frame.rect.height)
-                        paragraphAccent = (barRect, ruleHex)
+                       rule.width > 0 {
+                        if rule.edge == .left, frame.rect.width > rule.width + rule.gap {
+                            let barRect = Rect(x: frame.rect.x, y: frame.rect.y,
+                                               width: rule.width, height: frame.rect.height)
+                            textFrameRect = Rect(x: frame.rect.x + rule.width + rule.gap, y: frame.rect.y,
+                                                 width: frame.rect.width - rule.width - rule.gap,
+                                                 height: frame.rect.height)
+                            paragraphAccent = (barRect, ruleHex)
+                        } else if rule.edge == .top, frame.rect.height > rule.width + rule.gap {
+                            let barLength = rule.length ?? frame.rect.width
+                            let barRect = Rect(x: frame.rect.x, y: frame.rect.y,
+                                               width: min(barLength, frame.rect.width), height: rule.width)
+                            textFrameRect = Rect(x: frame.rect.x, y: frame.rect.y + rule.width + rule.gap,
+                                                 width: frame.rect.width,
+                                                 height: frame.rect.height - rule.width - rule.gap)
+                            paragraphAccent = (barRect, ruleHex)
+                        } else if rule.edge == .bottom, frame.rect.height > rule.width + rule.gap {
+                            let barLength = rule.length ?? frame.rect.width
+                            let barRect = Rect(x: frame.rect.x, y: frame.rect.y + frame.rect.height - rule.width,
+                                               width: min(barLength, frame.rect.width), height: rule.width)
+                            textFrameRect = Rect(x: frame.rect.x, y: frame.rect.y,
+                                                 width: frame.rect.width,
+                                                 height: frame.rect.height - rule.width - rule.gap)
+                            paragraphAccent = (barRect, ruleHex)
+                        }
                     }
 
                     items.append(textFrameItem(self: "uTF\(pi)_\(fi)", story: storySelf,

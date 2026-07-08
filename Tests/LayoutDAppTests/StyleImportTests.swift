@@ -246,7 +246,9 @@ final class StyleImportTests: XCTestCase {
             ],
             roleColors: ["章名": "ink", "抽言": "accent"],
             roleDecorations: [
-                "抽言": SpecPackDecoration(type: "left-rule", color: "accent", widthPt: 3)
+                "抽言": SpecPackDecoration(type: "left-rule", color: "accent", widthPt: 3),
+                "图注": SpecPackDecoration(type: "top-tick", color: "accent", widthPt: 2, lengthMM: 6),
+                "章名": SpecPackDecoration(type: "bottom-rule", color: "accent", widthPt: 4)
             ]
         )
     }
@@ -309,13 +311,32 @@ final class StyleImportTests: XCTestCase {
         let state = AppState(project: BookProject.sample)
         state.applySpecPackResult(sampleSpecResult())
 
+        // Left decoration on pullQuote
         let pull = state.project.styles.paragraphStyle(id: StyleID.pullQuote.rawValue)
-        let rule = try XCTUnwrap(pull.accentRule, "抽言 left-rule decoration should map to a paragraph accent rule")
-        XCTAssertEqual(rule.edge, .left)
-        XCTAssertEqual(rule.colorToken, "accent")
-        XCTAssertEqual(rule.width, 3)
+        let ruleLeft = try XCTUnwrap(pull.accentRule, "抽言 left-rule decoration should map to a paragraph accent rule")
+        XCTAssertEqual(ruleLeft.edge, .left)
+        XCTAssertEqual(ruleLeft.colorToken, "accent")
+        XCTAssertEqual(ruleLeft.width, 3)
+
+        // Top decoration on caption
+        let caption = state.project.styles.paragraphStyle(id: StyleID.caption.rawValue)
+        let ruleTop = try XCTUnwrap(caption.accentRule, "图注 top-tick decoration should map to a paragraph accent rule")
+        XCTAssertEqual(ruleTop.edge, .top)
+        XCTAssertEqual(ruleTop.colorToken, "accent")
+        XCTAssertEqual(ruleTop.width, 2)
+        XCTAssertEqual(ruleTop.length, 6 * (72.0 / 25.4))
+
+        // Bottom decoration on heading1
+        let heading1 = state.project.styles.paragraphStyle(id: StyleID.heading1.rawValue)
+        let ruleBottom = try XCTUnwrap(heading1.accentRule, "章名 bottom-rule decoration should map to a paragraph accent rule")
+        XCTAssertEqual(ruleBottom.edge, .bottom)
+        XCTAssertEqual(ruleBottom.colorToken, "accent")
+        XCTAssertEqual(ruleBottom.width, 4)
+
         // paragraphStyle(id:) returns the token-resolved copy — the rule must survive.
         XCTAssertNotNil(state.project.styles.paragraphStyle(id: StyleID.pullQuote.rawValue).accentRule)
+        XCTAssertNotNil(state.project.styles.paragraphStyle(id: StyleID.caption.rawValue).accentRule)
+        XCTAssertNotNil(state.project.styles.paragraphStyle(id: StyleID.heading1.rawValue).accentRule)
     }
 
     /// `autoDetectAndParseDetailed` must preserve the full result for a spec pack
