@@ -208,8 +208,25 @@ public struct IDMLExporter {
                     let fillColor = frame.kind == .table ? nil : resolvedFillHex
                     let strokeColor = frame.strokeColorHex ?? component?.resolvedStrokeColorHex(project: project)
                     let strokeWidth = frame.strokeWidth ?? component?.strokeWidth ?? 0
+
+                    // Paragraph accent rule (抽言左侧明黄竖线): the frame has no
+                    // component, so shrink the text frame left and place the bar in
+                    // the reclaimed strip (matches the PDF/PNG/Canvas preview).
+                    var textFrameRect = frame.rect
+                    var paragraphAccent: (rect: Rect, color: String)? = nil
+                    if let rule = style.accentRule, rule.edge == .left,
+                       let ruleHex = project.resolvedColorHex(rule.colorToken),
+                       rule.width > 0, frame.rect.width > rule.width + rule.gap {
+                        let barRect = Rect(x: frame.rect.x, y: frame.rect.y,
+                                           width: rule.width, height: frame.rect.height)
+                        textFrameRect = Rect(x: frame.rect.x + rule.width + rule.gap, y: frame.rect.y,
+                                             width: frame.rect.width - rule.width - rule.gap,
+                                             height: frame.rect.height)
+                        paragraphAccent = (barRect, ruleHex)
+                    }
+
                     items.append(textFrameItem(self: "uTF\(pi)_\(fi)", story: storySelf,
-                                               rect: frame.rect, fillColor: fillColor,
+                                               rect: textFrameRect, fillColor: fillColor,
                                                strokeColor: strokeColor, strokeWidth: strokeWidth,
                                                pageW: pageW, pageH: pageH, dx: dx))
                     // Accent 必须位于有底色的文本框之上，否则会被框架填色遮住。
@@ -219,6 +236,10 @@ public struct IDMLExporter {
                                               width: min(accentWidth, frame.rect.width), height: frame.rect.height)
                         items.append(colorRectangleItem(self: "uAccent\(pi)_\(fi)", rect: accentRect,
                                                         fillColor: accentColor, pageW: pageW, pageH: pageH, dx: dx))
+                    }
+                    if let pa = paragraphAccent {
+                        items.append(colorRectangleItem(self: "uPAccent\(pi)_\(fi)", rect: pa.rect,
+                                                        fillColor: pa.color, pageW: pageW, pageH: pageH, dx: dx))
                     }
                     // 原生表格：源段是 .table 且带结构化行列时，Story 内输出 InDesign
                     // <Table>（真行列/可调宽），而非把拍平文本当普通段落画。

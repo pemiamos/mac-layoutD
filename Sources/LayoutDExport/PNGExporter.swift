@@ -329,6 +329,9 @@ public struct PNGExporter {
 
         switch frame.content {
         case .text(let text):
+            // Paragraph accent rule (抽言左侧竖线 / 图注顶部短横). PNG context is
+            // y-flipped like the PDF exporter, so the visual top edge is at maxY.
+            let contentRect = drawParagraphAccentRule(style.accentRule, in: rect, project: project, topAtMaxY: true, context: context)
             if let componentStyle = project.styles.componentStyle(for: frame.kind) {
                 if frame.backgroundColorHex == nil {
                     drawComponentBackground(componentStyle, project: project, in: rect, context: context)
@@ -344,7 +347,7 @@ public struct PNGExporter {
                         textColorHex: frame.textColorHex
                     )
                 } else {
-                    let textRect = rect.insetBy(
+                    let textRect = contentRect.insetBy(
                         dx: CGFloat(componentStyle.textInsetX),
                         dy: CGFloat(componentStyle.textInsetY)
                     )
@@ -367,7 +370,7 @@ public struct PNGExporter {
                     styleId: frame.styleId,
                     kind: frame.kind,
                     project: project,
-                    in: rect,
+                    in: contentRect,
                     context: context,
                     textColorHex: frame.textColorHex,
                     sourceParagraphId: frame.sourceParagraphId,
@@ -392,6 +395,23 @@ public struct PNGExporter {
             context.strokePath()
             context.restoreGState()
         }
+    }
+
+    /// Draw a paragraph accent bar (if any) and return the content rect the text
+    /// should occupy (inset to clear the bar). No rule → returns `rect` unchanged.
+    private func drawParagraphAccentRule(_ rule: ParagraphAccentRule?, in rect: CGRect, project: BookProject, topAtMaxY: Bool, context: CGContext) -> CGRect {
+        guard let rule,
+              rule.edge == .left,  // top-edge tick pending per-renderer orientation verification (ACCENT-2)
+              let hex = project.resolvedColorHex(rule.colorToken),
+              let color = NSColor.from(hex: hex) else {
+            return rect
+        }
+        let (bar, content) = rule.geometry(in: rect, topAtMaxY: topAtMaxY)
+        context.saveGState()
+        context.setFillColor(color.cgColor)
+        context.fill(bar)
+        context.restoreGState()
+        return content
     }
 
     private func drawComponentBackground(_ style: ComponentStyle, project: BookProject, in rect: CGRect, context: CGContext) {

@@ -302,6 +302,22 @@ final class StyleImportTests: XCTestCase {
         XCTAssertEqual(state.project.pageSetup.pageSize.width, 500.0)
     }
 
+    /// A spec pack's role decoration (抽言 left-rule) must land as a paragraph
+    /// accent rule on the pull-quote style, and survive token resolution (the
+    /// renderers read the resolved style — ACCENT-1).
+    func testSpecPackDecorationLandsAsParagraphAccentRule() throws {
+        let state = AppState(project: BookProject.sample)
+        state.applySpecPackResult(sampleSpecResult())
+
+        let pull = state.project.styles.paragraphStyle(id: StyleID.pullQuote.rawValue)
+        let rule = try XCTUnwrap(pull.accentRule, "抽言 left-rule decoration should map to a paragraph accent rule")
+        XCTAssertEqual(rule.edge, .left)
+        XCTAssertEqual(rule.colorToken, "accent")
+        XCTAssertEqual(rule.width, 3)
+        // paragraphStyle(id:) returns the token-resolved copy — the rule must survive.
+        XCTAssertNotNil(state.project.styles.paragraphStyle(id: StyleID.pullQuote.rawValue).accentRule)
+    }
+
     /// `autoDetectAndParseDetailed` must preserve the full result for a spec pack
     /// and return nil `specResult` for DTCG / Figma.
     func testAutoDetectDetailedPreservesSpecResult() throws {

@@ -485,6 +485,8 @@ extension CanvasView {
         case .text(let text):
             let textColor = resolvedColor(memoryColor: frameTextColors[frame.id], persistedHex: frame.textColorHex)
             let hasBg = resolvedColor(memoryColor: frameBackgroundColors[frame.id], persistedHex: frame.backgroundColorHex) != nil
+            // Paragraph accent rule (抽言左侧竖线); scaled to the canvas zoom.
+            let contentRect = drawParagraphAccentRule(style.accentRule, in: rect, project: project)
             if let componentStyle = project.styles.componentStyle(for: frame.kind) {
                 if !hasBg {
                     drawComponentBackground(componentStyle, project: project, rect: rect)
@@ -504,7 +506,7 @@ extension CanvasView {
                         text,
                         styleId: frame.styleId,
                         project: project,
-                        rect: rect.insetBy(
+                        rect: contentRect.insetBy(
                             dx: CGFloat(componentStyle.textInsetX) * zoomScale,
                             dy: CGFloat(componentStyle.textInsetY) * zoomScale
                         ),
@@ -522,7 +524,7 @@ extension CanvasView {
                     text,
                     styleId: frame.styleId,
                     project: project,
-                    rect: rect,
+                    rect: contentRect,
                     kind: frame.kind,
                     textColorOverride: textColor,
                     sourceParagraphId: frame.sourceParagraphId,
@@ -622,6 +624,21 @@ extension CanvasView {
                 }
             }
         }
+    }
+
+    /// Draw a paragraph accent bar (if any) scaled to the canvas zoom, and return
+    /// the content rect the text should occupy. No rule → returns `rect` unchanged.
+    private func drawParagraphAccentRule(_ rule: ParagraphAccentRule?, in rect: CGRect, project: BookProject) -> CGRect {
+        guard let rule,
+              rule.edge == .left,  // top-edge tick pending per-renderer orientation verification (ACCENT-2)
+              let hex = project.resolvedColorHex(rule.colorToken),
+              let color = NSColor.fromHex(hex) else {
+            return rect
+        }
+        let (bar, content) = rule.geometry(in: rect, topAtMaxY: false, scale: zoomScale)
+        color.setFill()
+        bar.fill()
+        return content
     }
 
     private func drawComponentBackground(_ style: ComponentStyle, project: BookProject, rect: CGRect) {
