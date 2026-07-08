@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 06:50 | antigravity | Completed and merged ACCENT-2 (top tick and bottom underline decorations) and WI
+- **分支**：ag-lane
+- **概述**：Completed and merged ACCENT-2 (top tick and bottom underline decorations) and WIZARD-1 (initial layout six-stage wizard workbench skeleton with sequential gating and disk-persisted rollback tracking). All checks pass and dev is updated.
+- **改动文件**：Sources/LayoutDCore/BookProject.swift, Sources/LayoutDCore/WizardState.swift, Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/PanelDockView.swift, Sources/LayoutDApp/WizardView.swift, Sources/LayoutDApp/WorkspaceViewController.swift, .ai/QUEUE.md
+- **检查**：swift build: pass, swift test: pass (312 tests), review-idml.sh: pass
+- **下一步**：Codex needs to work on SPEC-PACK-2 (highest priority total gate), GHOST-NUM-1a, HEADER-1a, and SECNUM-1a. AG's remaining visual chrome/style rendering tasks (GHOST-NUM-1b, HEADER-1b, SECNUM-1b, STYLE-LOCK-1) are blocked until these are parsed.
+
 ## 2026-07-09 06:48 | claude | 用户 InDesign 验收 ACCENT-1 抽言竖线通过（村落-方案A.idml 截图：明黄竖线+江城律动宋抽言体+两栏正文全对），据此做了集成收尾三件事：
 - **分支**：dev
 - **概述**：用户 InDesign 验收 ACCENT-1 抽言竖线通过（村落-方案A.idml 截图：明黄竖线+江城律动宋抽言体+两栏正文全对），据此做了集成收尾三件事：①ACCENT-1 + 村落-方案A 标记验收通过（QUEUE）；②dev→main 合并推送：本地 main 对齐 origin/main(3305be8) 后 --no-ff 合 dev，main=a5ce059 已 push，dev 自上次合 main 以来 33 提交全部落 main（ACCENT-1/SPEC-APPLY-1/PILOT-2/FRAME-CANVAS-1/UNDERLAY-1/engine 冻结页隔离/初排工作台开发计划），dev 领先 main 内容提交数归 0；③清理：删 10 个死枝本地分支（ag-fix-canvas-1/frame-canvas-1/sample-1/sample-1-v2/textframe-inset/underlay-1/claude-fixture-1/planblock-isolation/codex-docx-import-guards/codex-spec-pack-1）+ 删 2 个已合远端分支(origin/feature/ag-sample-1-v2、claude-planblock-isolation)+ 移除残留 /tmp/layoutD-verify-planblock worktree。最终：本地仅剩 dev/main/ag-lane/codex-lane/feature-ag-accent-2/feature-codex-spec-pack-2；远端仅 dev/main；worktree 3 个干净。
