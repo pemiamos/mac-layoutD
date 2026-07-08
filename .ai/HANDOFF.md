@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 07:06 | antigravity | Completed STYLE-LOCK-1: implemented baseline style freezing (StyleProfile) at St
+- **分支**：ag-lane
+- **概述**：Completed STYLE-LOCK-1: implemented baseline style freezing (StyleProfile) at Step 4 of the wizard, exporting the 4 core artifacts (Spec Pack JSON, manuscript fixture, support rate, and PDF sample). Implemented StyleReportGenerator to analyze layout quality indicators (token coverage, motif checkmarks, strategy repeats, page text/image densities, and overlaps/overflows) and integrated a detailed quality control panel inside WizardView. All 315 tests pass.
+- **改动文件**：Sources/LayoutDCore/StyleProfile.swift, Sources/LayoutDCore/BookProject.swift, Sources/LayoutDApp/StyleReportGenerator.swift, Sources/LayoutDApp/AppState+Layout.swift, Sources/LayoutDApp/AppState+Styles.swift, Sources/LayoutDApp/WorkspaceViewController.swift, Sources/LayoutDApp/WizardView.swift, Tests/LayoutDAppTests/StyleReportGeneratorTests.swift, .ai/QUEUE.md
+- **检查**：swift build: pass, swift test: pass (315 tests), review-idml.sh: pass
+- **下一步**：Claude can work on PLANNER-1a-DESIGN. AG can wait for Codex to complete GHOST-NUM-1a, HEADER-1a, or SECNUM-1a to unblock the respective rendering tasks.
+
 ## 2026-07-09 07:03 | codex | 完成 BOOK-SKILL-1/BOOK-SKILL-2：新增 `.ai/skills/spec-from-reference/SKILL.md` 与 `.ai
 - **分支**：feature/codex-book-skills
 - **概述**：完成 BOOK-SKILL-1/BOOK-SKILL-2：新增 `.ai/skills/spec-from-reference/SKILL.md` 与 `.ai/skills/sample-review/SKILL.md`。前者固化参考图→layoutD v2 规范包提取流程，强调先读 `docs/spec-pack-guide.md`、测量 trim/grid/type/motif/rhythm/qualityGates、字体真实权重、unsupportedFields 诚实上报、Figma 不作主路径；后者固化样张/IDML 预览评审流程，提供 7 维 0-5 打分、报告格式、诊断 parsed-but-not-consumed / renderer gap / planner gap / InDesign 手工项的词汇表。feature commit `f9463b9 docs(skills): add layout spec extraction and sample review skills`，已合入本地 dev merge `66c0f8d`。
