@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 04:38 | claude | 用户「继续」＝投入视觉标识层，让输出真正像图1。做完 ACCENT-1（视觉标识层第一刀：抽言左侧明黄竖线），合 dev(fba2462)。根因：抽言成帧后 k
+- **分支**：dev
+- **概述**：用户「继续」＝投入视觉标识层，让输出真正像图1。做完 ACCENT-1（视觉标识层第一刀：抽言左侧明黄竖线），合 dev(fba2462)。根因：抽言成帧后 kind=.text+styleId=pullQuote，点缀只按 frame.kind 查组件→抽言查不到→0 明黄；且 resolved(using:) 重建样式丢新字段。改动：①ParagraphStyle 加 accentRule(edge/colorToken/width/length/gap，可选 Codable 兼容)+共享 geometry(四渲染器同算法)+resolved 保留；②applySpecPack 把 roleDecorations 的 left-rule/top-tick 接到 pullQuote/caption 段落(此前只挂 .callout 组件)；③PDF/PNG/Canvas draw(frame:) 画竖条+文本内缩；④IDML 给抽言框左侧腾条带 emit colorRectangleItem 明黄竖条。本刀只开 edge==.left(抽言竖线，PNG 肉眼核实正确)，.top(图注横线)数据已解析但渲染门控关闭(各渲染器 y 翻转不同、顶边定位待核实=ACCENT-2)。实机 村落+方案A：抽言竖线 PNG 核实、IDML 出3个 uPAccent 矩形。310测试0失败(+1)、14/14探针、golden 逐字节一致(默认样章无 accentRule 零影响)。附带上一轮也已合 dev：CLI --spec-pack(0a53950)+GUI File菜单「导入样式基线/规范包」(⌘I)修图4。
+- **改动文件**：Sources/LayoutDCore/StyleLibrary.swift(ParagraphAccentRule+accentRule+geometry+resolved), Sources/LayoutDImport/BookProject+Tokens.swift(decoration→accentRule), Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDApp/CanvasView+Drawing.swift, Sources/LayoutDExport/IDMLExporter.swift, Tests/LayoutDAppTests/StyleImportTests.swift, .ai/QUEUE.md
+- **检查**：310 测试 0 失败、review-idml.sh 14/14、golden 逐字节一致；PNG 肉眼核实抽言明黄竖线正确、无杂散点缀；IDML 出 3 个 uPAccent 矩形(对应3处抽言)。
+- **下一步**：1) 用户 InDesign 打开桌面 村落-方案A.idml 确认抽言左侧明黄竖线(IDML 侧自动化验不了)；桌面 村落-方案A-抽言竖线.png 是 PNG 预览效果。2) 视觉标识层剩余(已登记 QUEUE)：ACCENT-2 图注顶部短横+标题线(需逐渲染器核实 y 翻转再开 .top 门控)、GHOST-NUM-1 超大 ghost 章节序号、HEADER-1 页眉 chrome、SECNUM-1 节序号——这些让输出更接近图1，但 章节序号/页眉页码/节名numberStyle 现都在 unsupportedFields，需先在 parseSpecPack 支持再渲染。3) dev 领先 main 33，建议尽快集中一次视觉验收合 main。
+
 ## 2026-07-08 17:11 | claude | 用户截图反馈三事(图1目标方案A杂志样式/图2-3 InDesign默认IDML无样式/图4 App导入报错)，全部定位并部分修复。①图4根因＝用户点了 Fil
 - **分支**：dev
 - **概述**：用户截图反馈三事(图1目标方案A杂志样式/图2-3 InDesign默认IDML无样式/图4 App导入报错)，全部定位并部分修复。①图4根因＝用户点了 File菜单「Import Layout Templates」(模板库导入器 schema 不符→data missing)；SPEC-APPLY-1 的规范包导入此前只藏在检查器按钮里、菜单栏没有。已在 File 菜单加「导入样式基线/规范包...」(⌘I)，走 autoDetectAndParseDetailed→规范包用 applySpecPackResult 全量落地、figma/dtcg 用 applyImportedTokens。②图2-3根因＝--export-idml 之前无法套规范包(只有 --render-samples 出 PDF)。已加 CLI --spec-pack PATH(ProjectLoader.applyingSpecPackIfNeeded，加载后任何导出前套)，实机 村落.docx+方案A→村落-方案A.idml 复合字体+明黄F5C518色板+185x260开本全落地。③诚实缺口(渲染PNG肉眼核实)：即便套方案A，村落只实现字体/两栏/开本/字号，方案A视觉标识——明黄点缀(抽言竖线/图注横线/标题线)、超大ghost章节序号、页眉chrome、节序号——整章0明黄像素全没画。原因：unsupportedFields(章节序号/页眉页码/节名numberStyle)明确不支持，且受支持的抽言/图注点缀只映射到 .callout/.caption 组件样式而真书抽言是 pullQuote 段落样式→点缀没挂上。方案A"杂志感"约1/3实现。合 dev(0a53950 feat + 0f9a2a3 queue)。
