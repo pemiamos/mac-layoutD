@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 06:59 | antigravity | Completed SPLIT-APPSTATE: split the 1387-line AppState.swift into 6 clean, modul
+- **分支**：ag-lane
+- **概述**：Completed SPLIT-APPSTATE: split the 1387-line AppState.swift into 6 clean, modular files without any logic changes. All unit tests, IDML structural tag checks, and golden regressions are pass.
+- **改动文件**：Sources/LayoutDApp/AppState.swift, Sources/LayoutDApp/AppState+Selection.swift, Sources/LayoutDApp/AppState+Layout.swift, Sources/LayoutDApp/AppState+Templates.swift, Sources/LayoutDApp/AppState+Styles.swift, Sources/LayoutDApp/AppState+Colors.swift, .ai/QUEUE.md
+- **检查**：swift build: pass, swift test: pass (314 tests), review-idml.sh: pass
+- **下一步**：Claude can proceed with PLANNER-1a-DESIGN now that SPEC-PACK-2 has been merged. AG can work on STYLE-LOCK-1 (基线冻结 + 风格报告 v0) or wait for Codex to finish GHOST-NUM-1a, HEADER-1a, and SECNUM-1a to unblock the rest of the visual rendering tasks.
+
 ## 2026-07-09 06:56 | codex | 完成 SPEC-PACK-2 规范包 v2 schema（feature/codex-spec-pack-2）。实现 `SpecPackImportResult
 - **分支**：feature/codex-spec-pack-2
 - **概述**：完成 SPEC-PACK-2 规范包 v2 schema（feature/codex-spec-pack-2）。实现 `SpecPackImportResult` 的 v2 强类型承载：`motifs`（chapterNumber/sectionNumber/header/captionTick/headingRule/pullQuoteRule）、`layoutGrammar`（spreadArchetypes + rhythm）、`qualityGates`；旧方案A 写在 `roles.章节序号` / `roles.节名.numberStyle` / `roles.页眉页码` 的字段兼容提升为 motif，不再只作为 unsupported；v2 未知字段按 JSON path 进入 `unsupportedFields`；新增非法值路径测试与指南更新。代码提交 `c2a89c7 feat(import): support spec pack v2 schema`，已按自主集成模式合入本地 `dev`，merge commit 待最终状态确认。
