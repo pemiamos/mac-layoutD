@@ -6,9 +6,36 @@ struct StyleImportSheet: View {
     @ObservedObject var state: AppState
     let tokens: DesignTokens
     let format: ImportFormat
+    var specResult: SpecPackImportResult? = nil
     let onDismiss: () -> Void
-    
+
     @State private var compensateBaselineGrid: Double = 14.0
+
+    private var isSpecPack: Bool { format == .specPack && specResult != nil }
+
+    private var formatBadgeText: String {
+        switch format {
+        case .figma: return "Figma"
+        case .specPack: return "规范包"
+        case .dtcg: return "DTCG"
+        }
+    }
+
+    private var formatBadgeColor: Color {
+        switch format {
+        case .figma: return .orange
+        case .specPack: return .green
+        case .dtcg: return .blue
+        }
+    }
+
+    private var headerSubtitle: String {
+        if isSpecPack, let result = specResult {
+            return "从 layoutD 规范包解析 \(tokens.colors.count) 个颜色、\(tokens.scalars.count) 个数值参数、\(result.fontResolutions.count) 项字体、\(result.roleColors.count) 个角色色"
+        }
+        let sourceName = format == .figma ? "Figma Variables" : "DTCG JSON"
+        return "从 \(sourceName) 成功解析 \(tokens.colors.count) 个颜色，\(tokens.scalars.count) 个数值参数"
+    }
     
     // Compute binding statistics
     private var bindingStats: (matches: Int, total: Int, rate: Double) {
@@ -51,20 +78,20 @@ struct StyleImportSheet: View {
                     Text("导入样式基线")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("从 \(format == .figma ? "Figma Variables" : "DTCG JSON") 成功解析 \(tokens.colors.count) 个颜色，\(tokens.scalars.count) 个数值参数")
+                    Text(headerSubtitle)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 Spacer()
-                
+
                 // Format Badge
-                Text(format == .figma ? "Figma" : "DTCG")
+                Text(formatBadgeText)
                     .font(.caption2)
                     .fontWeight(.black)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(format == .figma ? Color.orange.opacity(0.2) : Color.blue.opacity(0.2))
-                    .foregroundColor(format == .figma ? .orange : .blue)
+                    .background(formatBadgeColor.opacity(0.2))
+                    .foregroundColor(formatBadgeColor)
                     .cornerRadius(4)
             }
             .padding(.all, 20)
@@ -109,28 +136,69 @@ struct StyleImportSheet: View {
                     
                     // Section 2: Lossy Item Warnings (Compensation)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("有损导入项与值补偿")
+                        Text(isSpecPack ? "规范包应用项与提示" : "有损导入项与值补偿")
                             .font(.headline)
-                        
-                        // Composite Fonts Warning
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
-                                .font(.system(size: 14))
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("中西文复合字体设置")
-                                    .font(.subheadline)
-                                    .fontWeight(.bold)
-                                Text("Figma/DTCG 文件中不含复合字体映射。导入后英数字将自动应用默认复合字体映射（如 Georgia/Helvetica），汉字保持基线对齐。")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+
+                        if isSpecPack, let result = specResult {
+                            // Spec pack applies fonts / role colors / trim directly.
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundColor(.green)
+                                    .font(.system(size: 14))
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("字体族 / 角色色 / 开本将随规范包落地")
+                                        .font(.subheadline)
+                                        .fontWeight(.bold)
+                                    Text("规范包携带 \(result.fontResolutions.count) 项字体映射、\(result.roleColors.count) 个角色色、\(result.roleDecorations.count) 项装饰点缀，导入后将直接应用到对应段落样式与页面开本（与命令行样张一致）。")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
+                            .padding(.all, 12)
+                            .background(Color.green.opacity(0.1))
+                            .cornerRadius(8)
+
+                            if !result.unsupportedFields.isEmpty {
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.system(size: 14))
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("\(result.unsupportedFields.count) 个字段暂不支持（将被忽略）")
+                                            .font(.subheadline)
+                                            .fontWeight(.bold)
+                                        Text(result.unsupportedFields.prefix(12).joined(separator: "、") + (result.unsupportedFields.count > 12 ? " …" : ""))
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(.all, 12)
+                                .background(Color.orange.opacity(0.1))
+                                .cornerRadius(8)
+                            }
+                        } else {
+                            // Composite Fonts Warning (Figma / DTCG only)
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.system(size: 14))
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("中西文复合字体设置")
+                                        .font(.subheadline)
+                                        .fontWeight(.bold)
+                                    Text("Figma/DTCG 文件中不含复合字体映射。导入后英数字将自动应用默认复合字体映射（如 Georgia/Helvetica），汉字保持基线对齐。")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(.all, 12)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(8)
                         }
-                        .padding(.all, 12)
-                        .background(Color.orange.opacity(0.1))
-                        .cornerRadius(8)
-                        
+
                         // Baseline Grid Warning (if missing)
                         if isBaselineGridMissing {
                             HStack(alignment: .top, spacing: 8) {
@@ -259,7 +327,12 @@ struct StyleImportSheet: View {
                 .keyboardShortcut(.cancelAction)
                 
                 Button("确认导入") {
-                    state.applyImportedTokens(tokens, baselineGridCompensate: isBaselineGridMissing ? compensateBaselineGrid : nil)
+                    let compensate = isBaselineGridMissing ? compensateBaselineGrid : nil
+                    if isSpecPack, let result = specResult {
+                        state.applySpecPackResult(result, baselineGridCompensate: compensate)
+                    } else {
+                        state.applyImportedTokens(tokens, baselineGridCompensate: compensate)
+                    }
                     onDismiss()
                 }
                 .keyboardShortcut(.defaultAction)

@@ -214,8 +214,102 @@ final class StyleImportTests: XCTestCase {
     private func compStyleAccentWidth(_ style: ComponentStyle) -> Double {
         style.accentWidth
     }
-    
+
     private func compStyleStrokeWidth(_ style: ComponentStyle) -> Double {
         style.strokeWidth
+    }
+
+    // MARK: - SPEC-APPLY-1: GUI apply path carries the full spec-pack result
+
+    /// The spec pack that the GUI apply path must land: fonts / role colors /
+    /// trim / decorations — not just DesignTokens.
+    private func sampleSpecResult() -> SpecPackImportResult {
+        let tokens = DesignTokens(
+            colorModes: ["default"],
+            defaultMode: "default",
+            colors: [
+                ColorTokenSet(id: "accent", hex: "#F5C518"),
+                ColorTokenSet(id: "ink", hex: "#1B1B1B")
+            ],
+            scalars: [
+                ScalarToken(id: "page.width", value: 500.0, kind: .dimension),
+                ScalarToken(id: "page.height", value: 700.0, kind: .dimension)
+            ]
+        )
+        return SpecPackImportResult(
+            tokens: tokens,
+            unsupportedFields: [],
+            fontResolutions: [
+                SpecPackFontResolution(roleOrAlias: "章名", requestedName: "标题", resolvedName: "SpecApplyHeadingFont"),
+                SpecPackFontResolution(roleOrAlias: "正文", requestedName: "正文", resolvedName: "SpecApplyBodyFont"),
+                SpecPackFontResolution(roleOrAlias: "西文", requestedName: "西文", resolvedName: "SpecApplyLatinFont")
+            ],
+            roleColors: ["章名": "ink", "抽言": "accent"],
+            roleDecorations: [
+                "抽言": SpecPackDecoration(type: "left-rule", color: "accent", widthPt: 3)
+            ]
+        )
+    }
+
+    /// The GUI apply path (`applySpecPackResult`) must land the same visual state
+    /// (fonts / role colors / trim / decorations) as `BookProject.applySpecPack`.
+    func testGUIApplySpecPackResultLandsFontsColorsAndTrim() throws {
+        let state = AppState(project: BookProject.sample)
+        state.applySpecPackResult(sampleSpecResult())
+
+        // Trim
+        XCTAssertEqual(state.project.pageSetup.pageSize.width, 500.0)
+        XCTAssertEqual(state.project.pageSetup.pageSize.height, 700.0)
+
+        // Fonts (composite) — the differentiator that used to be dropped
+        let heading = state.project.styles.paragraphStyle(id: StyleID.heading1.rawValue)
+        XCTAssertEqual(heading.fontName, "SpecApplyHeadingFont")
+        XCTAssertEqual(heading.compositeFont?[.chinese]?.fontName, "SpecApplyHeadingFont")
+        XCTAssertEqual(heading.compositeFont?[.latin]?.fontName, "SpecApplyLatinFont")
+        XCTAssertEqual(heading.colorToken, "ink")
+
+        let body = state.project.styles.paragraphStyle(id: StyleID.body.rawValue)
+        XCTAssertEqual(body.fontName, "SpecApplyBodyFont")
+
+        // Role color + decoration
+        let pullQuote = state.project.styles.paragraphStyle(id: StyleID.pullQuote.rawValue)
+        XCTAssertEqual(pullQuote.colorToken, "accent")
+        let callout = state.project.styles.safeComponentStyles.first(where: { $0.frameKind == .callout })
+        XCTAssertEqual(callout?.accentColorToken, "accent")
+
+        // Undo restores the pre-import state
+        XCTAssertTrue(state.canUndo)
+        state.undo()
+        XCTAssertNotEqual(state.project.styles.paragraphStyle(id: StyleID.heading1.rawValue).fontName, "SpecApplyHeadingFont")
+    }
+
+    /// Regression guard for the SPEC-APPLY-1 gap: the tokens-only path
+    /// (`applyImportedTokens`) intentionally does NOT carry fonts / role colors /
+    /// decorations. This is exactly why the GUI must route spec packs through
+    /// `applySpecPackResult` instead. If this ever starts landing fonts, the two
+    /// paths have converged and the routing split can be revisited.
+    func testTokensOnlyPathDoesNotCarryFontsOrRoleColors() throws {
+        let result = sampleSpecResult()
+        let state = AppState(project: BookProject.sample)
+        let originalFont = state.project.styles.paragraphStyle(id: StyleID.heading1.rawValue).fontName
+
+        state.applyImportedTokens(result.tokens)
+
+        let heading = state.project.styles.paragraphStyle(id: StyleID.heading1.rawValue)
+        XCTAssertEqual(heading.fontName, originalFont, "tokens-only path must not change fonts")
+        XCTAssertNotEqual(heading.fontName, "SpecApplyHeadingFont")
+        // Trim lives in DesignTokens, so it DOES apply on both paths.
+        XCTAssertEqual(state.project.pageSetup.pageSize.width, 500.0)
+    }
+
+    /// `autoDetectAndParseDetailed` must preserve the full result for a spec pack
+    /// and return nil `specResult` for DTCG / Figma.
+    func testAutoDetectDetailedPreservesSpecResult() throws {
+        let dtcg = """
+        {"color":{"ink":{"$type":"color","$value":"#111111"}}}
+        """
+        let dtcgDetected = try StyleBaselineImporter.autoDetectAndParseDetailed(jsonData: Data(dtcg.utf8))
+        XCTAssertEqual(dtcgDetected.format, .dtcg)
+        XCTAssertNil(dtcgDetected.specResult)
     }
 }
