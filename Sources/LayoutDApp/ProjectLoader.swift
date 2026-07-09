@@ -45,10 +45,11 @@ struct ProjectLoader {
                     into: .sample,
                     from: options.importTemplateLibraryPath
                 )
-                project = try applyingSpecPackIfNeeded(
+                let styled = try applyingSpecPackIfNeeded(
                     into: withTemplates,
                     from: options.specPackPath
                 )
+                project = applyingAutoPlanIfNeeded(into: styled, enabled: options.autoPlan)
                 loadError = nil
             } catch {
                 project = .sample
@@ -96,10 +97,11 @@ struct ProjectLoader {
                 into: loadedProject,
                 from: options.importTemplateLibraryPath
             )
-            let project = try applyingSpecPackIfNeeded(
+            let styled = try applyingSpecPackIfNeeded(
                 into: withTemplates,
                 from: options.specPackPath
             )
+            let project = applyingAutoPlanIfNeeded(into: styled, enabled: options.autoPlan)
             return LoadedProject(
                 project: project,
                 sourceDescription: sourceDescription(for: manuscriptURL),
@@ -252,6 +254,53 @@ struct ProjectLoader {
         }
         var updated = project
         updated.applySpecPack(result)
+        return updated
+    }
+
+    /// Runs the SpreadPlanner headlessly and bakes its per-spread archetype
+    /// selection into `project.appliedLayoutPlans`, so a subsequent CLI export
+    /// reflects the auto-planned 对开骨架 layout (rhythm / big-image breathers /
+    /// chapter openers) — not just the plain faithful text flow. This mirrors the
+    /// GUI wizard station-5 path (`WorkspaceViewController.runPlannerForWizard`)
+    /// so CLI and GUI produce the same planned layout. Deterministic (fixed seed).
+    private func applyingAutoPlanIfNeeded(
+        into project: BookProject,
+        enabled: Bool
+    ) -> BookProject {
+        guard enabled else {
+            return project
+        }
+
+        let fingerprint = SpreadPlanner.generateFingerprint(from: project)
+
+        // Honour the wizard's enabled-archetype set + weights when present;
+        // otherwise fall back to the built-in default archetype table.
+        let enabledIds = project.wizardState?.enabledArchetypeIds ?? SpreadArchetype.defaults.map(\.id)
+        var activeArchetypes = SpreadArchetype.defaults.filter { enabledIds.contains($0.id) }
+        for i in activeArchetypes.indices {
+            if let customW = project.wizardState?.archetypeWeights?[activeArchetypes[i].id] {
+                activeArchetypes[i].weight = customW
+            }
+        }
+        let finalArchetypes = activeArchetypes.isEmpty ? SpreadArchetype.defaults : activeArchetypes
+
+        let selections = SpreadPlanner.planSpreads(
+            fingerprint: fingerprint,
+            archetypes: finalArchetypes
+        )
+        let plans = SpreadPlanner.materialize(
+            selections: selections,
+            archetypes: SpreadArchetype.defaults,
+            project: project
+        )
+
+        var updated = project
+        updated.appliedLayoutPlans = plans
+        if updated.wizardState == nil {
+            updated.wizardState = WizardState()
+        }
+        updated.wizardState?.spreadSelections = selections
+        fputs("[auto-plan] planned \(selections.count) spreads across \(plans.count) pages using \(finalArchetypes.count) archetypes.\n", stderr)
         return updated
     }
 
@@ -435,6 +484,10 @@ private struct CommandLineOptions {
     var exportPackagePath: String?
     var exportIDMLPath: String?
     var idmlFacing: Bool = false
+    /// Run the SpreadPlanner headlessly before export so `--export-idml`/`--export-pdf`
+    /// reflect the auto-selected 对开骨架 (same pipeline the GUI wizard station 5 uses),
+    /// instead of the plain faithful text flow. Enables reproducible PILOT-3 runs.
+    var autoPlan: Bool = false
     var pdfxVersion: PDFXVersion = .none
     var exportPDFFlowPath: String?
     var exportPNGFlowDirectoryPath: String?
@@ -608,6 +661,12 @@ private struct CommandLineOptions {
             if argument == "--export-idml", index + 1 < arguments.count {
                 exportIDMLPath = arguments[index + 1]
                 index += 2
+                continue
+            }
+
+            if argument == "--auto-plan" {
+                autoPlan = true
+                index += 1
                 continue
             }
 
