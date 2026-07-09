@@ -6,6 +6,7 @@ struct PanelDockView: View {
     let sidebar: SidebarView
     let inspector: InspectorView
     let wizard: WizardView
+    let wireframe: WireframePanelView
 
     @State private var selectedDock = 0
 
@@ -14,7 +15,8 @@ struct PanelDockView: View {
             Picker("", selection: $selectedDock) {
                 Text("面板").tag(0)
                 Text("检查器").tag(1)
-                Text("向导").tag(2)
+                Text("线框图").tag(2)
+                Text("向导").tag(3)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -29,8 +31,10 @@ struct PanelDockView: View {
                     .allowsHitTesting(selectedDock == 0)
                 inspector.opacity(selectedDock == 1 ? 1 : 0)
                     .allowsHitTesting(selectedDock == 1)
-                wizard.opacity(selectedDock == 2 ? 1 : 0)
+                wireframe.opacity(selectedDock == 2 ? 1 : 0)
                     .allowsHitTesting(selectedDock == 2)
+                wizard.opacity(selectedDock == 3 ? 1 : 0)
+                    .allowsHitTesting(selectedDock == 3)
             }
         }
         .background(Color(NSColor.windowBackgroundColor))

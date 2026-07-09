@@ -2,7 +2,10 @@ import Foundation
 import LayoutDCore
 
 public struct SpreadPlanner {
-    public static func generateFingerprint(from project: BookProject) -> ContentFingerprint {
+    public static func generateFingerprint(
+        from project: BookProject,
+        linesPerSpread: Int = 64
+    ) -> ContentFingerprint {
         var demands: [SpreadDemand] = []
         var currentSpreadIndex = 0
         var currentLines = 0
@@ -11,8 +14,10 @@ public struct SpreadPlanner {
         var currentKnowledgeCards = 0
         var isChapterStart = true
         var isSectionStart = false
-        
-        let linesPerSpread = 64
+
+        // 线框图面板的「留白比例」把这里调低（每对开装更少行 → 更多留白）；
+        // 下限防止极端值把一本书炸成上百对开。默认 64 = 原行为。
+        let linesPerSpread = max(16, linesPerSpread)
         
         // Build a section-index → [Asset] lookup from project-level assets.
         // Assets carry no explicit section reference, so we distribute them

@@ -22,7 +22,13 @@ public struct WizardState: Codable, Equatable, Sendable {
     public var enabledArchetypeIds: [String]?
     public var archetypeWeights: [String: Double]?
     public var spreadSelections: [SpreadSelection]?
-    
+
+    // 线框图面板的规划调节（可选、老工程 JSON 缺字段解码为 nil）：
+    // plannerWhitespaceRatio ∈ 0...0.5，折算进内容指纹的每对开行数（越大越留白）；
+    // plannerBigImageEvery = 每 N 对开至少一次大图（planSpreads 的 bigImageEveryMinSpreads）。
+    public var plannerWhitespaceRatio: Double?
+    public var plannerBigImageEvery: Int?
+
     // Step 6: Exported IDML path
     public var exportedIDMLPath: String?
 

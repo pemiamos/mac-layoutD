@@ -311,6 +311,12 @@ final class WorkspaceViewController: NSViewController {
                 self?.rerollSpreadForWizard(spreadIndex: idx, completion: completion)
             }
         )
+        let wireframePanelView = WireframePanelView(
+            state: appState,
+            onRunPlanner: { [weak self] completion in
+                self?.runPlannerForWizard(completion: completion)
+            }
+        )
         let inspectorView = InspectorView(
             state: appState,
             onIssueClick: { [weak self] issue in
@@ -361,7 +367,7 @@ final class WorkspaceViewController: NSViewController {
 
         // InDesign 式右侧面板坞：面板（页面/属性/图层/资产/色板）、检查器与向导合并为
         // 一列分段切换；三个 SwiftUI 面板自带滚动，由坞直接托管。
-        let dockHost = NSHostingView(rootView: PanelDockView(sidebar: sidebarView, inspector: inspectorView, wizard: wizardView))
+        let dockHost = NSHostingView(rootView: PanelDockView(sidebar: sidebarView, inspector: inspectorView, wizard: wizardView, wireframe: wireframePanelView))
         dockHost.translatesAutoresizingMaskIntoConstraints = false
         dockHost.wantsLayer = true
         dockHost.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
@@ -1236,13 +1242,18 @@ extension WorkspaceViewController {
             try FileManager.default.createDirectory(at: step5Dir, withIntermediateDirectories: true)
             let destURL = step5Dir.appendingPathComponent("layout_plans.json")
             
-            // 1. Generate content fingerprint
-            let fingerprint = SpreadPlanner.generateFingerprint(from: self.appState.project)
-            
+            // 1. Generate content fingerprint（线框图面板的「留白比例」折算进每对开行数）
+            let whitespaceRatio = self.appState.project.wizardState?.plannerWhitespaceRatio ?? 0.0
+            let linesPerSpread = Int(64.0 * (1.0 - whitespaceRatio))
+            let fingerprint = SpreadPlanner.generateFingerprint(
+                from: self.appState.project,
+                linesPerSpread: linesPerSpread
+            )
+
             // 2. Resolve active archetypes and weights
             let enabledIds = self.appState.project.wizardState?.enabledArchetypeIds ?? SpreadArchetype.defaults.map(\.id)
             let activeArchetypes = SpreadArchetype.defaults.filter { enabledIds.contains($0.id) }
-            
+
             var customArchetypes = activeArchetypes
             for i in 0..<customArchetypes.count {
                 let id = customArchetypes[i].id
@@ -1250,13 +1261,14 @@ extension WorkspaceViewController {
                     customArchetypes[i].weight = customW
                 }
             }
-            
+
             let finalArchetypes = customArchetypes.isEmpty ? SpreadArchetype.defaults : customArchetypes
-            
-            // 3. Run the planner
+
+            // 3. Run the planner（「大图气口频率」直通 bigImageEveryMinSpreads）
             let selections = SpreadPlanner.planSpreads(
                 fingerprint: fingerprint,
                 archetypes: finalArchetypes,
+                bigImageEveryMinSpreads: self.appState.project.wizardState?.plannerBigImageEvery ?? 3,
                 seed: 42
             )
             
@@ -1304,9 +1316,13 @@ extension WorkspaceViewController {
                 return
             }
             
-            // 2. Generate content fingerprint
-            let fingerprint = SpreadPlanner.generateFingerprint(from: self.appState.project)
-            
+            // 2. Generate content fingerprint（与整书规划同一套线框图旋钮，保证重抽指纹一致）
+            let whitespaceRatio = self.appState.project.wizardState?.plannerWhitespaceRatio ?? 0.0
+            let fingerprint = SpreadPlanner.generateFingerprint(
+                from: self.appState.project,
+                linesPerSpread: Int(64.0 * (1.0 - whitespaceRatio))
+            )
+
             // 3. Resolve active archetypes and weights
             let enabledIds = self.appState.project.wizardState?.enabledArchetypeIds ?? SpreadArchetype.defaults.map(\.id)
             let activeArchetypes = SpreadArchetype.defaults.filter { enabledIds.contains($0.id) }
