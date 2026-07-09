@@ -170,7 +170,14 @@ public struct PNGExporter {
 
     private func draw(page: LaidOutPage, project: BookProject, document: LaidOutDocument, in context: CGContext, bleedPoints: CGFloat, grouping: FlowFrameGrouping) {
         let pageSize = project.pageSetup.pageSize
-        context.setFillColor(NSColor.white.cgColor)
+        let pageBgColor: CGColor
+        if let bgHex = project.resolvedPageBackgroundHex(for: page),
+           let color = NSColor.from(hex: bgHex) {
+            pageBgColor = color.cgColor
+        } else {
+            pageBgColor = NSColor.white.cgColor
+        }
+        context.setFillColor(pageBgColor)
         context.fill(CGRect(x: 0, y: 0, width: pageSize.width, height: pageSize.height))
 
         let sortedPages = document.pages.sorted { $0.number < $1.number }

@@ -179,6 +179,20 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         styles.colorHex(id, mode: colorMode)
     }
 
+    /// Returns the resolved background color hex for a given page, checking
+    /// per-chapter overrides first, then the global page background token.
+    public func resolvedPageBackgroundHex(for page: LaidOutPage) -> String? {
+        if let byChapter = pageSetup.backgroundByChapter,
+           let section = activeSection(for: page),
+           let chapterToken = byChapter[section.title] ?? byChapter["default"] {
+            return resolvedColorHex(chapterToken) ?? chapterToken
+        }
+        if let bg = pageSetup.pageBackgroundColor {
+            return resolvedColorHex(bg) ?? bg
+        }
+        return nil
+    }
+
     public var safeAppliedLayoutPlans: [Int: LayoutPlan] {
         get { appliedLayoutPlans ?? [:] }
         set { appliedLayoutPlans = newValue }

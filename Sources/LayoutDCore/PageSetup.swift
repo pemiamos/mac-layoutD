@@ -37,6 +37,13 @@ public struct PageSetup: Codable, Equatable, Sendable {
     /// Output color intent (global RGB/CMYK switch). Optional & additive: old
     /// `.layoutd` files decode with `colorSpace == nil` → treated as `.rgb`.
     public var colorSpace: LayoutColorSpace?
+    /// A color token or hex for the global page background (e.g. warm beige).
+    /// Optional & additive: old `.layoutd` files decode with `pageBackgroundColor == nil`.
+    public var pageBackgroundColor: String?
+    /// Maps chapter title → color token, enabling per-chapter background tinting.
+    /// A special key "default" acts as the fallback for chapters not listed.
+    /// Optional & additive: old `.layoutd` files decode with `backgroundByChapter == nil`.
+    public var backgroundByChapter: [String: String]?
     public var marginTopToken: String?
     public var marginRightToken: String?
     public var marginBottomToken: String?
@@ -56,6 +63,8 @@ public struct PageSetup: Codable, Equatable, Sendable {
         layoutDirection: LayoutDirection = .horizontal,
         includesTableOfContents: Bool = false,
         colorSpace: LayoutColorSpace? = nil,
+        pageBackgroundColor: String? = nil,
+        backgroundByChapter: [String: String]? = nil,
         marginTopToken: String? = nil,
         marginRightToken: String? = nil,
         marginBottomToken: String? = nil,
@@ -74,6 +83,8 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.layoutDirection = layoutDirection
         self.includesTableOfContents = includesTableOfContents
         self.colorSpace = colorSpace
+        self.pageBackgroundColor = pageBackgroundColor
+        self.backgroundByChapter = backgroundByChapter
         self.marginTopToken = marginTopToken
         self.marginRightToken = marginRightToken
         self.marginBottomToken = marginBottomToken
@@ -84,7 +95,7 @@ public struct PageSetup: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case pageSize, margins, columns, gutter, baselineGrid, facingPages, bleedMM, layoutDirection, includesTableOfContents, colorSpace
+        case pageSize, margins, columns, gutter, baselineGrid, facingPages, bleedMM, layoutDirection, includesTableOfContents, colorSpace, pageBackgroundColor, backgroundByChapter
         case marginTopToken, marginRightToken, marginBottomToken, marginLeftToken
         case columnsToken, gutterToken, baselineGridToken
     }
@@ -101,6 +112,8 @@ public struct PageSetup: Codable, Equatable, Sendable {
         self.layoutDirection = try container.decodeIfPresent(LayoutDirection.self, forKey: .layoutDirection) ?? .horizontal
         self.includesTableOfContents = try container.decodeIfPresent(Bool.self, forKey: .includesTableOfContents) ?? false
         self.colorSpace = try container.decodeIfPresent(LayoutColorSpace.self, forKey: .colorSpace)
+        self.pageBackgroundColor = try container.decodeIfPresent(String.self, forKey: .pageBackgroundColor)
+        self.backgroundByChapter = try container.decodeIfPresent([String: String].self, forKey: .backgroundByChapter)
         self.marginTopToken = try container.decodeIfPresent(String.self, forKey: .marginTopToken)
         self.marginRightToken = try container.decodeIfPresent(String.self, forKey: .marginRightToken)
         self.marginBottomToken = try container.decodeIfPresent(String.self, forKey: .marginBottomToken)
@@ -122,6 +135,8 @@ public struct PageSetup: Codable, Equatable, Sendable {
         try container.encode(layoutDirection, forKey: .layoutDirection)
         try container.encode(includesTableOfContents, forKey: .includesTableOfContents)
         try container.encodeIfPresent(colorSpace, forKey: .colorSpace)
+        try container.encodeIfPresent(pageBackgroundColor, forKey: .pageBackgroundColor)
+        try container.encodeIfPresent(backgroundByChapter, forKey: .backgroundByChapter)
         try container.encodeIfPresent(marginTopToken, forKey: .marginTopToken)
         try container.encodeIfPresent(marginRightToken, forKey: .marginRightToken)
         try container.encodeIfPresent(marginBottomToken, forKey: .marginBottomToken)
@@ -173,6 +188,8 @@ public struct PageSetup: Codable, Equatable, Sendable {
             layoutDirection: layoutDirection,
             includesTableOfContents: includesTableOfContents,
             colorSpace: colorSpace,
+            pageBackgroundColor: pageBackgroundColor,
+            backgroundByChapter: backgroundByChapter,
             marginTopToken: marginTopToken,
             marginRightToken: marginRightToken,
             marginBottomToken: marginBottomToken,

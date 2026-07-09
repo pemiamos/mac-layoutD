@@ -195,6 +195,22 @@ public struct IDMLExporter {
             var items: [String] = []
             var underlayItems: [String] = []
 
+            // Page-level background color rectangle (PB-P0a)
+            if let bgHex = project.resolvedPageBackgroundHex(for: page) {
+                let resolvedHex = project.resolvedColorHex(bgHex) ?? bgHex
+                let bgRect = Rect(x: 0, y: 0, width: pageW, height: pageH)
+                let bgItem = colorRectangleItem(
+                    self: "uPageBg\(pi)",
+                    rect: bgRect,
+                    fillColor: resolvedHex,
+                    pageW: pageW,
+                    pageH: pageH,
+                    dx: dx
+                )
+                underlayItems.insert(bgItem, at: 0)
+                _ = ctx.color(resolvedHex)
+            }
+
             // Draw ghost chapter number motif if configured
             if let info = project.ghostChapterNumberInfo(for: page) {
                 let ghostStoryId = "uStoryGhost\(pi)"

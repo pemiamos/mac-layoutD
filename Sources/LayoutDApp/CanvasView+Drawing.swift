@@ -96,7 +96,12 @@ extension CanvasView {
             return
         }
 
-        NSColor.white.setFill()
+        if let bgHex = project.resolvedPageBackgroundHex(for: page),
+           let bgColor = NSColor.from(hex: bgHex) {
+            bgColor.setFill()
+        } else {
+            NSColor.white.setFill()
+        }
         pageRect.fill()
         NSColor(calibratedWhite: 0.72, alpha: 1).setStroke()
         NSBezierPath(rect: pageRect).stroke()

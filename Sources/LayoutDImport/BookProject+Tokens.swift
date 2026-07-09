@@ -187,6 +187,11 @@ extension BookProject {
         if let vertVal = importedTokens.scalar("page.vertical") {
             setup.layoutDirection = (vertVal == 1.0) ? .vertical : .horizontal
         }
+
+        // 3.3 Page background color
+        if importedTokens.colors.contains(where: { $0.id == "paper" }) {
+            setup.pageBackgroundColor = "paper"
+        }
         
         self.pageSetup = setup
         
