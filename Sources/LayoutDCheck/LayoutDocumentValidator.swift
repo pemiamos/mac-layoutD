@@ -272,11 +272,15 @@ public struct LayoutDocumentValidator {
             return false
         }
 
-        let attributedString = CFAttributedStringCreate(
-            nil,
-            text as CFString,
-            textAttributes(style: project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue))
-        )!
+        // Measure with the SAME typesetter the layout engine uses to paginate
+        // (`ChineseTypesetting.makeAttributedString` — composite font mapping,
+        // per-character size multipliers, CJK metrics). The validator previously
+        // built its own single-font attributed string, which disagreed with the
+        // engine once a spec pack applied composite fonts (方正兰亭细黑 etc.),
+        // producing phantom "文本溢出" errors on frames the engine had filled
+        // correctly. Sharing one source of truth eliminates that divergence.
+        let style = project.styles.paragraphStyle(id: frame.styleId ?? StyleID.body.rawValue)
+        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, project: project) as CFAttributedString
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
         path.addRect(
