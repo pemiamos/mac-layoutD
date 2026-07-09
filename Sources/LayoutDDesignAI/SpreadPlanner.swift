@@ -1,67 +1,6 @@
 import Foundation
 import LayoutDCore
 
-public struct ContentFingerprint: Codable, Equatable, Sendable {
-    public var spreadDemands: [SpreadDemand]
-    
-    public init(spreadDemands: [SpreadDemand] = []) {
-        self.spreadDemands = spreadDemands
-    }
-}
-
-public struct SpreadDemand: Codable, Equatable, Sendable {
-    public var spreadIndex: Int
-    public var bodyLoad: Double // 0...1 estimated text load
-    public var imageCount: Int
-    public var images: [AssetSummary]
-    public var pullQuoteCount: Int
-    public var knowledgeCardCount: Int
-    public var isChapterStart: Bool
-    
-    public init(
-        spreadIndex: Int,
-        bodyLoad: Double = 0.0,
-        imageCount: Int = 0,
-        images: [AssetSummary] = [],
-        pullQuoteCount: Int = 0,
-        knowledgeCardCount: Int = 0,
-        isChapterStart: Bool = false
-    ) {
-        self.spreadIndex = spreadIndex
-        self.bodyLoad = bodyLoad
-        self.imageCount = imageCount
-        self.images = images
-        self.pullQuoteCount = pullQuoteCount
-        self.knowledgeCardCount = knowledgeCardCount
-        self.isChapterStart = isChapterStart
-    }
-}
-
-public struct SpreadSelection: Codable, Equatable, Sendable {
-    public var spreadIndex: Int
-    public var archetypeId: String
-    public var mirror: Bool
-    public var imageTier: String // "none", "small", "medium", "large", "fullBleed"
-    public var pullQuotePosition: String // "none", "top", "middle", "inlineLeft"
-    public var rerollCounter: Int
-    
-    public init(
-        spreadIndex: Int,
-        archetypeId: String,
-        mirror: Bool = false,
-        imageTier: String = "none",
-        pullQuotePosition: String = "none",
-        rerollCounter: Int = 0
-    ) {
-        self.spreadIndex = spreadIndex
-        self.archetypeId = archetypeId
-        self.mirror = mirror
-        self.imageTier = imageTier
-        self.pullQuotePosition = pullQuotePosition
-        self.rerollCounter = rerollCounter
-    }
-}
-
 public struct SpreadPlanner {
     public static func generateFingerprint(from project: BookProject) -> ContentFingerprint {
         var demands: [SpreadDemand] = []
@@ -345,5 +284,115 @@ public struct SpreadPlanner {
         }
         
         return plans
+    }
+    
+    /// Re-roll a single spread, producing a different selection than the current one.
+    /// Uses `rerollCounter + 1` mixed into the seed to guarantee a different PRNG path.
+    /// The current archetypeId is heavily penalized (not completely excluded, as it may
+    /// be the only viable candidate after hard filtering).
+    public static func rerollSpread(
+        spreadIndex: Int,
+        currentSelections: [SpreadSelection],
+        fingerprint: ContentFingerprint,
+        archetypes: [SpreadArchetype],
+        baseSeed: UInt64 = 42
+    ) -> SpreadSelection {
+        guard let demandIndex = fingerprint.spreadDemands.firstIndex(where: { $0.spreadIndex == spreadIndex }) else {
+            // Spread not found in fingerprint — return current or a default
+            if let current = currentSelections.first(where: { $0.spreadIndex == spreadIndex }) {
+                return current
+            }
+            return SpreadSelection(spreadIndex: spreadIndex, archetypeId: archetypes.first?.id ?? "running-text")
+        }
+        
+        let demand = fingerprint.spreadDemands[demandIndex]
+        let currentSel = currentSelections.first(where: { $0.spreadIndex == spreadIndex })
+        let currentArchetypeId = currentSel?.archetypeId
+        let newCounter = (currentSel?.rerollCounter ?? 0) + 1
+        
+        // Gather neighbor families for monotony check
+        var neighborFamilies: [LayoutStrategy] = []
+        if spreadIndex > 0, let prev = currentSelections.first(where: { $0.spreadIndex == spreadIndex - 1 }),
+           let prevArch = archetypes.first(where: { $0.id == prev.archetypeId }) {
+            neighborFamilies.append(prevArch.family)
+        }
+        if let next = currentSelections.first(where: { $0.spreadIndex == spreadIndex + 1 }),
+           let nextArch = archetypes.first(where: { $0.id == next.archetypeId }) {
+            neighborFamilies.append(nextArch.family)
+        }
+        
+        // Build candidates with hard filters (same logic as planSpreads)
+        var candidates: [(SpreadArchetype, Bool, String, String, Double)] = []
+        let allowedArchetypes = demand.isChapterStart ? archetypes : archetypes.filter { $0.role != .opener }
+        
+        for arch in allowedArchetypes {
+            if demand.imageCount > arch.imageSlots { continue }
+            if demand.imageCount == 0 && arch.family == .imageLed { continue }
+            
+            let mirrors = arch.mirror ? [false, true] : [false]
+            let tiers = arch.imageTiers.isEmpty ? ["none"] : arch.imageTiers
+            let pqPositions = arch.pullQuotePositions.isEmpty ? ["none"] : arch.pullQuotePositions
+            
+            for mir in mirrors {
+                for tier in tiers {
+                    if (tier == "large" || tier == "fullBleed") {
+                        var dpiOk = true
+                        for img in demand.images {
+                            let slotInches = 350.0 / 72.0
+                            let dpi = Double(img.pixelWidth) / slotInches
+                            if dpi < 150.0 {
+                                dpiOk = false
+                                break
+                            }
+                        }
+                        if !dpiOk { continue }
+                    }
+                    
+                    for pqPos in pqPositions {
+                        if demand.pullQuoteCount == 0 && pqPos != "none" { continue }
+                        
+                        var score = 1.0
+                        
+                        // Heavy penalty for current archetype to encourage variety
+                        if arch.id == currentArchetypeId {
+                            score *= 0.1
+                        }
+                        
+                        // Monotony bias against neighbors
+                        for nf in neighborFamilies {
+                            if arch.family == nf {
+                                score -= 0.3
+                            }
+                        }
+                        
+                        score *= arch.weight
+                        candidates.append((arch, mir, tier, pqPos, max(score, 0.01)))
+                    }
+                }
+            }
+        }
+        
+        // Fallback
+        if candidates.isEmpty, let fallback = archetypes.first(where: { $0.role == .workhorse }) {
+            candidates.append((fallback, false, "none", "none", 1.0))
+        }
+        
+        // Seeded sampling with reroll counter mixed in
+        let sorted = candidates.sorted { $0.4 > $1.4 }
+        let topK = Array(sorted.prefix(5)) // Wider top-K for reroll variety
+        
+        let rerollSeed = baseSeed ^ UInt64(spreadIndex) ^ UInt64(newCounter) &* 2654435761
+        var prng = SeededRandom(seed: rerollSeed)
+        let chosenIndex = Int(prng.next() % UInt64(topK.count))
+        let chosen = topK[chosenIndex]
+        
+        return SpreadSelection(
+            spreadIndex: spreadIndex,
+            archetypeId: chosen.0.id,
+            mirror: chosen.1,
+            imageTier: chosen.2,
+            pullQuotePosition: chosen.3,
+            rerollCounter: newCounter
+        )
     }
 }
