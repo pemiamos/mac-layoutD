@@ -119,10 +119,11 @@ public enum ChineseTypesetting {
                     }
                     
                     if let colorToken = run.colorTokenRef,
-                       let proj = project,
-                       let hex = proj.resolvedColorHex(colorToken),
-                       let color = NSColor.from(hex: hex) {
-                        attrString.addAttribute(NSAttributedString.Key(kCTForegroundColorAttributeName as String), value: color.cgColor, range: safeRange)
+                       let proj = project {
+                        let hex = proj.resolvedColorHex(colorToken) ?? colorToken
+                        if let color = NSColor.from(hex: hex) {
+                            attrString.addAttribute(NSAttributedString.Key(kCTForegroundColorAttributeName as String), value: color.cgColor, range: safeRange)
+                        }
                     }
                     
                     attrString.enumerateAttribute(NSAttributedString.Key(kCTFontAttributeName as String), in: safeRange, options: []) { value, range, stop in

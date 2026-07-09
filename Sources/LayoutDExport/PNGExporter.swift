@@ -618,6 +618,7 @@ public struct PNGExporter {
         tableOfContentsEntries: [TableOfContentsEntry]? = nil,
         exclusionRects: [Rect]? = nil
     ) {
+        let processedProject = project.prependingSectionNumbers()
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -644,7 +645,7 @@ public struct PNGExporter {
                 colorToken: "ink"
             )
         } else {
-            style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+            style = processedProject.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
         }
 
         // Color priority: explicit frame override > paragraph style's color token
@@ -652,7 +653,7 @@ public struct PNGExporter {
         let textColor: CGColor
         if let hex = textColorHex, let color = NSColor.from(hex: hex) {
             textColor = color.cgColor
-        } else if let tokenHex = project.resolvedColorHex(style.colorToken), let color = NSColor.from(hex: tokenHex) {
+        } else if let tokenHex = processedProject.resolvedColorHex(style.colorToken), let color = NSColor.from(hex: tokenHex) {
             textColor = color.cgColor
         } else {
             textColor = NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).cgColor
@@ -662,7 +663,7 @@ public struct PNGExporter {
         if let entries = tableOfContentsEntries, !entries.isEmpty {
             attributedString = ChineseTypesetting.makeTOCAttributedString(
                 entries: entries,
-                project: project,
+                project: processedProject,
                 containerWidth: Double(rect.width),
                 zoomScale: 1.0,
                 foregroundColor: textColor
@@ -670,7 +671,7 @@ public struct PNGExporter {
         } else {
             var mappedRuns: [InlineRun]? = nil
             if let sourceParagraphId = sourceParagraphId,
-               let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+               let paragraph = processedProject.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
                let runs = paragraph.inlineRuns {
                 mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
             }
@@ -680,7 +681,7 @@ public struct PNGExporter {
                 style: style,
                 foregroundColor: textColor,
                 inlineRuns: mappedRuns,
-                project: project
+                project: processedProject
             )
         }
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
