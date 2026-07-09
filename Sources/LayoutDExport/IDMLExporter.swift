@@ -60,10 +60,11 @@ public struct IDMLExporter {
 
     public func export(
         document: LaidOutDocument,
-        project: BookProject,
+        project originalProject: BookProject,
         to url: URL,
         options: IDMLExportOptions = IDMLExportOptions()
     ) throws {
+        let project = originalProject.prependingSectionNumbers()
         let pageW = project.pageSetup.pageSize.width
         let pageH = project.pageSetup.pageSize.height
         let pages = document.pages.sorted { $0.number < $1.number }
@@ -102,6 +103,34 @@ public struct IDMLExporter {
                     if let hex = component.resolvedFillColorHex(project: project) { _ = ctx.color(hex) }
                     if let hex = component.resolvedStrokeColorHex(project: project) { _ = ctx.color(hex) }
                     if let hex = component.resolvedAccentColorHex(project: project) { _ = ctx.color(hex) }
+                }
+            }
+        }
+
+        // 注册所有 motif 的颜色与字体，防止未被 ParagraphStyle/Frame 包含的 motif 颜色漏掉
+        if let motif = project.motifs {
+            if let c = motif.chapterNumber?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+            if let f = motif.chapterNumber?.resolvedFontName { ctx.font(f) }
+            if let c = motif.sectionNumber?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+            if let c = motif.header?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+            if let f = motif.header?.resolvedFontName { ctx.font(f) }
+            if let c = motif.captionTick?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+            if let c = motif.headingRule?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+            if let c = motif.pullQuoteRule?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+        }
+
+        // 注册所有段落 inline runs 中的颜色与字体
+        for section in project.sections {
+            for story in section.stories {
+                for paragraph in story.paragraphs {
+                    if let runs = paragraph.inlineRuns {
+                        for run in runs {
+                            if let colorToken = run.colorTokenRef {
+                                let hex = project.resolvedColorHex(colorToken) ?? colorToken
+                                _ = ctx.color(hex)
+                            }
+                        }
+                    }
                 }
             }
         }

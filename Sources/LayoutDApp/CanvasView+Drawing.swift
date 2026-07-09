@@ -852,6 +852,7 @@ extension CanvasView {
         exclusionRects: [Rect]? = nil,
         frameRect: Rect? = nil
     ) {
+        let processedProject = project.prependingSectionNumbers()
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -878,10 +879,10 @@ extension CanvasView {
                 colorToken: "ink"
             )
         } else {
-            style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+            style = processedProject.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
         }
 
-        let tokenColor = project.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
+        let tokenColor = processedProject.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
         let rawTextColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
         let textColor = proofedText(rawTextColor) ?? rawTextColor
         
@@ -891,7 +892,7 @@ extension CanvasView {
         if let entries = tableOfContentsEntries, !entries.isEmpty {
             attrString = ChineseTypesetting.makeTOCAttributedString(
                 entries: entries,
-                project: project,
+                project: processedProject,
                 containerWidth: Double(drawingRect.width),
                 zoomScale: zoomScale,
                 foregroundColor: textColor.cgColor
@@ -899,7 +900,7 @@ extension CanvasView {
         } else {
             var mappedRuns: [InlineRun]? = nil
             if let sourceParagraphId = sourceParagraphId,
-               let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+               let paragraph = processedProject.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
                let runs = paragraph.inlineRuns {
                 mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
             }
@@ -909,7 +910,8 @@ extension CanvasView {
                 style: style,
                 foregroundColor: textColor.cgColor,
                 zoomScale: zoomScale,
-                inlineRuns: mappedRuns
+                inlineRuns: mappedRuns,
+                project: processedProject
             )
         }
         

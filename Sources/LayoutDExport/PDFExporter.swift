@@ -853,6 +853,7 @@ public struct PDFExporter {
         exclusionRects: [Rect]? = nil,
         pageHeight: CGFloat = 0
     ) {
+        let processedProject = project.prependingSectionNumbers()
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -879,7 +880,7 @@ public struct PDFExporter {
                 colorToken: "ink"
             )
         } else {
-            style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+            style = processedProject.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
         }
 
         // Color priority: explicit frame override > paragraph style's color token
@@ -887,7 +888,7 @@ public struct PDFExporter {
         let textColor: CGColor
         if let hex = textColorHex, let color = NSColor.from(hex: hex) {
             textColor = color.cgColor
-        } else if let tokenHex = project.resolvedColorHex(style.colorToken), let color = NSColor.from(hex: tokenHex) {
+        } else if let tokenHex = processedProject.resolvedColorHex(style.colorToken), let color = NSColor.from(hex: tokenHex) {
             textColor = color.cgColor
         } else {
             textColor = NSColor.black.cgColor
@@ -897,7 +898,7 @@ public struct PDFExporter {
         if let entries = tableOfContentsEntries, !entries.isEmpty {
             attributedString = ChineseTypesetting.makeTOCAttributedString(
                 entries: entries,
-                project: project,
+                project: processedProject,
                 containerWidth: Double(rect.width),
                 zoomScale: 1.0,
                 foregroundColor: textColor
@@ -905,7 +906,7 @@ public struct PDFExporter {
         } else {
             var mappedRuns: [InlineRun]? = nil
             if let sourceParagraphId = sourceParagraphId,
-               let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+               let paragraph = processedProject.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
                let runs = paragraph.inlineRuns {
                 mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
             }
@@ -915,7 +916,7 @@ public struct PDFExporter {
                 style: style,
                 foregroundColor: textColor,
                 inlineRuns: mappedRuns,
-                project: project
+                project: processedProject
             )
         }
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
