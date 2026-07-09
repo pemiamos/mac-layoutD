@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 13:51 | antigravity | Completed PB-P0a, PB-P0b, PB-P1a, PB-P1b, and PB-P2 for the photobook expansion 
+- **分支**：ag-lane
+- **概述**：Completed PB-P0a, PB-P0b, PB-P1a, PB-P1b, and PB-P2 for the photobook expansion batch. Implemented page-level background color rendering, fullbleed-opener archetype selection, section-opener archetype selection with section boundary detection & breathing, fullbleed-photo archetype, circle image mask shape with polygon approximations, dropCapLines in ParagraphStyle, and InDesign drop cap properties. Pushed merged dev branch to origin/dev, and vacated dev branch.
+- **改动文件**：Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDCore/SpreadArchetype.swift, Sources/LayoutDCore/SpreadSelection.swift, Sources/LayoutDCore/StyleLibrary.swift, Sources/LayoutDDesignAI/SpreadPlanner.swift, Sources/LayoutDExport/IDMLExporter+Helpers.swift, Sources/LayoutDExport/IDMLExporter+Resources.swift, Sources/LayoutDExport/IDMLExporter.swift, Sources/LayoutDExport/PDFExporter.swift, Sources/LayoutDExport/PNGExporter.swift, Sources/LayoutDImport/BookProject+Tokens.swift, Sources/LayoutDCore/PageSetup.swift, Sources/LayoutDApp/CanvasView+Drawing.swift, Tests/LayoutDAppTests/SpreadArchetypeTests.swift, Tests/LayoutDAppTests/SpreadPlannerTests.swift
+- **检查**：swift build: pass, swift test: pass (344 tests), review-idml.sh: pass (14/14)
+- **下一步**：Wait for user/Claude visual verification of photobook layouts. Codex can continue with remaining P2 tasks (like IDML-RNG lint or PB-SPEC patch) or wait for PILOT-3.
+
 ## 2026-07-09 13:01 | antigravity | Completed SECNUM-1b (section number rendering). Updated CanvasView, PDFExporter,
 - **分支**：dev
 - **概述**：Completed SECNUM-1b (section number rendering). Updated CanvasView, PDFExporter, PNGExporter, and IDMLExporter to use the processed BookProject (with prepended section numbers) during paragraph inline runs mapping and formatting resolution. Added fallback resolution support for direct hex strings in ChineseTypesetting.makeAttributedString. Registered all motifs' colors/fonts and story paragraphs' inline colors into IDML export Graphic.xml swatches. Verified all E2E checks and golden baselines are fully green. Merged feature branch feature/ag-secnum-1b into local dev branch.
