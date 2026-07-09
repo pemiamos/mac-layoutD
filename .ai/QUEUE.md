@@ -113,11 +113,11 @@
 
 - [x] **ACCENT-2 图注顶部短横 + 标题下划线** — **AG**。已开 `edge==.top` 与 `edge==.bottom` 门控，并完成 Canvas, PDF, PNG, IDML 绘制逻辑与 IDML 导出（commit f631549）。
 - [x] **GHOST-NUM-1a 章节序号解析** — ✅ **Codex**（`2e2255e`）。`章节序号` 已移出 `unsupportedFields`，`parseSpecPack` 支持其 motif 字段（字体/字号/透明度/锚点/压底层）；本棒补专门回归锁住 legacy `position`→`anchor`、`treatment:"ghost"`→`layer:"behind"`。
-- [ ] **GHOST-NUM-1b 超大 ghost 章节号渲染** — **AG**（依赖 1a）。超大淡灰数字压在章名后/底，四渲染器同算法。
+- [x] **GHOST-NUM-1b 超大 ghost 章节号渲染** — ✅ **AG**（`309595b`）。超大淡灰数字压在章名后/底，四渲染器同算法。
 - [x] **HEADER-1a 页眉字段解析** — ✅ **Codex**（`943fa33`）。`页眉页码` / `页眉章名` 已移出 `unsupportedFields`，parseSpecPack 合并为 `motifs.header`；旧 `页眉页码` 保持页眉+页码兼容，`页眉章名` 可单独补章名侧样式。
-- [ ] **HEADER-1b 页眉 chrome 渲染** — **AG**（依赖 1a）。页眉（章名 · 刊名 · 细线）；注意与 MASTER-1 已有主页页码协调。
+- [x] **HEADER-1b 页眉 chrome 渲染** — ✅ **AG**（`309595b`）。页眉（章名 · 刊名 · 细线），实测天池渲染青绿页眉正确。
 - [x] **SECNUM-1a 节序号解析** — ✅ **Codex**（`200f616`）。`节名.numberStyle` 已移出 unsupportedFields，parseSpecPack 映射到 `motifs.sectionNumber.style`；字段存在但类型错误会报 `$.roles.节名.numberStyle`。
-- [ ] **SECNUM-1b 节序号渲染** — **AG**（依赖 1a）。节序号「01 /」黄色。
+- [x] **SECNUM-1b 节序号渲染** — ✅ **AG**（`b8c1c8f`，合 dev `abec47a`）。节序号「01 /」带前后缀 + 自定义色。
 
 ### 批次 S — 规范包 v2 + 技能教材（站1）
 
@@ -133,10 +133,22 @@
 ### 批次 P — 规划器（站4/站5，主战役）
 
 - [x] **PLANNER-1a-DESIGN 骨架词表设计文档** — ✅ Claude（`docs/planner-1a-skeleton-design.md`）。定义 7 个对开骨架（A1 章节开篇/A2 正文流/A3 图文均衡/A4 大图气口/A5 图集/A6 抽言强调/A7 知识卡片，家族 + 参数变体：镜像/图片档位/抽言位）+ 槽位词表 + 灰盒线框图渲染方案 + GUI 站4 圈选交互 + **倒推 SPEC-PACK-2 的 `layoutGrammar` schema 需求**（新增 imageTiers/pullQuotePositions/carriesMotifs/role/openerAlwaysArchetype，禁止装饰性空字段）。设计文档不改代码，与 Codex 的 SPEC-PACK-2 并行、不撞车。**下一步交 AG 做 PLANNER-1a-IMPL、Claude 接 PLANNER-1b-DESIGN。**
-- [ ] **PLANNER-1a-IMPL 骨架 + 线框图 + 圈选** — **AG**（依赖 1a-DESIGN）。约 7 个对开骨架落地（扩现有 4 单页模板到对开级）+ 灰盒线框图渲染供圈选 + GUI 圈选界面，批准结果写进规范包 layoutGrammar。
-- [ ] **PLANNER-1b-DESIGN 受控变体规划器设计文档** — **Claude**（依赖 1a）。内容指纹（现 `LayoutPlanContext` 已有雏形）→ 受控抽签（固定种子）→ 硬过滤（不越界/不重叠/文流顺序/DPI）→ 软评分（防单调/图大小/贴近度/留白/accent 频率）→ 节奏记忆（相邻不重复、大图气口）。**以对开为单位规划，非单页。**
-- [ ] **PLANNER-1b-IMPL 受控变体规划器（引擎核心，高风险）** — **AG**（依赖 1b-DESIGN）。硬约束：① **只动帧几何不破串接文流**（正文永远一条河，见 [[layoutd-positioning-initial-pour]]）；② **纯函数同输入同输出**（固定种子，否则 golden/逐字节护栏全废）；③ 端到端验收不能只靠单测（本项目踩过单测全绿功能坏）。
-- [ ] **REROLL-1 「换一版」单页重抽** — **AG**（依赖 1b-IMPL）。某页不满意→在该对开其余候选里重抽；与锁页/手工微调/undo 协同（锁页不被重排覆盖）。
+- [x] **PLANNER-1a-IMPL 骨架 + 线框图 + 圈选** — ✅ **AG**（`d883368`）。SpreadArchetype.swift(7骨架) + WireframeRenderer.swift + 站4 圈选界面。
+- [x] **PLANNER-1b-DESIGN 受控变体规划器设计文档** — ✅ **Claude**（`docs/planner-1b-planner-design.md`）。内容指纹→受控抽签(SplitMix64)→硬过滤→软评分→节奏记忆全链设计。
+- [x] **PLANNER-1b-IMPL 受控变体规划器** — ✅ **AG**（`f348802`，合 dev `38e6ba0`）。SpreadPlanner.swift(349行) + SeededRandom + LayoutAdvisor 接入 + 16 测试。Claude 后续修了章起判定/0图图槽两 bug（`4ba912b`）。
+- [x] **REROLL-1 「换一版」单页重抽** — ✅ **AG**（`cee365c`，合 dev `ec2367f`）。单对开子种子重抽 + 锁页协同。
+
+### 批次 PB — 摄影集范式扩建（用户 2026-07-09 拍板，最高优先，见 `docs/photobook-whitespace-bigimage-design.md`）
+
+> 缘起：PILOT-3 拿《长白山天池》14 页样张比对，用户明确「**我们的书都是大留白、大量大图甚至跨页全幅图的**」（记忆 [[books-are-whitespace-bigimage-fullbleed]]）。现有渲染器+7 骨架偏文字密排，排不出这类书——受限的是**渲染能力**不是分析能力。Claude 已出完整设计文档，本批把它落地。**这是 layoutD 能排用户这类书的必要条件，优先级高于剩余细枝。**
+> 设计全文见 `docs/photobook-whitespace-bigimage-design.md`（9 种版式→渲染器/骨架/规划器扩建清单，分 P0→P2）。
+
+- [ ] **PB-P0a 页级背景色渲染** — **AG**（P0，单点最大提升，立即可开工）。`PageSetup` 加 `pageBackgroundColor`（含按章主题 `backgroundByChapter`）；`parseSpecPack` 映射 `colors.tokens.paper`/`page.backgroundByChapter`；四渲染器画 frame 前先填页背景（**强烈建议走 RENDER-CORE-1 的绘制指令 `.pageFill`，别 4 处追平**；可复用 `60be0e1` 已有的 fullPageImage/cover 出血扩展经验）。IDML 用页大小 `Rectangle` 置底。验：天池 v2 规范包（`~/Desktop/layoutD-规范包测试/天池-地心青.json`）渲染出暖米白/淡青底。
+- [ ] **PB-P0b 全出血跨页开篇骨架** — **AG**（P0，依赖 PB-P0a 的背景/出血原语）。新增 `fullbleed-opener` 骨架：全出血图铺满对开 + 标题/CHAPTER/英文副标叠图（现 A1 是文字型，开篇页只有标题在白底）。规划器章首强制选它。参照样张页 01/08。
+- [ ] **PB-P1a 开节留白骨架 + 规划器「呼吸」改造** — **AG**（P1，依赖 PLANNER-1b-IMPL，治「排太紧」根本）。新增 `section-opener` 骨架（节号+标题+引言占页上部，下部强制留白）；`SpreadPlanner` 从「灌满」转「呼吸」：`linesPerSpread` 按摄影集风格调低、软评分加「留白项」、加 `minWhitespaceRatio` 质量闸、section 边界强制 `section-opener`。**注意：SpreadPlanner 已含 Claude 的章起/图槽修复（`4ba912b`），在此基础上加，别回退。** 参照样张页 11 右/04 右。
+- [ ] **PB-P1b 全幅气口骨架 + 图鉴圆形遮罩** — **AG**（P1）。`fullbleed-photo`（纯一张跨页出血图作气口）真被规划器选中；`ImageMaskShape` 加 `circle`（现有 rect/fan/octagon）供图鉴网格。参照样张页 03（全幅）/11 左（圆形图鉴）。
+- [ ] **PB-P2 首字下沉 + 图框描边** — **AG**（P2，锦上添花）。段落样式 `dropCapLines`（正文/章首段首字放大，IDML 有原生 `DropCapCharacters`/`DropCapLines`）；图 frame 可选 accent 描边（`strokeColorHex` 字段已有，接上渲染）。参照样张页 05/06（首字放大）、04/06（青绿图框）。
+- [ ] **PB-SPEC SPEC-PACK-2 补丁：摄影集字段** — **Codex**（配合本批）。真支持 `layoutGrammar.spreadArchetypes[].imageTiers`（含 `fullPage`/`fullBleed`）、`role`、`carriesMotifs`、`minWhitespace`、`rhythm.openerAlwaysArchetype`/`sectionBoundaryArchetype`（PILOT-3 实测全报 unsupported）；`page.backgroundByChapter`、`colors.tokens.paper` 页背景 token；`qualityGates.minWhitespaceRatio`、`roles.*.dropCapLines`；`applySpecPack` 把 `spreadArchetypes` 写进 `wizardState.enabledArchetypeIds`，让 auto-plan/GUI 真吃规范包骨架（现只吃内置默认）。
 
 ### 批次 W — 向导 GUI（可与 S 并行起步）
 
