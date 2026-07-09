@@ -5,7 +5,7 @@ import XCTest
 final class SpreadArchetypeTests: XCTestCase {
     func testSpreadArchetypeDefaults() {
         let defaults = SpreadArchetype.defaults
-        XCTAssertEqual(defaults.count, 7)
+        XCTAssertEqual(defaults.count, 10)
         
         // Opener archetype check
         let opener = defaults.first(where: { $0.id == "chapter-opener" })

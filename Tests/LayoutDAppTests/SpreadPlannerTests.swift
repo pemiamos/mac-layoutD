@@ -129,7 +129,7 @@ final class SpreadPlannerTests: XCTestCase {
     }
     
     func testChapterStartsGetOpener() {
-        let project = makeProject(sectionCount: 3)
+        let project = makeProject(sectionCount: 3, assetCount: 0)
         let fp = SpreadPlanner.generateFingerprint(from: project)
         
         let selections = SpreadPlanner.planSpreads(
@@ -138,12 +138,31 @@ final class SpreadPlannerTests: XCTestCase {
             seed: 42
         )
         
-        // Every demand that is a chapter start should map to the chapter-opener archetype
+        // Every demand that is a chapter start with 0 images should map to the chapter-opener archetype
         for demand in fp.spreadDemands where demand.isChapterStart {
             let sel = selections.first(where: { $0.spreadIndex == demand.spreadIndex })
             XCTAssertNotNil(sel)
             XCTAssertEqual(sel?.archetypeId, "chapter-opener",
                           "Chapter start spreads must use the chapter-opener archetype")
+        }
+    }
+    
+    func testChapterStartsGetFullBleedOpenerWhenImagesAvailable() {
+        let project = makeProject(sectionCount: 3, assetCount: 10) // ensure images for all chapters
+        let fp = SpreadPlanner.generateFingerprint(from: project)
+        
+        let selections = SpreadPlanner.planSpreads(
+            fingerprint: fp,
+            archetypes: SpreadArchetype.defaults,
+            seed: 42
+        )
+        
+        for demand in fp.spreadDemands where demand.isChapterStart {
+            let sel = selections.first(where: { $0.spreadIndex == demand.spreadIndex })
+            XCTAssertNotNil(sel)
+            // It should select fullbleed-opener because images are available
+            XCTAssertEqual(sel?.archetypeId, "fullbleed-opener",
+                          "Chapter start spreads with images should use fullbleed-opener")
         }
     }
     
