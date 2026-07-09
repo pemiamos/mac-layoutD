@@ -24,6 +24,15 @@ public struct SpreadPlanner {
         }
         
         for (sectionIndex, section) in project.sections.enumerated() {
+            // The first spread of each new section is a chapter start. Section 0
+            // is already covered by the initial `isChapterStart = true`. Marking
+            // it here (at section START, not end) avoids the trailing partial
+            // window inheriting a phantom chapter-start — the previous
+            // end-of-section assignment made the LAST spread of a single-section
+            // book falsely render as a chapter opener.
+            if sectionIndex > 0 {
+                isChapterStart = true
+            }
             for story in section.stories {
                 for paragraph in story.paragraphs {
                     // Estimate line count for paragraph (horizontal Chinese layout helper)
@@ -59,7 +68,6 @@ public struct SpreadPlanner {
                     currentImages.append(AssetSummary(asset: asset))
                 }
             }
-            isChapterStart = true
         }
         
         // Append last window if content remains
@@ -150,6 +158,13 @@ public struct SpreadPlanner {
                 
                 for mir in mirrors {
                     for tier in tiers {
+                        // Slot supply/demand: never assign an image tier when the
+                        // spread has no images. Archetypes whose only tiers are
+                        // image-bearing (e.g. text-image-balanced) thus produce no
+                        // candidate on an image-less spread and fall through to the
+                        // workhorse fallback — no phantom empty image frames.
+                        if tier != "none" && demand.imageCount == 0 { continue }
+
                         // Image DPI filter
                         if (tier == "large" || tier == "fullBleed") {
                             var dpiOk = true
