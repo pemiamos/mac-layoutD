@@ -135,8 +135,14 @@ extension IDMLExporter {
             let styleFallback = ctx.appliedStyle[style.fontName] ?? BuildContext.splitFont(style.fontName).1
             let applied = isComposite ? "CF_\(xmlSafe(style.id))" : famFallback
             let fontStyleAttr = isComposite ? "" : " FontStyle=\"\(esc(styleFallback))\""
+            let dropCapAttr: String
+            if let dcl = style.dropCapLines, dcl > 0 {
+                dropCapAttr = " DropCapCharacters=\"1\" DropCapLines=\"\(dcl)\""
+            } else {
+                dropCapAttr = ""
+            }
             paras += """
-            \t\t<ParagraphStyle Self="ParagraphStyle/\(xmlSafe(style.id))" Imported="false" Name="\(esc(style.displayName))" PointSize="\(fmt(style.fontSize))" Leading="\(fmt(style.lineHeight))" FirstLineIndent="\(fmt(style.firstLineIndent))" SpaceBefore="\(fmt(style.spaceBefore))" SpaceAfter="\(fmt(style.spaceAfter))" FillColor="\(fill)"\(fontStyleAttr) Composer="\(composer)" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="\(mojikumiTableSelf)">
+            \t\t<ParagraphStyle Self="ParagraphStyle/\(xmlSafe(style.id))" Imported="false" Name="\(esc(style.displayName))" PointSize="\(fmt(style.fontSize))" Leading="\(fmt(style.lineHeight))" FirstLineIndent="\(fmt(style.firstLineIndent))" SpaceBefore="\(fmt(style.spaceBefore))" SpaceAfter="\(fmt(style.spaceAfter))" FillColor="\(fill)"\(fontStyleAttr)\(dropCapAttr) Composer="\(composer)" Justification="LeftAlign" KinsokuType="KinsokuPushInFirst" KinsokuHangType="None" GridAlignment="None" Mojikumi="\(mojikumiTableSelf)">
             \t\t\t<Properties>
             \t\t\t\t<BasedOn type="object">ParagraphStyle/$ID/[No paragraph style]</BasedOn>
             \t\t\t\t<PreviewColor type="enumeration">Nothing</PreviewColor>

@@ -329,6 +329,7 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
     public var compositeFont: [CompositeFontClass: CompositeFontMapping]?
     public var layoutDirection: LayoutDirection?
     public var accentRule: ParagraphAccentRule?
+    public var dropCapLines: Int?
 
     public init(
         id: String,
@@ -347,7 +348,8 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         spaceAfterToken: String? = nil,
         compositeFont: [CompositeFontClass: CompositeFontMapping]? = nil,
         layoutDirection: LayoutDirection? = nil,
-        accentRule: ParagraphAccentRule? = nil
+        accentRule: ParagraphAccentRule? = nil,
+        dropCapLines: Int? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -366,6 +368,7 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
         self.compositeFont = compositeFont
         self.layoutDirection = layoutDirection
         self.accentRule = accentRule
+        self.dropCapLines = dropCapLines
     }
 
     public static let body = ParagraphStyle(
@@ -488,7 +491,8 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
             spaceBeforeToken: spaceBefore == nil ? spaceBeforeToken : nil,
             spaceAfterToken: spaceAfter == nil ? spaceAfterToken : nil,
             compositeFont: compositeFont ?? self.compositeFont,
-            layoutDirection: layoutDirection ?? self.layoutDirection
+            layoutDirection: layoutDirection ?? self.layoutDirection,
+            dropCapLines: self.dropCapLines
         )
     }
 
@@ -515,7 +519,8 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
             spaceBeforeToken: spaceBefore ?? spaceBeforeToken,
             spaceAfterToken: spaceAfter ?? spaceAfterToken,
             compositeFont: self.compositeFont,
-            layoutDirection: self.layoutDirection
+            layoutDirection: self.layoutDirection,
+            dropCapLines: self.dropCapLines
         )
     }
 
@@ -537,7 +542,8 @@ public struct ParagraphStyle: Codable, Equatable, Sendable, Identifiable {
             spaceAfterToken: spaceAfterToken,
             compositeFont: self.compositeFont,
             layoutDirection: self.layoutDirection,
-            accentRule: self.accentRule
+            accentRule: self.accentRule,
+            dropCapLines: self.dropCapLines
         )
     }
 

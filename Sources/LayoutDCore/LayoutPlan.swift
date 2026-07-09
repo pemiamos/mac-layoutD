@@ -117,6 +117,7 @@ public enum ImageMaskShape: String, Codable, CaseIterable, Sendable {
     case rect
     case fan
     case octagon
+    case circle
 }
 
 public struct LayoutPlanBlock: Codable, Equatable, Sendable, Identifiable {
@@ -339,6 +340,18 @@ extension ImageMaskShape {
                 points.append(CGPoint(x: cx + r * cos(angle), y: cy + r * sin(angle)))
             }
             
+            return points
+        case .circle:
+            let cx = rect.midX
+            let cy = rect.midY
+            let rx = rect.width / 2.0
+            let ry = rect.height / 2.0
+            var points: [CGPoint] = []
+            let segments = 32
+            for i in 0..<segments {
+                let angle = 2.0 * .pi * Double(i) / Double(segments)
+                points.append(CGPoint(x: cx + rx * cos(angle), y: cy + ry * sin(angle)))
+            }
             return points
         }
     }

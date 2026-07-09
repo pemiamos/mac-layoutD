@@ -16,6 +16,7 @@ public struct SpreadDemand: Codable, Equatable, Sendable {
     public var pullQuoteCount: Int
     public var knowledgeCardCount: Int
     public var isChapterStart: Bool
+    public var isSectionStart: Bool
     
     public init(
         spreadIndex: Int,
@@ -24,7 +25,8 @@ public struct SpreadDemand: Codable, Equatable, Sendable {
         images: [AssetSummary] = [],
         pullQuoteCount: Int = 0,
         knowledgeCardCount: Int = 0,
-        isChapterStart: Bool = false
+        isChapterStart: Bool = false,
+        isSectionStart: Bool = false
     ) {
         self.spreadIndex = spreadIndex
         self.bodyLoad = bodyLoad
@@ -33,6 +35,7 @@ public struct SpreadDemand: Codable, Equatable, Sendable {
         self.pullQuoteCount = pullQuoteCount
         self.knowledgeCardCount = knowledgeCardCount
         self.isChapterStart = isChapterStart
+        self.isSectionStart = isSectionStart
     }
 }
 

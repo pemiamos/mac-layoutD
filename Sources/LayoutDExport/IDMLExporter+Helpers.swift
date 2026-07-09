@@ -77,6 +77,16 @@ extension IDMLExporter {
                 let t = half - 2 * half * Double(i) / Double(seg)
                 pts.append((cx + ri * sin(t), cy - ri * cos(t)))
             }
+        case .circle:
+            let cx = (left + right) / 2
+            let cy = (top + bottom) / 2
+            let rx = w / 2
+            let ry = h / 2
+            let seg = 32
+            for i in 0..<seg {
+                let t = 2.0 * Double.pi * Double(i) / Double(seg)
+                pts.append((cx + rx * cos(t), cy + ry * sin(t)))
+            }
         default:
             return rectGeometry(rect, pageW: pageW, pageH: pageH, dx: dx)
         }

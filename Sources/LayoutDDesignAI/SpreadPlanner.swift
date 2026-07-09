@@ -10,6 +10,7 @@ public struct SpreadPlanner {
         var currentPullQuotes = 0
         var currentKnowledgeCards = 0
         var isChapterStart = true
+        var isSectionStart = false
         
         let linesPerSpread = 64
         
@@ -32,6 +33,7 @@ public struct SpreadPlanner {
             // book falsely render as a chapter opener.
             if sectionIndex > 0 {
                 isChapterStart = true
+                isSectionStart = true
             }
             for story in section.stories {
                 for paragraph in story.paragraphs {
@@ -48,7 +50,8 @@ public struct SpreadPlanner {
                             images: currentImages,
                             pullQuoteCount: currentPullQuotes,
                             knowledgeCardCount: currentKnowledgeCards,
-                            isChapterStart: isChapterStart
+                            isChapterStart: isChapterStart,
+                            isSectionStart: isSectionStart
                         )
                         demands.append(demand)
                         
@@ -58,6 +61,7 @@ public struct SpreadPlanner {
                         currentPullQuotes = 0
                         currentKnowledgeCards = 0
                         isChapterStart = false
+                        isSectionStart = false
                     }
                 }
             }
@@ -79,7 +83,8 @@ public struct SpreadPlanner {
                 images: currentImages,
                 pullQuoteCount: currentPullQuotes,
                 knowledgeCardCount: currentKnowledgeCards,
-                isChapterStart: isChapterStart
+                isChapterStart: isChapterStart,
+                isSectionStart: isSectionStart
             )
             demands.append(demand)
         }
@@ -117,17 +122,49 @@ public struct SpreadPlanner {
                 continue
             }
             
-            // 1. Force chapter opener
-            if demand.isChapterStart, let opener = archetypes.first(where: { $0.role == .opener }) {
+            // 1. Force chapter opener (prefer fullbleed-opener when images available)
+            if demand.isChapterStart {
+                let fullbleedOpener = archetypes.first(where: { $0.id == "fullbleed-opener" })
+                let classicOpener = archetypes.first(where: { $0.role == .opener && $0.id != "fullbleed-opener" })
+                let opener: SpreadArchetype?
+                let imageTier: String
+                if demand.imageCount > 0, let fb = fullbleedOpener {
+                    opener = fb
+                    imageTier = "fullBleed"
+                } else if let classic = classicOpener {
+                    opener = classic
+                    imageTier = "none"
+                } else {
+                    opener = fullbleedOpener ?? classicOpener
+                    imageTier = "none"
+                }
+                if let opener = opener {
+                    let sel = SpreadSelection(
+                        spreadIndex: idx,
+                        archetypeId: opener.id,
+                        mirror: false,
+                        imageTier: imageTier,
+                        pullQuotePosition: "none"
+                    )
+                    selections.append(sel)
+                    recentFamilies.append(opener.family)
+                    if imageTier == "fullBleed" { spreadsSinceBigImage = 0 } else { spreadsSinceBigImage += 1 }
+                    continue
+                }
+            }
+            
+            // 1.5 Force section opener on section boundaries
+            if demand.isSectionStart && !demand.isChapterStart,
+               let sectionOpener = archetypes.first(where: { $0.id == "section-opener" }) {
                 let sel = SpreadSelection(
                     spreadIndex: idx,
-                    archetypeId: opener.id,
+                    archetypeId: sectionOpener.id,
                     mirror: false,
-                    imageTier: demand.imageCount > 0 ? "small" : "none",
+                    imageTier: "none",
                     pullQuotePosition: "none"
                 )
                 selections.append(sel)
-                recentFamilies.append(opener.family)
+                recentFamilies.append(sectionOpener.family)
                 spreadsSinceBigImage += 1
                 continue
             }

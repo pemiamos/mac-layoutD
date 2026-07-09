@@ -99,6 +99,54 @@ extension SpreadArchetype {
             ]
         ),
         
+        // A1' · Full-Bleed Opener (fullbleed-opener)
+        SpreadArchetype(
+            id: "fullbleed-opener",
+            displayName: "全出血开篇对开",
+            family: .opener,
+            pages: 2,
+            imageSlots: 1,
+            pullQuoteSlots: 0,
+            mirror: false,
+            weight: 1.5,
+            imageTiers: ["fullBleed"],
+            pullQuotePositions: ["none"],
+            carriesMotifs: ["chapterNumber", "sectionNumber"],
+            role: .opener,
+            leftPageBlocks: [
+                SpreadBlock(role: "hero", kind: .image, normalizedFrame: Rect(x: 0, y: 0, width: 1, height: 1), bleedAcrossSpine: true)
+            ],
+            rightPageBlocks: [
+                SpreadBlock(role: "hero", kind: .image, normalizedFrame: Rect(x: 0, y: 0, width: 1, height: 1), bleedAcrossSpine: true),
+                SpreadBlock(role: "heading1", kind: .text, normalizedFrame: Rect(x: 0.1, y: 0.55, width: 0.8, height: 0.15)),
+                SpreadBlock(role: "introduction", kind: .text, normalizedFrame: Rect(x: 0.1, y: 0.72, width: 0.6, height: 0.15))
+            ]
+        ),
+        
+        // A9 · Section Opener (section-opener)
+        SpreadArchetype(
+            id: "section-opener",
+            displayName: "开节留白对开",
+            family: .opener,
+            pages: 2,
+            imageSlots: 0,
+            pullQuoteSlots: 0,
+            mirror: false,
+            weight: 1.0,
+            imageTiers: ["none"],
+            pullQuotePositions: ["none"],
+            carriesMotifs: ["sectionNumber", "header"],
+            role: .breathing,
+            leftPageBlocks: [
+                SpreadBlock(role: "body", kind: .text, normalizedFrame: Rect(x: 0.1, y: 0.12, width: 0.8, height: 0.78))
+            ],
+            rightPageBlocks: [
+                SpreadBlock(role: "sectionNumber", kind: .text, normalizedFrame: Rect(x: 0.1, y: 0.15, width: 0.3, height: 0.12)),
+                SpreadBlock(role: "heading2", kind: .text, normalizedFrame: Rect(x: 0.1, y: 0.3, width: 0.8, height: 0.12)),
+                SpreadBlock(role: "introduction", kind: .text, normalizedFrame: Rect(x: 0.1, y: 0.45, width: 0.6, height: 0.15))
+            ]
+        ),
+        
         // A2 · Running Text (running-text)
         SpreadArchetype(
             id: "running-text",
@@ -169,6 +217,29 @@ extension SpreadArchetype {
             rightPageBlocks: [
                 SpreadBlock(role: "hero", kind: .image, normalizedFrame: Rect(x: 0.0, y: 0.12, width: 0.8, height: 0.78), bleedAcrossSpine: true),
                 SpreadBlock(role: "caption", kind: .caption, normalizedFrame: Rect(x: 0.1, y: 0.92, width: 0.8, height: 0.05))
+            ]
+        ),
+        
+        // A4' · Full-Bleed Photo (fullbleed-photo)
+        SpreadArchetype(
+            id: "fullbleed-photo",
+            displayName: "全幅气口对开",
+            family: .imageLed,
+            pages: 2,
+            imageSlots: 1,
+            pullQuoteSlots: 0,
+            mirror: false,
+            weight: 0.8,
+            imageTiers: ["fullBleed"],
+            pullQuotePositions: ["none"],
+            carriesMotifs: [],
+            role: .breathing,
+            leftPageBlocks: [
+                SpreadBlock(role: "hero", kind: .image, normalizedFrame: Rect(x: 0, y: 0, width: 1, height: 1), bleedAcrossSpine: true)
+            ],
+            rightPageBlocks: [
+                SpreadBlock(role: "hero", kind: .image, normalizedFrame: Rect(x: 0, y: 0, width: 1, height: 1), bleedAcrossSpine: true),
+                SpreadBlock(role: "caption", kind: .caption, normalizedFrame: Rect(x: 0.1, y: 0.92, width: 0.4, height: 0.05))
             ]
         ),
         
