@@ -97,11 +97,12 @@ public struct LayoutEngine: LayoutEngineProtocol {
     public init() {}
 
     public func layout(project: BookProject) -> LaidOutDocument {
-        var context = LayoutContext(project: project)
-        context.addRunningHeader(project.metadata.title)
+        let processedProject = project.prependingSectionNumbers()
+        var context = LayoutContext(project: processedProject)
+        context.addRunningHeader(processedProject.metadata.title)
         context.applyPlanIfPresent()
 
-        for section in project.sections {
+        for section in processedProject.sections {
             context.addSectionTitle(section.title)
             for story in section.stories {
                 context.addStory(story)

@@ -679,7 +679,8 @@ public struct PNGExporter {
                 text: text,
                 style: style,
                 foregroundColor: textColor,
-                inlineRuns: mappedRuns
+                inlineRuns: mappedRuns,
+                project: project
             )
         }
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)

@@ -1,5 +1,6 @@
 import Foundation
 import CoreText
+import AppKit
 
 public enum ChineseTypesetting {
     public static let openingPunctuation = Set<Character>("（【〔《〈「『“‘")
@@ -12,7 +13,8 @@ public enum ChineseTypesetting {
         style: ParagraphStyle,
         foregroundColor: CGColor? = nil,
         zoomScale: Double = 1.0,
-        inlineRuns: [InlineRun]? = nil
+        inlineRuns: [InlineRun]? = nil,
+        project: BookProject? = nil
     ) -> NSAttributedString {
         let baseFontSize = style.fontSize * zoomScale
         let baseFont = CTFontCreateWithName(style.fontName as CFString, CGFloat(baseFontSize), nil)
@@ -114,6 +116,13 @@ public enum ChineseTypesetting {
                     
                     if run.emphasis.contains(.kenten) {
                         attrString.addAttribute(ChineseTypesetting.kentenAttributeName, value: true, range: safeRange)
+                    }
+                    
+                    if let colorToken = run.colorTokenRef,
+                       let proj = project,
+                       let hex = proj.resolvedColorHex(colorToken),
+                       let color = NSColor.from(hex: hex) {
+                        attrString.addAttribute(NSAttributedString.Key(kCTForegroundColorAttributeName as String), value: color.cgColor, range: safeRange)
                     }
                     
                     attrString.enumerateAttribute(NSAttributedString.Key(kCTFontAttributeName as String), in: safeRange, options: []) { value, range, stop in

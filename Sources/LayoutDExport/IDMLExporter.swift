@@ -147,7 +147,7 @@ public struct IDMLExporter {
             guard !flowParagraphs.isEmpty else { continue }
             let storySelf = "uStoryFlow\(runIndex)"
             storyFiles["Stories/Story_\(storySelf).xml"] = chapterStoryXML(
-                self: storySelf, vertical: flowVertical, paragraphs: flowParagraphs)
+                self: storySelf, vertical: flowVertical, paragraphs: flowParagraphs, project: project)
             storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
             storyListIds.append(storySelf)
             flowStorySelf[runIndex] = storySelf
@@ -412,7 +412,8 @@ public struct IDMLExporter {
                         storyFiles["Stories/Story_\(storySelf).xml"] = tableStoryXML(
                             self: storySelf, styleRef: styleRef, cells: cells,
                             cellRuns: paragraphsByID[paragraphID]?.tableCellRuns,
-                            frameWidth: frame.rect.width, cellFillSwatch: cellFillSwatch)
+                            frameWidth: frame.rect.width, cellFillSwatch: cellFillSwatch,
+                            project: project)
                         storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                         storyListIds.append(storySelf)
                         continue
@@ -444,7 +445,8 @@ public struct IDMLExporter {
                     let storyContent = storyXML(self: storySelf, styleRef: styleRef,
                                                 vertical: vertical, text: text, inlineRuns: frameInlineRuns,
                                                 footnotes: frameFootnotes,
-                                                footnoteStyleRef: footnoteStyleRef(for: frameFootnotes, ctx: ctx))
+                                                footnoteStyleRef: footnoteStyleRef(for: frameFootnotes, ctx: ctx),
+                                                project: project)
                     storyFiles["Stories/Story_\(storySelf).xml"] = storyContent
                     storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                     storyListIds.append(storySelf)

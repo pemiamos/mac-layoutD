@@ -343,4 +343,73 @@ public extension BookProject {
             drawBehind: drawBehind
         )
     }
+    
+    func sectionIndex(for paragraphId: UUID, in section: BookSection) -> Int? {
+        var index = 0
+        for story in section.stories {
+            for para in story.paragraphs {
+                if para.kind == .heading(level: 2) || para.styleId == StyleID.heading2.rawValue || para.styleId == "heading2" || para.styleId == "节名" {
+                    index += 1
+                    if para.id == paragraphId {
+                        return index
+                    }
+                }
+            }
+        }
+        return nil
+    }
+    
+    func prependingSectionNumbers() -> BookProject {
+        guard let motif = motifs?.sectionNumber else {
+            return self
+        }
+        
+        var updatedSections = sections
+        for (secIdx, section) in sections.enumerated() {
+            var updatedStories = section.stories
+            for (storyIdx, story) in section.stories.enumerated() {
+                var updatedParagraphs = story.paragraphs
+                for (paraIdx, paragraph) in story.paragraphs.enumerated() {
+                    if paragraph.kind == .heading(level: 2) || paragraph.styleId == StyleID.heading2.rawValue || paragraph.styleId == "heading2" || paragraph.styleId == "节名" {
+                        if let index = sectionIndex(for: paragraph.id, in: section) {
+                            let minDigits = motif.minDigits ?? 2
+                            let formattedNum = String(format: "%0\(minDigits)d", index)
+                            let prefix = motif.prefix ?? ""
+                            let suffix = motif.suffix ?? ""
+                            let secNumStr = "\(prefix)\(formattedNum)\(suffix)"
+                            
+                            var updatedPara = paragraph
+                            updatedPara.text = secNumStr + paragraph.text
+                            
+                            var newRuns = paragraph.inlineRuns ?? []
+                            newRuns = newRuns.map { run in
+                                var r = run
+                                r.location += secNumStr.count
+                                return r
+                            }
+                            
+                            let numColor = motif.color ?? "accent"
+                            newRuns.insert(InlineRun(location: 0, length: secNumStr.count, emphasis: [], colorTokenRef: numColor), at: 0)
+                            updatedPara.inlineRuns = newRuns
+                            
+                            updatedParagraphs[paraIdx] = updatedPara
+                        }
+                    }
+                }
+                updatedStories[storyIdx] = Story(
+                    id: story.id,
+                    title: story.title,
+                    paragraphs: updatedParagraphs
+                )
+            }
+            updatedSections[secIdx] = BookSection(
+                title: section.title,
+                stories: updatedStories
+            )
+        }
+        
+        var copy = self
+        copy.sections = updatedSections
+        return copy
+    }
 }

@@ -49,12 +49,14 @@ extension IDMLExporter {
         text: String,
         inlineRuns: [InlineRun]? = nil,
         footnotes: [Paragraph] = [],
-        footnoteStyleRef: String = "ParagraphStyle/$ID/[No paragraph style]"
+        footnoteStyleRef: String = "ParagraphStyle/$ID/[No paragraph style]",
+        project: BookProject
     ) -> String {
         let orientation = vertical ? "Vertical" : "Horizontal"
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
         let body = paragraphStyleRangeXML(styleRef: styleRef, text: text, inlineRuns: inlineRuns,
-                                          footnotes: footnotes, footnoteStyleRef: footnoteStyleRef)
+                                          footnotes: footnotes, footnoteStyleRef: footnoteStyleRef,
+                                          project: project)
         return """
         \(header)
         <idPkg:Story \(pkgNS) DOMVersion="\(dom)">
@@ -74,13 +76,13 @@ extension IDMLExporter {
     /// ⚠️ 段落回车不能用字符：实测 U+000A 被当「强制换行/软回车」（整章并成一段、标题不套
     /// 样式、无空行）；U+2029 被当空格；不加分隔则文字全糊。只有 `<Br/>` 元素是对的
     /// （2026-07-07 用户逐一实机验证 7 种写法，仅 `<Br/>` 通过：标题变大+分段+空行）。
-    func chapterStoryXML(self id: String, vertical: Bool, paragraphs: [ChapterParagraph]) -> String {
+    func chapterStoryXML(self id: String, vertical: Bool, paragraphs: [ChapterParagraph], project: BookProject) -> String {
         let orientation = vertical ? "Vertical" : "Horizontal"
         let direction = vertical ? "RightToLeftDirection" : "LeftToRightDirection"
         let lastIndex = paragraphs.count - 1
         let body = paragraphs.enumerated().map { index, p -> String in
             // 可见文字 → 段落回车 <Br/>（单独一个 CharacterStyleRange，放在本段最后）。
-            let textRanges = characterStyleRanges(for: p.text, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef, noBreakTail: trailingNoBreakCount(for: p.text))
+            let textRanges = characterStyleRanges(for: p.text, globalStart: 0, inlineRuns: p.inlineRuns ?? [], footnotes: p.footnotes, footnoteStyleRef: p.footnoteStyleRef, noBreakTail: trailingNoBreakCount(for: p.text), project: project)
             let paragraphMark = index == lastIndex ? [] : [Self.paragraphBreakRange]
             let ranges = ([textRanges] + paragraphMark).joined(separator: "\n")
             return """
@@ -109,7 +111,8 @@ extension IDMLExporter {
     /// 段与段之间加 `<Br/>` 段落回车，否则 InDesign 会把它们并成一整段（除末段外）。
     func paragraphStyleRangeXML(
         styleRef: String, text: String, inlineRuns: [InlineRun]?,
-        footnotes: [Paragraph], footnoteStyleRef: String
+        footnotes: [Paragraph], footnoteStyleRef: String,
+        project: BookProject
     ) -> String {
         var lineStart = 0
         let lines = text.components(separatedBy: "\n").compactMap { rawLine -> (String, Int)? in
@@ -125,7 +128,7 @@ extension IDMLExporter {
             let mark = index == lastIndex ? "" : "\n" + Self.paragraphBreakRange
             return """
             \t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)">
-            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes, footnoteStyleRef: footnoteStyleRef))\(mark)
+            \(characterStyleRanges(for: line, globalStart: start, inlineRuns: inlineRuns ?? [], footnotes: footnotes, footnoteStyleRef: footnoteStyleRef, project: project))\(mark)
             \t\t</ParagraphStyleRange>
             """
         }.joined(separator: "\n")
@@ -168,10 +171,11 @@ extension IDMLExporter {
         inlineRuns: [InlineRun],
         footnotes: [Paragraph] = [],
         footnoteStyleRef: String = "ParagraphStyle/$ID/[No paragraph style]",
-        noBreakTail: Int = 0
+        noBreakTail: Int = 0,
+        project: BookProject
     ) -> String {
         guard !footnotes.isEmpty else {
-            return styledCharacterRanges(for: text, globalStart: globalStart, inlineRuns: inlineRuns, noBreakTail: noBreakTail)
+            return styledCharacterRanges(for: text, globalStart: globalStart, inlineRuns: inlineRuns, noBreakTail: noBreakTail, project: project)
         }
         // 带脚注的段落走下方拆分路径，段末孤字防治暂不叠加（脚注段本就少见，避免与
         // 脚注锚点拆分逻辑纠缠）。
@@ -191,31 +195,39 @@ extension IDMLExporter {
                 output += styledCharacterRanges(
                     for: String(characters[cursor..<markerStart]),
                     globalStart: globalStart + cursor,
-                    inlineRuns: inlineRuns
+                    inlineRuns: inlineRuns,
+                    project: project
                 )
             }
-            output += footnoteXML(footnote, styleRef: footnoteStyleRef)
+            output += footnoteXML(footnote, styleRef: footnoteStyleRef, project: project)
             cursor = markerStart + marker.count
         }
         if cursor < characters.count {
             output += styledCharacterRanges(
                 for: String(characters[cursor...]),
                 globalStart: globalStart + cursor,
-                inlineRuns: inlineRuns
+                inlineRuns: inlineRuns,
+                project: project
             )
         }
         return output
     }
 
-    func styledCharacterRanges(for text: String, globalStart: Int, inlineRuns: [InlineRun], noBreakTail: Int = 0) -> String {
+    func styledCharacterRanges(for text: String, globalStart: Int, inlineRuns: [InlineRun], noBreakTail: Int = 0, project: BookProject) -> String {
         let characters = Array(text)
         guard !characters.isEmpty else { return "" }
         var styles = Array(repeating: Set<InlineEmphasis>(), count: characters.count)
+        var colors = Array(repeating: String?.none, count: characters.count)
         for run in inlineRuns {
             let start = max(0, run.location - globalStart)
             let end = min(characters.count, run.location + run.length - globalStart)
             guard start < end else { continue }
-            for index in start..<end { styles[index].formUnion(run.emphasis) }
+            for index in start..<end {
+                styles[index].formUnion(run.emphasis)
+                if let ref = run.colorTokenRef {
+                    colors[index] = ref
+                }
+            }
         }
         // 段末孤字防治：末尾 noBreakTail 个字符标「禁止断行」，让它们放不下时整体换到
         // 最后一行，避免单字孤零零成行。noBreak 与 emphasis 一样是分段维度，任一变化即断段。
@@ -224,14 +236,14 @@ extension IDMLExporter {
             for index in max(0, characters.count - noBreakTail)..<characters.count { noBreak[index] = true }
         }
 
-        var ranges: [(String, Set<InlineEmphasis>, Bool)] = []
+        var ranges: [(String, Set<InlineEmphasis>, String?, Bool)] = []
         var start = 0
         for index in 1...characters.count
-        where index == characters.count || styles[index] != styles[start] || noBreak[index] != noBreak[start] {
-            ranges.append((String(characters[start..<index]), styles[start], noBreak[start]))
+        where index == characters.count || styles[index] != styles[start] || colors[index] != colors[start] || noBreak[index] != noBreak[start] {
+            ranges.append((String(characters[start..<index]), styles[start], colors[start], noBreak[start]))
             start = index
         }
-        return ranges.map { content, emphasis, isNoBreak in
+        return ranges.map { content, emphasis, colorToken, isNoBreak in
             // 粗体用 FauxBold（算法加粗），斜体用 Skew（切变倾斜角）而非 FontStyle 字符串：
             // FontStyle="Bold"/"Italic" 要求 Fonts.xml 里真有同名字重/斜体的字体资源，否则
             // InDesign 找不到，会用替代字形顶上（视觉上是粉色高亮，等于没生效）。
@@ -252,15 +264,20 @@ extension IDMLExporter {
             }
             // NoBreak：InDesign 的「禁止断行」字符属性（DOM 的 noBreak，读写布尔）。
             if isNoBreak { attrs += " NoBreak=\"true\"" }
+            if let colorHexOrToken = colorToken {
+                let resolvedHex = project.resolvedColorHex(colorHexOrToken) ?? colorHexOrToken
+                attrs += " FillColor=\"\(colorRef(resolvedHex))\""
+            }
             return "\t\t\t<CharacterStyleRange AppliedCharacterStyle=\"CharacterStyle/$ID/[No character style]\"\(attrs)><Content>\(esc(content))</Content></CharacterStyleRange>"
         }.joined(separator: "\n")
     }
 
-    func footnoteXML(_ paragraph: Paragraph, styleRef: String) -> String {
+    func footnoteXML(_ paragraph: Paragraph, styleRef: String, project: BookProject) -> String {
         let body = styledCharacterRanges(
             for: paragraph.text,
             globalStart: 0,
-            inlineRuns: paragraph.inlineRuns ?? []
+            inlineRuns: paragraph.inlineRuns ?? [],
+            project: project
         )
         // 脚注也是 CJK 段落，统一用 World-Ready 排版器（与正文一致）：对纯脚注无害，
         // 又能在脚注内出现着重号/避头尾时正确排版。
@@ -277,11 +294,11 @@ extension IDMLExporter {
     /// 再全部 <Row>，最后全部 <Cell>（Cell 不嵌在 Row 里，靠 Name="列:行" 定位）。
     /// 第一行视为表头。列宽按框宽均分；单元格四边给 0.5pt 黑边，使其在 InDesign 里
     /// 一眼是真表格。单元格文字复用 styledCharacterRanges，并与正文一样带 World-Ready 排版器。
-    func tableStoryXML(self id: String, styleRef: String, cells: [[String]], cellRuns: [[[InlineRun]]]? = nil, frameWidth: Double, cellFillSwatch: String? = nil) -> String {
+    func tableStoryXML(self id: String, styleRef: String, cells: [[String]], cellRuns: [[[InlineRun]]]? = nil, frameWidth: Double, cellFillSwatch: String? = nil, project: BookProject) -> String {
         let rowCount = cells.count
         let columnCount = cells.map(\.count).max() ?? 0
         guard rowCount > 0, columnCount > 0 else {
-            return storyXML(self: id, styleRef: styleRef, vertical: false, text: "")
+            return storyXML(self: id, styleRef: styleRef, vertical: false, text: "", project: project)
         }
         let headerRowCount = 1
         let bodyRowCount = rowCount - headerRowCount
@@ -309,7 +326,7 @@ extension IDMLExporter {
                 let content = c < cells[r].count ? cells[r][c] : ""
                 // 该格的行内格式（粗/斜/傍点），偏移针对该格文本；缺则空（纯文字）。
                 let runs: [InlineRun] = (cellRuns.flatMap { r < $0.count && c < $0[r].count ? $0[r][c] : nil }) ?? []
-                let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: runs)
+                let cellBody = styledCharacterRanges(for: content, globalStart: 0, inlineRuns: runs, project: project)
                 cellsXML.append("""
                 \t\t\t\t\t<Cell Self="\(tableSelf)Cell\(c)_\(r)" Name="\(c):\(r)" RowSpan="1" ColumnSpan="1" AppliedCellStyle="CellStyle/$ID/[None]"\(fillAttr) \(border)>
                 \t\t\t\t\t\t<ParagraphStyleRange AppliedParagraphStyle="\(styleRef)" FirstLineIndent="0" Justification="LeftAlign">

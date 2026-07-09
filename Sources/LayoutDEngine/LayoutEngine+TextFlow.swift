@@ -340,7 +340,7 @@ extension LayoutContext {
             return applyWidowOrphanControls(prefix: kinsokuPrefix, fullText: text, style: style, maxHeight: maxHeight, width: width, inlineRuns: inlineRuns)
         }
         
-        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, inlineRuns: inlineRuns)
+        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, inlineRuns: inlineRuns, project: project)
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         
         let path = CGMutablePath()
