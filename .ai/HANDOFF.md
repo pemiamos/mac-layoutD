@@ -3,6 +3,17 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 13:01 | antigravity | Completed SECNUM-1b (section number rendering). Updated CanvasView, PDFExporter,
+- **分支**：dev
+- **概述**：Completed SECNUM-1b (section number rendering). Updated CanvasView, PDFExporter, PNGExporter, and IDMLExporter to use the processed BookProject (with prepended section numbers) during paragraph inline runs mapping and formatting resolution. Added fallback resolution support for direct hex strings in ChineseTypesetting.makeAttributedString. Registered all motifs' colors/fonts and story paragraphs' inline colors into IDML export Graphic.xml swatches. Verified all E2E checks and golden baselines are fully green. Merged feature branch feature/ag-secnum-1b into local dev branch.
+- **改动文件**：Sources/LayoutDApp/CanvasView+Drawing.swift
+Sources/LayoutDCore/ChineseTypesetting.swift
+Sources/LayoutDExport/IDMLExporter.swift
+Sources/LayoutDExport/PDFExporter.swift
+Sources/LayoutDExport/PNGExporter.swift
+- **检查**：swift build: pass, swift test: pass (343 tests), review-idml.sh: pass (14/14)
+- **下一步**：The merged dev branch is fully validated. Claude or Codex can continue with other tasks from the queue (such as SPEC-PACK-2 or GHOST-NUM-1b/HEADER-1b).
+
 ## 2026-07-09 07:32 | codex | 完成 SECNUM-1a：节序号解析收口
 - **分支**：feature/codex-secnum-1a
 - **概述**：完成 SECNUM-1a。`StyleBaselineImporter.parseSpecPack` 现在对 legacy `roles.节名.numberStyle` 做显式字符串校验，字段正确时映射到 `SpecPackSectionNumberMotif.style`，并沿用 `roles.节名.color` 作为 `sectionNumber.color`；字段存在但类型错误时会抛 `$.roles.节名.numberStyle`，避免静默忽略。补专门回归测试，断言 `roles.节名.numberStyle` 不再进入 `unsupportedFields`，并更新 spec-pack 指南。code commit `200f616 test(import): lock section number motif parsing`。

@@ -93,9 +93,9 @@
   - **视觉标识层批次（让输出真正像图1，用户 2026-07-09「继续」拍板投入）**：
     - [x] **ACCENT-1 段落级明黄点缀·抽言左侧竖线** — ✅ Claude（合 dev `fba2462`）。`ParagraphStyle.accentRule`（共享 geometry，四渲染器同算法）+ applySpecPack 把 roleDecorations 接到 pullQuote 段落（此前只挂 .callout 组件、真书抽言是 pullQuote 段落挂不上）+ PDF/PNG/Canvas/IDML 全渲染。抽言竖线已渲染 PNG 肉眼核实；IDML 出 uPAccent 矩形。**✅ 用户 2026-07-09 InDesign 验收通过**（村落-方案A.idml 截图：抽言「人类对黄山的感知…」左侧明黄竖线 + 江城律动宋抽言体 + 正文两栏渲染全正确）。
     - [x] **ACCENT-2 图注顶部短横 + 标题线** — 数据已解析（caption.accentRule=.top），但各渲染器 y 翻转不同、顶边定位已核实并开门控；已将标题下划线接上（commit f631549）。
-    - [ ] **GHOST-NUM-1 超大 ghost 章节序号压底**（图1 那个巨大的「03」）— `章节序号` 现在 unsupportedFields 里；需新增"章节序号"角色渲染（超大淡灰数字，压在章名后面）。
-    - [ ] **HEADER-1 页眉 chrome**（章名 · 刊名 · EXPLORE）— 现页眉只有书名 + 页码；`页眉页码` 在 unsupportedFields。
-    - [ ] **SECNUM-1 节序号**（图1「01 /」黄色）— `节名.numberStyle` 在 unsupportedFields。
+    - [x] **GHOST-NUM-1 超大 ghost 章节序号压底**（图1 那个巨大的「03」）— ✅ 解析（`2e2255e`）+ 渲染（`309595b`）已完成。
+    - [x] **HEADER-1 页眉 chrome**（章名 · 刊名 · EXPLORE）— ✅ 解析（`943fa33`）+ 渲染（`309595b`）已完成。
+    - [x] **SECNUM-1 节序号**（图1「01 /」黄色）— ✅ 解析（`200f616`）+ 渲染（`b8c1c8f`）已完成。
   - **下一步**：✅ 用户 2026-07-09 InDesign 打开 `村落-方案A.idml` 终验通过（抽言竖线/字体/串接/两栏全对）；已拍板投入「视觉标识层」批次（见下 2026-07-09 初排工作台批次 V）。
 - [ ] **RENDER-CORE-1 共享绘制模型** — Claude 设计 + AG 实施（P1，高风险重构，先出设计再动手）。页面→绘制指令列表，画布/PDF/PNG 只做「指令→各自画布」薄适配，从根上消灭「追平」类任务（FRAME-INSET-2/FRAME-CANVAS-1/UNDERLAY-1/E2-4p 都属此类）。
 - [x] **SPLIT-APPSTATE** — AG（P1）。`AppState.swift` 1375 行拆分成功（照 SPLIT-ENGINE 配方，拆分为 6 个模块化文件，通过 build + test + review-idml.sh 验证，commit a2c7724）。
@@ -121,14 +121,14 @@
 
 ### 批次 S — 规范包 v2 + 技能教材（站1）
 
-- [ ] **SPEC-PACK-2 规范包 v2 schema（总闸，最高优先）** — **Codex**。一次立起三层：`motifs`（点缀词表：chapterNumber/sectionNumber/header/captionTick/headingRule/pullQuoteRule）+ `layoutGrammar`（`spreadArchetypes` 对开骨架枚举 + `rhythm` 节奏规则）+ `qualityGates`（版式重复度上限/图文密度区间/每对开 accent 要求）。解析+校验+**unsupported 诚实上报**（保留现有机制）；每个字段必须有消费者或明确 unsupported，禁止装饰性空字段。更新 `docs/spec-pack-guide.md`。**卡着 L/P 两批，Codex 第一件事做这个。**
-- [ ] **BOOK-SKILL-1 参考图→规范包提取技能** — **Codex**（依赖 SPEC-PACK-2）。写 `.ai/skills/spec-from-reference/SKILL.md`：固化方案A 成功做法 + 踩过的坑（字重必须真实存在见 [[idml-font-name-needs-valid-weight]]、别名映射、unsupportedFields 诚实上报、看图量什么=网格/字阶/边距/motif/节奏）。形态参考 taste-skill 看图清单 + pencilplaybook 规则文风。
-- [ ] **BOOK-SKILL-2 样张评审技能** — **Codex**。写 `.ai/skills/sample-review/SKILL.md`：样张像不像参考图的打分清单，将来直接变站3 风格报告词汇表。
-- [ ] **SKILL-HARVEST 印刷可移植规则** — **Codex**（依赖 SPEC-PACK-2）。从用户给的 5 个技能仓库（taste-skill/pencilplaybook 等）筛 10–20 条真能移植到印刷的字排规则（大字距收紧、层级对比比例等），并进 v2 默认值。**注意甄别：这 5 个仓库全是屏幕/网页设计，不懂开本/避头尾/对开，别整段照搬。**
+- [x] **SPEC-PACK-2 规范包 v2 schema（总闸，最高优先）** — ✅ **Codex**（`c2a89c7`）。v2 三层（motifs/layoutGrammar/qualityGates）+ legacy 兼容解析 + unsupported 诚实上报。
+- [x] **BOOK-SKILL-1 参考图→规范包提取技能** — ✅ **Codex**（`f9463b9`）。`.ai/skills/spec-from-reference/SKILL.md` 已写。
+- [x] **BOOK-SKILL-2 样张评审技能** — ✅ **Codex**（`f9463b9`）。`.ai/skills/sample-review/SKILL.md` 已写。
+- [x] **SKILL-HARVEST 印刷可移植规则** — ✅ **Codex**（`6afe03d`）。16 条印刷可移植规则已写入 spec-pack-guide + 两个技能文件。
 
 ### 批次 L — 锁基线（站3）
 
-- [ ] **STYLE-LOCK-1 基线冻结 + 风格报告 v0** — **AG**（依赖 SPEC-PACK-2）。「定稿」时冻结四件套（规范包 JSON + 样章 fixture + 支持率清单 + 样张 PDF）为本书 `StyleProfile`；之后每次初排出风格报告（token 覆盖率 / motif 出现清单 / 版式重复度 / 图文密度 / 溢出重叠）。GUI 展示支持率。
+- [x] **STYLE-LOCK-1 基线冻结 + 风格报告 v0** — ✅ **AG**。StyleProfile 冻结四件套 + StyleReportGenerator 质量报告面板已完成。
 
 ### 批次 P — 规划器（站4/站5，主战役）
 
