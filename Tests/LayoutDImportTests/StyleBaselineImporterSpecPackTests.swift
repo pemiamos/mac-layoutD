@@ -1,4 +1,5 @@
 import LayoutDImport
+import LayoutDCore
 import XCTest
 
 final class StyleBaselineImporterSpecPackTests: XCTestCase {

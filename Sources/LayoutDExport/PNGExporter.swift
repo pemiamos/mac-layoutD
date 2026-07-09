@@ -200,7 +200,23 @@ public struct PNGExporter {
         // 2. Draw all page frames
         let underlays = page.frames.filter { $0.isUnderlay }
         let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+        
+        // Draw ghost chapter number (behind layer)
+        if let info = project.ghostChapterNumberInfo(for: page), info.drawBehind {
+            MotifRenderer.drawGhostChapterNumber(
+                page: page,
+                project: project,
+                in: context,
+                zoomScale: 1.0,
+                pageHeight: Double(pageSize.height),
+                isPDF: false
+            )
+        }
+        
         for frame in underlays + nonUnderlays {
+            if frame.kind == .runningHeader && project.motifs?.header != nil {
+                continue
+            }
             // Find if frame belongs to a group
             var frameGroup: FlowFrameGroup? = nil
             for group in pageGroups {
@@ -211,6 +227,28 @@ public struct PNGExporter {
             }
             draw(frame: frame, pageNumber: page.number, project: project, in: context, bleedPoints: bleedPoints, flowGroup: frameGroup)
         }
+        
+        // Draw ghost chapter number (front layer)
+        if let info = project.ghostChapterNumberInfo(for: page), !info.drawBehind {
+            MotifRenderer.drawGhostChapterNumber(
+                page: page,
+                project: project,
+                in: context,
+                zoomScale: 1.0,
+                pageHeight: Double(pageSize.height),
+                isPDF: false
+            )
+        }
+        
+        // Draw custom header motif
+        MotifRenderer.drawHeaderMotif(
+            page: page,
+            project: project,
+            in: context,
+            zoomScale: 1.0,
+            pageHeight: Double(pageSize.height),
+            isPDF: false
+        )
 
         // 3. Draw group strokes last
         for group in pageGroups {
@@ -774,6 +812,9 @@ public struct PNGExporter {
     }
 
     private func drawPageNumber(_ number: Int, project: BookProject, in context: CGContext) {
+        if let header = project.motifs?.header, header.showPageNumber {
+            return
+        }
         guard project.resolvedShowHeadersFooters(for: number) else {
             return
         }

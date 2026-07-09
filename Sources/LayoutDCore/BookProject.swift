@@ -55,6 +55,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
     public var wizardState: WizardState?
     public var styleProfile: StyleProfile?
     public var styleReport: StyleReport?
+    public var motifs: SpecPackMotifs?
 
     public init(
         schemaVersion: Int = BookProject.currentSchemaVersion,
@@ -73,7 +74,8 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         customSwatches: [PrintSwatch]? = nil,
         wizardState: WizardState? = nil,
         styleProfile: StyleProfile? = nil,
-        styleReport: StyleReport? = nil
+        styleReport: StyleReport? = nil,
+        motifs: SpecPackMotifs? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.id = id
@@ -92,6 +94,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         self.wizardState = wizardState
         self.styleProfile = styleProfile
         self.styleReport = styleReport
+        self.motifs = motifs
     }
 
     public var safeAnnotations: [BookAnnotation] {
@@ -122,6 +125,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         case wizardState
         case styleProfile
         case styleReport
+        case motifs
     }
 
     public init(from decoder: Decoder) throws {
@@ -143,6 +147,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         wizardState = try container.decodeIfPresent(WizardState.self, forKey: .wizardState)
         styleProfile = try container.decodeIfPresent(StyleProfile.self, forKey: .styleProfile)
         styleReport = try container.decodeIfPresent(StyleReport.self, forKey: .styleReport)
+        motifs = try container.decodeIfPresent(SpecPackMotifs.self, forKey: .motifs)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -164,6 +169,7 @@ public struct BookProject: Codable, Equatable, Sendable, Identifiable {
         try container.encodeIfPresent(wizardState, forKey: .wizardState)
         try container.encodeIfPresent(styleProfile, forKey: .styleProfile)
         try container.encodeIfPresent(styleReport, forKey: .styleReport)
+        try container.encodeIfPresent(motifs, forKey: .motifs)
     }
 
     /// Resolves a color token id to a hex value under the project's active color

@@ -236,9 +236,62 @@ extension CanvasView {
 
         let underlays = page.frames.filter { $0.isUnderlay }
         let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+        
+        // Draw ghost chapter number (behind layer)
+        if let context = NSGraphicsContext.current?.cgContext {
+            if let info = project.ghostChapterNumberInfo(for: page), info.drawBehind {
+                context.saveGState()
+                context.translateBy(x: pageRect.minX, y: pageRect.minY)
+                MotifRenderer.drawGhostChapterNumber(
+                    page: page,
+                    project: project,
+                    in: context,
+                    zoomScale: zoomScale,
+                    pageHeight: Double(pageRect.height),
+                    isPDF: false
+                )
+                context.restoreGState()
+            }
+        }
+        
         for frame in underlays + nonUnderlays {
+            if frame.kind == .runningHeader && project.motifs?.header != nil {
+                continue
+            }
             let group = groupByFrameId[frame.id]
             draw(frame: frame, project: project, pageRect: pageRect, flowGroup: group)
+        }
+        
+        // Draw ghost chapter number (front layer)
+        if let context = NSGraphicsContext.current?.cgContext {
+            if let info = project.ghostChapterNumberInfo(for: page), !info.drawBehind {
+                context.saveGState()
+                context.translateBy(x: pageRect.minX, y: pageRect.minY)
+                MotifRenderer.drawGhostChapterNumber(
+                    page: page,
+                    project: project,
+                    in: context,
+                    zoomScale: zoomScale,
+                    pageHeight: Double(pageRect.height),
+                    isPDF: false
+                )
+                context.restoreGState()
+            }
+        }
+        
+        // Draw custom header motif
+        if let context = NSGraphicsContext.current?.cgContext {
+            context.saveGState()
+            context.translateBy(x: pageRect.minX, y: pageRect.minY)
+            MotifRenderer.drawHeaderMotif(
+                page: page,
+                project: project,
+                in: context,
+                zoomScale: zoomScale,
+                pageHeight: Double(pageRect.height),
+                isPDF: false
+            )
+            context.restoreGState()
         }
 
         // Draw flow group strokes, selections, and highlights
@@ -1070,6 +1123,9 @@ extension CanvasView {
     }
 
     private func drawPageNumber(_ number: Int, project: BookProject, pageRect: CGRect) {
+        if let header = project.motifs?.header, header.showPageNumber {
+            return
+        }
         guard project.resolvedShowHeadersFooters(for: number) else {
             return
         }
