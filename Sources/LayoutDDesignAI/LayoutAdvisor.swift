@@ -59,24 +59,6 @@ public struct SectionSummary: Codable, Equatable, Sendable {
     }
 }
 
-public struct AssetSummary: Codable, Equatable, Sendable {
-    public var fileName: String
-    public var role: String
-    public var usage: String
-    public var caption: String?
-    public var pixelWidth: Int
-    public var pixelHeight: Int
-
-    public init(asset: Asset) {
-        fileName = asset.fileName
-        role = asset.role.rawValue
-        usage = asset.usage.rawValue
-        caption = asset.caption
-        pixelWidth = asset.pixelWidth
-        pixelHeight = asset.pixelHeight
-    }
-}
-
 public struct ProviderBackedLayoutAdvisor<Provider: LayoutPlanProvider>: LayoutAdvisor {
     public var provider: Provider
     public var fallback: RuleBasedLayoutAdvisor

@@ -21,6 +21,7 @@ public struct WizardState: Codable, Equatable, Sendable {
     public var chosenArchetypes: [String]
     public var enabledArchetypeIds: [String]?
     public var archetypeWeights: [String: Double]?
+    public var spreadSelections: [SpreadSelection]?
     
     // Step 6: Exported IDML path
     public var exportedIDMLPath: String?
@@ -36,6 +37,7 @@ public struct WizardState: Codable, Equatable, Sendable {
         chosenArchetypes: [String] = [],
         enabledArchetypeIds: [String]? = nil,
         archetypeWeights: [String: Double]? = nil,
+        spreadSelections: [SpreadSelection]? = nil,
         exportedIDMLPath: String? = nil
     ) {
         self.currentStep = currentStep
@@ -48,6 +50,7 @@ public struct WizardState: Codable, Equatable, Sendable {
         self.chosenArchetypes = chosenArchetypes
         self.enabledArchetypeIds = enabledArchetypeIds
         self.archetypeWeights = archetypeWeights
+        self.spreadSelections = spreadSelections
         self.exportedIDMLPath = exportedIDMLPath
     }
 }

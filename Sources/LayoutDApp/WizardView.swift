@@ -11,6 +11,7 @@ struct WizardView: View {
     var onFreezeStyle: (@escaping (Bool) -> Void) -> Void
     var onRunPlanner: (@escaping ([String]?) -> Void) -> Void
     var onExportIDML: (@escaping (String?) -> Void) -> Void
+    var onRerollSpread: (Int, @escaping ([String]?) -> Void) -> Void
     
     @State private var showResetWarning = false
     @State private var targetStep = 1
@@ -657,8 +658,41 @@ struct WizardView: View {
                         .bold()
                     
                     ForEach(wizardState.chosenArchetypes.indices, id: \.self) { idx in
-                        Text("Spread \(idx + 1): \(wizardState.chosenArchetypes[idx])")
-                            .font(.system(size: 10, design: .monospaced))
+                        let leftPage = idx * 2 + 1
+                        let rightPage = leftPage + 1
+                        let isLocked = (state.project.lockedPages ?? []).contains(leftPage) ||
+                                       (state.project.lockedPages ?? []).contains(rightPage)
+                        
+                        HStack {
+                            Text("Spread \(idx + 1) (Page \(leftPage)-\(rightPage)): \(wizardState.chosenArchetypes[idx])")
+                                .font(.system(size: 10, design: .monospaced))
+                            
+                            if isLocked {
+                                Text("🔒 已锁定")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                onRerollSpread(idx) { archetypes in
+                                    if let archetypes {
+                                        var current = wizardState
+                                        current.chosenArchetypes = archetypes
+                                        updateWizardState(current)
+                                    }
+                                }
+                            }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(isLocked ? .gray : .accentColor)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isLocked)
+                            .help(isLocked ? "该对开页面已锁定，不可重抽" : "重抽这一页的对开骨架")
+                        }
+                        .padding(.vertical, 2)
                     }
                 }
                 .padding(10)
