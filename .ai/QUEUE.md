@@ -116,7 +116,7 @@
 - [ ] **GHOST-NUM-1b 超大 ghost 章节号渲染** — **AG**（依赖 1a）。超大淡灰数字压在章名后/底，四渲染器同算法。
 - [x] **HEADER-1a 页眉字段解析** — ✅ **Codex**（`943fa33`）。`页眉页码` / `页眉章名` 已移出 `unsupportedFields`，parseSpecPack 合并为 `motifs.header`；旧 `页眉页码` 保持页眉+页码兼容，`页眉章名` 可单独补章名侧样式。
 - [ ] **HEADER-1b 页眉 chrome 渲染** — **AG**（依赖 1a）。页眉（章名 · 刊名 · 细线）；注意与 MASTER-1 已有主页页码协调。
-- [ ] **SECNUM-1a 节序号解析** — **Codex**。`节名.numberStyle` 移出 unsupportedFields，parseSpecPack 支持。
+- [x] **SECNUM-1a 节序号解析** — ✅ **Codex**（`200f616`）。`节名.numberStyle` 已移出 unsupportedFields，parseSpecPack 映射到 `motifs.sectionNumber.style`；字段存在但类型错误会报 `$.roles.节名.numberStyle`。
 - [ ] **SECNUM-1b 节序号渲染** — **AG**（依赖 1a）。节序号「01 /」黄色。
 
 ### 批次 S — 规范包 v2 + 技能教材（站1）
