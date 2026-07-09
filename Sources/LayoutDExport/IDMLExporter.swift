@@ -60,10 +60,11 @@ public struct IDMLExporter {
 
     public func export(
         document: LaidOutDocument,
-        project: BookProject,
+        project originalProject: BookProject,
         to url: URL,
         options: IDMLExportOptions = IDMLExportOptions()
     ) throws {
+        let project = originalProject.prependingSectionNumbers()
         let pageW = project.pageSetup.pageSize.width
         let pageH = project.pageSetup.pageSize.height
         let pages = document.pages.sorted { $0.number < $1.number }
@@ -102,6 +103,34 @@ public struct IDMLExporter {
                     if let hex = component.resolvedFillColorHex(project: project) { _ = ctx.color(hex) }
                     if let hex = component.resolvedStrokeColorHex(project: project) { _ = ctx.color(hex) }
                     if let hex = component.resolvedAccentColorHex(project: project) { _ = ctx.color(hex) }
+                }
+            }
+        }
+
+        // 注册所有 motif 的颜色与字体，防止未被 ParagraphStyle/Frame 包含的 motif 颜色漏掉
+        if let motif = project.motifs {
+            if let c = motif.chapterNumber?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+            if let f = motif.chapterNumber?.resolvedFontName { ctx.font(f) }
+            if let c = motif.sectionNumber?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+            if let c = motif.header?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+            if let f = motif.header?.resolvedFontName { ctx.font(f) }
+            if let c = motif.captionTick?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+            if let c = motif.headingRule?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+            if let c = motif.pullQuoteRule?.color { _ = ctx.color(project.resolvedColorHex(c) ?? c) }
+        }
+
+        // 注册所有段落 inline runs 中的颜色与字体
+        for section in project.sections {
+            for story in section.stories {
+                for paragraph in story.paragraphs {
+                    if let runs = paragraph.inlineRuns {
+                        for run in runs {
+                            if let colorToken = run.colorTokenRef {
+                                let hex = project.resolvedColorHex(colorToken) ?? colorToken
+                                _ = ctx.color(hex)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -147,7 +176,7 @@ public struct IDMLExporter {
             guard !flowParagraphs.isEmpty else { continue }
             let storySelf = "uStoryFlow\(runIndex)"
             storyFiles["Stories/Story_\(storySelf).xml"] = chapterStoryXML(
-                self: storySelf, vertical: flowVertical, paragraphs: flowParagraphs)
+                self: storySelf, vertical: flowVertical, paragraphs: flowParagraphs, project: project)
             storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
             storyListIds.append(storySelf)
             flowStorySelf[runIndex] = storySelf
@@ -164,11 +193,154 @@ public struct IDMLExporter {
             // 对开 recto 右(0, 框[0,pageW])、verso 左(-pageW, 框[-pageW,0])。
             let pageTransformX = facing ? (recto ? 0 : -pageW) : -pageW / 2
             var items: [String] = []
-            // 垫底图（wrapMode == .underlay）画在本页所有内容之下：spread 内条目顺序即
-            // 叠放顺序（越靠前越底层），故单独收集、拼装时置于最前。
             var underlayItems: [String] = []
 
+            // Draw ghost chapter number motif if configured
+            if let info = project.ghostChapterNumberInfo(for: page) {
+                let ghostStoryId = "uStoryGhost\(pi)"
+                let ghostStoryContent = motifStoryXML(
+                    self: ghostStoryId,
+                    text: info.text,
+                    fontName: info.fontName,
+                    fontSizePt: Double(info.fontSize),
+                    fillColorHex: info.colorHex,
+                    project: project
+                )
+                storyFiles["Stories/Story_\(ghostStoryId).xml"] = ghostStoryContent
+                storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(ghostStoryId).xml\"/>")
+                storyListIds.append(ghostStoryId)
+                
+                let ghostRect = Rect(x: info.rect.origin.x, y: info.rect.origin.y, width: info.rect.size.width, height: info.rect.size.height)
+                let ghostFrameItem = textFrameItem(
+                    self: "uGhostFrame\(pi)",
+                    story: ghostStoryId,
+                    rect: ghostRect,
+                    fillColor: nil,
+                    strokeColor: nil,
+                    strokeWidth: 0,
+                    pageW: pageW,
+                    pageH: pageH,
+                    dx: dx
+                )
+                if info.drawBehind {
+                    underlayItems.append(ghostFrameItem)
+                } else {
+                    items.append(ghostFrameItem)
+                }
+            }
+
+            // Draw custom header motif if configured
+            if project.resolvedShowHeadersFooters(for: page.number),
+               let header = project.motifs?.header {
+                let activeSec = project.activeSection(for: page)
+                let headerText = project.resolvedHeaderText(for: page.number, activeSection: activeSec)
+                
+                let fontName = header.resolvedFontName ?? "Heiti SC Medium"
+                let fontSize = header.fontSizePt ?? 9.0
+                let colorHex = project.resolvedColorHex(header.color ?? "grayText") ?? "#7F7F7F"
+                
+                let margins = project.resolvedMargins(for: page.number)
+                let setup = project.pageSetup
+                
+                let leftMargin = margins.left
+                let rightMargin = margins.right
+                
+                let headerY = 24.0
+                let headerHeight = 16.0
+                
+                // Draw Thin line (细线通栏) if configured
+                if let rule = header.rule, rule == "细线通栏" {
+                    let lineY = headerY + headerHeight
+                    let ruleRect = Rect(x: leftMargin, y: lineY, width: pageW - leftMargin - rightMargin, height: 0.5)
+                    let ruleItem = graphicLineItem(
+                        self: "uHeaderRule\(pi)",
+                        rect: ruleRect,
+                        strokeColor: colorHex,
+                        strokeWidth: 0.5,
+                        pageW: pageW,
+                        pageH: pageH,
+                        dx: dx
+                    )
+                    items.append(ruleItem)
+                }
+                
+                let labelStr = headerText
+                let pageNumStr = "\(page.number)"
+                let showPageNum = header.showPageNumber
+                
+                if setup.facingPages {
+                    let isLeftPage = page.number % 2 == 0
+                    if isLeftPage {
+                        if showPageNum {
+                            let pageNumStoryId = "uStoryHeaderPage\(pi)"
+                            let pageNumStoryContent = motifStoryXML(self: pageNumStoryId, text: pageNumStr, fontName: fontName, fontSizePt: fontSize, fillColorHex: colorHex, project: project, alignRight: false)
+                            storyFiles["Stories/Story_\(pageNumStoryId).xml"] = pageNumStoryContent
+                            storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(pageNumStoryId).xml\"/>")
+                            storyListIds.append(pageNumStoryId)
+                            
+                            let pageNumRect = Rect(x: leftMargin, y: headerY, width: 50, height: headerHeight)
+                            items.append(textFrameItem(self: "uHeaderPageFrame\(pi)", story: pageNumStoryId, rect: pageNumRect, fillColor: nil, strokeColor: nil, strokeWidth: 0, pageW: pageW, pageH: pageH, dx: dx))
+                        }
+                        
+                        let textStoryId = "uStoryHeaderLabel\(pi)"
+                        let textStoryContent = motifStoryXML(self: textStoryId, text: labelStr, fontName: fontName, fontSizePt: fontSize, fillColorHex: colorHex, project: project, alignRight: true)
+                        storyFiles["Stories/Story_\(textStoryId).xml"] = textStoryContent
+                        storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(textStoryId).xml\"/>")
+                        storyListIds.append(textStoryId)
+                        
+                        let textW = pageW - leftMargin - rightMargin - (showPageNum ? 60 : 0)
+                        let textX = leftMargin + (showPageNum ? 60 : 0)
+                        let textRect = Rect(x: textX, y: headerY, width: textW, height: headerHeight)
+                        items.append(textFrameItem(self: "uHeaderLabelFrame\(pi)", story: textStoryId, rect: textRect, fillColor: nil, strokeColor: nil, strokeWidth: 0, pageW: pageW, pageH: pageH, dx: dx))
+                    } else {
+                        let textStoryId = "uStoryHeaderLabel\(pi)"
+                        let textStoryContent = motifStoryXML(self: textStoryId, text: labelStr, fontName: fontName, fontSizePt: fontSize, fillColorHex: colorHex, project: project, alignRight: false)
+                        storyFiles["Stories/Story_\(textStoryId).xml"] = textStoryContent
+                        storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(textStoryId).xml\"/>")
+                        storyListIds.append(textStoryId)
+                        
+                        let textW = pageW - leftMargin - rightMargin - (showPageNum ? 60 : 0)
+                        let textRect = Rect(x: leftMargin, y: headerY, width: textW, height: headerHeight)
+                        items.append(textFrameItem(self: "uHeaderLabelFrame\(pi)", story: textStoryId, rect: textRect, fillColor: nil, strokeColor: nil, strokeWidth: 0, pageW: pageW, pageH: pageH, dx: dx))
+                        
+                        if showPageNum {
+                            let pageNumStoryId = "uStoryHeaderPage\(pi)"
+                            let pageNumStoryContent = motifStoryXML(self: pageNumStoryId, text: pageNumStr, fontName: fontName, fontSizePt: fontSize, fillColorHex: colorHex, project: project, alignRight: true)
+                            storyFiles["Stories/Story_\(pageNumStoryId).xml"] = pageNumStoryContent
+                            storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(pageNumStoryId).xml\"/>")
+                            storyListIds.append(pageNumStoryId)
+                            
+                            let pageNumRect = Rect(x: pageW - rightMargin - 50, y: headerY, width: 50, height: headerHeight)
+                            items.append(textFrameItem(self: "uHeaderPageFrame\(pi)", story: pageNumStoryId, rect: pageNumRect, fillColor: nil, strokeColor: nil, strokeWidth: 0, pageW: pageW, pageH: pageH, dx: dx))
+                        }
+                    }
+                } else {
+                    if showPageNum {
+                        let pageNumStoryId = "uStoryHeaderPage\(pi)"
+                        let pageNumStoryContent = motifStoryXML(self: pageNumStoryId, text: pageNumStr, fontName: fontName, fontSizePt: fontSize, fillColorHex: colorHex, project: project, alignRight: true)
+                        storyFiles["Stories/Story_\(pageNumStoryId).xml"] = pageNumStoryContent
+                        storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(pageNumStoryId).xml\"/>")
+                        storyListIds.append(pageNumStoryId)
+                        
+                        let pageNumRect = Rect(x: pageW - rightMargin - 50, y: headerY, width: 50, height: headerHeight)
+                        items.append(textFrameItem(self: "uHeaderPageFrame\(pi)", story: pageNumStoryId, rect: pageNumRect, fillColor: nil, strokeColor: nil, strokeWidth: 0, pageW: pageW, pageH: pageH, dx: dx))
+                    }
+                    let textStoryId = "uStoryHeaderLabel\(pi)"
+                    let textStoryContent = motifStoryXML(self: textStoryId, text: labelStr, fontName: fontName, fontSizePt: fontSize, fillColorHex: colorHex, project: project, alignRight: false)
+                    storyFiles["Stories/Story_\(textStoryId).xml"] = textStoryContent
+                    storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(textStoryId).xml\"/>")
+                    storyListIds.append(textStoryId)
+                    
+                    let textW = pageW - leftMargin - rightMargin - (showPageNum ? 60 : 0)
+                    let textRect = Rect(x: leftMargin, y: headerY, width: textW, height: headerHeight)
+                    items.append(textFrameItem(self: "uHeaderLabelFrame\(pi)", story: textStoryId, rect: textRect, fillColor: nil, strokeColor: nil, strokeWidth: 0, pageW: pageW, pageH: pageH, dx: dx))
+                }
+            }
+
             for (fi, frame) in page.frames.enumerated() {
+                if frame.kind == .runningHeader && project.motifs?.header != nil {
+                    continue
+                }
                 switch frame.content {
                 case .text(let raw):
                     // 脚注由锚点 Story 内的原生 <Footnote> 承载。LayoutEngine 仍会
@@ -269,7 +441,8 @@ public struct IDMLExporter {
                         storyFiles["Stories/Story_\(storySelf).xml"] = tableStoryXML(
                             self: storySelf, styleRef: styleRef, cells: cells,
                             cellRuns: paragraphsByID[paragraphID]?.tableCellRuns,
-                            frameWidth: frame.rect.width, cellFillSwatch: cellFillSwatch)
+                            frameWidth: frame.rect.width, cellFillSwatch: cellFillSwatch,
+                            project: project)
                         storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                         storyListIds.append(storySelf)
                         continue
@@ -301,7 +474,8 @@ public struct IDMLExporter {
                     let storyContent = storyXML(self: storySelf, styleRef: styleRef,
                                                 vertical: vertical, text: text, inlineRuns: frameInlineRuns,
                                                 footnotes: frameFootnotes,
-                                                footnoteStyleRef: footnoteStyleRef(for: frameFootnotes, ctx: ctx))
+                                                footnoteStyleRef: footnoteStyleRef(for: frameFootnotes, ctx: ctx),
+                                                project: project)
                     storyFiles["Stories/Story_\(storySelf).xml"] = storyContent
                     storyRefs.append("\t<idPkg:Story src=\"Stories/Story_\(storySelf).xml\"/>")
                     storyListIds.append(storySelf)
@@ -371,6 +545,9 @@ public struct IDMLExporter {
             self: "uMasterPageNumberTF", story: masterPageNumberStorySelf, rect: masterPageNumberRect,
             fillColor: nil, strokeColor: nil, strokeWidth: 0, pageW: pageW, pageH: pageH)
 
+        let showMasterPageNumber = !(project.motifs?.header?.showPageNumber ?? false)
+        let masterItems = showMasterPageNumber ? [masterPageNumberItem] : []
+
         // 组装包内所有部件。
         var files: [String: String] = [
             "mimetype": "application/vnd.adobe.indesign-idml-package",
@@ -382,7 +559,7 @@ public struct IDMLExporter {
             "Resources/Preferences.xml": preferences(pageW: pageW, pageH: pageH, pageCount: pages.count, facing: facing),
             "XML/Tags.xml": tags(),
             "XML/BackingStory.xml": backingStory(),
-            "MasterSpreads/MasterSpread_uMasterA.xml": masterSpread(pageW: pageW, pageH: pageH, items: [masterPageNumberItem]),
+            "MasterSpreads/MasterSpread_uMasterA.xml": masterSpread(pageW: pageW, pageH: pageH, items: masterItems),
             "designmap.xml": designmap(spreadRefs: spreadRefs, storyRefs: storyRefs, storyList: storyListIds)
         ]
         files.merge(spreadFiles) { _, b in b }
@@ -394,6 +571,41 @@ public struct IDMLExporter {
 
         try writePackage(files: files, to: url)
         try copyPackagedLinks(packagedLinks.values, beside: url)
+    }
+
+    func motifStoryXML(
+        self id: String,
+        text: String,
+        fontName: String,
+        fontSizePt: Double,
+        fillColorHex: String?,
+        project: BookProject,
+        alignRight: Bool = false
+    ) -> String {
+        let orientation = "Horizontal"
+        let direction = "LeftToRightDirection"
+        
+        let justification = alignRight ? "RightAlign" : "LeftAlign"
+        let colorRefVal: String
+        if let hex = fillColorHex {
+            colorRefVal = colorRef(hex)
+        } else {
+            colorRefVal = "Color/Black"
+        }
+        
+        return """
+        \(header)
+        <idPkg:Story \(pkgNS) DOMVersion="\(dom)">
+        \t<Story Self="\(id)" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="$ID/" AppliedNamedGrid="n">
+        \t\t<StoryPreference OpticalMarginAlignment="false" OpticalMarginSize="12" FrameType="TextFrameType" StoryOrientation="\(orientation)" StoryDirection="\(direction)"/>
+        \t\t<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/$ID/[No paragraph style]" Justification="\(justification)">
+        \t\t\t<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]" AppliedFont="\(xmlSafe(fontName))" PointSize="\(fmt(fontSizePt))" FillColor="\(colorRefVal)">
+        \t\t\t\t<Content>\(xmlSafe(text))</Content>
+        \t\t\t</CharacterStyleRange>
+        \t\t</ParagraphStyleRange>
+        \t</Story>
+        </idPkg:Story>
+        """
     }
 
 }

@@ -3,6 +3,17 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-09 07:32 | codex | 完成 SECNUM-1a：节序号解析收口
+- **分支**：feature/codex-secnum-1a
+- **概述**：完成 SECNUM-1a。`StyleBaselineImporter.parseSpecPack` 现在对 legacy `roles.节名.numberStyle` 做显式字符串校验，字段正确时映射到 `SpecPackSectionNumberMotif.style`，并沿用 `roles.节名.color` 作为 `sectionNumber.color`；字段存在但类型错误时会抛 `$.roles.节名.numberStyle`，避免静默忽略。补专门回归测试，断言 `roles.节名.numberStyle` 不再进入 `unsupportedFields`，并更新 spec-pack 指南。code commit `200f616 test(import): lock section number motif parsing`。
+- **改动文件**：Sources/LayoutDImport/StyleBaselineImporter.swift
+Tests/LayoutDImportTests/StyleBaselineImporterSpecPackTests.swift
+docs/spec-pack-guide.md
+.ai/QUEUE.md
+.ai/HANDOFF.md
+- **检查**：Focused `swift test --filter StyleBaselineImporterSpecPackTests` PASS（9 tests, 0 failures）；`git diff --check` PASS；`run_checks("test")` PASS（321 tests, 0 failures）；`bash scripts/review-idml.sh` PASS（14/14，golden 基线逐字节一致）。
+- **下一步**：AG 可接 SECNUM-1b，把 `SpecPackImportResult.motifs.sectionNumber` 渲染为节名前的「01 /」黄色序号。Codex 道视觉标识层解析项已收口，可继续看队列里剩余 Codex 项（如 IDML-RNG lint）或等待新派发。
+
 ## 2026-07-09 07:24 | codex | 完成 HEADER-1a：页眉字段解析收口
 - **分支**：feature/codex-header-1a
 - **概述**：完成 HEADER-1a。`StyleBaselineImporter.parseSpecPack` 现在把 legacy `roles.页眉章名` 识别为 motif role，不再进入 `unsupportedFields`；`roles.页眉章名` 与 `roles.页眉页码` 会合并到同一个 `SpecPackHeaderMotif`。兼容性保留：旧 `页眉页码` 仍表示页眉+页码，`页眉章名` 可单独补章名侧字体/字号/颜色/规则；合并时保留先出现的样式字段，并 OR 合并 `showChapterTitle` / `showPageNumber`。同步更新 spec-pack 指南和回归测试。code commit `943fa33 feat(import): parse legacy header motifs`。

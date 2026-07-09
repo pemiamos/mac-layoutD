@@ -2262,6 +2262,56 @@ extension LayoutDCoreTests {
         XCTAssertEqual(leftSpreadFrames.first?.wrapMode, .underlay)
         XCTAssertEqual(rightSpreadFrames.first?.wrapMode, .underlay)
     }
+
+    func testSectionNumberPrepending() {
+        var project = BookProject.sample
+        
+        // Define section number motif
+        let sectionNumberMotif = SpecPackSectionNumberMotif(
+            style: StyleID.heading2.rawValue,
+            color: "accent",
+            minDigits: 3,
+            prefix: "[",
+            suffix: "] "
+        )
+        
+        project.motifs = SpecPackMotifs(
+            sectionNumber: sectionNumberMotif
+        )
+        
+        // Insert a heading2 paragraph
+        let h2Para = Paragraph(
+            id: UUID(),
+            kind: .heading(level: 2),
+            text: "测试小节标题",
+            styleId: StyleID.heading2.rawValue
+        )
+        
+        project.sections = [
+            BookSection(
+                title: "第一章",
+                stories: [
+                    Story(
+                        id: UUID(),
+                        title: "故事一",
+                        paragraphs: [
+                            h2Para,
+                            Paragraph(id: UUID(), kind: .body, text: "正文内容", styleId: StyleID.body.rawValue)
+                        ]
+                    )
+                ]
+            )
+        ]
+        
+        let processed = project.prependingSectionNumbers()
+        
+        let firstPara = processed.sections[0].stories[0].paragraphs[0]
+        XCTAssertEqual(firstPara.text, "[001] 测试小节标题")
+        XCTAssertEqual(firstPara.inlineRuns?.count, 1)
+        XCTAssertEqual(firstPara.inlineRuns?.first?.location, 0)
+        XCTAssertEqual(firstPara.inlineRuns?.first?.length, 6)
+        XCTAssertEqual(firstPara.inlineRuns?.first?.colorTokenRef, "accent")
+    }
 }
 
 private struct FailingPlanProvider: LayoutPlanProvider {

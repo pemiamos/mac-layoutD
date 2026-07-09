@@ -6,6 +6,7 @@ extension BookProject {
         let importedTokens = result.tokens
         
         self.styles.tokens = importedTokens
+        self.motifs = result.motifs
         
         // 1. Rebuild legacy colors list for backward compatibility
         var legacyColors: [ColorToken] = []

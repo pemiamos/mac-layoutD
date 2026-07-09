@@ -236,9 +236,62 @@ extension CanvasView {
 
         let underlays = page.frames.filter { $0.isUnderlay }
         let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+        
+        // Draw ghost chapter number (behind layer)
+        if let context = NSGraphicsContext.current?.cgContext {
+            if let info = project.ghostChapterNumberInfo(for: page), info.drawBehind {
+                context.saveGState()
+                context.translateBy(x: pageRect.minX, y: pageRect.minY)
+                MotifRenderer.drawGhostChapterNumber(
+                    page: page,
+                    project: project,
+                    in: context,
+                    zoomScale: zoomScale,
+                    pageHeight: Double(pageRect.height),
+                    isPDF: false
+                )
+                context.restoreGState()
+            }
+        }
+        
         for frame in underlays + nonUnderlays {
+            if frame.kind == .runningHeader && project.motifs?.header != nil {
+                continue
+            }
             let group = groupByFrameId[frame.id]
             draw(frame: frame, project: project, pageRect: pageRect, flowGroup: group)
+        }
+        
+        // Draw ghost chapter number (front layer)
+        if let context = NSGraphicsContext.current?.cgContext {
+            if let info = project.ghostChapterNumberInfo(for: page), !info.drawBehind {
+                context.saveGState()
+                context.translateBy(x: pageRect.minX, y: pageRect.minY)
+                MotifRenderer.drawGhostChapterNumber(
+                    page: page,
+                    project: project,
+                    in: context,
+                    zoomScale: zoomScale,
+                    pageHeight: Double(pageRect.height),
+                    isPDF: false
+                )
+                context.restoreGState()
+            }
+        }
+        
+        // Draw custom header motif
+        if let context = NSGraphicsContext.current?.cgContext {
+            context.saveGState()
+            context.translateBy(x: pageRect.minX, y: pageRect.minY)
+            MotifRenderer.drawHeaderMotif(
+                page: page,
+                project: project,
+                in: context,
+                zoomScale: zoomScale,
+                pageHeight: Double(pageRect.height),
+                isPDF: false
+            )
+            context.restoreGState()
         }
 
         // Draw flow group strokes, selections, and highlights
@@ -799,6 +852,7 @@ extension CanvasView {
         exclusionRects: [Rect]? = nil,
         frameRect: Rect? = nil
     ) {
+        let processedProject = project.prependingSectionNumbers()
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -825,10 +879,10 @@ extension CanvasView {
                 colorToken: "ink"
             )
         } else {
-            style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+            style = processedProject.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
         }
 
-        let tokenColor = project.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
+        let tokenColor = processedProject.resolvedColorHex(style.colorToken).flatMap(NSColor.fromHex)
         let rawTextColor = textColorOverride ?? tokenColor ?? NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1)
         let textColor = proofedText(rawTextColor) ?? rawTextColor
         
@@ -838,7 +892,7 @@ extension CanvasView {
         if let entries = tableOfContentsEntries, !entries.isEmpty {
             attrString = ChineseTypesetting.makeTOCAttributedString(
                 entries: entries,
-                project: project,
+                project: processedProject,
                 containerWidth: Double(drawingRect.width),
                 zoomScale: zoomScale,
                 foregroundColor: textColor.cgColor
@@ -846,7 +900,7 @@ extension CanvasView {
         } else {
             var mappedRuns: [InlineRun]? = nil
             if let sourceParagraphId = sourceParagraphId,
-               let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+               let paragraph = processedProject.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
                let runs = paragraph.inlineRuns {
                 mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
             }
@@ -856,7 +910,8 @@ extension CanvasView {
                 style: style,
                 foregroundColor: textColor.cgColor,
                 zoomScale: zoomScale,
-                inlineRuns: mappedRuns
+                inlineRuns: mappedRuns,
+                project: processedProject
             )
         }
         
@@ -1070,6 +1125,9 @@ extension CanvasView {
     }
 
     private func drawPageNumber(_ number: Int, project: BookProject, pageRect: CGRect) {
+        if let header = project.motifs?.header, header.showPageNumber {
+            return
+        }
         guard project.resolvedShowHeadersFooters(for: number) else {
             return
         }

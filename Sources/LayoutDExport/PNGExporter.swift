@@ -200,7 +200,23 @@ public struct PNGExporter {
         // 2. Draw all page frames
         let underlays = page.frames.filter { $0.isUnderlay }
         let nonUnderlays = page.frames.filter { !$0.isUnderlay }
+        
+        // Draw ghost chapter number (behind layer)
+        if let info = project.ghostChapterNumberInfo(for: page), info.drawBehind {
+            MotifRenderer.drawGhostChapterNumber(
+                page: page,
+                project: project,
+                in: context,
+                zoomScale: 1.0,
+                pageHeight: Double(pageSize.height),
+                isPDF: false
+            )
+        }
+        
         for frame in underlays + nonUnderlays {
+            if frame.kind == .runningHeader && project.motifs?.header != nil {
+                continue
+            }
             // Find if frame belongs to a group
             var frameGroup: FlowFrameGroup? = nil
             for group in pageGroups {
@@ -211,6 +227,28 @@ public struct PNGExporter {
             }
             draw(frame: frame, pageNumber: page.number, project: project, in: context, bleedPoints: bleedPoints, flowGroup: frameGroup)
         }
+        
+        // Draw ghost chapter number (front layer)
+        if let info = project.ghostChapterNumberInfo(for: page), !info.drawBehind {
+            MotifRenderer.drawGhostChapterNumber(
+                page: page,
+                project: project,
+                in: context,
+                zoomScale: 1.0,
+                pageHeight: Double(pageSize.height),
+                isPDF: false
+            )
+        }
+        
+        // Draw custom header motif
+        MotifRenderer.drawHeaderMotif(
+            page: page,
+            project: project,
+            in: context,
+            zoomScale: 1.0,
+            pageHeight: Double(pageSize.height),
+            isPDF: false
+        )
 
         // 3. Draw group strokes last
         for group in pageGroups {
@@ -580,6 +618,7 @@ public struct PNGExporter {
         tableOfContentsEntries: [TableOfContentsEntry]? = nil,
         exclusionRects: [Rect]? = nil
     ) {
+        let processedProject = project.prependingSectionNumbers()
         let style: ParagraphStyle
         if kind == .footnote {
             style = ParagraphStyle(
@@ -606,7 +645,7 @@ public struct PNGExporter {
                 colorToken: "ink"
             )
         } else {
-            style = project.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
+            style = processedProject.styles.paragraphStyle(id: styleId ?? StyleID.body.rawValue)
         }
 
         // Color priority: explicit frame override > paragraph style's color token
@@ -614,7 +653,7 @@ public struct PNGExporter {
         let textColor: CGColor
         if let hex = textColorHex, let color = NSColor.from(hex: hex) {
             textColor = color.cgColor
-        } else if let tokenHex = project.resolvedColorHex(style.colorToken), let color = NSColor.from(hex: tokenHex) {
+        } else if let tokenHex = processedProject.resolvedColorHex(style.colorToken), let color = NSColor.from(hex: tokenHex) {
             textColor = color.cgColor
         } else {
             textColor = NSColor(calibratedRed: 0.08, green: 0.11, blue: 0.14, alpha: 1).cgColor
@@ -624,7 +663,7 @@ public struct PNGExporter {
         if let entries = tableOfContentsEntries, !entries.isEmpty {
             attributedString = ChineseTypesetting.makeTOCAttributedString(
                 entries: entries,
-                project: project,
+                project: processedProject,
                 containerWidth: Double(rect.width),
                 zoomScale: 1.0,
                 foregroundColor: textColor
@@ -632,7 +671,7 @@ public struct PNGExporter {
         } else {
             var mappedRuns: [InlineRun]? = nil
             if let sourceParagraphId = sourceParagraphId,
-               let paragraph = project.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
+               let paragraph = processedProject.sections.lazy.flatMap(\.stories).flatMap(\.paragraphs).first(where: { $0.id == sourceParagraphId }),
                let runs = paragraph.inlineRuns {
                 mappedRuns = InlineRun.mapRuns(runs, from: paragraph.text, to: text)
             }
@@ -641,7 +680,8 @@ public struct PNGExporter {
                 text: text,
                 style: style,
                 foregroundColor: textColor,
-                inlineRuns: mappedRuns
+                inlineRuns: mappedRuns,
+                project: processedProject
             )
         }
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
@@ -774,6 +814,9 @@ public struct PNGExporter {
     }
 
     private func drawPageNumber(_ number: Int, project: BookProject, in context: CGContext) {
+        if let header = project.motifs?.header, header.showPageNumber {
+            return
+        }
         guard project.resolvedShowHeadersFooters(for: number) else {
             return
         }

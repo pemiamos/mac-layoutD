@@ -93,7 +93,7 @@ extension LayoutContext {
             return estimatedTextHeight(text: text, style: style, width: width, inlineRuns: inlineRuns)
         }
         
-        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, inlineRuns: inlineRuns)
+        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, inlineRuns: inlineRuns, project: project)
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         
         let path = CGMutablePath()
@@ -140,7 +140,7 @@ extension LayoutContext {
             return cached
         }
         
-        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, inlineRuns: inlineRuns)
+        let attributedString = ChineseTypesetting.makeAttributedString(text: text, style: style, inlineRuns: inlineRuns, project: project)
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let constraint = CGSize(width: width, height: .greatestFiniteMagnitude)
         let size = CTFramesetterSuggestFrameSizeWithConstraints(
