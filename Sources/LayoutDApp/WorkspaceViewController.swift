@@ -11,7 +11,7 @@ import LayoutDImport
 import UniformTypeIdentifiers
 
 final class WorkspaceViewController: NSViewController {
-    private var appState: AppState
+    var appState: AppState
     private var sourceDescription: String
     private let canvas = CanvasView()
     private var selectedFrameCancellable: AnyCancellable?
@@ -306,6 +306,9 @@ final class WorkspaceViewController: NSViewController {
             },
             onExportIDML: { [weak self] completion in
                 self?.exportIDMLForWizard(completion: completion)
+            },
+            onRerollSpread: { [weak self] idx, completion in
+                self?.rerollSpreadForWizard(spreadIndex: idx, completion: completion)
             }
         )
         let inspectorView = InspectorView(
@@ -1264,9 +1267,13 @@ extension WorkspaceViewController {
                 project: self.appState.project
             )
             
-            // 5. Update app state project's appliedLayoutPlans
+            // 5. Update app state project's appliedLayoutPlans and wizardState
             self.appState.updateProject { project in
                 project.appliedLayoutPlans = materializedPlans
+                if project.wizardState == nil {
+                    project.wizardState = WizardState()
+                }
+                project.wizardState?.spreadSelections = selections
             }
             
             let encoder = JSONEncoder()
@@ -1278,6 +1285,96 @@ extension WorkspaceViewController {
             completion(chosenArchetypeIds)
         } catch {
             self.showExportResult(message: "运行规划器失败", detail: error.localizedDescription)
+            completion(nil)
+        }
+    }
+    
+    func rerollSpreadForWizard(spreadIndex: Int, completion: @escaping ([String]?) -> Void) {
+        do {
+            let step5Dir = self.getWizardProductsDir().appendingPathComponent("step5_archetypes")
+            try FileManager.default.createDirectory(at: step5Dir, withIntermediateDirectories: true)
+            let destURL = step5Dir.appendingPathComponent("layout_plans.json")
+            
+            // 1. Check if either page of the spread is locked
+            let leftPage = spreadIndex * 2 + 1
+            let rightPage = leftPage + 1
+            let locked = self.appState.project.lockedPages ?? []
+            if locked.contains(leftPage) || locked.contains(rightPage) {
+                completion(nil)
+                return
+            }
+            
+            // 2. Generate content fingerprint
+            let fingerprint = SpreadPlanner.generateFingerprint(from: self.appState.project)
+            
+            // 3. Resolve active archetypes and weights
+            let enabledIds = self.appState.project.wizardState?.enabledArchetypeIds ?? SpreadArchetype.defaults.map(\.id)
+            let activeArchetypes = SpreadArchetype.defaults.filter { enabledIds.contains($0.id) }
+            
+            var customArchetypes = activeArchetypes
+            for i in 0..<customArchetypes.count {
+                let id = customArchetypes[i].id
+                if let customW = self.appState.project.wizardState?.archetypeWeights?[id] {
+                    customArchetypes[i].weight = customW
+                }
+            }
+            let finalArchetypes = customArchetypes.isEmpty ? SpreadArchetype.defaults : customArchetypes
+            
+            // 4. Retrieve current selections
+            var selections = self.appState.project.wizardState?.spreadSelections ?? []
+            if selections.isEmpty {
+                selections = SpreadPlanner.planSpreads(
+                    fingerprint: fingerprint,
+                    archetypes: finalArchetypes,
+                    seed: 42
+                )
+            }
+            
+            // 5. Reroll specific spread
+            let newSelection = SpreadPlanner.rerollSpread(
+                spreadIndex: spreadIndex,
+                currentSelections: selections,
+                fingerprint: fingerprint,
+                archetypes: finalArchetypes,
+                baseSeed: 42
+            )
+            
+            // Update selections array
+            if let idx = selections.firstIndex(where: { $0.spreadIndex == spreadIndex }) {
+                selections[idx] = newSelection
+            } else {
+                selections.append(newSelection)
+            }
+            
+            // 6. Materialize plans
+            let materializedPlans = SpreadPlanner.materialize(
+                selections: selections,
+                archetypes: SpreadArchetype.defaults,
+                project: self.appState.project
+            )
+            
+            // 7. Update app state project's appliedLayoutPlans and wizardState
+            // Note: updateProject automatically handles undo/redo stack grouping
+            self.appState.updateProject { project in
+                project.appliedLayoutPlans = materializedPlans
+                if project.wizardState == nil {
+                    project.wizardState = WizardState()
+                }
+                project.wizardState?.spreadSelections = selections
+            }
+            
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let planData = try encoder.encode(materializedPlans)
+            try planData.write(to: destURL, options: .atomic)
+            
+            // 8. Trigger layout recalculation
+            self.appState.recalculateLayout()
+            
+            let chosenArchetypeIds = selections.map { $0.archetypeId }
+            completion(chosenArchetypeIds)
+        } catch {
+            self.showExportResult(message: "重抽对开失败", detail: error.localizedDescription)
             completion(nil)
         }
     }
