@@ -3,6 +3,13 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-13 23:56 | claude | 用户实测拖拽赋骨架两连报障，两轮修复均已提交。①「拖移可以但重排无效」(222c804)：SwiftUI NSItemProvider 数据异步兑现，AppKi
+- **分支**：feature/claude-pilot-verify
+- **概述**：用户实测拖拽赋骨架两连报障，两轮修复均已提交。①「拖移可以但重排无效」(222c804)：SwiftUI NSItemProvider 数据异步兑现，AppKit 落下瞬间同步 data(forType:) 读空 → onArchetypeDropped 从未触发（桌面无 wizard_products 目录佐证）。修法：拖起时把骨架 id 存 CanvasView.inFlightArchetypeDragId（同进程直传），剪贴板类型只当会话标记。②「拖拽后手动加的3页消失」(be5c92f)：根因是老毛病——appliedLayoutPlans 一本登记簿同时装规划器产物和手动编辑（插空白页/手动冻结版式/锁页快照），runPlanner/reroll/assign 三处全是整本替换 project.appliedLayoutPlans = materializedPlans，把手动痕迹连带清掉。修法：LayoutPlan.isManualEdit（手动痕迹带「手动…」note，materialize 从不写 note）+ WorkspaceViewController.mergePlannerPlans（全书重规划：手动+锁定页保留，旧规划产物清理后写新）；reroll/assign 改为只 materialize 目标对开并合并那两页；assign 不再在无 selections 时隐式全书规划。新增 WizardPlanMergeTests 3 项（含 controller 级拖放保留测试）。
+- **改动文件**：Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/WireframePanelView.swift, Sources/LayoutDCore/LayoutPlan.swift, Sources/LayoutDApp/WorkspaceViewController.swift, Tests/LayoutDAppTests/WizardPlanMergeTests.swift(新)
+- **检查**：swift build pass; swift test 352 pass（+3 WizardPlanMergeTests）
+- **下一步**：① 用户视觉验收：加几页空白页 → 拖骨架到某对开 → 确认目标对开重排且手动加的页还在；再点「重新规划全书」确认手动页/锁定页存活。② 注意：单测会在 ~/Desktop 生成 测试*_wizard_products 空目录（getWizardProductsDir 副作用），可考虑测试注入临时目录。③ 已知约定差异仍在：规划器对开=页(1,2)(3,4) vs 画布视觉对页(2,3)(4,5)，规划器不感知手动插页导致的页号漂移（初排定位可接受，但值得列入 planner-2 议题）。④ 待合 dev。
+
 ## 2026-07-13 23:31 | claude | 用户提问「能否拖拽把预置对开骨架直接赋给画布上的对开页并保留手工调整」→ 直接实现。① SpreadPlanner 新增 assignArchetype(spr
 - **分支**：feature/claude-pilot-verify
 - **概述**：用户提问「能否拖拽把预置对开骨架直接赋给画布上的对开页并保留手工调整」→ 直接实现。① SpreadPlanner 新增 assignArchetype(spreadIndex:archetypeId:...)：用户显式指定的骨架无条件生效（不评分不重抽），imageTier/pullQuotePosition 按该对开内容需求推导（低 DPI 图自动降档，同 planSpreads 硬过滤逻辑），rerollCounter 原样保留。② CanvasView 注册自定义拖放类型 com.layoutd.archetype-id：draggingEntered/Updated 实时高亮目标对开（按规划器约定 spread i=页 2i+1/2i+2，与 materialize 一致），performDragOperation 回调 onArchetypeDropped(页号, 骨架id)。③ WireframePanelView 骨架卡片缩略图加 .onDrag（NSItemProvider 自定义类型，ownProcess 可见性）+ 提示文案。④ WorkspaceViewController 新增 assignArchetypeForWizard：锁页拒绝（弹提示）、同指纹旋钮、无选择时先 planSpreads、materialize 后 updateProject（undo 友好）+ 写 layout_plans.json + recalculateLayout，并同步 chosenArchetypes。落下后仍是 LayoutPlan 结构化模型，手工拖框微调照常。
