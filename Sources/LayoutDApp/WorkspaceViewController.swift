@@ -1240,6 +1240,24 @@ extension WorkspaceViewController {
         }
     }
     
+    /// 规划器写回 appliedLayoutPlans 一律走合并，绝不整本替换：appliedLayoutPlans
+    /// 同时承载手动编辑（插入空白页、手动冻结的版式、锁页快照），整本替换会把
+    /// 用户手工痕迹连带清掉。合并规则：手动痕迹与锁定页保留，其余旧的规划器
+    /// 产物清掉后写入新产物。
+    static func mergePlannerPlans(
+        _ materialized: [Int: LayoutPlan],
+        into existing: [Int: LayoutPlan],
+        locked: Set<Int>
+    ) -> [Int: LayoutPlan] {
+        var merged = existing.filter { $0.value.isManualEdit || locked.contains($0.key) }
+        for (page, plan) in materialized {
+            if locked.contains(page) { continue }
+            if merged[page]?.isManualEdit == true { continue }
+            merged[page] = plan
+        }
+        return merged
+    }
+
     func runPlannerForWizard(completion: @escaping ([String]?) -> Void) {
         do {
             let step5Dir = self.getWizardProductsDir().appendingPathComponent("step5_archetypes")
@@ -1283,20 +1301,25 @@ extension WorkspaceViewController {
                 project: self.appState.project
             )
             
-            // 5. Update app state project's appliedLayoutPlans and wizardState
+            // 5. Merge into existing plans (hand edits & locked pages survive a re-plan)
+            let mergedPlans = Self.mergePlannerPlans(
+                materializedPlans,
+                into: self.appState.project.appliedLayoutPlans ?? [:],
+                locked: self.appState.project.lockedPages ?? []
+            )
             self.appState.updateProject { project in
-                project.appliedLayoutPlans = materializedPlans
+                project.appliedLayoutPlans = mergedPlans
                 if project.wizardState == nil {
                     project.wizardState = WizardState()
                 }
                 project.wizardState?.spreadSelections = selections
             }
-            
+
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
-            let planData = try encoder.encode(materializedPlans)
+            let planData = try encoder.encode(mergedPlans)
             try planData.write(to: destURL, options: .atomic)
-            
+
             let chosenArchetypeIds = selections.map { $0.archetypeId }
             completion(chosenArchetypeIds)
         } catch {
@@ -1366,28 +1389,34 @@ extension WorkspaceViewController {
                 selections.append(newSelection)
             }
             
-            // 6. Materialize plans
-            let materializedPlans = SpreadPlanner.materialize(
-                selections: selections,
+            // 6. Materialize the rerolled spread only, and merge just its two pages —
+            // wholesale replacement would wipe hand edits stored in the same dict
+            // (inserted blank pages, hand-frozen layouts).
+            let spreadPlans = SpreadPlanner.materialize(
+                selections: [newSelection],
                 archetypes: SpreadArchetype.defaults,
                 project: self.appState.project
             )
-            
+            var mergedPlans = self.appState.project.appliedLayoutPlans ?? [:]
+            for (page, plan) in spreadPlans {
+                mergedPlans[page] = plan
+            }
+
             // 7. Update app state project's appliedLayoutPlans and wizardState
             // Note: updateProject automatically handles undo/redo stack grouping
             self.appState.updateProject { project in
-                project.appliedLayoutPlans = materializedPlans
+                project.appliedLayoutPlans = mergedPlans
                 if project.wizardState == nil {
                     project.wizardState = WizardState()
                 }
                 project.wizardState?.spreadSelections = selections
             }
-            
+
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
-            let planData = try encoder.encode(materializedPlans)
+            let planData = try encoder.encode(mergedPlans)
             try planData.write(to: destURL, options: .atomic)
-            
+
             // 8. Trigger layout recalculation
             self.appState.recalculateLayout()
             
@@ -1423,16 +1452,9 @@ extension WorkspaceViewController {
                 linesPerSpread: Int(64.0 * (1.0 - whitespaceRatio))
             )
 
-            // 3. Current selections (plan first if none yet)
+            // 3. Current selections (a single drop must not restructure the whole
+            // book, so no implicit full plan when none exists yet)
             var selections = self.appState.project.wizardState?.spreadSelections ?? []
-            if selections.isEmpty {
-                selections = SpreadPlanner.planSpreads(
-                    fingerprint: fingerprint,
-                    archetypes: SpreadArchetype.defaults,
-                    bigImageEveryMinSpreads: self.appState.project.wizardState?.plannerBigImageEvery ?? 3,
-                    seed: 42
-                )
-            }
 
             // 4. Direct assignment — user's explicit pick wins over the planner
             guard let newSelection = SpreadPlanner.assignArchetype(
@@ -1451,14 +1473,20 @@ extension WorkspaceViewController {
                 selections.append(newSelection)
             }
 
-            // 5. Materialize and commit (updateProject handles undo grouping)
-            let materializedPlans = SpreadPlanner.materialize(
-                selections: selections,
+            // 5. Materialize the assigned spread only and merge just its two pages —
+            // everything else in appliedLayoutPlans (other spreads, inserted blank
+            // pages, hand-frozen layouts) stays untouched.
+            let spreadPlans = SpreadPlanner.materialize(
+                selections: [newSelection],
                 archetypes: SpreadArchetype.defaults,
                 project: self.appState.project
             )
+            var mergedPlans = self.appState.project.appliedLayoutPlans ?? [:]
+            for (page, plan) in spreadPlans {
+                mergedPlans[page] = plan
+            }
             self.appState.updateProject { project in
-                project.appliedLayoutPlans = materializedPlans
+                project.appliedLayoutPlans = mergedPlans
                 if project.wizardState == nil {
                     project.wizardState = WizardState()
                 }
@@ -1470,7 +1498,7 @@ extension WorkspaceViewController {
 
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
-            let planData = try encoder.encode(materializedPlans)
+            let planData = try encoder.encode(mergedPlans)
             try planData.write(to: destURL, options: .atomic)
 
             self.appState.recalculateLayout()

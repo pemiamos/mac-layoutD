@@ -33,6 +33,14 @@ public struct LayoutPlan: Codable, Equatable, Sendable, Identifiable {
 }
 
 public extension LayoutPlan {
+    /// True when this plan records a hand edit (inserted blank page, hand-frozen
+    /// page layout, …) rather than planner output. Hand edits are written by
+    /// AppState with a "手动…" note; SpreadPlanner.materialize never writes notes.
+    /// Planner merge logic uses this to avoid clobbering the user's work.
+    var isManualEdit: Bool {
+        notes.contains { $0.hasPrefix("手动") }
+    }
+
     func retargeted(to target: LayoutTarget, regenerateBlockIDs: Bool = true) -> LayoutPlan {
         let mappedBlocks: [LayoutPlanBlock]
         if regenerateBlockIDs {
