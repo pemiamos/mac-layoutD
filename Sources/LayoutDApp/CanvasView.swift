@@ -85,6 +85,12 @@ final class CanvasView: NSView {
     /// Pasteboard type carried by archetype-card drags from WireframePanelView.
     static let archetypeDragType = NSPasteboard.PasteboardType("com.layoutd.archetype-id")
 
+    /// The archetype id of the in-flight card drag. SwiftUI's NSItemProvider delivers
+    /// its payload asynchronously, so a synchronous data(forType:) read at drop time
+    /// can come back empty — the drag source stashes the id here instead, and the
+    /// pasteboard type only marks the session as an archetype drag.
+    static var inFlightArchetypeDragId: String?
+
     /// Pages of the spread currently hovered by an archetype drag; drawn highlighted.
     var archetypeDropTargetPages: [Int] = [] {
         didSet {
@@ -352,9 +358,18 @@ final class CanvasView: NSView {
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        defer { archetypeDropTargetPages = [] }
-        guard let data = sender.draggingPasteboard.data(forType: Self.archetypeDragType),
-              let archetypeId = String(data: data, encoding: .utf8),
+        defer {
+            archetypeDropTargetPages = []
+            Self.inFlightArchetypeDragId = nil
+        }
+        guard sender.draggingPasteboard.availableType(from: [Self.archetypeDragType]) != nil else {
+            return false
+        }
+        // Prefer the pasteboard payload when it materializes; fall back to the
+        // in-process stash (SwiftUI item providers often can't deliver synchronously).
+        let pasteboardId = sender.draggingPasteboard.data(forType: Self.archetypeDragType)
+            .flatMap { String(data: $0, encoding: .utf8) }
+        guard let archetypeId = (pasteboardId?.isEmpty == false ? pasteboardId : Self.inFlightArchetypeDragId),
               !archetypeId.isEmpty else {
             return false
         }

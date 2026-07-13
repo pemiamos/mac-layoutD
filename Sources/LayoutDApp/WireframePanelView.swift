@@ -246,6 +246,7 @@ struct WireframePanelView: View {
                     .cornerRadius(3)
                     .opacity(isEnabled ? 1.0 : 0.35)
                     .onDrag {
+                        CanvasView.inFlightArchetypeDragId = archetype.id
                         let provider = NSItemProvider()
                         provider.registerDataRepresentation(
                             forTypeIdentifier: CanvasView.archetypeDragType.rawValue,
