@@ -452,4 +452,52 @@ public struct SpreadPlanner {
             rerollCounter: newCounter
         )
     }
+
+    /// Assign a specific archetype to a spread — the user's explicit pick (e.g. a card
+    /// dragged from the wireframe panel onto the canvas), so no scoring or sampling:
+    /// the archetype is honored even if planSpreads would have filtered it out. Only the
+    /// variant knobs (imageTier / pullQuotePosition) are derived from the spread's
+    /// content demand so the plan stays materializable.
+    /// Returns nil only when the archetypeId is unknown.
+    public static func assignArchetype(
+        spreadIndex: Int,
+        archetypeId: String,
+        currentSelections: [SpreadSelection],
+        fingerprint: ContentFingerprint,
+        archetypes: [SpreadArchetype]
+    ) -> SpreadSelection? {
+        guard let archetype = archetypes.first(where: { $0.id == archetypeId }) else {
+            return nil
+        }
+        let demand = fingerprint.spreadDemands.first(where: { $0.spreadIndex == spreadIndex })
+        let current = currentSelections.first(where: { $0.spreadIndex == spreadIndex })
+
+        // Largest tier the spread's images can carry; low-DPI images downgrade past
+        // large/fullBleed the same way planSpreads' hard filter would.
+        var imageTier = "none"
+        if let demand, demand.imageCount > 0, !archetype.imageTiers.isEmpty {
+            let bigToSmall = ["fullBleed", "large", "medium", "small"]
+            let ordered = archetype.imageTiers.sorted {
+                (bigToSmall.firstIndex(of: $0) ?? bigToSmall.count) < (bigToSmall.firstIndex(of: $1) ?? bigToSmall.count)
+            }
+            imageTier = ordered.first { tier in
+                guard tier == "large" || tier == "fullBleed" else { return true }
+                let slotInches = 350.0 / 72.0
+                return demand.images.allSatisfy { Double($0.pixelWidth) / slotInches >= 150.0 }
+            } ?? "none"
+        }
+
+        let pullQuotePosition = (demand?.pullQuoteCount ?? 0) > 0
+            ? (archetype.pullQuotePositions.first ?? "none")
+            : "none"
+
+        return SpreadSelection(
+            spreadIndex: spreadIndex,
+            archetypeId: archetype.id,
+            mirror: false,
+            imageTier: imageTier,
+            pullQuotePosition: pullQuotePosition,
+            rerollCounter: current?.rerollCounter ?? 0
+        )
+    }
 }

@@ -25,6 +25,21 @@ extension CanvasView {
 
         drawRubberBandFrameIfNeeded()
         drawMarqueeIfNeeded()
+        drawArchetypeDropTargetIfNeeded()
+    }
+
+    /// Highlights the spread pages an archetype-card drag is hovering over.
+    private func drawArchetypeDropTargetIfNeeded() {
+        guard !archetypeDropTargetPages.isEmpty else { return }
+        for pageNumber in archetypeDropTargetPages {
+            guard let rect = pageRect(number: pageNumber) else { continue }
+            NSColor.controlAccentColor.withAlphaComponent(0.12).setFill()
+            rect.fill()
+            NSColor.controlAccentColor.withAlphaComponent(0.9).setStroke()
+            let path = NSBezierPath(rect: rect.insetBy(dx: 1.5, dy: 1.5))
+            path.lineWidth = 3
+            path.stroke()
+        }
     }
 
     /// Renders the in-progress marquee (rubber-band selection) rectangle.

@@ -137,6 +137,10 @@ final class WorkspaceViewController: NSViewController {
             self?.appState.updateLineGeometry(id: id, rect: rect)
         }
 
+        canvas.onArchetypeDropped = { [weak self] pageNumber, archetypeId in
+            self?.assignArchetypeForWizard(spreadIndex: (pageNumber - 1) / 2, archetypeId: archetypeId)
+        }
+
         canvas.onGapDragged = { [weak self] firstId, firstRect, secondId, secondRect in
             guard let self else { return }
             self.appState.updateGapFrames(firstId: firstId, firstRect: firstRect, secondId: secondId, secondRect: secondRect)
@@ -1395,6 +1399,86 @@ extension WorkspaceViewController {
         }
     }
     
+    /// 拖拽赋骨架：把线框图面板拖来的骨架直接指定给某个对开（不重抽、不评分），
+    /// 之后照常 materialize 成 LayoutPlan，手工微调不受影响。
+    func assignArchetypeForWizard(spreadIndex: Int, archetypeId: String) {
+        do {
+            let step5Dir = self.getWizardProductsDir().appendingPathComponent("step5_archetypes")
+            try FileManager.default.createDirectory(at: step5Dir, withIntermediateDirectories: true)
+            let destURL = step5Dir.appendingPathComponent("layout_plans.json")
+
+            // 1. Locked spread cannot be reassigned
+            let leftPage = spreadIndex * 2 + 1
+            let rightPage = leftPage + 1
+            let locked = self.appState.project.lockedPages ?? []
+            if locked.contains(leftPage) || locked.contains(rightPage) {
+                self.showExportResult(message: "该对开已锁定", detail: "第 \(leftPage)-\(rightPage) 页被锁定，先解锁才能指定骨架。")
+                return
+            }
+
+            // 2. Same fingerprint knobs as planning/reroll
+            let whitespaceRatio = self.appState.project.wizardState?.plannerWhitespaceRatio ?? 0.0
+            let fingerprint = SpreadPlanner.generateFingerprint(
+                from: self.appState.project,
+                linesPerSpread: Int(64.0 * (1.0 - whitespaceRatio))
+            )
+
+            // 3. Current selections (plan first if none yet)
+            var selections = self.appState.project.wizardState?.spreadSelections ?? []
+            if selections.isEmpty {
+                selections = SpreadPlanner.planSpreads(
+                    fingerprint: fingerprint,
+                    archetypes: SpreadArchetype.defaults,
+                    bigImageEveryMinSpreads: self.appState.project.wizardState?.plannerBigImageEvery ?? 3,
+                    seed: 42
+                )
+            }
+
+            // 4. Direct assignment — user's explicit pick wins over the planner
+            guard let newSelection = SpreadPlanner.assignArchetype(
+                spreadIndex: spreadIndex,
+                archetypeId: archetypeId,
+                currentSelections: selections,
+                fingerprint: fingerprint,
+                archetypes: SpreadArchetype.defaults
+            ) else {
+                self.showExportResult(message: "指定骨架失败", detail: "未知骨架 id：\(archetypeId)")
+                return
+            }
+            if let idx = selections.firstIndex(where: { $0.spreadIndex == spreadIndex }) {
+                selections[idx] = newSelection
+            } else {
+                selections.append(newSelection)
+            }
+
+            // 5. Materialize and commit (updateProject handles undo grouping)
+            let materializedPlans = SpreadPlanner.materialize(
+                selections: selections,
+                archetypes: SpreadArchetype.defaults,
+                project: self.appState.project
+            )
+            self.appState.updateProject { project in
+                project.appliedLayoutPlans = materializedPlans
+                if project.wizardState == nil {
+                    project.wizardState = WizardState()
+                }
+                project.wizardState?.spreadSelections = selections
+                project.wizardState?.chosenArchetypes = selections
+                    .sorted { $0.spreadIndex < $1.spreadIndex }
+                    .map(\.archetypeId)
+            }
+
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let planData = try encoder.encode(materializedPlans)
+            try planData.write(to: destURL, options: .atomic)
+
+            self.appState.recalculateLayout()
+        } catch {
+            self.showExportResult(message: "指定骨架失败", detail: error.localizedDescription)
+        }
+    }
+
     func exportIDMLForWizard(completion: @escaping (String?) -> Void) {
         let document = appState.laidOutDocument ?? appState.engine.layout(project: appState.project)
         do {

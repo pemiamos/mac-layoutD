@@ -219,6 +219,10 @@ struct WireframePanelView: View {
             Text("预置对开骨架（\(SpreadArchetype.defaults.count)）")
                 .font(.system(size: 11, weight: .semibold))
 
+            Text("拖动缩略图到画布对开页 = 直接指定该骨架")
+                .font(.system(size: 9))
+                .foregroundColor(.secondary)
+
             if noWorkhorseEnabled {
                 Text("⚠️ 没有启用任何正文骨架，正文将无处安放")
                     .font(.system(size: 10))
@@ -241,6 +245,18 @@ struct WireframePanelView: View {
                     .frame(width: 74, height: 46)
                     .cornerRadius(3)
                     .opacity(isEnabled ? 1.0 : 0.35)
+                    .onDrag {
+                        let provider = NSItemProvider()
+                        provider.registerDataRepresentation(
+                            forTypeIdentifier: CanvasView.archetypeDragType.rawValue,
+                            visibility: .ownProcess
+                        ) { completion in
+                            completion(archetype.id.data(using: .utf8), nil)
+                            return nil
+                        }
+                        return provider
+                    }
+                    .help("拖到画布上的对开页，可把这个骨架直接指定给该对开")
 
                 VStack(alignment: .leading, spacing: 2) {
                     Toggle(isOn: enabledBinding(for: archetype.id)) {

@@ -78,6 +78,19 @@ final class CanvasView: NSView {
     /// In-place text editing finished (double-click a text/caption frame). Payload:
     /// frame id + the new text. Wired to AppState.updateSelectedFrameText.
     var onFrameTextEdited: ((UUID, String) -> Void)?
+    /// An archetype card was dropped onto a page (drag from the wireframe panel).
+    /// Payload: page number under the drop point + archetype id.
+    var onArchetypeDropped: ((Int, String) -> Void)?
+
+    /// Pasteboard type carried by archetype-card drags from WireframePanelView.
+    static let archetypeDragType = NSPasteboard.PasteboardType("com.layoutd.archetype-id")
+
+    /// Pages of the spread currently hovered by an archetype drag; drawn highlighted.
+    var archetypeDropTargetPages: [Int] = [] {
+        didSet {
+            if oldValue != archetypeDropTargetPages { needsDisplay = true }
+        }
+    }
 
     // In-place (double-click) text editor overlay
     var inlineEditor: InlineTextEditorView?
@@ -165,6 +178,7 @@ final class CanvasView: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         updatePasteboardColor()
+        registerForDraggedTypes([Self.archetypeDragType])
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -282,6 +296,72 @@ final class CanvasView: NSView {
                 height: pageHeight
             )
         }
+    }
+
+    func pageNumber(at point: CGPoint) -> Int? {
+        guard let document else { return nil }
+        for page in document.pages {
+            if let rect = pageRect(number: page.number), rect.contains(point) {
+                return page.number
+            }
+        }
+        return nil
+    }
+
+    /// Pages of the planner spread containing `number`, restricted to pages that exist.
+    /// Uses the planner convention (spread i = pages 2i+1, 2i+2), matching
+    /// SpreadPlanner.materialize — this is what an assignment will actually touch.
+    func plannerSpreadPages(forPage number: Int) -> [Int] {
+        guard let document else { return [number] }
+        let spreadIndex = (number - 1) / 2
+        return [spreadIndex * 2 + 1, spreadIndex * 2 + 2].filter { candidate in
+            document.pages.contains { $0.number == candidate }
+        }
+    }
+
+    // MARK: - Archetype drag & drop (cards from WireframePanelView)
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        updateArchetypeDropTarget(sender)
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        updateArchetypeDropTarget(sender)
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        archetypeDropTargetPages = []
+    }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        archetypeDropTargetPages = []
+    }
+
+    private func updateArchetypeDropTarget(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard sender.draggingPasteboard.availableType(from: [Self.archetypeDragType]) != nil else {
+            archetypeDropTargetPages = []
+            return []
+        }
+        let point = convert(sender.draggingLocation, from: nil)
+        guard let page = pageNumber(at: point) else {
+            archetypeDropTargetPages = []
+            return []
+        }
+        archetypeDropTargetPages = plannerSpreadPages(forPage: page)
+        return .copy
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        defer { archetypeDropTargetPages = [] }
+        guard let data = sender.draggingPasteboard.data(forType: Self.archetypeDragType),
+              let archetypeId = String(data: data, encoding: .utf8),
+              !archetypeId.isEmpty else {
+            return false
+        }
+        let point = convert(sender.draggingLocation, from: nil)
+        guard let page = pageNumber(at: point) else { return false }
+        onArchetypeDropped?(page, archetypeId)
+        return true
     }
 
     func findFrame(id: UUID, in document: LaidOutDocument) -> (frame: PageFrame, pageNumber: Int)? {

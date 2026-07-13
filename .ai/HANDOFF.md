@@ -3,6 +3,20 @@
 
 <!-- ENTRIES -->
 
+## 2026-07-13 23:31 | claude | 用户提问「能否拖拽把预置对开骨架直接赋给画布上的对开页并保留手工调整」→ 直接实现。① SpreadPlanner 新增 assignArchetype(spr
+- **分支**：feature/claude-pilot-verify
+- **概述**：用户提问「能否拖拽把预置对开骨架直接赋给画布上的对开页并保留手工调整」→ 直接实现。① SpreadPlanner 新增 assignArchetype(spreadIndex:archetypeId:...)：用户显式指定的骨架无条件生效（不评分不重抽），imageTier/pullQuotePosition 按该对开内容需求推导（低 DPI 图自动降档，同 planSpreads 硬过滤逻辑），rerollCounter 原样保留。② CanvasView 注册自定义拖放类型 com.layoutd.archetype-id：draggingEntered/Updated 实时高亮目标对开（按规划器约定 spread i=页 2i+1/2i+2，与 materialize 一致），performDragOperation 回调 onArchetypeDropped(页号, 骨架id)。③ WireframePanelView 骨架卡片缩略图加 .onDrag（NSItemProvider 自定义类型，ownProcess 可见性）+ 提示文案。④ WorkspaceViewController 新增 assignArchetypeForWizard：锁页拒绝（弹提示）、同指纹旋钮、无选择时先 planSpreads、materialize 后 updateProject（undo 友好）+ 写 layout_plans.json + recalculateLayout，并同步 chosenArchetypes。落下后仍是 LayoutPlan 结构化模型，手工拖框微调照常。
+- **改动文件**：Sources/LayoutDDesignAI/SpreadPlanner.swift, Sources/LayoutDApp/CanvasView.swift, Sources/LayoutDApp/CanvasView+Drawing.swift, Sources/LayoutDApp/WireframePanelView.swift, Sources/LayoutDApp/WorkspaceViewController.swift, Tests/LayoutDAppTests/SpreadPlannerAssignTests.swift(新)
+- **检查**：swift build pass; swift test 349 pass（新增 SpreadPlannerAssignTests 5 项）
+- **下一步**：① 用户视觉验收：从线框图面板拖骨架缩略图到画布对开页，看高亮与落下后重排（Claude 无屏幕录制权限，请用户实机试）。② 已知约定差异：规划器对开=页(1,2)(3,4)…，而画布对页视觉成对为(2,3)(4,5)；高亮按规划器约定画（真实生效页），若用户觉得别扭可再议对齐方案。③ 待合 dev（本轮只提交在 feature/claude-pilot-verify）。
+
+## 2026-07-09 21:28 | claude | 用户直接要求：右侧面板加「线框图」控制器辅助排版。已实现并合 dev(c2ff5c9,随即释放 dev)。改动：① PanelDockView 第4段,顺序改为
+- **分支**：feature/claude-pilot-verify
+- **概述**：用户直接要求：右侧面板加「线框图」控制器辅助排版。已实现并合 dev(c2ff5c9,随即释放 dev)。改动：① PanelDockView 第4段,顺序改为 面板/检查器/线框图/向导。② 新建 WireframePanelView.swift：当前页图文/留白密度条(实时读 laidOutDocument+currentPageNumber)、留白比例滑杆(0-50%,折算进指纹 linesPerSpread=64*(1-ratio))、大图气口频率滑杆(2-6对开,直通 planSpreads bigImageEveryMinSpreads)、全部10个 SpreadArchetype.defaults 骨架卡片(WireframeRenderer 缩略图+启用勾选+权重滑杆0.2-2.0+无workhorse红字警告)、「重新规划全书」按钮(复用 runPlannerForWizard)+当前对开序列列表。绑定全走 appState.updateProject(undo友好)。③ WizardState 加 plannerWhitespaceRatio/plannerBigImageEvery(可选字段,老JSON兼容)。④ generateFingerprint 加 linesPerSpread 参数(默认64=原行为,下限16防爆炸)。⑤ runPlannerForWizard/rerollSpreadForWizard 消费两旋钮(重抽与整书规划同指纹)。344测试过/review-idml 14/14。App 已用新构建启动,待用户视觉验收。⚠️跨道改 LayoutDApp/Core/DesignAI(AG道),用户直接要求。
+- **改动文件**：Sources/LayoutDApp/WireframePanelView.swift(新), Sources/LayoutDApp/PanelDockView.swift, Sources/LayoutDApp/WorkspaceViewController.swift, Sources/LayoutDCore/WizardState.swift, Sources/LayoutDDesignAI/SpreadPlanner.swift
+- **检查**：swift build pass; swift test 344 pass; review-idml.sh 14/14; golden 一致。dev 已合并已释放。
+- **下一步**：① 用户视觉验收线框图面板(App已启动):切「线框图」段看密度条/滑杆/骨架卡片/重新规划。② AG 知悉:线框图面板复用了你的 WireframeRenderer 与 runPlannerForWizard;后续给骨架卡片加参数变体预览(镜像/图档/抽言位子集圈选,见 planner-1a 设计 §5)可在 WireframePanelView 上扩展。③ 全出血开篇图铺底收尾(fullbleed-opener 已被选中但开篇大图未真铺满,上轮已记)。绝不碰main。
+
 ## 2026-07-09 13:01 | antigravity | Completed SECNUM-1b (section number rendering). Updated CanvasView, PDFExporter,
 - **分支**：dev
 - **概述**：Completed SECNUM-1b (section number rendering). Updated CanvasView, PDFExporter, PNGExporter, and IDMLExporter to use the processed BookProject (with prepended section numbers) during paragraph inline runs mapping and formatting resolution. Added fallback resolution support for direct hex strings in ChineseTypesetting.makeAttributedString. Registered all motifs' colors/fonts and story paragraphs' inline colors into IDML export Graphic.xml swatches. Verified all E2E checks and golden baselines are fully green. Merged feature branch feature/ag-secnum-1b into local dev branch.
